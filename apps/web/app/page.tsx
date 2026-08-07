@@ -1,54 +1,37 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const featuredProducts = [
-  {
-    id: '1',
-    name: 'iPhone 15 Pro',
-    slug: 'iphone-15-pro',
-    price: 999.99,
-    compareAtPrice: 1099.99,
-    category: 'Electronics',
-    rating: 4.8,
-    reviewCount: 124,
-  },
-  {
-    id: '2',
-    name: 'MacBook Pro 14"',
-    slug: 'macbook-pro-14',
-    price: 1599.99,
-    category: 'Electronics',
-    rating: 4.9,
-    reviewCount: 89,
-  },
-  {
-    id: '3',
-    name: 'Classic T-Shirt',
-    slug: 'classic-t-shirt',
-    price: 29.99,
-    category: 'Clothing',
-    rating: 4.5,
-    reviewCount: 256,
-  },
-  {
-    id: '4',
-    name: 'Web Development Course',
-    slug: 'web-development-course',
-    price: 49.99,
-    compareAtPrice: 99.99,
-    category: 'Digital Products',
-    rating: 4.7,
-    reviewCount: 312,
-  },
-];
-
-const categories = [
-  { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 156 },
-  { name: 'Clothing', slug: 'clothing', emoji: '👕', count: 243 },
-  { name: 'Books', slug: 'books', emoji: '📚', count: 89 },
-  { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 67 },
-];
+import { api, Product, getCategoryEmoji } from '@/lib/api';
 
 export default function HomePage() {
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchFeaturedProducts();
+  }, []);
+
+  const fetchFeaturedProducts = async () => {
+    try {
+      const response = await api.getFeaturedProducts(4);
+      setFeaturedProducts(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch featured products:', err);
+      // Use empty array if API fails
+      setFeaturedProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const categories = [
+    { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 156 },
+    { name: 'Clothing', slug: 'clothing', emoji: '👕', count: 243 },
+    { name: 'Books', slug: 'books', emoji: '📚', count: 89 },
+    { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 67 },
+  ];
+
   return (
     <div>
       {/* Hero Section */}
@@ -94,7 +77,6 @@ export default function HomePage() {
                 fontSize: '14px',
                 fontWeight: 600,
                 textDecoration: 'none',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
               }}>
                 Shop Now
               </Link>
@@ -128,13 +110,13 @@ export default function HomePage() {
               Browse our wide selection of products
             </p>
           </div>
-          <Link href="/categories" style={{
+          <Link href="/products" style={{
             fontSize: '14px',
             fontWeight: 500,
             color: '#000',
             textDecoration: 'none',
           }}>
-            View All Categories →
+            View All →
           </Link>
         </div>
         <div style={{
@@ -205,62 +187,79 @@ export default function HomePage() {
             View All Products →
           </Link>
         </div>
-        <div style={{
-          marginTop: '32px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '24px',
-        }}>
-          {featuredProducts.map((product) => (
-            <Link
-              key={product.id}
-              href={`/products/${product.slug}`}
-              style={{
-                display: 'block',
-                overflow: 'hidden',
-                borderRadius: '8px',
-                border: '1px solid #e5e5e5',
-                backgroundColor: 'white',
-                textDecoration: 'none',
-                color: '#000',
-                transition: 'box-shadow 0.2s',
-              }}
-            >
-              <div style={{
-                aspectRatio: '1',
-                backgroundColor: '#f5f5f5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '64px',
-              }}>
-                {product.category === 'Electronics' && '📱'}
-                {product.category === 'Clothing' && '👕'}
-                {product.category === 'Digital Products' && '💻'}
-                {product.category === 'Books' && '📚'}
-              </div>
-              <div style={{ padding: '16px' }}>
-                <p style={{ fontSize: '12px', color: '#666' }}>{product.category}</p>
-                <h3 style={{ marginTop: '4px', fontWeight: 600 }}>{product.name}</h3>
-                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${product.price}</span>
-                  {product.compareAtPrice && (
-                    <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
-                      ${product.compareAtPrice}
+
+        {/* Loading State */}
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '64px' }}>
+            <p style={{ color: '#666' }}>Loading products...</p>
+          </div>
+        )}
+
+        {/* Products Grid */}
+        {!loading && featuredProducts.length > 0 && (
+          <div style={{
+            marginTop: '32px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '24px',
+          }}>
+            {featuredProducts.map((product) => (
+              <Link
+                key={product.id}
+                href={`/products/${product.slug}`}
+                style={{
+                  display: 'block',
+                  overflow: 'hidden',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e5e5',
+                  backgroundColor: 'white',
+                  textDecoration: 'none',
+                  color: '#000',
+                }}
+              >
+                <div style={{
+                  aspectRatio: '1',
+                  backgroundColor: '#f5f5f5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '64px',
+                }}>
+                  {getCategoryEmoji(product.category?.name)}
+                </div>
+                <div style={{ padding: '16px' }}>
+                  <p style={{ fontSize: '12px', color: '#666' }}>{product.category?.name}</p>
+                  <h3 style={{ marginTop: '4px', fontWeight: 600 }}>{product.name}</h3>
+                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${product.price}</span>
+                    {product.compareAtPrice && (
+                      <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
+                        ${product.compareAtPrice}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ color: '#f59e0b' }}>★</span>
+                    <span style={{ fontSize: '14px' }}>{product.averageRating || 0}</span>
+                    <span style={{ fontSize: '14px', color: '#666' }}>
+                      ({product.reviewCount || 0})
                     </span>
-                  )}
+                  </div>
                 </div>
-                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ color: '#f59e0b' }}>★</span>
-                  <span style={{ fontSize: '14px' }}>{product.rating}</span>
-                  <span style={{ fontSize: '14px', color: '#666' }}>
-                    ({product.reviewCount})
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* No Products */}
+        {!loading && featuredProducts.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '64px', color: '#666' }}>
+            <p>No featured products available</p>
+            <p style={{ fontSize: '14px', marginTop: '8px' }}>
+              Make sure the API server is running
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Features Section */}
@@ -290,9 +289,7 @@ export default function HomePage() {
                 🚚
               </div>
               <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Free Shipping</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-                On orders over $100
-              </p>
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>On orders over $100</p>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{
@@ -309,9 +306,7 @@ export default function HomePage() {
                 🔒
               </div>
               <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Secure Payment</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-                100% secure checkout
-              </p>
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>100% secure checkout</p>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{
@@ -328,9 +323,7 @@ export default function HomePage() {
                 🌍
               </div>
               <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Worldwide Shipping</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-                Deliver to your door
-              </p>
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>Deliver to your door</p>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{
@@ -347,9 +340,7 @@ export default function HomePage() {
                 🔄
               </div>
               <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Easy Returns</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-                30 day return policy
-              </p>
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>30 day return policy</p>
             </div>
           </div>
         </div>
@@ -407,9 +398,6 @@ export default function HomePage() {
                 Subscribe
               </button>
             </div>
-            <p style={{ marginTop: '16px', fontSize: '14px', opacity: 0.7 }}>
-              We respect your privacy. Unsubscribe at any time.
-            </p>
           </div>
         </div>
       </section>

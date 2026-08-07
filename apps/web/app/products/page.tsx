@@ -1,53 +1,66 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const allProducts = [
-  { id: '1', name: 'iPhone 15 Pro', slug: 'iphone-15-pro', price: 999.99, compareAtPrice: 1099.99, category: 'Electronics', rating: 4.8, reviewCount: 124, inStock: true },
-  { id: '2', name: 'MacBook Pro 14"', slug: 'macbook-pro-14', price: 1599.99, category: 'Electronics', rating: 4.9, reviewCount: 89, inStock: true },
-  { id: '3', name: 'Classic T-Shirt', slug: 'classic-t-shirt', price: 29.99, category: 'Clothing', rating: 4.5, reviewCount: 256, inStock: true },
-  { id: '4', name: 'Web Development Course', slug: 'web-development-course', price: 49.99, compareAtPrice: 99.99, category: 'Digital Products', rating: 4.7, reviewCount: 312, inStock: true },
-  { id: '5', name: 'JavaScript: The Good Parts', slug: 'javascript-good-parts', price: 24.99, category: 'Books', rating: 4.6, reviewCount: 178, inStock: true },
-];
-
-const categories = [
-  { name: 'All', slug: 'all' },
-  { name: 'Electronics', slug: 'electronics' },
-  { name: 'Clothing', slug: 'clothing' },
-  { name: 'Books', slug: 'books' },
-  { name: 'Digital Products', slug: 'digital-products' },
-];
-
-function getCategoryEmoji(category: string): string {
-  switch (category) {
-    case 'Electronics': return '📱';
-    case 'Clothing': return '👕';
-    case 'Books': return '📚';
-    case 'Digital Products': return '💻';
-    default: return '📦';
-  }
-}
+import { api, Product, getCategoryEmoji } from '@/lib/api';
 
 export default function ProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter products by category
-  const filteredProducts = selectedCategory === 'all'
-    ? allProducts
-    : allProducts.filter(p => p.category.toLowerCase().replace(' ', '-') === selectedCategory);
+  // Fetch products from API
+  useEffect(() => {
+    fetchProducts();
+  }, [selectedCategory, sortBy, searchQuery]);
 
-  // Sort products
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    switch (sortBy) {
-      case 'price-low': return a.price - b.price;
-      case 'price-high': return b.price - a.price;
-      case 'rating': return b.rating - a.rating;
-      case 'name': return a.name.localeCompare(b.name);
-      default: return 0;
+  const fetchProducts = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params: any = {
+        limit: 50,
+      };
+
+      if (selectedCategory !== 'all') {
+        params.category = selectedCategory;
+      }
+
+      if (searchQuery) {
+        params.search = searchQuery;
+      }
+
+      if (sortBy === 'price-low') params.sort = 'price_asc';
+      else if (sortBy === 'price-high') params.sort = 'price_desc';
+      else if (sortBy === 'rating') params.sort = 'popular';
+      else if (sortBy === 'name') params.sort = 'name_asc';
+      else params.sort = 'newest';
+
+      const response = await api.getProducts(params);
+      setProducts(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch products:', err);
+      setError('Failed to load products. Make sure the API server is running.');
+      // Use fallback data if API fails
+      setProducts([]);
+    } finally {
+      setLoading(false);
     }
-  });
+  };
+
+  // Get unique categories from products
+  const categories = ['all', ...new Set(products.map(p => p.category?.slug || p.category?.name?.toLowerCase() || ''))].filter(Boolean);
+
+  // Filter products by category (client-side backup)
+  const filteredProducts = selectedCategory === 'all'
+    ? products
+    : products.filter(p => 
+        (p.category?.slug || p.category?.name?.toLowerCase()) === selectedCategory
+      );
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
@@ -62,8 +75,26 @@ export default function ProductsPage() {
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Products</h1>
         <p style={{ marginTop: '8px', color: '#666' }}>
-          Showing {sortedProducts.length} of {allProducts.length} products
+          {loading ? 'Loading...' : `Showing ${filteredProducts.length} products`}
         </p>
+      </div>
+
+      {/* Search Bar */}
+      <div style={{ marginBottom: '24px' }}>
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            border: '1px solid #e5e5e5',
+            fontSize: '16px',
+            outline: 'none',
+          }}
+        />
       </div>
 
       {/* Filters Row */}
@@ -77,23 +108,23 @@ export default function ProductsPage() {
       }}>
         {/* Category Filters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {categories.map((category) => (
+          {['all', 'electronics', 'clothing', 'books', 'digital-products'].map((cat) => (
             <button
-              key={category.slug}
-              onClick={() => setSelectedCategory(category.slug)}
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
               style={{
                 padding: '10px 20px',
                 borderRadius: '6px',
                 fontSize: '14px',
                 fontWeight: 500,
-                border: selectedCategory === category.slug ? '2px solid #000' : '1px solid #e5e5e5',
-                backgroundColor: selectedCategory === category.slug ? '#000' : 'white',
-                color: selectedCategory === category.slug ? '#fff' : '#000',
+                border: selectedCategory === cat ? '2px solid #000' : '1px solid #e5e5e5',
+                backgroundColor: selectedCategory === cat ? '#000' : 'white',
+                color: selectedCategory === cat ? '#fff' : '#000',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
-              {category.name}
+              {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1).replace('-', ' ')}
             </button>
           ))}
         </div>
@@ -122,19 +153,26 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Product Grid */}
-      {sortedProducts.length === 0 ? (
+      {/* Loading State */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '64px' }}>
+          <p style={{ fontSize: '18px', color: '#666' }}>Loading products...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
         <div style={{ 
           textAlign: 'center', 
-          padding: '64px 20px',
-          color: '#666'
+          padding: '32px',
+          backgroundColor: '#fef2f2',
+          borderRadius: '8px',
+          marginBottom: '24px'
         }}>
-          <p style={{ fontSize: '48px', marginBottom: '16px' }}>😕</p>
-          <p style={{ fontSize: '18px' }}>No products found in this category</p>
+          <p style={{ color: '#ef4444', marginBottom: '16px' }}>{error}</p>
           <button 
-            onClick={() => setSelectedCategory('all')}
+            onClick={fetchProducts}
             style={{
-              marginTop: '16px',
               padding: '10px 20px',
               backgroundColor: '#000',
               color: '#fff',
@@ -143,12 +181,42 @@ export default function ProductsPage() {
               cursor: 'pointer',
             }}
           >
-            View All Products
+            Try Again
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Product Grid */}
+      {!loading && filteredProducts.length === 0 && (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '64px 20px',
+          color: '#666'
+        }}>
+          <p style={{ fontSize: '48px', marginBottom: '16px' }}>😕</p>
+          <p style={{ fontSize: '18px' }}>No products found</p>
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              style={{
+                marginTop: '16px',
+                padding: '10px 20px',
+                backgroundColor: '#000',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Clear Search
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && filteredProducts.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
-          {sortedProducts.map((product) => (
+          {filteredProducts.map((product) => (
             <Link
               key={product.id}
               href={`/products/${product.slug}`}
@@ -160,7 +228,7 @@ export default function ProductsPage() {
                 backgroundColor: 'white',
                 textDecoration: 'none',
                 color: '#000',
-                transition: 'box-shadow 0.2s, transform 0.2s',
+                transition: 'box-shadow 0.2s',
                 position: 'relative',
               }}
             >
@@ -191,19 +259,21 @@ export default function ProductsPage() {
                 justifyContent: 'center',
                 fontSize: '64px',
               }}>
-                {getCategoryEmoji(product.category)}
+                {getCategoryEmoji(product.category?.name)}
               </div>
 
               {/* Product Info */}
               <div style={{ padding: '16px' }}>
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{product.category}</p>
+                <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                  {product.category?.name}
+                </p>
                 <h3 style={{ fontWeight: 600, fontSize: '16px', marginBottom: '8px' }}>{product.name}</h3>
                 
                 {/* Rating */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
                   <span style={{ color: '#f59e0b' }}>★</span>
-                  <span style={{ fontSize: '14px' }}>{product.rating}</span>
-                  <span style={{ fontSize: '14px', color: '#666' }}>({product.reviewCount})</span>
+                  <span style={{ fontSize: '14px' }}>{product.averageRating || 0}</span>
+                  <span style={{ fontSize: '14px', color: '#666' }}>({product.reviewCount || 0})</span>
                 </div>
 
                 {/* Price */}
@@ -217,8 +287,8 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Stock */}
-                <p style={{ marginTop: '8px', fontSize: '12px', color: product.inStock ? '#22c55e' : '#ef4444' }}>
-                  {product.inStock ? '✓ In Stock' : '✗ Out of Stock'}
+                <p style={{ marginTop: '8px', fontSize: '12px', color: product.quantity > 0 ? '#22c55e' : '#ef4444' }}>
+                  {product.quantity > 0 ? '✓ In Stock' : '✗ Out of Stock'}
                 </p>
               </div>
             </Link>
@@ -226,33 +296,21 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Active Filter Display */}
-      {selectedCategory !== 'all' && (
-        <div style={{ 
-          marginTop: '32px', 
-          padding: '16px', 
-          backgroundColor: '#f5f5f5', 
+      {/* API Not Running Notice */}
+      {!loading && products.length === 0 && !error && (
+        <div style={{
+          marginTop: '32px',
+          padding: '24px',
+          backgroundColor: '#f0f9ff',
           borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
+          textAlign: 'center'
         }}>
-          <span style={{ fontSize: '14px' }}>
-            Filtering by: <strong>{categories.find(c => c.slug === selectedCategory)?.name}</strong>
-          </span>
-          <button 
-            onClick={() => setSelectedCategory('all')}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              backgroundColor: 'white',
-              border: '1px solid #e5e5e5',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Clear Filter
-          </button>
+          <p style={{ fontSize: '16px', marginBottom: '8px' }}>
+            ℹ️ No products loaded from API
+          </p>
+          <p style={{ fontSize: '14px', color: '#666' }}>
+            Make sure the API server is running: <code>npm run dev:api</code>
+          </p>
         </div>
       )}
     </div>
