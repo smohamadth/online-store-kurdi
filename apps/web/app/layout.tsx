@@ -121,7 +121,7 @@ function UserMenu() {
           color: '#333', 
           fontSize: '14px',
         }}>
-          👤 {user.firstName}
+          👤 My Account
         </a>
         <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
           Orders
