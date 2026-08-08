@@ -46,6 +46,17 @@ export default function OrderDetailPage() {
 
   const fetchOrder = async (token: string, id: string) => {
     try {
+      // First try to get from localStorage
+      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+      const localOrder = localOrders.find((o: any) => o.id === id || o.orderNumber === id);
+      
+      if (localOrder) {
+        setOrder(localOrder);
+        setLoading(false);
+        return;
+      }
+
+      // Try API
       const response = await api.getOrder(token, id);
       setOrder(response.data);
     } catch (err) {
@@ -402,7 +413,9 @@ export default function OrderDetailPage() {
               </div>
               {order.discountAmount > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Discount</span>
+                  <span style={{ color: '#22c55e' }}>
+                    Discount {order.couponCode ? `(${order.couponCode})` : ''}
+                  </span>
                   <span style={{ fontWeight: 500, color: '#22c55e' }}>-${Number(order.discountAmount).toFixed(2)}</span>
                 </div>
               )}

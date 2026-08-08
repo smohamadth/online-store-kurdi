@@ -102,22 +102,66 @@ export default function CheckoutPage() {
       const response = await api.createOrder(token, orderData);
       
       if (response.data) {
-        setOrderNumber(response.data.orderNumber || 'ORD-' + Date.now());
+        const orderNumber = response.data.orderNumber || 'ORD-' + Date.now();
+        setOrderNumber(orderNumber);
+        
+        // Save order locally
+        saveOrderLocally(orderNumber, orderData);
+        
         setOrderPlaced(true);
         clearCart();
-        // Clear applied coupon
         localStorage.removeItem('appliedCoupon');
       }
     } catch (err: any) {
       console.error('Order failed:', err);
-      // Create order locally for demo
-      setOrderNumber('ORD-' + Date.now());
+      // Create order locally
+      const orderNumber = 'ORD-' + Date.now();
+      setOrderNumber(orderNumber);
+      
+      saveOrderLocally(orderNumber, orderData);
+      
       setOrderPlaced(true);
       clearCart();
       localStorage.removeItem('appliedCoupon');
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveOrderLocally = (orderNumber: string, orderData: any) => {
+    const order = {
+      id: Date.now().toString(),
+      orderNumber,
+      userId: user?.id,
+      status: 'processing',
+      items: items.map(item => ({
+        id: item.id,
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        variant: item.variant,
+      })),
+      subtotal,
+      discountAmount: discount,
+      couponCode: appliedCoupon?.code || null,
+      shippingAmount: shipping,
+      taxAmount: tax,
+      totalAmount: total,
+      shippingAddress: shippingInfo,
+      paymentMethod,
+      createdAt: new Date().toISOString(),
+      user: user ? {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+      } : null,
+    };
+
+    // Save to localStorage
+    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+    orders.unshift(order);
+    localStorage.setItem('orders', JSON.stringify(orders));
   };
 
   // Order confirmation

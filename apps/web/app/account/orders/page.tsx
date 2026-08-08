@@ -46,11 +46,30 @@ export default function OrdersPage() {
   const fetchOrders = async (token: string) => {
     try {
       const response = await api.getOrders(token);
-      setOrders(response.data || []);
+      const apiOrders = response.data || [];
+      
+      // Also get locally stored orders
+      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+      
+      // Merge API orders with local orders (avoid duplicates)
+      const allOrders = [...localOrders];
+      apiOrders.forEach((apiOrder: any) => {
+        if (!allOrders.find(o => o.id === apiOrder.id)) {
+          allOrders.push(apiOrder);
+        }
+      });
+      
+      // Sort by date (newest first)
+      allOrders.sort((a: any, b: any) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      setOrders(allOrders);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
-      // Show empty state instead of mock data
-      setOrders([]);
+      // Fallback to local orders
+      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+      setOrders(localOrders);
     } finally {
       setLoading(false);
     }
@@ -276,11 +295,19 @@ export default function OrdersPage() {
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
+                    alignItems: 'flex-end',
                   }}>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                      Total: ${Number(order.totalAmount || 0).toFixed(2)}
-                    </span>
+                    <div>
+                      {order.discountAmount > 0 && (
+                        <p style={{ fontSize: '14px', color: '#22c55e', marginBottom: '4px' }}>
+                          Discount: -${Number(order.discountAmount).toFixed(2)}
+                          {order.couponCode && ` (${order.couponCode})`}
+                        </p>
+                      )}
+                      <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                        Total: ${Number(order.totalAmount || 0).toFixed(2)}
+                      </span>
+                    </div>
                     <Link href={`/account/orders/${order.id}`} style={{
                       padding: '10px 20px',
                       backgroundColor: '#000',
