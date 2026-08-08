@@ -47,22 +47,33 @@ function CartIcon() {
 function UserMenu() {
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
+  const [isAdminPage, setIsAdminPage] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     loadUser();
+    
+    // Check if we're on admin page
+    setIsAdminPage(window.location.pathname.startsWith('/admin'));
     
     // Listen for custom auth change event
     const handleAuthChange = () => {
       loadUser();
     };
     
+    // Listen for route changes
+    const handleRouteChange = () => {
+      setIsAdminPage(window.location.pathname.startsWith('/admin'));
+    };
+    
     window.addEventListener('authChange', handleAuthChange);
     window.addEventListener('storage', handleAuthChange);
+    window.addEventListener('popstate', handleRouteChange);
     
     return () => {
       window.removeEventListener('authChange', handleAuthChange);
       window.removeEventListener('storage', handleAuthChange);
+      window.removeEventListener('popstate', handleRouteChange);
     };
   }, []);
 
@@ -91,7 +102,8 @@ function UserMenu() {
     
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {isAdmin && (
+        {/* Only show admin link if NOT on admin page */}
+        {isAdmin && !isAdminPage && (
           <a href="/admin" style={{ 
             textDecoration: 'none', 
             color: '#fff', 
@@ -104,18 +116,13 @@ function UserMenu() {
             ⚙️ Admin Panel
           </a>
         )}
-        <div style={{ position: 'relative', display: 'inline-block' }}>
-          <a href="/account" style={{ 
-            textDecoration: 'none', 
-            color: '#333', 
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}>
-            👤 {user.firstName}
-          </a>
-        </div>
+        <a href="/account" style={{ 
+          textDecoration: 'none', 
+          color: '#333', 
+          fontSize: '14px',
+        }}>
+          👤 {user.firstName}
+        </a>
         <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
           Orders
         </a>
