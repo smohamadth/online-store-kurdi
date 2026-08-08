@@ -47,35 +47,31 @@ function CartIcon() {
 function UserMenu() {
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
-  const [isAdminPage, setIsAdminPage] = useState(false);
+  const [currentPath, setCurrentPath] = useState('');
 
   useEffect(() => {
     setMounted(true);
     loadUser();
-    
-    // Check if we're on admin page
-    setIsAdminPage(window.location.pathname.startsWith('/admin'));
+    setCurrentPath(window.location.pathname);
     
     // Listen for custom auth change event
     const handleAuthChange = () => {
       loadUser();
     };
     
-    // Listen for route changes
-    const handleRouteChange = () => {
-      setIsAdminPage(window.location.pathname.startsWith('/admin'));
-    };
-    
     window.addEventListener('authChange', handleAuthChange);
     window.addEventListener('storage', handleAuthChange);
-    window.addEventListener('popstate', handleRouteChange);
     
     return () => {
       window.removeEventListener('authChange', handleAuthChange);
       window.removeEventListener('storage', handleAuthChange);
-      window.removeEventListener('popstate', handleRouteChange);
     };
   }, []);
+
+  // Update path on every render (catches navigation)
+  useEffect(() => {
+    setCurrentPath(window.location.pathname);
+  });
 
   const loadUser = () => {
     try {
@@ -99,6 +95,7 @@ function UserMenu() {
 
   if (user) {
     const isAdmin = user.role === 'admin' || user.role === 'manager';
+    const isAdminPage = currentPath.startsWith('/admin');
     
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
