@@ -11,6 +11,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
   useEffect(() => {
     checkAuth();
@@ -45,29 +46,39 @@ export default function OrdersPage() {
 
   const fetchOrders = async (token: string) => {
     try {
-      const response = await api.getOrders(token);
-      const apiOrders = response.data || [];
-      
-      // Also get locally stored orders
+      // Try API first
+      let apiOrders: any[] = [];
+      try {
+        const response = await api.getOrders(token);
+        apiOrders = response.data || [];
+        if (apiOrders.length > 0) {
+          setApiStatus('connected');
+        }
+      } catch (err) {
+        console.log('Orders API not available');
+        setApiStatus('disconnected');
+      }
+
+      // Get locally stored orders
       const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      
-      // Merge API orders with local orders (avoid duplicates)
-      const allOrders = [...localOrders];
-      apiOrders.forEach((apiOrder: any) => {
-        if (!allOrders.find(o => o.id === apiOrder.id)) {
-          allOrders.push(apiOrder);
+
+      // Merge: API orders first, then local orders (avoid duplicates)
+      const allOrders = [...apiOrders];
+      localOrders.forEach((localOrder: any) => {
+        if (!allOrders.find(o => o.id === localOrder.id || o.orderNumber === localOrder.orderNumber)) {
+          allOrders.push(localOrder);
         }
       });
-      
+
       // Sort by date (newest first)
       allOrders.sort((a: any, b: any) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-      
+
       setOrders(allOrders);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
-      // Fallback to local orders
+      // Fallback to local orders only
       const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
       setOrders(localOrders);
     } finally {
@@ -196,6 +207,21 @@ export default function OrdersPage() {
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '32px' }}>
             My Orders
           </h1>
+
+          {/* API Status */}
+          {apiStatus === 'disconnected' && (
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: '#fef3c7',
+              border: '1px solid #f59e0b',
+              borderRadius: '6px',
+              marginBottom: '24px',
+              fontSize: '14px',
+              color: '#92400e',
+            }}>
+              ⚠️ Showing local orders. Start API to sync with database.
+            </div>
+          )}
 
           {orders.length === 0 ? (
             <div style={{

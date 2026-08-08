@@ -91,8 +91,9 @@ const SAMPLE_COUPONS: Coupon[] = [
   },
 ];
 
-// Get all coupons (for admin)
+// Get all coupons (for admin) - try API first
 export async function getCoupons(token: string): Promise<Coupon[]> {
+  // Try API first
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/coupons`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -100,17 +101,21 @@ export async function getCoupons(token: string): Promise<Coupon[]> {
     
     if (response.ok) {
       const data = await response.json();
-      return data.data || [];
+      if (data.data && data.data.length > 0) {
+        return data.data;
+      }
     }
   } catch (err) {
-    console.error('Failed to fetch coupons:', err);
+    console.log('Coupon API not available, using local data');
   }
   
+  // Fallback to sample coupons
   return SAMPLE_COUPONS;
 }
 
-// Validate coupon
+// Validate coupon - try API first, then local
 export async function validateCoupon(code: string, subtotal: number): Promise<CouponValidation> {
+  // Try API first
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/coupons/validate`, {
       method: 'POST',
@@ -123,7 +128,7 @@ export async function validateCoupon(code: string, subtotal: number): Promise<Co
       return data.data || { valid: false, error: 'Invalid coupon' };
     }
   } catch (err) {
-    console.error('Failed to validate coupon via API:', err);
+    console.log('Coupon API not available, using local validation');
   }
   
   // Fallback to local validation

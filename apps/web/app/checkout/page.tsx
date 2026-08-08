@@ -99,18 +99,34 @@ export default function CheckoutPage() {
         totalAmount: total,
       };
 
-      // Try API
+      // Try API first
       let orderNumber = 'ORD-' + Date.now();
+      let savedToDb = false;
       try {
-        const response = await api.createOrder(token, orderData);
-        if (response.data?.orderNumber) {
-          orderNumber = response.data.orderNumber;
+        const response = await api.createOrder(token, {
+          items: items.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+          shippingAddress: shippingInfo,
+          paymentMethod,
+          couponCode: appliedCoupon?.code || null,
+          discountAmount: discount,
+          subtotal,
+          shippingAmount: shipping,
+          taxAmount: tax,
+          totalAmount: total,
+        });
+        
+        if (response.data) {
+          orderNumber = response.data.orderNumber || orderNumber;
+          savedToDb = true;
         }
       } catch (err) {
         console.log('API not available, saving locally');
       }
 
-      // Save order locally
+      // Save order locally (always, as backup)
       saveOrderLocally(orderNumber);
       
       setOrderNumber(orderNumber);
@@ -119,7 +135,6 @@ export default function CheckoutPage() {
       localStorage.removeItem('appliedCoupon');
     } catch (err: any) {
       console.error('Order failed:', err);
-      // Still create order locally
       const orderNumber = 'ORD-' + Date.now();
       saveOrderLocally(orderNumber);
       setOrderNumber(orderNumber);

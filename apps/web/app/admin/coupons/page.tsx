@@ -8,6 +8,7 @@ export default function AdminCouponsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
   const [formData, setFormData] = useState({
     code: '',
@@ -32,8 +33,16 @@ export default function AdminCouponsPage() {
 
       const data = await getCoupons(token);
       setCoupons(data);
+      
+      // Check if we got data from API (not sample data)
+      if (data.length > 0 && data[0].id !== '1') {
+        setApiStatus('connected');
+      } else {
+        setApiStatus('disconnected');
+      }
     } catch (err) {
       console.error('Failed to fetch coupons:', err);
+      setApiStatus('disconnected');
     } finally {
       setLoading(false);
     }
@@ -132,6 +141,34 @@ export default function AdminCouponsPage() {
 
   return (
     <div>
+      {/* API Status */}
+      {apiStatus === 'disconnected' && (
+        <div style={{
+          padding: '16px 24px',
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '8px',
+          marginBottom: '24px',
+        }}>
+          <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
+          <p style={{ fontSize: '14px', color: '#92400e', marginTop: '4px' }}>
+            Showing sample coupons. Start API to manage database coupons: <code>npm run dev:api</code>
+          </p>
+        </div>
+      )}
+
+      {apiStatus === 'connected' && (
+        <div style={{
+          padding: '12px 24px',
+          backgroundColor: '#d1fae5',
+          border: '1px solid #22c55e',
+          borderRadius: '8px',
+          marginBottom: '24px',
+        }}>
+          <p style={{ fontSize: '14px', color: '#166534' }}>✅ API Connected - Managing database coupons</p>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
