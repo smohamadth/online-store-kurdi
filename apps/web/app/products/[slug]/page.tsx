@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
+import ReviewSection from '@/components/ReviewSection';
 
 export default function ProductPage() {
   const params = useParams();
@@ -349,6 +350,9 @@ export default function ProductPage() {
           <p style={{ fontWeight: 600, textTransform: 'capitalize' }}>{product.status}</p>
         </div>
       </div>
+
+      {/* Reviews Section */}
+      <ReviewSection productId={product.id} productName={product.name} />
     </div>
   );
 }

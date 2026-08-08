@@ -155,6 +155,14 @@ export default function AccountPage() {
               }}>
                 Orders
               </Link>
+              <Link href="/account/reviews" style={{
+                padding: '10px 16px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                color: '#666',
+              }}>
+                Reviews
+              </Link>
               <Link href="/account/profile" style={{
                 padding: '10px 16px',
                 borderRadius: '6px',
@@ -226,6 +234,19 @@ export default function AccountPage() {
               <p style={{ fontSize: '14px', color: '#666' }}>View order history</p>
             </Link>
 
+            <Link href="/account/reviews" style={{
+              padding: '24px',
+              border: '1px solid #e5e5e5',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              color: '#000',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '12px' }}>⭐</div>
+              <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>Reviews</h3>
+              <p style={{ fontSize: '14px', color: '#666' }}>Manage reviews</p>
+            </Link>
+
             <Link href="/account/profile" style={{
               padding: '24px',
               border: '1px solid #e5e5e5',
@@ -237,19 +258,6 @@ export default function AccountPage() {
               <div style={{ fontSize: '32px', marginBottom: '12px' }}>✏️</div>
               <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>Edit Profile</h3>
               <p style={{ fontSize: '14px', color: '#666' }}>Update your info</p>
-            </Link>
-
-            <Link href="/wishlist" style={{
-              padding: '24px',
-              border: '1px solid #e5e5e5',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              color: '#000',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>❤️</div>
-              <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>Wishlist</h3>
-              <p style={{ fontSize: '14px', color: '#666' }}>Saved items</p>
             </Link>
 
             <Link href="/products" style={{
