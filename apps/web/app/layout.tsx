@@ -89,6 +89,11 @@ function UserMenu() {
   if (user) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {(user.role === 'admin' || user.role === 'manager') && (
+          <a href="/admin" style={{ textDecoration: 'none', color: '#f59e0b', fontSize: '14px', fontWeight: 600 }}>
+            ⚙️ Admin
+          </a>
+        )}
         <a href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
           👤 {user.firstName}
         </a>
