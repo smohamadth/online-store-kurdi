@@ -47,19 +47,10 @@ export default function SearchBar() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Mock products for search
-  const MOCK_PRODUCTS: Product[] = [
-    { id: '1', name: 'iPhone 15 Pro', slug: 'iphone-15-pro', description: 'Latest iPhone', shortDescription: '', sku: '', type: 'physical', status: 'active', price: 999.99, compareAtPrice: 1099.99, quantity: 50, images: [], category: { id: '1', name: 'Electronics', slug: 'electronics', image: null }, variants: [], averageRating: 4.8, reviewCount: 124, createdAt: '', updatedAt: '' },
-    { id: '2', name: 'MacBook Pro 14"', slug: 'macbook-pro-14', description: 'Professional laptop', shortDescription: '', sku: '', type: 'physical', status: 'active', price: 1599.99, quantity: 30, images: [], category: { id: '1', name: 'Electronics', slug: 'electronics', image: null }, variants: [], averageRating: 4.9, reviewCount: 89, createdAt: '', updatedAt: '' },
-    { id: '3', name: 'Classic T-Shirt', slug: 'classic-t-shirt', description: 'Cotton t-shirt', shortDescription: '', sku: '', type: 'physical', status: 'active', price: 29.99, quantity: 200, images: [], category: { id: '2', name: 'Clothing', slug: 'clothing', image: null }, variants: [], averageRating: 4.5, reviewCount: 256, createdAt: '', updatedAt: '' },
-    { id: '4', name: 'Web Development Course', slug: 'web-development-course', description: 'Learn coding', shortDescription: '', sku: '', type: 'digital', status: 'active', price: 49.99, quantity: 999, images: [], category: { id: '3', name: 'Digital Products', slug: 'digital-products', image: null }, variants: [], averageRating: 4.7, reviewCount: 312, createdAt: '', updatedAt: '' },
-    { id: '5', name: 'JavaScript: The Good Parts', slug: 'javascript-good-parts', description: 'JS book', shortDescription: '', sku: '', type: 'physical', status: 'active', price: 24.99, quantity: 150, images: [], category: { id: '4', name: 'Books', slug: 'books', image: null }, variants: [], averageRating: 4.6, reviewCount: 178, createdAt: '', updatedAt: '' },
-  ];
-
   const searchProducts = async (searchQuery: string) => {
     setLoading(true);
     
-    // Try API first
+    // Try search API first
     try {
       const response = await api.searchProducts(searchQuery);
       if (response.data && response.data.length > 0) {
@@ -68,18 +59,29 @@ export default function SearchBar() {
         return;
       }
     } catch (err) {
-      console.log('API not available, using local search');
+      console.log('Search API not available');
     }
 
-    // Fallback to local search
-    const queryLower = searchQuery.toLowerCase();
-    const filtered = MOCK_PRODUCTS.filter(p =>
-      p.name.toLowerCase().includes(queryLower) ||
-      p.description.toLowerCase().includes(queryLower) ||
-      p.category?.name.toLowerCase().includes(queryLower)
-    );
-    
-    setResults(filtered);
+    // Fallback: Get all products and filter
+    try {
+      const allProducts = await api.getProducts({ limit: 100 });
+      if (allProducts.data && allProducts.data.length > 0) {
+        const queryLower = searchQuery.toLowerCase();
+        const filtered = allProducts.data.filter(p =>
+          p.name.toLowerCase().includes(queryLower) ||
+          p.description?.toLowerCase().includes(queryLower) ||
+          p.category?.name.toLowerCase().includes(queryLower)
+        );
+        setResults(filtered);
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.log('Products API not available');
+    }
+
+    // No results
+    setResults([]);
     setLoading(false);
   };
 
