@@ -34,6 +34,7 @@ model User {
   events        UserEvent[]
   preferences   UserPreference?
   sessions      Session[]
+  inventoryLogs InventoryLog[]
   
   @@index([email])
   @@index([role])
@@ -145,12 +146,16 @@ model Product {
   // Relations
   categoryId    String
   category      Category  @relation(fields: [categoryId], references: [id])
+  taxClassId    String?
+  taxClass      TaxClass? @relation(fields: [taxClassId], references: [id])
   images        ProductImage[]
   variants      ProductVariant[]
   reviews       Review[]
   wishlist      WishlistItem[]
   cart          CartItem[]
   orderItems    OrderItem[]
+  inventoryLogs InventoryLog[]
+  stockAlerts   StockAlert[]
   
   // ML/Analytics relations
   events        UserEvent[]
@@ -202,6 +207,7 @@ model ProductVariant {
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems    OrderItem[]
   cartItems     CartItem[]
+  inventoryLogs InventoryLog[]
   
   @@index([productId])
   @@index([sku])
@@ -276,7 +282,8 @@ model Order {
   
   // Shipping
   shippingAddressId String?
-  shippingMethod    String?
+  shippingMethodId  String?
+  shippingZoneId    String?
   trackingNumber    String?
   shippedAt         DateTime?
   deliveredAt       DateTime?
@@ -298,8 +305,10 @@ model Order {
   // Relations
   user              User      @relation(fields: [userId], references: [id])
   shippingAddress   Address?  @relation(fields: [shippingAddressId], references: [id])
+  shippingMethod    ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
   items             OrderItem[]
   payments          Payment[]
+  inventoryLogs     InventoryLog[]
   
   @@index([userId])
   @@index([orderNumber])
@@ -471,4 +480,201 @@ model SearchQuery {
   @@index([query])
   @@index([timestamp])
   @@index([userId])
+}
+
+// ============================================
+// SETTINGS & CONFIGURATION
+// ============================================
+
+// Store settings (single row)
+model StoreSettings {
+  id                    String    @id @default("default")
+  
+  // Store Info
+  storeName             String    @default("My Store")
+  storeDescription      String?   
+  storeEmail            String    @default("info@store.com")
+  storePhone            String?   
+  storeAddress          String?   
+  storeCity             String?   
+  storeState            String?   
+  storeZipCode          String?   
+  storeCountry          String    @default("US")
+  
+  // Currency
+  currency              String    @default("USD")
+  currencySymbol        String    @default("$")
+  currencyPosition      String    @default("before")
+  
+  // Units
+  weightUnit            String    @default("kg")
+  dimensionUnit         String    @default("cm")
+  
+  // Date/Time
+  timezone              String    @default("UTC")
+  dateFormat            String    @default("MM/DD/YYYY")
+  
+  // Social Media
+  facebookUrl           String?   
+  instagramUrl          String?   
+  twitterUrl            String?   
+  youtubeUrl            String?   
+  
+  // SEO
+  metaTitle             String?   
+  metaDescription       String?   
+  googleAnalyticsId     String?   
+  googleTagManagerId    String?   
+  
+  // Maintenance
+  maintenanceMode       Boolean   @default(false)
+  maintenanceMessage    String?   
+  
+  // Legal
+  privacyPolicyUrl      String?   
+  termsOfServiceUrl     String?   
+  returnPolicyUrl       String?   
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model EmailTemplate {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  subject       String    
+  htmlContent   String    
+  textContent   String?   
+  variables     String    @default("[]")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// INVENTORY MANAGEMENT
+// ============================================
+
+model InventoryLog {
+  id                String    @id @default(uuid())
+  productId         String
+  variantId         String?   
+  quantityChange    Int       
+  previousQuantity  Int       
+  newQuantity       Int       
+  reason            String    
+  notes             String?   
+  orderId           String?   
+  createdBy         String?   
+  createdAt         DateTime  @default(now())
+
+  product           Product   @relation(fields: [productId], references: [id])
+  variant           ProductVariant? @relation(fields: [variantId], references: [id])
+  order             Order?    @relation(fields: [orderId], references: [id])
+  creator           User?     @relation(fields: [createdBy], references: [id])
+  
+  @@index([productId])
+  @@index([createdAt])
+  @@index([reason])
+}
+
+model StockAlert {
+  id                    String    @id @default(uuid())
+  productId             String    @unique
+  lowStockThreshold     Int       @default(10)
+  outOfStockThreshold   Int       @default(0)
+  notifyEmail           String?   
+  isActive              Boolean   @default(true)
+  lastAlertSent         DateTime? 
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  product               Product   @relation(fields: [productId], references: [id])
+}
+
+// ============================================
+// SHIPPING MANAGEMENT
+// ============================================
+
+model ShippingZone {
+  id            String    @id @default(uuid())
+  name          String    
+  countries     String    @default("[]")
+  states        String    @default("[]")
+  zipCodes      String    @default("[]")
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  methods       ShippingMethod[]
+}
+
+model ShippingMethod {
+  id                    String    @id @default(uuid())
+  zoneId                String    
+  name                  String    
+  description           String?   
+  type                  String    
+  baseRate              Float     @default(0)
+  
+  weightUnitRate        Float?    
+  minWeight             Float?    
+  maxWeight             Float?    
+  
+  pricePercentage       Float?    
+  minOrderAmount        Float?    
+  maxOrderAmount        Float?    
+  
+  itemCountRate         Float?    
+  
+  freeShippingThreshold Float?    
+  
+  minDeliveryDays       Int       @default(1)
+  maxDeliveryDays       Int       @default(7)
+  
+  isActive              Boolean   @default(true)
+  sortOrder             Int       @default(0)
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  zone                  ShippingZone @relation(fields: [zoneId], references: [id])
+  orders                Order[]
+  
+  @@index([zoneId])
+}
+
+// ============================================
+// TAX CONFIGURATION
+// ============================================
+
+model TaxRate {
+  id            String    @id @default(uuid())
+  name          String    
+  rate          Float     
+  country       String    
+  state         String?   
+  city          String?   
+  zipCode       String?   
+  taxClass      String    @default("standard")
+  priority      Int       @default(0)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([country])
+  @@index([state])
+  @@index([taxClass])
+}
+
+model TaxClass {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  description   String?   
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  products      Product[]
 }
