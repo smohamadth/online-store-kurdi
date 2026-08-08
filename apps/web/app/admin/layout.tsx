@@ -92,6 +92,7 @@ export default function AdminLayout({
         color: 'white',
         padding: '24px 0',
         flexShrink: 0,
+        position: 'relative',
       }}>
         {/* Logo */}
         <div style={{ padding: '0 24px', marginBottom: '32px' }}>
