@@ -14,6 +14,7 @@ export default function AdminDashboard() {
     topProducts: [],
   });
   const [loading, setLoading] = useState(true);
+  const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
   useEffect(() => {
     fetchDashboardData();
@@ -24,33 +25,45 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Fetch products count
+      // Fetch products
       let products = [];
       try {
         const productsRes = await api.getProducts({ limit: 100 });
         products = productsRes.data || [];
+        if (products.length > 0) {
+          setApiStatus('connected');
+        }
       } catch (e) {
         console.error('Failed to fetch products:', e);
+        setApiStatus('disconnected');
       }
 
-      // Fetch orders
+      // Fetch orders (from API and localStorage)
       let orders = [];
       try {
         const ordersRes = await api.getOrders(token);
         orders = ordersRes.data || [];
       } catch (e) {
-        console.error('Failed to fetch orders:', e);
+        console.log('Orders API not available, using localStorage');
       }
+      
+      // Also get local orders
+      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+      const allOrders = [...localOrders, ...orders];
+      // Remove duplicates
+      const uniqueOrders = allOrders.filter((order, index, self) =>
+        index === self.findIndex(o => o.id === order.id)
+      );
 
       // Calculate stats
-      const totalRevenue = orders.reduce((sum: number, order: any) => sum + (order.totalAmount || 0), 0);
+      const totalRevenue = uniqueOrders.reduce((sum: number, order: any) => sum + (order.totalAmount || 0), 0);
 
       setStats({
         totalProducts: products.length,
-        totalOrders: orders.length,
-        totalUsers: 2, // Mock - admin + customer
+        totalOrders: uniqueOrders.length,
+        totalUsers: 2, // admin + customer
         totalRevenue,
-        recentOrders: orders.slice(0, 5),
+        recentOrders: uniqueOrders.slice(0, 5),
         topProducts: products.slice(0, 5),
       });
     } catch (err) {
@@ -70,6 +83,44 @@ export default function AdminDashboard() {
 
   return (
     <div>
+      {/* API Status */}
+      {apiStatus === 'disconnected' && (
+        <div style={{
+          padding: '16px 24px',
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '8px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}>
+          <span style={{ fontSize: '20px' }}>⚠️</span>
+          <div>
+            <p style={{ fontWeight: 600, color: '#92400e' }}>API Disconnected</p>
+            <p style={{ fontSize: '14px', color: '#92400e' }}>
+              The backend API is not running. Some features may not work. 
+              Start the API with: <code style={{ backgroundColor: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>npm run dev:api</code>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {apiStatus === 'connected' && (
+        <div style={{
+          padding: '12px 24px',
+          backgroundColor: '#d1fae5',
+          border: '1px solid #22c55e',
+          borderRadius: '8px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}>
+          <span style={{ fontSize: '16px' }}>✅</span>
+          <p style={{ fontSize: '14px', color: '#166534' }}>API Connected - Data synced with database</p>
+        </div>
+      )}
       {/* Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
         <div style={{

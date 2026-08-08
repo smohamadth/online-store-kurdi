@@ -10,6 +10,7 @@ export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -33,9 +34,13 @@ export default function AdminProductsPage() {
     try {
       const response = await api.getProducts({ limit: 100 });
       setProducts(response.data || []);
+      if (response.data && response.data.length > 0) {
+        setApiStatus('connected');
+      }
     } catch (err) {
       console.error('Failed to fetch products:', err);
       setProducts([]);
+      setApiStatus('disconnected');
     } finally {
       setLoading(false);
     }
@@ -146,6 +151,22 @@ export default function AdminProductsPage() {
 
   return (
     <div>
+      {/* API Status */}
+      {apiStatus === 'disconnected' && (
+        <div style={{
+          padding: '16px 24px',
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '8px',
+          marginBottom: '24px',
+        }}>
+          <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
+          <p style={{ fontSize: '14px', color: '#92400e', marginTop: '4px' }}>
+            Products shown are from database. Start API for full functionality: <code>npm run dev:api</code>
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
