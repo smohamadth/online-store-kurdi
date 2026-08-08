@@ -103,10 +103,12 @@ export default function AdminLayout({
         color: 'white',
         padding: '24px 0',
         flexShrink: 0,
-        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
       }}>
         {/* Logo */}
-        <div style={{ padding: '0 24px', marginBottom: '32px' }}>
+        <div style={{ padding: '0 24px', marginBottom: '24px' }}>
           <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
           </Link>
@@ -115,8 +117,15 @@ export default function AdminLayout({
           </p>
         </div>
 
-        {/* Navigation */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px', overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+        {/* Navigation - Scrollable */}
+        <nav style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '2px', 
+          padding: '0 12px',
+          flex: 1,
+          overflowY: 'auto',
+        }}>
           {menuItems.map((item) => (
             <Link
               key={item.path}
@@ -125,15 +134,16 @@ export default function AdminLayout({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                padding: '12px 16px',
+                padding: '10px 16px',
                 borderRadius: '6px',
                 textDecoration: 'none',
                 color: isActive(item.path) ? 'white' : '#8888aa',
                 backgroundColor: isActive(item.path) ? '#2d2d4e' : 'transparent',
                 transition: 'all 0.2s',
+                flexShrink: 0,
               }}
             >
-              <span style={{ fontSize: '18px' }}>{item.icon}</span>
+              <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
               <span style={{ fontSize: '14px', fontWeight: isActive(item.path) ? 600 : 400 }}>
                 {item.label}
               </span>
@@ -141,15 +151,13 @@ export default function AdminLayout({
           ))}
         </nav>
 
-        {/* User Info */}
+        {/* User Info - Fixed at bottom */}
         <div style={{
-          position: 'absolute',
-          bottom: '24px',
-          left: '12px',
-          right: '12px',
           padding: '16px',
+          margin: '12px',
           backgroundColor: '#2d2d4e',
           borderRadius: '6px',
+          flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <div style={{
