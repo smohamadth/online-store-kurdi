@@ -10,19 +10,38 @@ export default function OrdersPage() {
   const [user, setUser] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    checkAuth();
+  }, []);
 
-    if (!storedUser || !token) {
-      router.push('/login');
-      return;
+  const checkAuth = async () => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
+
+      if (!storedUser || !token) {
+        router.push('/login');
+        return;
+      }
+
+      // Parse user with error handling
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error('Failed to parse user:', e);
+        router.push('/login');
+        return;
+      }
+
+      await fetchOrders(token);
+    } catch (err) {
+      console.error('Auth check error:', err);
+      setError('Failed to load orders. Please try logging in again.');
+      setLoading(false);
     }
-
-    setUser(JSON.parse(storedUser));
-    fetchOrders(token);
-  }, [router]);
+  };
 
   const fetchOrders = async (token: string) => {
     try {
@@ -30,49 +49,57 @@ export default function OrdersPage() {
       setOrders(response.data || []);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
-      // Use mock orders for demo
-      setOrders([
-        {
-          id: '1',
-          orderNumber: 'ORD-2024-001',
-          status: 'delivered',
-          totalAmount: 1049.98,
-          createdAt: '2024-01-15T10:30:00Z',
-          items: [
-            { name: 'iPhone 15 Pro', quantity: 1, price: 999.99 },
-            { name: 'Classic T-Shirt', quantity: 1, price: 29.99 },
-          ],
-        },
-        {
-          id: '2',
-          orderNumber: 'ORD-2024-002',
-          status: 'processing',
-          totalAmount: 49.99,
-          createdAt: '2024-01-20T14:20:00Z',
-          items: [
-            { name: 'Web Development Course', quantity: 1, price: 49.99 },
-          ],
-        },
-      ]);
+      // Show empty state instead of mock data
+      setOrders([]);
     } finally {
       setLoading(false);
     }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'delivered': return '#22c55e';
       case 'processing': return '#f59e0b';
       case 'shipped': return '#3b82f6';
       case 'cancelled': return '#ef4444';
+      case 'pending': return '#6b7280';
       default: return '#666';
     }
+  };
+
+  // Get item name from order item (handles different API structures)
+  const getItemName = (item: any) => {
+    // API might return: item.product.name or item.name
+    return item.product?.name || item.name || 'Product';
+  };
+
+  // Get item price from order item
+  const getItemPrice = (item: any) => {
+    return item.price || item.unitPrice || item.product?.price || 0;
   };
 
   if (loading) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
         <p style={{ color: '#666' }}>Loading orders...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
+        <p style={{ color: '#ef4444', marginBottom: '16px' }}>{error}</p>
+        <Link href="/login" style={{
+          display: 'inline-block',
+          padding: '12px 24px',
+          backgroundColor: '#000',
+          color: '#fff',
+          borderRadius: '6px',
+          textDecoration: 'none',
+        }}>
+          Go to Login
+        </Link>
       </div>
     );
   }
@@ -184,6 +211,7 @@ export default function OrdersPage() {
                   borderRadius: '8px',
                   backgroundColor: 'white',
                 }}>
+                  {/* Order Header */}
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -192,14 +220,14 @@ export default function OrdersPage() {
                   }}>
                     <div>
                       <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>
-                        Order #{order.orderNumber}
+                        Order #{order.orderNumber || order.id}
                       </h3>
                       <p style={{ fontSize: '14px', color: '#666' }}>
-                        Placed on {new Date(order.createdAt).toLocaleDateString('en-US', {
+                        Placed on {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
-                        })}
+                        }) : 'N/A'}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -212,41 +240,46 @@ export default function OrdersPage() {
                         fontWeight: 600,
                         textTransform: 'capitalize',
                       }}>
-                        {order.status}
+                        {order.status || 'pending'}
                       </span>
                     </div>
                   </div>
 
                   {/* Order Items */}
-                  <div style={{
-                    padding: '16px',
-                    backgroundColor: '#f9f9f9',
-                    borderRadius: '6px',
-                    marginBottom: '16px',
-                  }}>
-                    {order.items?.map((item: any, index: number) => (
-                      <div key={index} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        padding: '8px 0',
-                        borderBottom: index < order.items.length - 1 ? '1px solid #e5e5e5' : 'none',
-                      }}>
-                        <div>
-                          <span style={{ fontWeight: 500 }}>{item.name}</span>
-                          <span style={{ color: '#666', marginLeft: '8px' }}>x{item.quantity}</span>
+                  {order.items && order.items.length > 0 && (
+                    <div style={{
+                      padding: '16px',
+                      backgroundColor: '#f9f9f9',
+                      borderRadius: '6px',
+                      marginBottom: '16px',
+                    }}>
+                      {order.items.map((item: any, index: number) => (
+                        <div key={item.id || index} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: index < order.items.length - 1 ? '1px solid #e5e5e5' : 'none',
+                        }}>
+                          <div>
+                            <span style={{ fontWeight: 500 }}>{getItemName(item)}</span>
+                            <span style={{ color: '#666', marginLeft: '8px' }}>x{item.quantity || 1}</span>
+                          </div>
+                          <span style={{ fontWeight: 600 }}>
+                            ${(getItemPrice(item) * (item.quantity || 1)).toFixed(2)}
+                          </span>
                         </div>
-                        <span style={{ fontWeight: 600 }}>${(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
 
+                  {/* Order Footer */}
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                   }}>
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                      Total: ${order.totalAmount?.toFixed(2) || '0.00'}
+                      Total: ${Number(order.totalAmount || 0).toFixed(2)}
                     </span>
                     <Link href={`/account/orders/${order.id}`} style={{
                       padding: '10px 20px',
