@@ -13,6 +13,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [discount, setDiscount] = useState(0);
 
   const [shippingInfo, setShippingInfo] = useState({
     firstName: '',
@@ -44,6 +46,16 @@ export default function CheckoutPage() {
       }));
     }
 
+    // Load applied coupon from cart
+    const storedCoupon = localStorage.getItem('appliedCoupon');
+    if (storedCoupon) {
+      try {
+        const { coupon, discount: discountAmount } = JSON.parse(storedCoupon);
+        setAppliedCoupon(coupon);
+        setDiscount(discountAmount);
+      } catch (e) {}
+    }
+
     // Redirect if cart is empty
     if (items.length === 0 && !orderPlaced) {
       router.push('/cart');
@@ -51,9 +63,9 @@ export default function CheckoutPage() {
   }, [items, orderPlaced, router]);
 
   const subtotal = getTotal();
-  const shipping = subtotal >= 100 ? 0 : 9.99;
+  const shipping = appliedCoupon?.type === 'free_shipping' ? 0 : (subtotal >= 100 ? 0 : 9.99);
   const tax = subtotal * 0.1;
-  const total = subtotal + shipping + tax;
+  const total = subtotal - discount + shipping + tax;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setShippingInfo({ ...shippingInfo, [e.target.name]: e.target.value });
@@ -440,6 +452,12 @@ export default function CheckoutPage() {
                   <span style={{ color: '#666' }}>Subtotal</span>
                   <span style={{ fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
                 </div>
+                {discount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
+                    <span>Discount ({appliedCoupon?.code})</span>
+                    <span style={{ fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#666' }}>Shipping</span>
                   <span style={{ fontWeight: 600 }}>

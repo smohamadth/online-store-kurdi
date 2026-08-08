@@ -79,6 +79,7 @@ export default function AdminLayout({
     { path: '/admin', label: 'Dashboard', icon: '📊' },
     { path: '/admin/products', label: 'Products', icon: '📦' },
     { path: '/admin/orders', label: 'Orders', icon: '🛒' },
+    { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
     { path: '/admin/users', label: 'Users', icon: '👥' },
     { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
   ];

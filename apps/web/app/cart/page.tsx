@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useCart } from '@/lib/store';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import CouponInput from '@/components/CouponInput';
+import { Coupon } from '@/lib/coupons';
 
 function getCategoryEmoji(category: string): string {
   switch (category) {
@@ -17,11 +20,23 @@ function getCategoryEmoji(category: string): string {
 export default function CartPage() {
   const { items, removeItem, updateQuantity, clearCart, getTotal, getItemCount } = useCart();
   const router = useRouter();
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [discount, setDiscount] = useState(0);
 
   const subtotal = getTotal();
-  const shipping = subtotal >= 100 ? 0 : 9.99;
+  const shipping = appliedCoupon?.type === 'free_shipping' ? 0 : (subtotal >= 100 ? 0 : 9.99);
   const tax = subtotal * 0.1;
-  const total = subtotal + shipping + tax;
+  const total = subtotal - discount + shipping + tax;
+
+  const handleApplyCoupon = (coupon: Coupon, discountAmount: number) => {
+    setAppliedCoupon(coupon);
+    setDiscount(discountAmount);
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscount(0);
+  };
 
   if (items.length === 0) {
     return (
@@ -215,11 +230,30 @@ export default function CartPage() {
           }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Order Summary</h2>
 
+            {/* Coupon Input */}
+            <div style={{ marginBottom: '24px' }}>
+              <CouponInput
+                subtotal={subtotal}
+                onApply={handleApplyCoupon}
+                onRemove={handleRemoveCoupon}
+                appliedCoupon={appliedCoupon}
+              />
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Subtotal</span>
                 <span style={{ fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
               </div>
+
+              {/* Discount */}
+              {discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
+                  <span>Discount ({appliedCoupon?.code})</span>
+                  <span style={{ fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Shipping</span>
                 <span style={{ fontWeight: 600 }}>
@@ -242,14 +276,25 @@ export default function CartPage() {
               </div>
             </div>
 
-            {shipping > 0 && (
+            {shipping > 0 && !appliedCoupon && (
               <p style={{ marginTop: '16px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
                 Add ${(100 - subtotal).toFixed(2)} more for free shipping
               </p>
             )}
 
             <button
-              onClick={() => router.push('/checkout')}
+              onClick={() => {
+                // Store coupon info for checkout
+                if (appliedCoupon) {
+                  localStorage.setItem('appliedCoupon', JSON.stringify({
+                    coupon: appliedCoupon,
+                    discount: discount,
+                  }));
+                } else {
+                  localStorage.removeItem('appliedCoupon');
+                }
+                router.push('/checkout');
+              }}
               style={{
                 width: '100%',
                 marginTop: '24px',
