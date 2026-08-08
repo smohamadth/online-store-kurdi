@@ -1,8 +1,8 @@
 'use client';
 
-import type { Metadata } from 'next';
 import './globals.css';
 import { CartProvider, useCart } from '@/lib/store';
+import { useState, useEffect } from 'react';
 
 function CartIcon() {
   const { getItemCount } = useCart();
@@ -16,17 +16,7 @@ function CartIcon() {
       display: 'flex',
       alignItems: 'center',
     }}>
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="8" cy="21" r="1" />
         <circle cx="19" cy="21" r="1" />
         <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
@@ -51,6 +41,82 @@ function CartIcon() {
         </span>
       )}
     </a>
+  );
+}
+
+function UserMenu() {
+  const [user, setUser] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {}
+    }
+  }, []);
+
+  // Listen for storage changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (e) {
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    // Also check on focus
+    window.addEventListener('focus', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleStorageChange);
+    };
+  }, []);
+
+  if (!mounted) {
+    return <div style={{ width: '80px' }} />;
+  }
+
+  if (user) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <a href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+          👤 {user.firstName}
+        </a>
+        <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+          Orders
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <a href="/login" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+        Sign In
+      </a>
+      <a href="/register" style={{
+        textDecoration: 'none',
+        backgroundColor: '#000',
+        color: '#fff',
+        padding: '8px 16px',
+        borderRadius: '6px',
+        fontSize: '14px',
+        fontWeight: 500,
+      }}>
+        Sign Up
+      </a>
+    </div>
   );
 }
 
@@ -105,23 +171,21 @@ export default function RootLayout({
                 <a href="/products" style={{ textDecoration: 'none', color: '#333' }}>
                   Products
                 </a>
-                <a href="/categories" style={{ textDecoration: 'none', color: '#333' }}>
-                  Categories
+                <a href="/products?category=electronics" style={{ textDecoration: 'none', color: '#333' }}>
+                  Electronics
                 </a>
-                <a href="/deals" style={{ textDecoration: 'none', color: '#333' }}>
-                  Deals
+                <a href="/products?category=clothing" style={{ textDecoration: 'none', color: '#333' }}>
+                  Clothing
                 </a>
               </nav>
               <div style={{
                 marginLeft: 'auto',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '16px',
+                gap: '20px',
               }}>
                 <CartIcon />
-                <a href="/account" style={{ textDecoration: 'none', color: '#333' }}>
-                  Account
-                </a>
+                <UserMenu />
               </div>
             </div>
           </header>
@@ -135,15 +199,56 @@ export default function RootLayout({
           <footer style={{
             borderTop: '1px solid #e5e5e5',
             backgroundColor: '#f9f9f9',
+            marginTop: '64px',
           }}>
             <div style={{
               maxWidth: '1200px',
               margin: '0 auto',
               padding: '40px 20px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '32px',
+            }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>Store</h3>
+                <p style={{ fontSize: '14px', color: '#666', maxWidth: '300px' }}>
+                  Your one-stop shop for electronics, clothing, books, and digital products.
+                </p>
+              </div>
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <a href="/products" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>All Products</a>
+                  <a href="/products?category=electronics" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Electronics</a>
+                  <a href="/products?category=clothing" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Clothing</a>
+                  <a href="/products?category=books" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Books</a>
+                </div>
+              </div>
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <a href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</a>
+                  <a href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</a>
+                  <a href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</a>
+                </div>
+              </div>
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <a href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</a>
+                  <a href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</a>
+                  <a href="/shipping" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Shipping Info</a>
+                </div>
+              </div>
+            </div>
+            <div style={{
+              borderTop: '1px solid #e5e5e5',
+              padding: '20px',
               textAlign: 'center',
             }}>
               <p style={{ fontSize: '14px', color: '#666' }}>
-                Built with Next.js and Express.js. All rights reserved.
+                © 2024 Online Store. All rights reserved.
               </p>
             </div>
           </footer>
