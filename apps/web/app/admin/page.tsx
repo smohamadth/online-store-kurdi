@@ -337,19 +337,31 @@ export default function AdminDashboard() {
             <div style={{ fontSize: '32px', marginBottom: '8px' }}>📋</div>
             <p style={{ fontWeight: 500 }}>Manage Orders</p>
           </Link>
-          <Link href="/admin/users" style={{
-            padding: '20px',
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            border: '1px solid #e5e5e5',
-            textDecoration: 'none',
-            color: '#000',
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: '32px', marginBottom: '8px' }}>👥</div>
-            <p style={{ fontWeight: 500 }}>Manage Users</p>
-          </Link>
-          <Link href="/admin/analytics" style={{
+              <Link href="/admin/users" style={{
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                border: '1px solid #e5e5e5',
+                textDecoration: 'none',
+                color: '#000',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '8px' }}>👥</div>
+                <p style={{ fontWeight: 500 }}>Manage Users</p>
+              </Link>
+              <Link href="/admin/reviews" style={{
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                border: '1px solid #e5e5e5',
+                textDecoration: 'none',
+                color: '#000',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '8px' }}>⭐</div>
+                <p style={{ fontWeight: 500 }}>Manage Reviews</p>
+              </Link>
+              <Link href="/admin/analytics" style={{
             padding: '20px',
             backgroundColor: 'white',
             borderRadius: '8px',
