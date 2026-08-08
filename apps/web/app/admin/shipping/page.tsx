@@ -173,7 +173,11 @@ export default function AdminShippingPage() {
                 <div>
                   <h3 style={{ fontWeight: 600 }}>{zone.name}</h3>
                   <p style={{ fontSize: '14px', color: '#666' }}>
-                    Countries: {zone.countries.join(', ')}
+                    Countries: {Array.isArray(zone.countries) 
+                      ? zone.countries.join(', ') 
+                      : typeof zone.countries === 'string' 
+                        ? zone.countries 
+                        : 'None'}
                   </p>
                 </div>
                 <button
