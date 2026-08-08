@@ -116,16 +116,43 @@ function UserMenu() {
             ⚙️ Admin Panel
           </a>
         )}
-        <a href="/account" style={{ 
-          textDecoration: 'none', 
-          color: '#333', 
-          fontSize: '14px',
-        }}>
-          👤 My Account
-        </a>
-        <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-          Orders
-        </a>
+        
+        {/* Regular users see account and orders */}
+        {!isAdmin && (
+          <>
+            <a href="/account" style={{ 
+              textDecoration: 'none', 
+              color: '#333', 
+              fontSize: '14px',
+            }}>
+              👤 My Account
+            </a>
+            <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+              Orders
+            </a>
+          </>
+        )}
+        
+        {/* Admin users only see logout */}
+        {isAdmin && (
+          <button
+            onClick={() => {
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              window.dispatchEvent(new Event('authChange'));
+              window.location.href = '/';
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#ef4444',
+              cursor: 'pointer',
+              fontSize: '14px',
+            }}
+          >
+            Logout
+          </button>
+        )}
       </div>
     );
   }
