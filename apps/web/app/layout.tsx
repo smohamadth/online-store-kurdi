@@ -3,6 +3,7 @@
 import './globals.css';
 import { CartProvider, useCart } from '@/lib/store';
 import { useState, useEffect } from 'react';
+import SearchBar from '@/components/SearchBar';
 
 function CartIcon() {
   const { getItemCount } = useCart();
@@ -222,6 +223,12 @@ export default function RootLayout({
                   Clothing
                 </a>
               </nav>
+              
+              {/* Search Bar */}
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 24px' }}>
+                <SearchBar />
+              </div>
+              
               <div style={{
                 marginLeft: 'auto',
                 display: 'flex',
