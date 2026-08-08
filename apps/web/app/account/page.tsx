@@ -155,6 +155,14 @@ export default function AccountPage() {
               }}>
                 Orders
               </Link>
+              <Link href="/account/profile" style={{
+                padding: '10px 16px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                color: '#666',
+              }}>
+                Edit Profile
+              </Link>
               <Link href="/wishlist" style={{
                 padding: '10px 16px',
                 borderRadius: '6px',
@@ -204,7 +212,7 @@ export default function AccountPage() {
           </div>
 
           {/* Quick Actions */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
             <Link href="/account/orders" style={{
               padding: '24px',
               border: '1px solid #e5e5e5',
@@ -216,6 +224,19 @@ export default function AccountPage() {
               <div style={{ fontSize: '32px', marginBottom: '12px' }}>📦</div>
               <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>Orders</h3>
               <p style={{ fontSize: '14px', color: '#666' }}>View order history</p>
+            </Link>
+
+            <Link href="/account/profile" style={{
+              padding: '24px',
+              border: '1px solid #e5e5e5',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              color: '#000',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '12px' }}>✏️</div>
+              <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>Edit Profile</h3>
+              <p style={{ fontSize: '14px', color: '#666' }}>Update your info</p>
             </Link>
 
             <Link href="/wishlist" style={{
