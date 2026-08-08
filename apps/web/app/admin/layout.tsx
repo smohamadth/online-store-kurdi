@@ -60,6 +60,11 @@ export default function AdminLayout({
   };
 
   const isActive = (path: string) => {
+    // Dashboard should only be active when exactly on /admin
+    if (path === '/admin') {
+      return pathname === '/admin' || pathname === '/admin/';
+    }
+    // Other paths should match exactly or with sub-paths
     return pathname === path || pathname?.startsWith(path + '/');
   };
 
@@ -111,7 +116,7 @@ export default function AdminLayout({
         </div>
 
         {/* Navigation */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px' }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px', overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
           {menuItems.map((item) => (
             <Link
               key={item.path}
