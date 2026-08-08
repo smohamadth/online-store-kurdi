@@ -50,38 +50,37 @@ function UserMenu() {
 
   useEffect(() => {
     setMounted(true);
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {}
-    }
+    loadUser();
+    
+    // Listen for custom auth change event
+    const handleAuthChange = () => {
+      loadUser();
+    };
+    
+    window.addEventListener('authChange', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    
+    return () => {
+      window.removeEventListener('authChange', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
   }, []);
 
-  // Listen for storage changes
-  useEffect(() => {
-    const handleStorageChange = () => {
+  const loadUser = () => {
+    try {
       const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch (e) {
-          setUser(null);
-        }
+      const token = localStorage.getItem('token');
+      
+      if (storedUser && token) {
+        setUser(JSON.parse(storedUser));
       } else {
         setUser(null);
       }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    // Also check on focus
-    window.addEventListener('focus', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', handleStorageChange);
-    };
-  }, []);
+    } catch (e) {
+      console.error('Failed to load user:', e);
+      setUser(null);
+    }
+  };
 
   if (!mounted) {
     return <div style={{ width: '80px' }} />;

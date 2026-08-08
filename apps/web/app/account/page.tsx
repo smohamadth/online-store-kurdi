@@ -3,28 +3,67 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    checkAuth();
+  }, []);
 
-    if (!storedUser || !token) {
-      router.push('/login');
-      return;
+  const checkAuth = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+
+      if (!token || !storedUser) {
+        router.push('/login');
+        return;
+      }
+
+      // Parse stored user
+      let userData;
+      try {
+        userData = JSON.parse(storedUser);
+      } catch (e) {
+        console.error('Failed to parse stored user:', e);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return;
+      }
+
+      // Verify token is still valid by fetching current user
+      try {
+        const response = await api.getCurrentUser(token);
+        if (response.data) {
+          // Update stored user with fresh data
+          userData = response.data;
+          localStorage.setItem('user', JSON.stringify(userData));
+        }
+      } catch (err) {
+        // Token might be expired - but still show account with stored data
+        console.warn('Could not verify token:', err);
+      }
+
+      setUser(userData);
+    } catch (err) {
+      console.error('Auth check error:', err);
+      setError('Failed to load account. Please try logging in again.');
+    } finally {
+      setLoading(false);
     }
-
-    setUser(JSON.parse(storedUser));
-    setLoading(false);
-  }, [router]);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new Event('authChange'));
     router.push('/');
     router.refresh();
   };
@@ -32,7 +71,25 @@ export default function AccountPage() {
   if (loading) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
-        <p style={{ color: '#666' }}>Loading...</p>
+        <p style={{ color: '#666' }}>Loading account...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
+        <p style={{ color: '#ef4444', marginBottom: '16px' }}>{error}</p>
+        <Link href="/login" style={{
+          display: 'inline-block',
+          padding: '12px 24px',
+          backgroundColor: '#000',
+          color: '#fff',
+          borderRadius: '6px',
+          textDecoration: 'none',
+        }}>
+          Go to Login
+        </Link>
       </div>
     );
   }

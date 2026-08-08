@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -11,6 +11,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Check if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    
+    if (token && storedUser) {
+      // Already logged in, redirect to account
+      router.push('/account');
+    } else {
+      setCheckingAuth(false);
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,16 +39,35 @@ export default function LoginPage() {
         localStorage.setItem('token', response.data.accessToken);
         localStorage.setItem('user', JSON.stringify(response.data.user));
         
+        // Dispatch custom event to notify other components
+        window.dispatchEvent(new Event('authChange'));
+        
         // Redirect to home
         router.push('/');
         router.refresh();
+      } else {
+        setError('Login failed. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      console.error('Login error:', err);
+      if (err.message?.includes('fetch')) {
+        setError('Cannot connect to server. Please make sure the API is running.');
+      } else {
+        setError(err.message || 'Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div style={{ maxWidth: '480px', margin: '64px auto', padding: '0 20px', textAlign: 'center' }}>
+        <p style={{ color: '#666' }}>Checking authentication...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{
