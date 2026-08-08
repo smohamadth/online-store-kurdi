@@ -56,6 +56,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
   };
 
   const fetchReviews = async () => {
+    setLoading(true);
+    
     try {
       // Try dedicated reviews endpoint first
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`);
@@ -64,6 +66,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
         const data = await response.json();
         if (data.data && data.data.length > 0) {
           setReviews(data.data);
+          setLoading(false);
           return;
         }
       }
@@ -78,6 +81,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
         const parsed = JSON.parse(storedReviews);
         if (parsed.length > 0) {
           setReviews(parsed);
+          setLoading(false);
           return;
         }
       }
