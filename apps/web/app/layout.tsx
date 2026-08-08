@@ -87,16 +87,35 @@ function UserMenu() {
   }
 
   if (user) {
+    const isAdmin = user.role === 'admin' || user.role === 'manager';
+    
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {(user.role === 'admin' || user.role === 'manager') && (
-          <a href="/admin" style={{ textDecoration: 'none', color: '#f59e0b', fontSize: '14px', fontWeight: 600 }}>
-            ⚙️ Admin
+        {isAdmin && (
+          <a href="/admin" style={{ 
+            textDecoration: 'none', 
+            color: '#fff', 
+            fontSize: '14px', 
+            fontWeight: 600,
+            backgroundColor: '#f59e0b',
+            padding: '6px 12px',
+            borderRadius: '4px',
+          }}>
+            ⚙️ Admin Panel
           </a>
         )}
-        <a href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-          👤 {user.firstName}
-        </a>
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <a href="/account" style={{ 
+            textDecoration: 'none', 
+            color: '#333', 
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}>
+            👤 {user.firstName}
+          </a>
+        </div>
         <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
           Orders
         </a>
