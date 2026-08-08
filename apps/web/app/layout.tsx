@@ -47,12 +47,10 @@ function CartIcon() {
 function UserMenu() {
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
-  const [currentPath, setCurrentPath] = useState('');
 
   useEffect(() => {
     setMounted(true);
     loadUser();
-    setCurrentPath(window.location.pathname);
     
     // Listen for custom auth change event
     const handleAuthChange = () => {
@@ -67,11 +65,6 @@ function UserMenu() {
       window.removeEventListener('storage', handleAuthChange);
     };
   }, []);
-
-  // Update path on every render (catches navigation)
-  useEffect(() => {
-    setCurrentPath(window.location.pathname);
-  });
 
   const loadUser = () => {
     try {
@@ -95,23 +88,41 @@ function UserMenu() {
 
   if (user) {
     const isAdmin = user.role === 'admin' || user.role === 'manager';
-    const isAdminPage = currentPath.startsWith('/admin');
     
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {/* Only show admin link if NOT on admin page */}
-        {isAdmin && !isAdminPage && (
-          <a href="/admin" style={{ 
-            textDecoration: 'none', 
-            color: '#fff', 
-            fontSize: '14px', 
-            fontWeight: 600,
-            backgroundColor: '#f59e0b',
-            padding: '6px 12px',
-            borderRadius: '4px',
-          }}>
-            ⚙️ Admin Panel
-          </a>
+        {/* Admin users see admin panel link and logout */}
+        {isAdmin && (
+          <>
+            <a href="/admin" style={{ 
+              textDecoration: 'none', 
+              color: '#fff', 
+              fontSize: '14px', 
+              fontWeight: 600,
+              backgroundColor: '#f59e0b',
+              padding: '6px 12px',
+              borderRadius: '4px',
+            }}>
+              ⚙️ Admin
+            </a>
+            <button
+              onClick={() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.dispatchEvent(new Event('authChange'));
+                window.location.href = '/';
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#ef4444',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              Logout
+            </button>
+          </>
         )}
         
         {/* Regular users see account and orders */}
@@ -128,27 +139,6 @@ function UserMenu() {
               Orders
             </a>
           </>
-        )}
-        
-        {/* Admin users only see logout */}
-        {isAdmin && (
-          <button
-            onClick={() => {
-              localStorage.removeItem('token');
-              localStorage.removeItem('user');
-              window.dispatchEvent(new Event('authChange'));
-              window.location.href = '/';
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#ef4444',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            Logout
-          </button>
         )}
       </div>
     );
