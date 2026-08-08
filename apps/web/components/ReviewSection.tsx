@@ -58,64 +58,72 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
   const fetchReviews = async () => {
     setLoading(true);
     
-    try {
-      // Try dedicated reviews endpoint first
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data && data.data.length > 0) {
-          setReviews(data.data);
-          setLoading(false);
-          return;
-        }
-      }
-    } catch (err) {
-      console.log('Reviews API not available, using local storage');
-    }
-
-    // Try to load from localStorage
+    // First try to load from localStorage (includes user-submitted reviews)
+    let localReviews: Review[] = [];
     try {
       const storedReviews = localStorage.getItem(`reviews_${productId}`);
       if (storedReviews) {
-        const parsed = JSON.parse(storedReviews);
-        if (parsed.length > 0) {
-          setReviews(parsed);
-          setLoading(false);
-          return;
-        }
+        localReviews = JSON.parse(storedReviews);
       }
     } catch (err) {
       console.log('No stored reviews found');
     }
 
-    // Use mock reviews as default
-    setReviews([
-      {
-        id: '1',
-        userId: 'user1',
-        productId,
-        rating: 5,
-        title: 'Amazing product!',
-        comment: 'Really love this product. Great quality and fast shipping.',
-        isVerified: true,
-        isApproved: true,
-        createdAt: '2024-01-15T10:00:00Z',
-        user: { id: 'user1', firstName: 'John', lastName: 'D.' },
-      },
-      {
-        id: '2',
-        userId: 'user2',
-        productId,
-        rating: 4,
-        title: 'Good value',
-        comment: 'Solid product for the price. Would recommend.',
-        isVerified: true,
-        isApproved: true,
-        createdAt: '2024-01-10T14:30:00Z',
-        user: { id: 'user2', firstName: 'Sarah', lastName: 'M.' },
-      },
-    ]);
+    // Try to get API reviews
+    let apiReviews: Review[] = [];
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data && data.data.length > 0) {
+          apiReviews = data.data;
+        }
+      }
+    } catch (err) {
+      console.log('Reviews API not available');
+    }
+
+    // Merge reviews: local reviews + API reviews (avoid duplicates)
+    const allReviews = [...localReviews];
+    apiReviews.forEach(apiReview => {
+      if (!allReviews.find(r => r.id === apiReview.id)) {
+        allReviews.push(apiReview);
+      }
+    });
+
+    // If no reviews at all, show mock reviews
+    if (allReviews.length === 0) {
+      setReviews([
+        {
+          id: 'mock-1',
+          userId: 'user1',
+          productId,
+          rating: 5,
+          title: 'Amazing product!',
+          comment: 'Really love this product. Great quality and fast shipping.',
+          isVerified: true,
+          isApproved: true,
+          createdAt: '2024-01-15T10:00:00Z',
+          user: { id: 'user1', firstName: 'John', lastName: 'D.' },
+        },
+        {
+          id: 'mock-2',
+          userId: 'user2',
+          productId,
+          rating: 4,
+          title: 'Good value',
+          comment: 'Solid product for the price. Would recommend.',
+          isVerified: true,
+          isApproved: true,
+          createdAt: '2024-01-10T14:30:00Z',
+          user: { id: 'user2', firstName: 'Sarah', lastName: 'M.' },
+        },
+      ]);
+    } else {
+      // Sort by date (newest first)
+      allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setReviews(allReviews);
+    }
     
     setLoading(false);
   };
