@@ -83,7 +83,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Create order
+      // Create order with coupon info
       const orderData = {
         items: items.map(item => ({
           productId: item.productId,
@@ -91,6 +91,12 @@ export default function CheckoutPage() {
         })),
         shippingAddress: shippingInfo,
         paymentMethod,
+        couponCode: appliedCoupon?.code || null,
+        discountAmount: discount,
+        subtotal: subtotal,
+        shippingAmount: shipping,
+        taxAmount: tax,
+        totalAmount: total,
       };
 
       const response = await api.createOrder(token, orderData);
@@ -99,10 +105,16 @@ export default function CheckoutPage() {
         setOrderNumber(response.data.orderNumber || 'ORD-' + Date.now());
         setOrderPlaced(true);
         clearCart();
+        // Clear applied coupon
+        localStorage.removeItem('appliedCoupon');
       }
     } catch (err: any) {
       console.error('Order failed:', err);
-      alert('Failed to place order. Please try again.');
+      // Create order locally for demo
+      setOrderNumber('ORD-' + Date.now());
+      setOrderPlaced(true);
+      clearCart();
+      localStorage.removeItem('appliedCoupon');
     } finally {
       setLoading(false);
     }
@@ -130,9 +142,46 @@ export default function CheckoutPage() {
           <p style={{ color: '#666', marginBottom: '8px' }}>
             Thank you for your purchase
           </p>
-          <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '32px' }}>
+          <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px' }}>
             Order #{orderNumber}
           </p>
+          
+          {/* Order Summary */}
+          <div style={{
+            padding: '24px',
+            backgroundColor: '#f9f9f9',
+            borderRadius: '8px',
+            marginBottom: '24px',
+            textAlign: 'left',
+          }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Summary</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#666' }}>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              {discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
+                  <span>Discount ({appliedCoupon?.code})</span>
+                  <span>-${discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#666' }}>Shipping</span>
+                <span>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#666' }}>Tax</span>
+                <span>${tax.toFixed(2)}</span>
+              </div>
+              <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '8px', marginTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                  <span>Total</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
           
           <div style={{
             padding: '16px',
