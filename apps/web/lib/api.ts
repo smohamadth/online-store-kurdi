@@ -185,6 +185,12 @@ class ApiClient {
     });
   }
 
+  async getOrder(token: string, orderId: string): Promise<ApiResponse<any>> {
+    return this.request(`/orders/${orderId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
   // Analytics
   async trackEvent(event: {
     eventType: string;
