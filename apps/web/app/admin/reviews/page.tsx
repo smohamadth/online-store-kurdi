@@ -26,6 +26,7 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'approved' | 'pending'>('all');
+  const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
   useEffect(() => {
     fetchReviews();
@@ -38,15 +39,39 @@ export default function AdminReviewsPage() {
 
       // Try API first
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
           const data = await response.json();
           if (data.data && data.data.length > 0) {
-            setReviews(data.data);
-            setLoading(false);
-            return;
+            // Get reviews for each product
+            const allReviews: Review[] = [];
+            for (const product of data.data) {
+              try {
+                const reviewsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${product.id}/reviews`);
+                if (reviewsRes.ok) {
+                  const reviewsData = await reviewsRes.json();
+                  if (reviewsData.data) {
+                    reviewsData.data.forEach((review: any) => {
+                      allReviews.push({
+                        ...review,
+                        productName: product.name,
+                        productSlug: product.slug,
+                      });
+                    });
+                  }
+                }
+              } catch (e) {}
+            }
+            
+            if (allReviews.length > 0) {
+              allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              setReviews(allReviews);
+              setApiStatus('connected');
+              setLoading(false);
+              return;
+            }
           }
         }
       } catch (err) {
@@ -54,6 +79,7 @@ export default function AdminReviewsPage() {
       }
 
       // Fallback: Get reviews from localStorage
+      setApiStatus('disconnected');
       const allReviews: Review[] = [];
       const keys = Object.keys(localStorage);
       keys.forEach(key => {
@@ -152,6 +178,34 @@ export default function AdminReviewsPage() {
 
   return (
     <div>
+      {/* API Status */}
+      {apiStatus === 'disconnected' && (
+        <div style={{
+          padding: '16px 24px',
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '8px',
+          marginBottom: '24px',
+        }}>
+          <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
+          <p style={{ fontSize: '14px', color: '#92400e', marginTop: '4px' }}>
+            Reviews shown are from localStorage. Start API to see database reviews: <code>npm run dev:api</code>
+          </p>
+        </div>
+      )}
+
+      {apiStatus === 'connected' && (
+        <div style={{
+          padding: '12px 24px',
+          backgroundColor: '#d1fae5',
+          border: '1px solid #22c55e',
+          borderRadius: '8px',
+          marginBottom: '24px',
+        }}>
+          <p style={{ fontSize: '14px', color: '#166534' }}>✅ API Connected - Showing database reviews</p>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>

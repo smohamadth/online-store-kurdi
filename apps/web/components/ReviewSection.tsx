@@ -58,18 +58,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
   const fetchReviews = async () => {
     setLoading(true);
     
-    // First try to load from localStorage (includes user-submitted reviews)
-    let localReviews: Review[] = [];
-    try {
-      const storedReviews = localStorage.getItem(`reviews_${productId}`);
-      if (storedReviews) {
-        localReviews = JSON.parse(storedReviews);
-      }
-    } catch (err) {
-      console.log('No stored reviews found');
-    }
-
-    // Try to get API reviews
+    // Try to get reviews from database first
     let apiReviews: Review[] = [];
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`);
@@ -83,47 +72,61 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
       console.log('Reviews API not available');
     }
 
-    // Merge reviews: local reviews + API reviews (avoid duplicates)
-    const allReviews = [...localReviews];
-    apiReviews.forEach(apiReview => {
-      if (!allReviews.find(r => r.id === apiReview.id)) {
-        allReviews.push(apiReview);
-      }
-    });
-
-    // If no reviews at all, show mock reviews
-    if (allReviews.length === 0) {
-      setReviews([
-        {
-          id: 'mock-1',
-          userId: 'user1',
-          productId,
-          rating: 5,
-          title: 'Amazing product!',
-          comment: 'Really love this product. Great quality and fast shipping.',
-          isVerified: true,
-          isApproved: true,
-          createdAt: '2024-01-15T10:00:00Z',
-          user: { id: 'user1', firstName: 'John', lastName: 'D.' },
-        },
-        {
-          id: 'mock-2',
-          userId: 'user2',
-          productId,
-          rating: 4,
-          title: 'Good value',
-          comment: 'Solid product for the price. Would recommend.',
-          isVerified: true,
-          isApproved: true,
-          createdAt: '2024-01-10T14:30:00Z',
-          user: { id: 'user2', firstName: 'Sarah', lastName: 'M.' },
-        },
-      ]);
-    } else {
+    // If we got reviews from API, use them
+    if (apiReviews.length > 0) {
       // Sort by date (newest first)
-      allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setReviews(allReviews);
+      apiReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setReviews(apiReviews);
+      setLoading(false);
+      return;
     }
+
+    // Fallback: Load from localStorage
+    let localReviews: Review[] = [];
+    try {
+      const storedReviews = localStorage.getItem(`reviews_${productId}`);
+      if (storedReviews) {
+        localReviews = JSON.parse(storedReviews);
+      }
+    } catch (err) {
+      console.log('No stored reviews found');
+    }
+
+    // If we have local reviews, use them
+    if (localReviews.length > 0) {
+      localReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setReviews(localReviews);
+      setLoading(false);
+      return;
+    }
+
+    // Last resort: Show mock reviews
+    setReviews([
+      {
+        id: 'mock-1',
+        userId: 'user1',
+        productId,
+        rating: 5,
+        title: 'Amazing product!',
+        comment: 'Really love this product. Great quality and fast shipping.',
+        isVerified: true,
+        isApproved: true,
+        createdAt: '2024-01-15T10:00:00Z',
+        user: { id: 'user1', firstName: 'John', lastName: 'D.' },
+      },
+      {
+        id: 'mock-2',
+        userId: 'user2',
+        productId,
+        rating: 4,
+        title: 'Good value',
+        comment: 'Solid product for the price. Would recommend.',
+        isVerified: true,
+        isApproved: true,
+        createdAt: '2024-01-10T14:30:00Z',
+        user: { id: 'user2', firstName: 'Sarah', lastName: 'M.' },
+      },
+    ]);
     
     setLoading(false);
   };
@@ -141,8 +144,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
         return;
       }
 
-      // Try to submit to API
-      let apiSuccess = false;
+      // Try to save to database via API
+      let savedReview = null;
       try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`, {
           method: 'POST',
@@ -150,16 +153,28 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            rating: formData.rating,
+            title: formData.title,
+            comment: formData.comment,
+          }),
         });
-        apiSuccess = response.ok;
+        
+        if (response.ok) {
+          const data = await response.json();
+          savedReview = data.data;
+          setMessage({ type: 'success', text: 'Review saved to database!' });
+        } else {
+          throw new Error('API returned error');
+        }
       } catch (err) {
         console.log('API not available, saving locally');
+        setMessage({ type: 'success', text: 'Review saved locally (API not available)' });
       }
 
-      // Always add review locally (works with or without API)
+      // Create review object
       const newReview: Review = {
-        id: Date.now().toString(),
+        id: savedReview?.id || Date.now().toString(),
         userId: user?.id || 'anonymous',
         productId,
         rating: formData.rating,
@@ -174,14 +189,13 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
       const updatedReviews = [newReview, ...reviews];
       setReviews(updatedReviews);
       
-      // Save to localStorage so reviews persist
+      // Also save to localStorage as backup
       try {
         localStorage.setItem(`reviews_${productId}`, JSON.stringify(updatedReviews));
       } catch (e) {
         console.log('Could not save to localStorage');
       }
       
-      setMessage({ type: 'success', text: 'Review submitted successfully!' });
       setShowForm(false);
       setFormData({ rating: 5, title: '', comment: '' });
     } catch (err) {
