@@ -22,6 +22,7 @@ import analyticsRoutes from './modules/analytics/analytics.routes';
 import recommendationRoutes from './modules/recommendations/recommendation.routes';
 import storageRoutes from './modules/storage/storage.routes';
 import reviewRoutes from './modules/reviews/review.routes';
+import couponRoutes from './modules/coupons/coupon.routes';
 
 // Create Express app
 const app = express();
@@ -121,6 +122,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/storage', storageRoutes);
 app.use('/api', reviewRoutes);
+app.use('/api', couponRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
