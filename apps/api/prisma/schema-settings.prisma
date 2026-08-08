@@ -1,0 +1,225 @@
+// Add these models to your existing schema.prisma
+
+// ============================================
+// SETTINGS & CONFIGURATION
+// ============================================
+
+// Store settings (single row)
+model StoreSettings {
+  id                    String    @id @default("default")
+  
+  // Store Info
+  storeName             String    @default("My Store")
+  storeDescription      String?   
+  storeEmail            String    @default("info@store.com")
+  storePhone            String?   
+  storeAddress          String?   
+  storeCity             String?   
+  storeState            String?   
+  storeZipCode          String?   
+  storeCountry          String    @default("US")
+  
+  // Currency
+  currency              String    @default("USD")
+  currencySymbol        String    @default("$")
+  currencyPosition      String    @default("before") // before or after
+  
+  // Units
+  weightUnit            String    @default("kg") // kg, lb
+  dimensionUnit         String    @default("cm") // cm, in
+  
+  // Date/Time
+  timezone              String    @default("UTC")
+  dateFormat            String    @default("MM/DD/YYYY")
+  
+  // Social Media
+  facebookUrl           String?   
+  instagramUrl          String?   
+  twitterUrl            String?   
+  youtubeUrl            String?   
+  
+  // SEO
+  metaTitle             String?   
+  metaDescription       String?   
+  googleAnalyticsId     String?   
+  googleTagManagerId    String?   
+  
+  // Maintenance
+  maintenanceMode       Boolean   @default(false)
+  maintenanceMessage    String?   
+  maintenanceAllowedIPs String?   @default("[]") // JSON array
+  
+  // Legal
+  privacyPolicyUrl      String?   
+  termsOfServiceUrl     String?   
+  returnPolicyUrl       String?   
+  
+  // Timestamps
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// Email templates
+model EmailTemplate {
+  id            String    @id @default(uuid())
+  name          String    @unique // order_confirmation, shipping_notification, etc.
+  subject       String    
+  htmlContent   String    
+  textContent   String?   
+  variables     String    @default("[]") // JSON array of available variables
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// INVENTORY MANAGEMENT
+// ============================================
+
+// Inventory log for tracking stock changes
+model InventoryLog {
+  id                String    @id @default(uuid())
+  productId         String
+  variantId         String?   
+  quantityChange    Int       // positive = increase, negative = decrease
+  previousQuantity  Int       
+  newQuantity       Int       
+  reason            String    // sale, return, adjustment, restock, damaged
+  notes             String?   
+  orderId           String?   // If related to an order
+  createdBy         String?   // User who made the change
+  createdAt         DateTime  @default(now())
+
+  product           Product   @relation(fields: [productId], references: [id])
+  variant           ProductVariant? @relation(fields: [variantId], references: [id])
+  order             Order?    @relation(fields: [orderId], references: [id])
+  creator           User?     @relation(fields: [createdBy], references: [id])
+  
+  @@index([productId])
+  @@index([variantId])
+  @@index([createdAt])
+  @@index([reason])
+}
+
+// Stock alerts configuration
+model StockAlert {
+  id              String    @id @default(uuid())
+  productId       String    @unique
+  lowStockThreshold Int     @default(10)
+  outOfStockThreshold Int   @default(0)
+  notifyEmail     String?   
+  isActive        Boolean   @default(true)
+  lastAlertSent   DateTime? 
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product         Product   @relation(fields: [productId], references: [id])
+}
+
+// ============================================
+// SHIPPING MANAGEMENT
+// ============================================
+
+// Shipping zones
+model ShippingZone {
+  id            String    @id @default(uuid())
+  name          String    
+  countries     String    @default("[]") // JSON array of country codes
+  states        String    @default("[]") // JSON array of state codes
+  zipCodes      String    @default("[]") // JSON array of zip code patterns
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  methods       ShippingMethod[]
+  
+  @@index([isActive])
+}
+
+// Shipping methods
+model ShippingMethod {
+  id                  String    @id @default(uuid())
+  zoneId              String    
+  name                String    
+  description         String?   
+  type                String    // flat, weight, price, item_count
+  baseRate            Decimal   @default(0) @db.Decimal(10, 2)
+  
+  // Weight-based rates
+  weightUnitRate      Decimal?  @db.Decimal(10, 2) // Rate per unit weight
+  minWeight           Decimal?  @db.Decimal(10, 2)
+  maxWeight           Decimal?  @db.Decimal(10, 2)
+  
+  // Price-based rates (percentage of order total)
+  pricePercentage     Decimal?  @db.Decimal(5, 2)
+  minOrderAmount      Decimal?  @db.Decimal(10, 2)
+  maxOrderAmount      Decimal?  @db.Decimal(10, 2)
+  
+  // Item count-based rates
+  itemCountRate       Decimal?  @db.Decimal(10, 2) // Rate per item
+  
+  // Free shipping
+  freeShippingThreshold Decimal? @db.Decimal(10, 2)
+  
+  // Delivery estimate
+  minDeliveryDays     Int       @default(1)
+  maxDeliveryDays     Int       @default(7)
+  
+  // Status
+  isActive            Boolean   @default(true)
+  sortOrder           Int       @default(0)
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  zone                ShippingZone @relation(fields: [zoneId], references: [id])
+  orders              Order[]
+  
+  @@index([zoneId])
+  @@index([isActive])
+}
+
+// ============================================
+// TAX CONFIGURATION
+// ============================================
+
+// Tax rates
+model TaxRate {
+  id            String    @id @default(uuid())
+  name          String    
+  rate          Decimal   @db.Decimal(5, 4) // e.g., 0.1000 for 10%
+  country       String    
+  state         String?   
+  city          String?   
+  zipCode       String?   
+  taxClass      String    @default("standard") // standard, reduced, zero
+  priority      Int       @default(0) // Higher priority = applied first
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([country])
+  @@index([state])
+  @@index([taxClass])
+  @@index([isActive])
+}
+
+// Tax classes
+model TaxClass {
+  id            String    @id @default(uuid())
+  name          String    @unique // standard, reduced, zero, digital
+  description   String?   
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  products      Product[] 
+}
+
+// Add taxClassId to Product model
+// model Product {
+//   ...
+//   taxClassId    String?   
+//   taxClass      TaxClass? @relation(fields: [taxClassId], references: [id])
+// }

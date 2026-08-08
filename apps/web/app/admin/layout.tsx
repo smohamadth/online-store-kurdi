@@ -79,9 +79,13 @@ export default function AdminLayout({
     { path: '/admin', label: 'Dashboard', icon: '📊' },
     { path: '/admin/products', label: 'Products', icon: '📦' },
     { path: '/admin/orders', label: 'Orders', icon: '🛒' },
+    { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
     { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
     { path: '/admin/reviews', label: 'Reviews', icon: '⭐' },
     { path: '/admin/users', label: 'Users', icon: '👥' },
+    { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
+    { path: '/admin/tax', label: 'Tax', icon: '💰' },
+    { path: '/admin/settings', label: 'Settings', icon: '⚙️' },
     { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
   ];
 
