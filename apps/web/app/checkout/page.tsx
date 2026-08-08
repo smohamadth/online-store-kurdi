@@ -99,27 +99,30 @@ export default function CheckoutPage() {
         totalAmount: total,
       };
 
-      const response = await api.createOrder(token, orderData);
-      
-      if (response.data) {
-        const orderNumber = response.data.orderNumber || 'ORD-' + Date.now();
-        setOrderNumber(orderNumber);
-        
-        // Save order locally
-        saveOrderLocally(orderNumber, orderData);
-        
-        setOrderPlaced(true);
-        clearCart();
-        localStorage.removeItem('appliedCoupon');
+      // Try API
+      let orderNumber = 'ORD-' + Date.now();
+      try {
+        const response = await api.createOrder(token, orderData);
+        if (response.data?.orderNumber) {
+          orderNumber = response.data.orderNumber;
+        }
+      } catch (err) {
+        console.log('API not available, saving locally');
       }
+
+      // Save order locally
+      saveOrderLocally(orderNumber);
+      
+      setOrderNumber(orderNumber);
+      setOrderPlaced(true);
+      clearCart();
+      localStorage.removeItem('appliedCoupon');
     } catch (err: any) {
       console.error('Order failed:', err);
-      // Create order locally
+      // Still create order locally
       const orderNumber = 'ORD-' + Date.now();
+      saveOrderLocally(orderNumber);
       setOrderNumber(orderNumber);
-      
-      saveOrderLocally(orderNumber, orderData);
-      
       setOrderPlaced(true);
       clearCart();
       localStorage.removeItem('appliedCoupon');
