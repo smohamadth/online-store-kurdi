@@ -195,82 +195,101 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
         }}>
           {user ? (
             <>
-              {/* Admin Panel - only for admins */}
-              {isAdmin && (
-                <Link 
-                  href="/admin" 
-                  onClick={onClose}
-                  style={{ 
-                    display: 'block',
-                    padding: '12px 16px', 
-                    backgroundColor: '#f59e0b',
-                    color: 'white',
-                    borderRadius: '6px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    textAlign: 'center',
-                    marginBottom: '16px',
-                  }}
-                >
-                  ⚙️ Admin Panel
-                </Link>
+              {isAdmin ? (
+                <>
+                  {/* Admin Panel - only for admins */}
+                  <Link 
+                    href="/admin" 
+                    onClick={onClose}
+                    style={{ 
+                      display: 'block',
+                      padding: '12px 16px', 
+                      backgroundColor: '#f59e0b',
+                      color: 'white',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      textAlign: 'center',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    ⚙️ Admin Panel
+                  </Link>
+                  <button
+                    onClick={() => { onLogout(); onClose(); }}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Regular user options */}
+                  <Link 
+                    href="/account" 
+                    onClick={onClose}
+                    style={{ 
+                      display: 'block',
+                      padding: '12px 16px', 
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    👤 My Account
+                  </Link>
+                  <Link 
+                    href="/account/orders" 
+                    onClick={onClose}
+                    style={{ 
+                      display: 'block',
+                      padding: '12px 16px', 
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    📦 My Orders
+                  </Link>
+                  <Link 
+                    href="/account/wishlist" 
+                    onClick={onClose}
+                    style={{ 
+                      display: 'block',
+                      padding: '12px 16px', 
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    ❤️ Wishlist
+                  </Link>
+                  <button
+                    onClick={() => { onLogout(); onClose(); }}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Logout
+                  </button>
+                </>
               )}
-              
-              {/* Regular user options */}
-              <Link 
-                href="/account" 
-                onClick={onClose}
-                style={{ 
-                  display: 'block',
-                  padding: '12px 16px', 
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  marginBottom: '8px',
-                }}
-              >
-                👤 My Account
-              </Link>
-              <Link 
-                href="/account/orders" 
-                onClick={onClose}
-                style={{ 
-                  display: 'block',
-                  padding: '12px 16px', 
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  marginBottom: '8px',
-                }}
-              >
-                📦 My Orders
-              </Link>
-              <Link 
-                href="/account/wishlist" 
-                onClick={onClose}
-                style={{ 
-                  display: 'block',
-                  padding: '12px 16px', 
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  marginBottom: '16px',
-                }}
-              >
-                ❤️ Wishlist
-              </Link>
-              <button
-                onClick={() => { onLogout(); onClose(); }}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                }}
-              >
-                Logout
-              </button>
             </>
           ) : (
             <>
@@ -454,39 +473,54 @@ function Header() {
             {!isMobile && mounted && (
               user ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  {isAdmin && (
-                    <Link href="/admin" style={{ 
-                      textDecoration: 'none', 
-                      color: '#fff', 
-                      fontSize: '14px', 
-                      fontWeight: 600,
-                      backgroundColor: '#f59e0b',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                    }}>
-                      ⚙️ Admin Panel
-                    </Link>
+                  {isAdmin ? (
+                    <>
+                      <Link href="/admin" style={{ 
+                        textDecoration: 'none', 
+                        color: '#fff', 
+                        fontSize: '14px', 
+                        fontWeight: 600,
+                        backgroundColor: '#f59e0b',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                      }}>
+                        ⚙️ Admin Panel
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                        }}
+                      >
+                        Logout
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                        👤 My Account
+                      </Link>
+                      <Link href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                        Orders
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                        }}
+                      >
+                        Logout
+                      </button>
+                    </>
                   )}
-                  <Link href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-                    👤 My Account
-                  </Link>
-                  {!isAdmin && (
-                    <Link href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-                      Orders
-                    </Link>
-                  )}
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                    }}
-                  >
-                    Logout
-                  </button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
