@@ -222,7 +222,7 @@ export default function AdminLayout({
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Mobile header */}
       {isMobile && (
         <div style={{
@@ -311,7 +311,7 @@ export default function AdminLayout({
         )}
 
         {/* Main Content */}
-        <div style={{ flex: 1, backgroundColor: '#f5f5f5', overflow: 'auto', minWidth: 0 }}>
+        <div style={{ flex: 1, backgroundColor: '#f5f5f5', overflow: 'auto', minWidth: 0, overflowX: 'hidden' }}>
           {/* Top Bar */}
           <div style={{
             backgroundColor: 'white',
