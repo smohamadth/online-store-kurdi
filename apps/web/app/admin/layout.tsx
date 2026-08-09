@@ -13,6 +13,7 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     checkAdminAuth();
@@ -36,7 +37,6 @@ export default function AdminLayout({
         return;
       }
 
-      // Check if user is admin
       if (userData.role !== 'admin' && userData.role !== 'manager') {
         router.push('/');
         return;
@@ -60,11 +60,9 @@ export default function AdminLayout({
   };
 
   const isActive = (path: string) => {
-    // Dashboard should only be active when exactly on /admin
     if (path === '/admin') {
       return pathname === '/admin' || pathname === '/admin/';
     }
-    // Other paths should match exactly or with sub-paths
     return pathname === path || pathname?.startsWith(path + '/');
   };
 
@@ -96,146 +94,215 @@ export default function AdminLayout({
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
+      {/* Mobile header */}
       <div style={{
-        width: '260px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
         backgroundColor: '#1a1a2e',
         color: 'white',
-        padding: '24px 0',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
       }}>
-        {/* Logo */}
-        <div style={{ padding: '0 24px', marginBottom: '24px' }}>
-          <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
-            <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
-          </Link>
-          <p style={{ fontSize: '12px', color: '#8888aa', marginTop: '4px' }}>
-            Online Store Management
-          </p>
-        </div>
-
-        {/* Navigation - Scrollable */}
-        <nav style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '2px', 
-          padding: '0 12px',
-          flex: 1,
-          overflowY: 'auto',
-        }}>
-          {menuItems.map((item) => (
-            <Link
-              key={item.path}
-              href={item.path}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: isActive(item.path) ? 'white' : '#8888aa',
-                backgroundColor: isActive(item.path) ? '#2d2d4e' : 'transparent',
-                transition: 'all 0.2s',
-                flexShrink: 0,
-              }}
-            >
-              <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
-              <span style={{ fontSize: '14px', fontWeight: isActive(item.path) ? 600 : 400 }}>
-                {item.label}
-              </span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* User Info - Fixed at bottom */}
-        <div style={{
-          padding: '16px',
-          margin: '12px',
-          backgroundColor: '#2d2d4e',
-          borderRadius: '6px',
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#4a4a6a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-            }}>
-              👤
-            </div>
-            <div>
-              <p style={{ fontSize: '14px', fontWeight: 600 }}>{user.firstName} {user.lastName}</p>
-              <p style={{ fontSize: '12px', color: '#8888aa', textTransform: 'capitalize' }}>{user.role}</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Link href="/" style={{
-              flex: 1,
-              textAlign: 'center',
-              padding: '8px',
-              backgroundColor: '#4a4a6a',
-              borderRadius: '4px',
-              textDecoration: 'none',
-              color: 'white',
-              fontSize: '12px',
-            }}>
-              View Store
-            </Link>
-            <button
-              onClick={handleLogout}
-              style={{
-                flex: 1,
-                padding: '8px',
-                backgroundColor: '#ef4444',
-                border: 'none',
-                borderRadius: '4px',
-                color: 'white',
-                fontSize: '12px',
-                cursor: 'pointer',
-              }}
-            >
-              Logout
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'white',
+            fontSize: '24px',
+            cursor: 'pointer',
+            padding: '4px',
+          }}
+        >
+          ☰
+        </button>
+        <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
+          <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+        </Link>
+        <div style={{ width: '32px' }} /> {/* Spacer */}
       </div>
 
-      {/* Main Content */}
-      <div style={{ flex: 1, backgroundColor: '#f5f5f5', overflow: 'auto' }}>
-        {/* Top Bar */}
+      <div style={{ display: 'flex', flex: 1 }}>
+        {/* Sidebar */}
         <div style={{
-          backgroundColor: 'white',
-          padding: '16px 32px',
-          borderBottom: '1px solid #e5e5e5',
+          width: '260px',
+          backgroundColor: '#1a1a2e',
+          color: 'white',
+          padding: '24px 0',
+          flexShrink: 0,
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          position: 'fixed',
+          top: 0,
+          left: sidebarOpen ? 0 : '-260px',
+          height: '100vh',
+          zIndex: 1000,
+          transition: 'left 0.3s ease',
         }}>
-          <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold' }}>
-              {menuItems.find(item => isActive(item.path))?.label || 'Dashboard'}
-            </h2>
+          {/* Logo */}
+          <div style={{ padding: '0 24px', marginBottom: '24px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
+                <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+              </Link>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: '12px', color: '#8888aa', marginTop: '4px' }}>
+              Online Store Management
+            </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontSize: '14px', color: '#666' }}>
-              Welcome, {user.firstName}
-            </span>
+
+          {/* Navigation */}
+          <nav style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '2px', 
+            padding: '0 12px',
+            flex: 1,
+            overflowY: 'auto',
+          }}>
+            {menuItems.map((item) => (
+              <Link
+                key={item.path}
+                href={item.path}
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 16px',
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                  color: isActive(item.path) ? 'white' : '#8888aa',
+                  backgroundColor: isActive(item.path) ? '#2d2d4e' : 'transparent',
+                  transition: 'all 0.2s',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
+                <span style={{ fontSize: '14px', fontWeight: isActive(item.path) ? 600 : 400 }}>
+                  {item.label}
+                </span>
+              </Link>
+            ))}
+          </nav>
+
+          {/* User Info */}
+          <div style={{
+            padding: '16px',
+            margin: '12px',
+            backgroundColor: '#2d2d4e',
+            borderRadius: '6px',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#4a4a6a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+              }}>
+                👤
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: '14px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user.firstName} {user.lastName}
+                </p>
+                <p style={{ fontSize: '12px', color: '#8888aa', textTransform: 'capitalize' }}>{user.role}</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Link href="/" style={{
+                flex: 1,
+                textAlign: 'center',
+                padding: '8px',
+                backgroundColor: '#4a4a6a',
+                borderRadius: '4px',
+                textDecoration: 'none',
+                color: 'white',
+                fontSize: '12px',
+              }}>
+                View Store
+              </Link>
+              <button
+                onClick={handleLogout}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: '#ef4444',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: 'white',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Page Content */}
-        <div style={{ padding: '32px' }}>
-          {children}
+        {/* Sidebar overlay for mobile */}
+        {sidebarOpen && (
+          <div
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 999,
+            }}
+          />
+        )}
+
+        {/* Main Content */}
+        <div style={{ flex: 1, backgroundColor: '#f5f5f5', overflow: 'auto' }}>
+          {/* Top Bar */}
+          <div style={{
+            backgroundColor: 'white',
+            padding: '16px 24px',
+            borderBottom: '1px solid #e5e5e5',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <div>
+              <h2 style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                {menuItems.find(item => isActive(item.path))?.label || 'Dashboard'}
+              </h2>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <span style={{ fontSize: '14px', color: '#666' }}>
+                Welcome, {user.firstName}
+              </span>
+            </div>
+          </div>
+
+          {/* Page Content */}
+          <div style={{ padding: '24px' }}>
+            {children}
+          </div>
         </div>
       </div>
     </div>

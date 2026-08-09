@@ -355,13 +355,14 @@ function Header() {
           <button
             onClick={() => setMobileMenuOpen(true)}
             style={{
-              display: 'none', // Will be shown via CSS media query
               background: 'none',
               border: 'none',
               padding: '8px',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-            className="show-mobile"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 12h18M3 6h18M3 18h18" />

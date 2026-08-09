@@ -13,6 +13,7 @@ export default function AccountLayout({
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -57,7 +58,7 @@ export default function AccountLayout({
   ];
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
         <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
@@ -65,14 +66,42 @@ export default function AccountLayout({
         <span style={{ color: '#000' }}>Account</span>
       </nav>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '48px' }}>
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        style={{
+          display: 'block',
+          width: '100%',
+          padding: '12px',
+          marginBottom: '16px',
+          backgroundColor: '#f5f5f5',
+          border: '1px solid #e5e5e5',
+          borderRadius: '6px',
+          fontSize: '14px',
+          fontWeight: 500,
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        ☰ Account Menu
+      </button>
+
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+        gap: '32px' 
+      }}>
         {/* Sidebar */}
-        <div>
+        <div style={{
+          display: sidebarOpen ? 'block' : 'block',
+        }}>
           <div style={{
             padding: '24px',
             border: '1px solid #e5e5e5',
             borderRadius: '8px',
             backgroundColor: 'white',
+            position: 'sticky',
+            top: '80px',
           }}>
             {/* User Avatar */}
             <div style={{
@@ -93,7 +122,7 @@ export default function AccountLayout({
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', textAlign: 'center' }}>
               {user.firstName} {user.lastName}
             </h2>
-            <p style={{ fontSize: '14px', color: '#666', textAlign: 'center', marginBottom: '24px' }}>
+            <p style={{ fontSize: '14px', color: '#666', textAlign: 'center', marginBottom: '24px', wordBreak: 'break-all' }}>
               {user.email}
             </p>
 
@@ -103,6 +132,7 @@ export default function AccountLayout({
                 <Link
                   key={item.path}
                   href={item.path}
+                  onClick={() => setSidebarOpen(false)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -153,7 +183,7 @@ export default function AccountLayout({
         </div>
 
         {/* Main Content */}
-        <div>
+        <div style={{ minWidth: 0 }}>
           {children}
         </div>
       </div>
