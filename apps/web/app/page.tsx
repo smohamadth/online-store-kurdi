@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Head from 'next/head';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { useStoreSettings } from '@/lib/settings';
 
 export default function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const { settings } = useStoreSettings();
 
   useEffect(() => {
     fetchFeaturedProducts();
@@ -33,7 +36,16 @@ export default function HomePage() {
   ];
 
   return (
-    <div>
+    <>
+      <Head>
+        <title>{settings.storeName} - Shop the Best Products</title>
+        <meta name="description" content={settings.storeDescription} />
+        <meta property="og:title" content={`${settings.storeName} - Shop the Best Products`} />
+        <meta property="og:description" content={settings.storeDescription} />
+        <meta property="og:type" content="website" />
+        <link rel="canonical" href={process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'} />
+      </Head>
+      <div>
       {/* Hero Section */}
       <section style={{
         background: 'linear-gradient(to right, #1a1a2e, #16213e)',
@@ -410,5 +422,6 @@ export default function HomePage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

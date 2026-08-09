@@ -527,12 +527,31 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { settings } = useStoreSettings();
+
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <title>Online Store</title>
+        <title>{settings.metaTitle || settings.storeName}</title>
+        <meta name="description" content={settings.metaDescription || settings.storeDescription} />
+        <meta name="keywords" content="online store, shop, electronics, clothing, books, digital products" />
+        <meta name="author" content={settings.storeName} />
+        
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content={settings.storeName} />
+        <meta property="og:locale" content="en_US" />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        
+        {/* Canonical URL */}
+        <link rel="canonical" href={process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'} />
+        
+        {/* Favicon */}
+        <link rel="icon" href="/favicon.ico" />
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <CartProvider>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Head from 'next/head';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 
@@ -50,7 +51,15 @@ export default function ProductsPage() {
     });
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
+    <>
+      <Head>
+        <title>Products | {settings.storeName}</title>
+        <meta name="description" content={`Browse our collection of products. ${settings.storeDescription}`} />
+        <meta property="og:title" content={`Products | ${settings.storeName}`} />
+        <meta property="og:description" content={`Browse our collection of products.`} />
+        <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products`} />
+      </Head>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ 
         marginBottom: '24px', 
@@ -307,5 +316,6 @@ export default function ProductsPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

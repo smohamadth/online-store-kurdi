@@ -3,14 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Head from 'next/head';
 import { useCart } from '@/lib/store';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
   const { addItem, items } = useCart();
+  const { settings } = useStoreSettings();
   
   const slug = params?.slug as string;
   
@@ -155,7 +158,49 @@ export default function ProductPage() {
     : [{ id: 'placeholder', url: '', alt: product.name, isPrimary: true }];
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
+    <>
+      <Head>
+        <title>{product.name} | {settings.storeName}</title>
+        <meta name="description" content={product.shortDescription || product.description} />
+        <meta property="og:title" content={product.name} />
+        <meta property="og:description" content={product.shortDescription || product.description} />
+        <meta property="og:type" content="product" />
+        <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products/${slug}`} />
+        {product.images?.[0]?.url && (
+          <meta property="og:image" content={product.images[0].url} />
+        )}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={product.name} />
+        <meta name="twitter:description" content={product.shortDescription || product.description} />
+        <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products/${slug}`} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Product',
+              name: product.name,
+              description: product.description,
+              image: product.images?.map((img: any) => img.url) || [],
+              sku: product.sku,
+              offers: {
+                '@type': 'Offer',
+                price: product.price,
+                priceCurrency: settings.currency || 'USD',
+                availability: product.quantity > 0
+                  ? 'https://schema.org/InStock'
+                  : 'https://schema.org/OutOfStock',
+              },
+              aggregateRating: product.reviewCount > 0 ? {
+                '@type': 'AggregateRating',
+                ratingValue: product.averageRating,
+                reviewCount: product.reviewCount,
+              } : undefined,
+            }),
+          }}
+        />
+      </Head>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ 
         marginBottom: '24px', 
@@ -413,5 +458,6 @@ export default function ProductPage() {
       {/* Reviews Section */}
       <ReviewSection productId={product.id} productName={product.name} />
     </div>
+    </>
   );
 }
