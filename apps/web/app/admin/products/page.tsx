@@ -292,9 +292,18 @@ export default function AdminProductsPage() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '20px',
+                      overflow: 'hidden',
+                      flexShrink: 0,
                     }}>
-                      {getCategoryEmoji(product.category?.name)}
+                      {product.images && product.images.length > 0 && product.images[0]?.url ? (
+                        <img 
+                          src={product.images[0].url} 
+                          alt={product.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: '20px' }}>{getCategoryEmoji(product.category?.name)}</span>
+                      )}
                     </div>
                     <div>
                       <p style={{ fontWeight: 500 }}>{product.name}</p>
