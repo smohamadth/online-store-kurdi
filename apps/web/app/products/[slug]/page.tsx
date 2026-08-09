@@ -10,7 +10,7 @@ import ReviewSection from '@/components/ReviewSection';
 export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   
   const slug = params?.slug as string;
   
@@ -21,6 +21,7 @@ export default function ProductPage() {
   const [quantity, setQuantity] = useState(1);
   const [addedToCart, setAddedToCart] = useState(false);
   const [inWishlist, setInWishlist] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   // Fetch product from API
   useEffect(() => {
@@ -36,29 +37,11 @@ export default function ProductPage() {
     }
   }, [product?.id]);
 
-  // Check if product is in wishlist
-  const checkWishlistStatus = async (productId: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/check`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ productId }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setInWishlist(data.data?.inWishlist || false);
-      }
-    } catch (err) {
-      console.log('Could not check wishlist status');
-    }
-  };
+  // Check if already in cart
+  const isInCart = product ? items.some(item => 
+    item.productId === product.id && 
+    item.variant === (currentVariantName || undefined)
+  ) : false;
 
   const fetchProduct = async () => {
     setLoading(true);
@@ -80,20 +63,42 @@ export default function ProductPage() {
     }
   };
 
-  // Loading state
+  const checkWishlistStatus = async (productId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setInWishlist(data.data?.inWishlist || false);
+      }
+    } catch (err) {
+      // Ignore wishlist check errors
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '100px 20px', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
         <p style={{ fontSize: '18px', color: '#666' }}>Loading product...</p>
       </div>
     );
   }
 
-  // Error state
   if (error || !product) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '100px 20px', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '48px', marginBottom: '16px' }}>😕</h1>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
         <p style={{ fontSize: '18px', color: '#666', marginBottom: '32px' }}>{error || 'Product not found'}</p>
         <Link href="/products" style={{
           display: 'inline-block',
@@ -126,6 +131,8 @@ export default function ProductPage() {
 
   // Handle add to cart
   const handleAddToCart = () => {
+    if (!product) return;
+    
     addItem({
       productId: product.id,
       name: product.name,
@@ -133,6 +140,7 @@ export default function ProductPage() {
       price: currentPrice,
       quantity: quantity,
       variant: currentVariantName || undefined,
+      variantId: selectedVariant || undefined,
       category: product.category?.name || 'Other',
     });
 
@@ -181,6 +189,11 @@ export default function ProductPage() {
     }
   };
 
+  // Get all images (product images + placeholder)
+  const allImages = product.images && product.images.length > 0
+    ? product.images
+    : [{ id: 'placeholder', url: '', alt: product.name, isPrimary: true }];
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
       {/* Breadcrumb */}
@@ -198,8 +211,9 @@ export default function ProductPage() {
 
       {/* Product Details */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px' }}>
-        {/* Product Image */}
+        {/* Product Images */}
         <div>
+          {/* Main Image */}
           <div style={{
             aspectRatio: '1',
             backgroundColor: '#f5f5f5',
@@ -209,9 +223,9 @@ export default function ProductPage() {
             justifyContent: 'center',
             overflow: 'hidden',
           }}>
-            {product.images && product.images.length > 0 && product.images[0].url ? (
+            {allImages[selectedImageIndex]?.url ? (
               <img 
-                src={product.images[0].url} 
+                src={allImages[selectedImageIndex].url} 
                 alt={product.name}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -219,23 +233,32 @@ export default function ProductPage() {
               <span style={{ fontSize: '120px' }}>{getCategoryEmoji(product.category?.name)}</span>
             )}
           </div>
+          
           {/* Thumbnails */}
-          {product.images && product.images.length > 1 && (
+          {allImages.length > 1 && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-              {product.images.map((img, i) => (
-                <div key={img.id} style={{
-                  width: '80px',
-                  height: '80px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '32px',
-                  border: i === 0 ? '2px solid #000' : '1px solid #e5e5e5',
-                  cursor: 'pointer',
-                }}>
-                  {getCategoryEmoji(product.category?.name)}
+              {allImages.map((img, i) => (
+                <div 
+                  key={img.id || i}
+                  onClick={() => setSelectedImageIndex(i)}
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    border: i === selectedImageIndex ? '2px solid #000' : '2px solid transparent',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {img.url ? (
+                    <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '32px' }}>{getCategoryEmoji(product.category?.name)}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -381,7 +404,7 @@ export default function ProductPage() {
                 transition: 'background-color 0.2s',
               }}
             >
-              {product.quantity <= 0 ? 'Out of Stock' : (addedToCart ? '✓ Added to Cart!' : 'Add to Cart')}
+              {product.quantity <= 0 ? 'Out of Stock' : (addedToCart ? '✓ Added to Cart!' : isInCart ? 'Add More' : 'Add to Cart')}
             </button>
             <button
               onClick={handleBuyNow}
@@ -415,6 +438,11 @@ export default function ProductPage() {
               {inWishlist ? '❤️' : '🤍'}
             </button>
           </div>
+
+          {/* SKU */}
+          <p style={{ marginTop: '16px', fontSize: '12px', color: '#999' }}>
+            SKU: {product.sku}
+          </p>
         </div>
       </div>
 
@@ -422,22 +450,6 @@ export default function ProductPage() {
       <div style={{ marginTop: '64px', padding: '32px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
         <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>Description</h2>
         <p style={{ lineHeight: 1.8, color: '#333', fontSize: '16px' }}>{product.description}</p>
-      </div>
-
-      {/* Product Details */}
-      <div style={{ marginTop: '32px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-        <div style={{ padding: '16px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
-          <p style={{ fontSize: '12px', color: '#666' }}>SKU</p>
-          <p style={{ fontWeight: 600 }}>{product.sku}</p>
-        </div>
-        <div style={{ padding: '16px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
-          <p style={{ fontSize: '12px', color: '#666' }}>Type</p>
-          <p style={{ fontWeight: 600, textTransform: 'capitalize' }}>{product.type}</p>
-        </div>
-        <div style={{ padding: '16px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
-          <p style={{ fontSize: '12px', color: '#666' }}>Status</p>
-          <p style={{ fontWeight: 600, textTransform: 'capitalize' }}>{product.status}</p>
-        </div>
       </div>
 
       {/* Reviews Section */}
