@@ -20,6 +20,19 @@ export default function ImageUpload({
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getApiUrl = () => {
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+  };
+
+  const getImageUrl = (url: string) => {
+    // If URL starts with /uploads, prepend API base URL
+    if (url.startsWith('/uploads')) {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:3001';
+      return `${baseUrl}${url}`;
+    }
+    return url;
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -54,7 +67,7 @@ export default function ImageUpload({
       formData.append('folder', folder);
 
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/upload/image`, {
+      const response = await fetch(`${getApiUrl()}/upload/image`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -64,15 +77,17 @@ export default function ImageUpload({
 
       if (response.ok) {
         const data = await response.json();
-        onUpload(data.data.url);
+        const imageUrl = getImageUrl(data.data.url);
+        onUpload(imageUrl);
+        setPreview(imageUrl);
       } else {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
         setError(errorData.message || 'Upload failed');
         setPreview(currentImage || null);
       }
     } catch (err) {
       console.error('Upload error:', err);
-      setError('Upload failed. Please try again.');
+      setError('Upload failed. Is the API running?');
       setPreview(currentImage || null);
     } finally {
       setUploading(false);
@@ -106,8 +121,13 @@ export default function ImageUpload({
               borderRadius: '8px',
               border: '1px solid #e5e5e5',
             }}
+            onError={(e) => {
+              // If image fails to load, show placeholder
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
           <button
+            type="button"
             onClick={handleRemove}
             style={{
               position: 'absolute',
@@ -144,11 +164,17 @@ export default function ImageUpload({
             cursor: 'pointer',
             backgroundColor: '#f9f9f9',
             marginBottom: '12px',
+            transition: 'border-color 0.2s',
           }}
+          onMouseOver={(e) => e.currentTarget.style.borderColor = '#000'}
+          onMouseOut={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
         >
           <span style={{ fontSize: '32px', marginBottom: '8px' }}>📷</span>
           <span style={{ fontSize: '14px', color: '#666' }}>
             {uploading ? 'Uploading...' : 'Click to upload'}
+          </span>
+          <span style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+            JPEG, PNG, GIF, WebP
           </span>
         </div>
       )}
@@ -157,7 +183,7 @@ export default function ImageUpload({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/gif,image/webp"
         onChange={handleFileSelect}
         style={{ display: 'none' }}
       />
@@ -165,25 +191,6 @@ export default function ImageUpload({
       {/* Error message */}
       {error && (
         <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px' }}>{error}</p>
-      )}
-
-      {/* Upload button */}
-      {!preview && (
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: uploading ? '#ccc' : '#f5f5f5',
-            border: '1px solid #e5e5e5',
-            borderRadius: '4px',
-            fontSize: '14px',
-            cursor: uploading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {uploading ? 'Uploading...' : 'Choose File'}
-        </button>
       )}
     </div>
   );

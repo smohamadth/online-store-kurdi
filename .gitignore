@@ -59,3 +59,4 @@ docker/data/
 # Temporary
 tmp/
 temp/
+uploads/
