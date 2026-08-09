@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
+import { useStoreSettings } from '@/lib/settings';
 
 // Custom hook for mobile detection
 function useIsMobile() {
@@ -320,6 +321,7 @@ function Header() {
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
+  const { settings } = useStoreSettings();
 
   useEffect(() => {
     setMounted(true);
@@ -410,7 +412,7 @@ function Header() {
             color: '#000',
             flexShrink: 0,
           }}>
-            <span style={{ fontSize: '20px', fontWeight: 'bold' }}>Store</span>
+            <span style={{ fontSize: '20px', fontWeight: 'bold' }}>{settings.storeName}</span>
           </Link>
           
           {/* Desktop Navigation - hidden on mobile */}
@@ -556,10 +558,20 @@ export default function RootLayout({
               gap: '32px',
             }}>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>Store</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>{settings.storeName}</h3>
                 <p style={{ fontSize: '14px', color: '#666' }}>
-                  Your one-stop shop for electronics, clothing, books, and digital products.
+                  {settings.storeDescription}
                 </p>
+                {settings.storeEmail && (
+                  <p style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>
+                    📧 {settings.storeEmail}
+                  </p>
+                )}
+                {settings.storePhone && (
+                  <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+                    📞 {settings.storePhone}
+                  </p>
+                )}
               </div>
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
@@ -579,11 +591,31 @@ export default function RootLayout({
                 </div>
               </div>
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
+                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Connect</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
-                  <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
-                  <Link href="/shipping" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Shipping Info</Link>
+                  {settings.facebookUrl && (
+                    <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                      Facebook
+                    </a>
+                  )}
+                  {settings.instagramUrl && (
+                    <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                      Instagram
+                    </a>
+                  )}
+                  {settings.twitterUrl && (
+                    <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                      Twitter
+                    </a>
+                  )}
+                  {settings.youtubeUrl && (
+                    <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                      YouTube
+                    </a>
+                  )}
+                  {!settings.facebookUrl && !settings.instagramUrl && !settings.twitterUrl && !settings.youtubeUrl && (
+                    <p style={{ fontSize: '14px', color: '#666' }}>Coming soon</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -593,7 +625,7 @@ export default function RootLayout({
               textAlign: 'center',
             }}>
               <p style={{ fontSize: '14px', color: '#666' }}>
-                © 2024 Online Store. All rights reserved.
+                © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
               </p>
             </div>
           </footer>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -10,6 +11,7 @@ export default function ProductsPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [searchQuery, setSearchQuery] = useState('');
+  const { settings } = useStoreSettings();
 
   useEffect(() => {
     fetchProducts();
@@ -269,10 +271,10 @@ export default function ProductsPage() {
 
                 {/* Price */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${product.price}</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(product.price, settings.currencySymbol)}</span>
                   {product.compareAtPrice && (
                     <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
-                      ${product.compareAtPrice}
+                      {formatPrice(product.compareAtPrice, settings.currencySymbol)}
                     </span>
                   )}
                 </div>
