@@ -139,6 +139,9 @@ function UserMenu() {
             <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
               Orders
             </a>
+            <a href="/account/wishlist" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+              Wishlist
+            </a>
           </>
         )}
       </div>

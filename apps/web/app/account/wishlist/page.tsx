@@ -1,46 +1,29 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { getCategoryEmoji } from '@/lib/api';
 
 interface WishlistItem {
   id: string;
   productId: string;
   createdAt: string;
-  product: Product;
+  product: any;
 }
 
 export default function WishlistPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
+    fetchWishlist();
   }, []);
 
-  const checkAuth = () => {
+  const fetchWishlist = async () => {
     try {
-      const storedUser = localStorage.getItem('user');
       const token = localStorage.getItem('token');
+      if (!token) return;
 
-      if (!storedUser || !token) {
-        router.push('/login');
-        return;
-      }
-
-      setUser(JSON.parse(storedUser));
-      fetchWishlist(token);
-    } catch (err) {
-      router.push('/login');
-    }
-  };
-
-  const fetchWishlist = async (token: string) => {
-    try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -61,14 +44,12 @@ export default function WishlistPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${productId}`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${productId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (response.ok) {
-        setWishlistItems(wishlistItems.filter(item => item.productId !== productId));
-      }
+      setWishlistItems(wishlistItems.filter(item => item.productId !== productId));
     } catch (err) {
       console.error('Failed to remove from wishlist:', err);
     }
@@ -89,7 +70,6 @@ export default function WishlistPage() {
       });
 
       if (response.ok) {
-        // Remove from wishlist
         setWishlistItems(wishlistItems.filter(item => item.productId !== productId));
         alert('Item moved to cart!');
       }
@@ -99,23 +79,12 @@ export default function WishlistPage() {
   };
 
   if (loading) {
-    return (
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
-        <p style={{ color: '#666' }}>Loading wishlist...</p>
-      </div>
-    );
+    return <div style={{ textAlign: 'center', padding: '64px', color: '#666' }}>Loading wishlist...</div>;
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
-      {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
-        <span>/</span>
-        <span style={{ color: '#000' }}>Wishlist</span>
-      </nav>
-
-      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '32px' }}>
+    <div>
+      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '24px' }}>
         My Wishlist ({wishlistItems.length} items)
       </h1>
 
@@ -126,7 +95,7 @@ export default function WishlistPage() {
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
         }}>
-          <div style={{ fontSize: '64px', marginBottom: '16px' }}>❤️</div>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>❤️</div>
           <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Your wishlist is empty</h2>
           <p style={{ color: '#666', marginBottom: '24px' }}>
             Save items you love to your wishlist
@@ -144,7 +113,7 @@ export default function WishlistPage() {
           </Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
           {wishlistItems.map((item) => (
             <div
               key={item.id}
@@ -156,35 +125,31 @@ export default function WishlistPage() {
               }}
             >
               {/* Product Image */}
-              <Link href={`/products/${item.product.slug}`}>
+              <Link href={`/products/${item.product?.slug || '#'}`}>
                 <div style={{
                   aspectRatio: '1',
                   backgroundColor: '#f5f5f5',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '64px',
+                  fontSize: '48px',
                   textDecoration: 'none',
+                  color: '#000',
                 }}>
-                  {getCategoryEmoji(item.product.category?.name)}
+                  {getCategoryEmoji(item.product?.category?.name)}
                 </div>
               </Link>
 
               {/* Product Info */}
               <div style={{ padding: '16px' }}>
-                <Link href={`/products/${item.product.slug}`} style={{ textDecoration: 'none', color: '#000' }}>
-                  <h3 style={{ fontWeight: 600, marginBottom: '8px' }}>{item.product.name}</h3>
+                <Link href={`/products/${item.product?.slug || '#'}`} style={{ textDecoration: 'none', color: '#000' }}>
+                  <h3 style={{ fontWeight: 600, marginBottom: '8px' }}>{item.product?.name || 'Product'}</h3>
                 </Link>
                 <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
-                  {item.product.category?.name}
+                  {item.product?.category?.name || ''}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${item.product.price}</span>
-                  {item.product.compareAtPrice && (
-                    <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
-                      ${item.product.compareAtPrice}
-                    </span>
-                  )}
+                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${item.product?.price || 0}</span>
                 </div>
 
                 {/* Actions */}
