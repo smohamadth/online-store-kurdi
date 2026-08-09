@@ -258,12 +258,29 @@ export default function ProductsPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'hidden',
+                position: 'relative',
               }}>
-                {product.images && product.images.length > 0 && product.images[0].url ? (
+                {product.images && product.images.length > 0 && product.images[0]?.url ? (
                   <img 
                     src={product.images[0].url} 
                     alt={product.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                    }}
+                    onError={(e) => {
+                      // If image fails, show emoji
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent) {
+                        const emoji = document.createElement('span');
+                        emoji.style.fontSize = '64px';
+                        emoji.textContent = getCategoryEmoji(product.category?.name);
+                        parent.appendChild(emoji);
+                      }
+                    }}
                   />
                 ) : (
                   <span style={{ fontSize: '64px' }}>{getCategoryEmoji(product.category?.name)}</span>

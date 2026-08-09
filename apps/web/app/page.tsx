@@ -223,9 +223,17 @@ export default function HomePage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '64px',
+                  overflow: 'hidden',
                 }}>
-                  {getCategoryEmoji(product.category?.name)}
+                  {product.images && product.images.length > 0 && product.images[0]?.url ? (
+                    <img 
+                      src={product.images[0].url} 
+                      alt={product.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '64px' }}>{getCategoryEmoji(product.category?.name)}</span>
+                  )}
                 </div>
                 <div style={{ padding: '16px' }}>
                   <p style={{ fontSize: '12px', color: '#666' }}>{product.category?.name}</p>
