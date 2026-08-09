@@ -36,7 +36,7 @@ const createProductSchema = z.object({
     height: z.number().positive(),
     unit: z.enum(['cm', 'in', 'm', 'ft']).default('cm'),
   }).optional(),
-  categoryId: z.string().uuid(),
+  categoryId: z.string().optional(),  // Made optional
   metaTitle: z.string().max(255).optional(),
   metaDescription: z.string().max(500).optional(),
   metaKeywords: z.array(z.string()).default([]),
@@ -405,9 +405,29 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
       throw new ConflictError(`Product with SKU "${data.sku}" already exists`);
     }
 
+    // Get or create default category
+    let categoryId = data.categoryId;
+    if (!categoryId) {
+      let defaultCategory = await prisma.category.findFirst({
+        where: { slug: 'general' },
+      });
+      
+      if (!defaultCategory) {
+        defaultCategory = await prisma.category.create({
+          data: {
+            name: 'General',
+            slug: 'general',
+            description: 'General products',
+          },
+        });
+      }
+      categoryId = defaultCategory.id;
+    }
+
     const product = await prisma.product.create({
       data: {
         ...data,
+        categoryId,
         slug,
         images: { create: data.images },
         variants: { create: data.variants },
