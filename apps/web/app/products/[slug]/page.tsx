@@ -37,12 +37,6 @@ export default function ProductPage() {
     }
   }, [product?.id]);
 
-  // Check if already in cart
-  const isInCart = product ? items.some(item => 
-    item.productId === product.id && 
-    item.variant === (currentVariantName || undefined)
-  ) : false;
-
   const fetchProduct = async () => {
     setLoading(true);
     setError(null);
@@ -118,6 +112,12 @@ export default function ProductPage() {
   const currentVariant = product.variants?.find((v) => v.id === selectedVariant);
   const currentPrice = currentVariant ? Number(currentVariant.price) : Number(product.price);
   const currentVariantName = currentVariant?.name || null;
+
+  // Check if already in cart
+  const isInCart = items.some(item => 
+    item.productId === product.id && 
+    item.variant === (currentVariantName || undefined)
+  );
 
   // Parse variant attributes
   const getVariantDisplay = (variant: any) => {
