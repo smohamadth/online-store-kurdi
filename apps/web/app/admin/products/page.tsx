@@ -80,14 +80,14 @@ export default function AdminProductsPage() {
         price: parseFloat(formData.price),
         compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : undefined,
         quantity: parseInt(formData.quantity) || 0,
-        image: productImage || undefined,
+        images: productImage ? [{ url: productImage, alt: formData.name, isPrimary: true }] : [],
       };
 
       const url = editingProduct 
         ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${editingProduct.id}`
         : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products`;
 
-      await fetch(url, {
+      const response = await fetch(url, {
         method: editingProduct ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -96,14 +96,18 @@ export default function AdminProductsPage() {
         body: JSON.stringify(productData),
       });
 
-      // Reset form and refresh
-      setShowAddModal(false);
-      setEditingProduct(null);
-      resetForm();
-      fetchProducts();
+      if (response.ok) {
+        setShowAddModal(false);
+        setEditingProduct(null);
+        resetForm();
+        fetchProducts();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        alert(error.message || 'Failed to save product');
+      }
     } catch (err) {
       console.error('Failed to save product:', err);
-      alert('Failed to save product');
+      alert('Failed to save product. Is the API running?');
     }
   };
 
