@@ -461,12 +461,48 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
       }
     }
 
+    // Extract images and variants from data (handle separately)
+    const { images, variants, ...productData } = data;
+
+    // Update product
     const product = await prisma.product.update({
       where: { id },
       data: {
-        ...data,
+        ...productData,
         slug: data.slug || (data.name ? slugify(data.name, { lower: true, strict: true }) : undefined),
       },
+      include: {
+        images: true,
+        category: true,
+        variants: true,
+        reviews: { select: { rating: true } },
+      },
+    });
+
+    // Update images if provided
+    if (images && Array.isArray(images)) {
+      // Delete existing images
+      await prisma.productImage.deleteMany({
+        where: { productId: id },
+      });
+
+      // Create new images
+      if (images.length > 0) {
+        await prisma.productImage.createMany({
+          data: images.map((img: any, index: number) => ({
+            productId: id,
+            url: img.url || '',
+            alt: img.alt || null,
+            isPrimary: img.isPrimary || index === 0,
+            sortOrder: img.sortOrder || index,
+          })),
+        });
+      }
+    }
+
+    // Fetch updated product with images
+    const updatedProduct = await prisma.product.findUnique({
+      where: { id },
       include: {
         images: true,
         category: true,
@@ -479,7 +515,7 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
 
     res.json({
       status: 'success',
-      data: formatProduct(product),
+      data: formatProduct(updatedProduct || product),
     });
   } catch (error) {
     next(error);
