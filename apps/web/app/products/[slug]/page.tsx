@@ -23,34 +23,24 @@ export default function ProductPage() {
   const [inWishlist, setInWishlist] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
-  // Fetch product from API
   useEffect(() => {
-    if (slug) {
-      fetchProduct();
-    }
+    if (slug) fetchProduct();
   }, [slug]);
 
-  // Check wishlist status after product loads
   useEffect(() => {
-    if (product?.id) {
-      checkWishlistStatus(product.id);
-    }
+    if (product?.id) checkWishlistStatus(product.id);
   }, [product?.id]);
 
   const fetchProduct = async () => {
     setLoading(true);
     setError(null);
-
     try {
       const response = await api.getProductBySlug(slug);
       setProduct(response.data);
-      
-      // Set first variant as default
       if (response.data?.variants?.length > 0) {
         setSelectedVariant(response.data.variants[0].id);
       }
     } catch (err) {
-      console.error('Failed to fetch product:', err);
       setError('Product not found or API unavailable');
     } finally {
       setLoading(false);
@@ -61,28 +51,21 @@ export default function ProductPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/check`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ productId }),
       });
-
       if (response.ok) {
         const data = await response.json();
         setInWishlist(data.data?.inWishlist || false);
       }
-    } catch (err) {
-      // Ignore wishlist check errors
-    }
+    } catch (err) {}
   };
 
   if (loading) {
     return (
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '100px 20px', textAlign: 'center' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
         <p style={{ fontSize: '18px', color: '#666' }}>Loading product...</p>
       </div>
@@ -91,7 +74,7 @@ export default function ProductPage() {
 
   if (error || !product) {
     return (
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '100px 20px', textAlign: 'center' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
         <p style={{ fontSize: '18px', color: '#666', marginBottom: '32px' }}>{error || 'Product not found'}</p>
         <Link href="/products" style={{
@@ -108,18 +91,10 @@ export default function ProductPage() {
     );
   }
 
-  // Get current price based on selected variant
   const currentVariant = product.variants?.find((v) => v.id === selectedVariant);
   const currentPrice = currentVariant ? Number(currentVariant.price) : Number(product.price);
   const currentVariantName = currentVariant?.name || null;
 
-  // Check if already in cart
-  const isInCart = items.some(item => 
-    item.productId === product.id && 
-    item.variant === (currentVariantName || undefined)
-  );
-
-  // Parse variant attributes
   const getVariantDisplay = (variant: any) => {
     try {
       const attrs = typeof variant.attributes === 'string' ? JSON.parse(variant.attributes) : variant.attributes;
@@ -129,10 +104,8 @@ export default function ProductPage() {
     }
   };
 
-  // Handle add to cart
   const handleAddToCart = () => {
     if (!product) return;
-    
     addItem({
       productId: product.id,
       name: product.name,
@@ -143,43 +116,31 @@ export default function ProductPage() {
       variantId: selectedVariant || undefined,
       category: product.category?.name || 'Other',
     });
-
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
-  // Handle buy now
   const handleBuyNow = () => {
     handleAddToCart();
     router.push('/cart');
   };
 
-  // Handle wishlist
   const handleWishlist = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
+      if (!token) { router.push('/login'); return; }
       if (!product?.id) return;
 
       if (inWishlist) {
-        // Remove from wishlist
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${product.id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
         setInWishlist(false);
       } else {
-        // Add to wishlist
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ productId: product.id }),
         });
         setInWishlist(true);
@@ -189,28 +150,37 @@ export default function ProductPage() {
     }
   };
 
-  // Get all images (product images + placeholder)
   const allImages = product.images && product.images.length > 0
     ? product.images
     : [{ id: 'placeholder', url: '', alt: product.name, isPrimary: true }];
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
+      <nav style={{ 
+        marginBottom: '24px', 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '8px', 
+        fontSize: '14px', 
+        color: '#666',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap',
+      }}>
         <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
         <span>/</span>
         <Link href="/products" style={{ textDecoration: 'none', color: '#666' }}>Products</Link>
         <span>/</span>
-        <Link href={`/products?category=${product.category?.slug}`} style={{ textDecoration: 'none', color: '#666' }}>
-          {product.category?.name}
-        </Link>
-        <span>/</span>
         <span style={{ color: '#000' }}>{product.name}</span>
       </nav>
 
-      {/* Product Details */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px' }}>
+      {/* Product Details - Responsive Grid */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+        gap: '32px',
+        marginBottom: '48px',
+      }}>
         {/* Product Images */}
         <div>
           {/* Main Image */}
@@ -222,6 +192,7 @@ export default function ProductPage() {
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden',
+            marginBottom: '12px',
           }}>
             {allImages[selectedImageIndex]?.url ? (
               <img 
@@ -230,20 +201,20 @@ export default function ProductPage() {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              <span style={{ fontSize: '120px' }}>{getCategoryEmoji(product.category?.name)}</span>
+              <span style={{ fontSize: '80px' }}>{getCategoryEmoji(product.category?.name)}</span>
             )}
           </div>
           
           {/* Thumbnails */}
           {allImages.length > 1 && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
               {allImages.map((img, i) => (
                 <div 
                   key={img.id || i}
                   onClick={() => setSelectedImageIndex(i)}
                   style={{
-                    width: '80px',
-                    height: '80px',
+                    width: '60px',
+                    height: '60px',
                     backgroundColor: '#f5f5f5',
                     borderRadius: '6px',
                     display: 'flex',
@@ -252,12 +223,13 @@ export default function ProductPage() {
                     cursor: 'pointer',
                     border: i === selectedImageIndex ? '2px solid #000' : '2px solid transparent',
                     overflow: 'hidden',
+                    flexShrink: 0,
                   }}
                 >
                   {img.url ? (
                     <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ fontSize: '32px' }}>{getCategoryEmoji(product.category?.name)}</span>
+                    <span style={{ fontSize: '24px' }}>{getCategoryEmoji(product.category?.name)}</span>
                   )}
                 </div>
               ))}
@@ -268,13 +240,13 @@ export default function ProductPage() {
         {/* Product Info */}
         <div>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{product.category?.name}</p>
-          <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>{product.name}</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>{product.name}</h1>
           
           {/* Rating */}
-          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ display: 'flex', gap: '2px' }}>
               {[1, 2, 3, 4, 5].map((i) => (
-                <span key={i} style={{ color: i <= Math.floor(product.averageRating || 0) ? '#f59e0b' : '#d1d5db', fontSize: '20px' }}>★</span>
+                <span key={i} style={{ color: i <= Math.floor(product.averageRating || 0) ? '#f59e0b' : '#d1d5db', fontSize: '18px' }}>★</span>
               ))}
             </div>
             <span style={{ fontSize: '14px', color: '#666' }}>
@@ -283,16 +255,16 @@ export default function ProductPage() {
           </div>
 
           {/* Price */}
-          <div style={{ marginTop: '24px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <span style={{ fontSize: '36px', fontWeight: 'bold' }}>${currentPrice.toFixed(2)}</span>
+          <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '32px', fontWeight: 'bold' }}>${currentPrice.toFixed(2)}</span>
               {product.compareAtPrice && !currentVariant && (
                 <>
-                  <span style={{ fontSize: '20px', color: '#666', textDecoration: 'line-through' }}>
+                  <span style={{ fontSize: '18px', color: '#666', textDecoration: 'line-through' }}>
                     ${Number(product.compareAtPrice).toFixed(2)}
                   </span>
                   <span style={{
-                    padding: '4px 12px',
+                    padding: '4px 10px',
                     borderRadius: '50px',
                     backgroundColor: '#fef2f2',
                     color: '#ef4444',
@@ -311,15 +283,15 @@ export default function ProductPage() {
 
           {/* Short Description */}
           {product.shortDescription && (
-            <p style={{ marginTop: '24px', fontSize: '16px', color: '#555', lineHeight: 1.6 }}>
+            <p style={{ marginTop: '20px', fontSize: '15px', color: '#555', lineHeight: 1.6 }}>
               {product.shortDescription}
             </p>
           )}
 
           {/* Variants */}
           {product.variants && product.variants.length > 0 && (
-            <div style={{ marginTop: '24px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
+            <div style={{ marginTop: '20px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
                 Options: {currentVariantName && <span style={{ fontWeight: 400, color: '#666' }}>{getVariantDisplay(currentVariant)}</span>}
               </h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -328,18 +300,17 @@ export default function ProductPage() {
                     key={variant.id}
                     onClick={() => setSelectedVariant(variant.id)}
                     style={{
-                      padding: '10px 20px',
+                      padding: '8px 16px',
                       borderRadius: '6px',
                       border: selectedVariant === variant.id ? '2px solid #000' : '1px solid #e5e5e5',
                       backgroundColor: selectedVariant === variant.id ? '#f5f5f5' : 'white',
                       fontSize: '14px',
                       cursor: 'pointer',
                       fontWeight: selectedVariant === variant.id ? 600 : 400,
-                      transition: 'all 0.2s',
                     }}
                   >
                     {getVariantDisplay(variant)}
-                    <span style={{ marginLeft: '8px', color: '#666' }}>${Number(variant.price).toFixed(2)}</span>
+                    <span style={{ marginLeft: '6px', color: '#666' }}>${Number(variant.price).toFixed(2)}</span>
                   </button>
                 ))}
               </div>
@@ -347,8 +318,8 @@ export default function ProductPage() {
           )}
 
           {/* Quantity */}
-          <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Quantity:</h3>
+          <div style={{ marginTop: '20px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>Quantity:</h3>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -358,28 +329,14 @@ export default function ProductPage() {
             }}>
               <button
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                style={{
-                  padding: '12px 18px',
-                  fontSize: '18px',
-                  border: 'none',
-                  backgroundColor: '#f5f5f5',
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '10px 16px', fontSize: '16px', border: 'none', backgroundColor: '#f5f5f5', cursor: 'pointer' }}
               >
                 -
               </button>
-              <span style={{ padding: '12px 24px', fontSize: '16px', fontWeight: 600, minWidth: '40px', textAlign: 'center' }}>
-                {quantity}
-              </span>
+              <span style={{ padding: '10px 20px', fontSize: '16px', fontWeight: 600 }}>{quantity}</span>
               <button
                 onClick={() => setQuantity(Math.min(product.quantity, quantity + 1))}
-                style={{
-                  padding: '12px 18px',
-                  fontSize: '18px',
-                  border: 'none',
-                  backgroundColor: '#f5f5f5',
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '10px 16px', fontSize: '16px', border: 'none', backgroundColor: '#f5f5f5', cursor: 'pointer' }}
               >
                 +
               </button>
@@ -387,31 +344,46 @@ export default function ProductPage() {
           </div>
 
           {/* Add to Cart Buttons */}
-          <div style={{ marginTop: '32px', display: 'flex', gap: '12px' }}>
-            <button
-              onClick={handleAddToCart}
-              disabled={product.quantity <= 0}
-              style={{
-                flex: 1,
-                padding: '16px 32px',
-                backgroundColor: product.quantity <= 0 ? '#ccc' : (addedToCart ? '#22c55e' : '#000'),
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '16px',
-                fontWeight: 600,
-                cursor: product.quantity <= 0 ? 'not-allowed' : 'pointer',
-                transition: 'background-color 0.2s',
-              }}
-            >
-              {product.quantity <= 0 ? 'Out of Stock' : (addedToCart ? '✓ Added to Cart!' : isInCart ? 'Add More' : 'Add to Cart')}
-            </button>
+          <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={handleAddToCart}
+                disabled={product.quantity <= 0}
+                style={{
+                  flex: 1,
+                  padding: '14px 24px',
+                  backgroundColor: product.quantity <= 0 ? '#ccc' : (addedToCart ? '#22c55e' : '#000'),
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  cursor: product.quantity <= 0 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {product.quantity <= 0 ? 'Out of Stock' : (addedToCart ? '✓ Added!' : 'Add to Cart')}
+              </button>
+              <button
+                onClick={handleWishlist}
+                style={{
+                  padding: '14px',
+                  backgroundColor: inWishlist ? '#fef2f2' : 'white',
+                  color: inWishlist ? '#ef4444' : '#000',
+                  border: `2px solid ${inWishlist ? '#ef4444' : '#e5e5e5'}`,
+                  borderRadius: '6px',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                }}
+              >
+                {inWishlist ? '❤️' : '🤍'}
+              </button>
+            </div>
             <button
               onClick={handleBuyNow}
               disabled={product.quantity <= 0}
               style={{
-                flex: 1,
-                padding: '16px 32px',
+                width: '100%',
+                padding: '14px 24px',
                 backgroundColor: 'white',
                 color: product.quantity <= 0 ? '#ccc' : '#000',
                 border: `2px solid ${product.quantity <= 0 ? '#ccc' : '#000'}`,
@@ -423,20 +395,6 @@ export default function ProductPage() {
             >
               Buy Now
             </button>
-            <button
-              onClick={handleWishlist}
-              style={{
-                padding: '16px',
-                backgroundColor: inWishlist ? '#fef2f2' : 'white',
-                color: inWishlist ? '#ef4444' : '#000',
-                border: `2px solid ${inWishlist ? '#ef4444' : '#e5e5e5'}`,
-                borderRadius: '6px',
-                fontSize: '20px',
-                cursor: 'pointer',
-              }}
-            >
-              {inWishlist ? '❤️' : '🤍'}
-            </button>
           </div>
 
           {/* SKU */}
@@ -447,8 +405,8 @@ export default function ProductPage() {
       </div>
 
       {/* Product Description */}
-      <div style={{ marginTop: '64px', padding: '32px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>Description</h2>
+      <div style={{ padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginBottom: '48px' }}>
+        <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '16px' }}>Description</h2>
         <p style={{ lineHeight: 1.8, color: '#333', fontSize: '16px' }}>{product.description}</p>
       </div>
 

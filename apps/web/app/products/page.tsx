@@ -7,80 +7,74 @@ import { api, Product, getCategoryEmoji } from '@/lib/api';
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch products from API
   useEffect(() => {
     fetchProducts();
-  }, [selectedCategory, sortBy, searchQuery]);
+  }, []);
 
   const fetchProducts = async () => {
-    setLoading(true);
-    setError(null);
-
     try {
-      const params: any = {
-        limit: 50,
-      };
-
-      if (selectedCategory !== 'all') {
-        params.category = selectedCategory;
-      }
-
-      if (searchQuery) {
-        params.search = searchQuery;
-      }
-
-      if (sortBy === 'price-low') params.sort = 'price_asc';
-      else if (sortBy === 'price-high') params.sort = 'price_desc';
-      else if (sortBy === 'rating') params.sort = 'popular';
-      else if (sortBy === 'name') params.sort = 'name_asc';
-      else params.sort = 'newest';
-
-      const response = await api.getProducts(params);
+      const response = await api.getProducts({ limit: 100 });
       setProducts(response.data || []);
     } catch (err) {
       console.error('Failed to fetch products:', err);
-      setError('Failed to load products. Make sure the API server is running.');
-      // Use fallback data if API fails
-      setProducts([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Get unique categories from products
-  const categories = ['all', ...new Set(products.map(p => p.category?.slug || p.category?.name?.toLowerCase() || ''))].filter(Boolean);
-
-  // Filter products by category (client-side backup)
-  const filteredProducts = selectedCategory === 'all'
-    ? products
-    : products.filter(p => 
-        (p.category?.slug || p.category?.name?.toLowerCase()) === selectedCategory
-      );
+  // Filter and sort products
+  const filteredProducts = products
+    .filter(p => {
+      const matchesCategory = selectedCategory === 'all' || 
+        p.category?.slug === selectedCategory || 
+        p.category?.name?.toLowerCase().replace(/\s+/g, '-') === selectedCategory;
+      const matchesSearch = !searchQuery || 
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'price-low': return a.price - b.price;
+        case 'price-high': return b.price - a.price;
+        case 'rating': return (b.averageRating || 0) - (a.averageRating || 0);
+        case 'name': return a.name.localeCompare(b.name);
+        default: return 0;
+      }
+    });
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
+      <nav style={{ 
+        marginBottom: '24px', 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '8px', 
+        fontSize: '14px', 
+        color: '#666',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap',
+      }}>
         <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>Products</span>
       </nav>
 
       {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold' }}>Products</h1>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>Products</h1>
         <p style={{ marginTop: '8px', color: '#666' }}>
           {loading ? 'Loading...' : `Showing ${filteredProducts.length} products`}
         </p>
       </div>
 
       {/* Search Bar */}
-      <div style={{ marginBottom: '24px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <input
           type="text"
           placeholder="Search products..."
@@ -99,21 +93,25 @@ export default function ProductsPage() {
 
       {/* Filters Row */}
       <div style={{ 
-        marginBottom: '32px', 
+        marginBottom: '24px', 
         display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '16px'
+        flexDirection: 'column',
+        gap: '16px',
       }}>
-        {/* Category Filters */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        {/* Category Filters - Scrollable on mobile */}
+        <div style={{ 
+          display: 'flex', 
+          overflowX: 'auto', 
+          gap: '8px',
+          paddingBottom: '8px',
+          WebkitOverflowScrolling: 'touch',
+        }}>
           {['all', 'electronics', 'clothing', 'books', 'digital-products'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               style={{
-                padding: '10px 20px',
+                padding: '8px 16px',
                 borderRadius: '6px',
                 fontSize: '14px',
                 fontWeight: 500,
@@ -122,6 +120,8 @@ export default function ProductsPage() {
                 color: selectedCategory === cat ? '#fff' : '#000',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1).replace('-', ' ')}
@@ -131,17 +131,18 @@ export default function ProductsPage() {
 
         {/* Sort Dropdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#666' }}>Sort by:</span>
+          <span style={{ fontSize: '14px', color: '#666', whiteSpace: 'nowrap' }}>Sort by:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             style={{
-              padding: '10px 16px',
+              padding: '8px 12px',
               borderRadius: '6px',
               border: '1px solid #e5e5e5',
               backgroundColor: 'white',
               fontSize: '14px',
               cursor: 'pointer',
+              flex: 1,
             }}
           >
             <option value="newest">Newest</option>
@@ -156,41 +157,16 @@ export default function ProductsPage() {
       {/* Loading State */}
       {loading && (
         <div style={{ textAlign: 'center', padding: '64px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
           <p style={{ fontSize: '18px', color: '#666' }}>Loading products...</p>
         </div>
       )}
 
-      {/* Error State */}
-      {error && !loading && (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '32px',
-          backgroundColor: '#fef2f2',
-          borderRadius: '8px',
-          marginBottom: '24px'
-        }}>
-          <p style={{ color: '#ef4444', marginBottom: '16px' }}>{error}</p>
-          <button 
-            onClick={fetchProducts}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#000',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-            }}
-          >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* Product Grid */}
+      {/* No Results */}
       {!loading && filteredProducts.length === 0 && (
         <div style={{ 
           textAlign: 'center', 
-          padding: '64px 20px',
+          padding: '48px 20px',
           color: '#666'
         }}>
           <p style={{ fontSize: '48px', marginBottom: '16px' }}>😕</p>
@@ -214,8 +190,13 @@ export default function ProductsPage() {
         </div>
       )}
 
+      {/* Product Grid */}
       {!loading && filteredProducts.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+          gap: '16px' 
+        }}>
           {filteredProducts.map((product) => (
             <Link
               key={product.id}
@@ -236,8 +217,8 @@ export default function ProductsPage() {
               {product.compareAtPrice && (
                 <div style={{
                   position: 'absolute',
-                  left: '12px',
-                  top: '12px',
+                  left: '8px',
+                  top: '8px',
                   zIndex: 10,
                   borderRadius: '4px',
                   backgroundColor: '#ef4444',
@@ -258,52 +239,37 @@ export default function ProductsPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'hidden',
-                position: 'relative',
               }}>
                 {product.images && product.images.length > 0 && product.images[0]?.url ? (
                   <img 
                     src={product.images[0].url} 
                     alt={product.name}
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'cover',
-                    }}
-                    onError={(e) => {
-                      // If image fails, show emoji
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        const emoji = document.createElement('span');
-                        emoji.style.fontSize = '64px';
-                        emoji.textContent = getCategoryEmoji(product.category?.name);
-                        parent.appendChild(emoji);
-                      }
-                    }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
-                  <span style={{ fontSize: '64px' }}>{getCategoryEmoji(product.category?.name)}</span>
+                  <span style={{ fontSize: '48px' }}>{getCategoryEmoji(product.category?.name)}</span>
                 )}
               </div>
 
               {/* Product Info */}
-              <div style={{ padding: '16px' }}>
+              <div style={{ padding: '12px' }}>
                 <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
                   {product.category?.name}
                 </p>
-                <h3 style={{ fontWeight: 600, fontSize: '16px', marginBottom: '8px' }}>{product.name}</h3>
+                <h3 style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px', lineHeight: 1.3 }}>
+                  {product.name}
+                </h3>
                 
                 {/* Rating */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-                  <span style={{ color: '#f59e0b' }}>★</span>
-                  <span style={{ fontSize: '14px' }}>{product.averageRating || 0}</span>
-                  <span style={{ fontSize: '14px', color: '#666' }}>({product.reviewCount || 0})</span>
+                  <span style={{ color: '#f59e0b', fontSize: '12px' }}>★</span>
+                  <span style={{ fontSize: '12px' }}>{product.averageRating || 0}</span>
+                  <span style={{ fontSize: '12px', color: '#666' }}>({product.reviewCount || 0})</span>
                 </div>
 
                 {/* Price */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '20px', fontWeight: 'bold' }}>${product.price}</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${product.price}</span>
                   {product.compareAtPrice && (
                     <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
                       ${product.compareAtPrice}
@@ -322,7 +288,7 @@ export default function ProductsPage() {
       )}
 
       {/* API Not Running Notice */}
-      {!loading && products.length === 0 && !error && (
+      {!loading && products.length === 0 && (
         <div style={{
           marginTop: '32px',
           padding: '24px',
