@@ -6,6 +6,23 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 
+// Custom hook for mobile detection
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+}
+
 function CartIcon() {
   const { getItemCount } = useCart();
   const count = getItemCount();
@@ -72,6 +89,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
           top: 0,
           right: 0,
           width: '300px',
+          maxWidth: '85vw',
           height: '100%',
           backgroundColor: 'white',
           boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
@@ -292,6 +310,7 @@ function Header() {
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     setMounted(true);
@@ -351,23 +370,25 @@ function Header() {
           alignItems: 'center',
           gap: '16px',
         }}>
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h18M3 6h18M3 18h18" />
-            </svg>
-          </button>
+          {/* Mobile menu button - only show on mobile */}
+          {isMobile && (
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12h18M3 6h18M3 18h18" />
+              </svg>
+            </button>
+          )}
 
           {/* Logo */}
           <Link href="/" style={{
@@ -378,26 +399,26 @@ function Header() {
             <span style={{ fontSize: '20px', fontWeight: 'bold' }}>Store</span>
           </Link>
           
-          {/* Desktop Navigation */}
-          <nav style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '24px',
-            fontSize: '14px',
-            fontWeight: 500,
-          }}
-            className="hide-mobile"
-          >
-            <Link href="/products" style={{ textDecoration: 'none', color: '#333' }}>
-              Products
-            </Link>
-            <Link href="/products?category=electronics" style={{ textDecoration: 'none', color: '#333' }}>
-              Electronics
-            </Link>
-            <Link href="/products?category=clothing" style={{ textDecoration: 'none', color: '#333' }}>
-              Clothing
-            </Link>
-          </nav>
+          {/* Desktop Navigation - hidden on mobile */}
+          {!isMobile && (
+            <nav style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '24px',
+              fontSize: '14px',
+              fontWeight: 500,
+            }}>
+              <Link href="/products" style={{ textDecoration: 'none', color: '#333' }}>
+                Products
+              </Link>
+              <Link href="/products?category=electronics" style={{ textDecoration: 'none', color: '#333' }}>
+                Electronics
+              </Link>
+              <Link href="/products?category=clothing" style={{ textDecoration: 'none', color: '#333' }}>
+                Clothing
+              </Link>
+            </nav>
+          )}
           
           {/* Search Bar */}
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
@@ -413,61 +434,57 @@ function Header() {
           }}>
             <CartIcon />
             
-            {/* Desktop user menu */}
-            {!mounted ? (
-              <div style={{ width: '80px' }} className="hide-mobile" />
-            ) : user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}
-                className="hide-mobile"
-              >
-                {isAdmin && (
-                  <Link href="/admin" style={{ 
-                    textDecoration: 'none', 
-                    color: '#fff', 
-                    fontSize: '14px', 
-                    fontWeight: 600,
-                    backgroundColor: '#f59e0b',
-                    padding: '6px 12px',
-                    borderRadius: '4px',
-                  }}>
-                    ⚙️ Admin
+            {/* Desktop user menu - hidden on mobile */}
+            {!isMobile && mounted && (
+              user ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  {isAdmin && (
+                    <Link href="/admin" style={{ 
+                      textDecoration: 'none', 
+                      color: '#fff', 
+                      fontSize: '14px', 
+                      fontWeight: 600,
+                      backgroundColor: '#f59e0b',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                    }}>
+                      ⚙️ Admin
+                    </Link>
+                  )}
+                  <Link href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                    👤 {user.firstName}
                   </Link>
-                )}
-                <Link href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-                  👤 {user.firstName}
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#ef4444',
-                    cursor: 'pointer',
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ef4444',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Link href="/login" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                    Sign In
+                  </Link>
+                  <Link href="/register" style={{
+                    textDecoration: 'none',
+                    backgroundColor: '#000',
+                    color: '#fff',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
                     fontSize: '14px',
-                  }}
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}
-                className="hide-mobile"
-              >
-                <Link href="/login" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-                  Sign In
-                </Link>
-                <Link href="/register" style={{
-                  textDecoration: 'none',
-                  backgroundColor: '#000',
-                  color: '#fff',
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}>
-                  Sign Up
-                </Link>
-              </div>
+                    fontWeight: 500,
+                  }}>
+                    Sign Up
+                  </Link>
+                </div>
+              )
             )}
           </div>
         </div>
