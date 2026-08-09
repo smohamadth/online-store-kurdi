@@ -8,6 +8,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [apiConnected, setApiConnected] = useState(false);
 
   useEffect(() => {
     fetchOrders();
@@ -18,11 +19,40 @@ export default function AdminOrdersPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await api.getOrders(token);
-      setOrders(response.data || []);
+      // Try API first
+      let apiOrders: any[] = [];
+      try {
+        const response = await api.getOrders(token);
+        apiOrders = response.data || [];
+        if (apiOrders.length > 0) {
+          setApiConnected(true);
+        }
+      } catch (err) {
+        console.log('API not available');
+      }
+
+      // Get local orders
+      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+
+      // Merge orders (API orders first, then local)
+      const allOrders = [...apiOrders];
+      localOrders.forEach((localOrder: any) => {
+        if (!allOrders.find(o => o.id === localOrder.id || o.orderNumber === localOrder.orderNumber)) {
+          allOrders.push({
+            ...localOrder,
+            user: localOrder.user || { firstName: 'Guest', lastName: '', email: 'N/A' },
+          });
+        }
+      });
+
+      // Sort by date (newest first)
+      allOrders.sort((a: any, b: any) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setOrders(allOrders);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
-      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -33,20 +63,35 @@ export default function AdminOrdersPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
+      // Try API
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        });
+      } catch (err) {
+        console.log('API not available, updating locally');
+      }
 
-      // Refresh orders
-      fetchOrders();
+      // Update locally
+      const updatedOrders = orders.map(order => 
+        order.id === orderId ? { ...order, status: newStatus } : order
+      );
+      setOrders(updatedOrders);
+
+      // Update localStorage
+      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+      const updatedLocal = localOrders.map((o: any) => 
+        o.id === orderId ? { ...o, status: newStatus } : o
+      );
+      localStorage.setItem('orders', JSON.stringify(updatedLocal));
+
     } catch (err) {
       console.error('Failed to update order:', err);
-      alert('Failed to update order status');
     }
   };
 
@@ -59,6 +104,23 @@ export default function AdminOrdersPage() {
       case 'pending': return '#6b7280';
       default: return '#666';
     }
+  };
+
+  const getCustomerInfo = (order: any) => {
+    // Try different sources for customer info
+    if (order.user?.firstName && order.user?.lastName) {
+      return {
+        name: `${order.user.firstName} ${order.user.lastName}`,
+        email: order.user.email || 'N/A',
+      };
+    }
+    if (order.shippingAddress?.firstName) {
+      return {
+        name: `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`,
+        email: order.shippingAddress.email || 'N/A',
+      };
+    }
+    return { name: 'Guest Customer', email: 'N/A' };
   };
 
   const filteredOrders = filterStatus === 'all'
@@ -75,6 +137,14 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
+      {/* API Status */}
+      {!apiConnected && (
+        <div style={{ padding: '16px', backgroundColor: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', marginBottom: '24px' }}>
+          <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ Showing local orders</p>
+          <p style={{ fontSize: '14px', color: '#92400e' }}>Start API to sync with database: <code>npm run dev:api</code></p>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -100,7 +170,7 @@ export default function AdminOrdersPage() {
               textTransform: 'capitalize',
             }}
           >
-            {status}
+            {status} ({status === 'all' ? orders.length : orders.filter(o => o.status?.toLowerCase() === status).length})
           </button>
         ))}
       </div>
@@ -117,6 +187,7 @@ export default function AdminOrdersPage() {
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #e5e5e5' }}>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>Order</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>Customer</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>Items</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>Date</th>
               <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#666' }}>Total</th>
               <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#666' }}>Status</th>
@@ -124,68 +195,96 @@ export default function AdminOrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredOrders.map((order) => (
-              <tr key={order.id} style={{ borderBottom: '1px solid #e5e5e5' }}>
-                <td style={{ padding: '16px' }}>
-                  <p style={{ fontWeight: 500 }}>#{order.orderNumber || order.id}</p>
-                  <p style={{ fontSize: '12px', color: '#666' }}>{order.items?.length || 0} items</p>
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <p style={{ fontWeight: 500 }}>{order.user?.firstName || 'Guest'} {order.user?.lastName || ''}</p>
-                  <p style={{ fontSize: '12px', color: '#666' }}>{order.user?.email || 'N/A'}</p>
-                </td>
-                <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>
-                  {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
-                </td>
-                <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600 }}>
-                  ${Number(order.totalAmount || 0).toFixed(2)}
-                </td>
-                <td style={{ padding: '16px', textAlign: 'center' }}>
-                  <select
-                    value={order.status || 'pending'}
-                    onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '50px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      backgroundColor: `${getStatusColor(order.status)}20`,
-                      color: getStatusColor(order.status),
-                      border: `1px solid ${getStatusColor(order.status)}40`,
-                      cursor: 'pointer',
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="processing">Processing</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </td>
-                <td style={{ padding: '16px', textAlign: 'right' }}>
-                  <Link
-                    href={`/admin/orders/${order.id}`}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: '#f5f5f5',
-                      borderRadius: '4px',
-                      textDecoration: 'none',
-                      color: '#000',
-                      fontSize: '12px',
-                    }}
-                  >
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {filteredOrders.map((order) => {
+              const customer = getCustomerInfo(order);
+              return (
+                <tr key={order.id} style={{ borderBottom: '1px solid #e5e5e5' }}>
+                  <td style={{ padding: '16px' }}>
+                    <p style={{ fontWeight: 600 }}>#{order.orderNumber || order.id?.slice(0, 8)}</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>{order.paymentMethod || 'Credit Card'}</p>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <p style={{ fontWeight: 500 }}>{customer.name}</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>{customer.email}</p>
+                    {order.shippingAddress && (
+                      <p style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
+                        {order.shippingAddress.city}, {order.shippingAddress.state}
+                      </p>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <p style={{ fontWeight: 500 }}>{order.items?.length || 0} items</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>
+                      {order.items?.slice(0, 2).map((i: any) => i.name || i.product?.name).join(', ')}
+                      {(order.items?.length || 0) > 2 && '...'}
+                    </p>
+                  </td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>
+                    {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    }) : 'N/A'}
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600 }}>
+                    ${Number(order.totalAmount || 0).toFixed(2)}
+                    {order.discountAmount > 0 && (
+                      <p style={{ fontSize: '11px', color: '#22c55e' }}>
+                        -${Number(order.discountAmount).toFixed(2)} discount
+                      </p>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'center' }}>
+                    <select
+                      value={order.status || 'pending'}
+                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '50px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        backgroundColor: `${getStatusColor(order.status)}20`,
+                        color: getStatusColor(order.status),
+                        border: `1px solid ${getStatusColor(order.status)}40`,
+                        cursor: 'pointer',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="processing">Processing</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'right' }}>
+                    <Link
+                      href={`/admin/orders/${order.id}`}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#000',
+                        borderRadius: '4px',
+                        textDecoration: 'none',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
         {filteredOrders.length === 0 && (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>
-            No orders found
+          <div style={{ padding: '48px', textAlign: 'center', color: '#666' }}>
+            <p style={{ fontSize: '18px', marginBottom: '8px' }}>No orders found</p>
+            <p style={{ fontSize: '14px' }}>
+              {filterStatus !== 'all' ? 'Try a different filter' : 'Orders will appear here when customers make purchases'}
+            </p>
           </div>
         )}
       </div>
