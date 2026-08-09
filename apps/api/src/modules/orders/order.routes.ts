@@ -3,6 +3,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { sendOrderConfirmation } from '../../services/email.service';
 
 const router = Router();
 
@@ -265,6 +266,21 @@ router.post('/', authenticate, async (req, res, next) => {
     });
 
     logger.info(`Order created: ${order.orderNumber} by user ${req.user!.email}`);
+
+    // Send order confirmation email (non-blocking)
+    const orderUser = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    
+    if (orderUser) {
+      sendOrderConfirmation({
+        ...order,
+        items: order.items,
+      }, orderUser).catch(err => {
+        logger.error('Failed to send order confirmation:', err);
+      });
+    }
 
     res.status(201).json({
       status: 'success',

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { seedEmailTemplates } from './seed-email-templates';
 
 const prisma = new PrismaClient();
 
@@ -393,6 +394,9 @@ async function main() {
   }
 
   console.log('📊 Created sample analytics events');
+
+  // Seed email templates
+  await seedEmailTemplates();
 
   console.log('✅ Database seeded successfully!');
   console.log('\n📋 Summary:');

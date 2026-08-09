@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { generateTokens, verifyRefreshToken, authenticate } from '../../middleware/auth';
 import { AppError, UnauthorizedError, ConflictError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { sendWelcomeEmail, sendPasswordResetEmail } from '../../services/email.service';
 import { z } from 'zod';
 
 const router = Router();
@@ -80,6 +82,11 @@ router.post('/register', async (req, res, next) => {
     });
 
     logger.info(`User registered: ${user.email}`);
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail({ firstName: user.firstName, email: user.email }).catch(err => {
+      logger.error('Failed to send welcome email:', err);
+    });
 
     res.status(201).json({
       status: 'success',
