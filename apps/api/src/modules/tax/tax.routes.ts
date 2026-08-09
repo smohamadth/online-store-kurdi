@@ -239,14 +239,14 @@ router.post('/calculate', async (req, res, next) => {
   try {
     const { country, state, city, zipCode, subtotal, items } = req.body;
 
-    if (!country || !subtotal) {
+    if (!country) {
       return res.status(400).json({
         status: 'error',
-        message: 'Country and subtotal are required',
+        message: 'Country is required',
       });
     }
 
-    // Find matching tax rates
+    // Find all matching tax rates for the location
     const taxRates = await prisma.taxRate.findMany({
       where: {
         isActive: true,
@@ -255,68 +255,103 @@ router.post('/calculate', async (req, res, next) => {
       orderBy: { priority: 'desc' },
     });
 
-    let totalTax = 0;
-    let appliedRate = 0;
-    let taxName = '';
-
-    // Find the most specific matching rate
-    for (const rate of taxRates) {
-      // Check state match
-      if (rate.state && rate.state !== state) continue;
-      
-      // Check city match
-      if (rate.city && rate.city !== city) continue;
-      
-      // Check zip code match
-      if (rate.zipCode && !zipCode?.startsWith(rate.zipCode)) continue;
-
-      // This rate matches
-      appliedRate = Number(rate.rate);
-      taxName = rate.name;
-      totalTax = subtotal * appliedRate;
-      break;
-    }
-
-    // If no specific rate found, try to find a general rate for the country
-    if (appliedRate === 0) {
-      const generalRate = taxRates.find(r => !r.state && !r.city && !r.zipCode);
-      if (generalRate) {
-        appliedRate = Number(generalRate.rate);
-        taxName = generalRate.name;
-        totalTax = subtotal * appliedRate;
-      }
-    }
-
-    // Calculate tax per item if items provided
-    let itemTaxes: any[] = [];
-    if (items && Array.isArray(items)) {
-      itemTaxes = items.map((item: any) => {
-        let itemTaxRate = appliedRate;
+    // Function to find the best matching tax rate for a location
+    const findTaxRate = (targetState?: string, targetCity?: string, targetZip?: string) => {
+      for (const rate of taxRates) {
+        // Check state match
+        if (rate.state && rate.state !== targetState) continue;
         
-        // Check if product has specific tax class
-        if (item.taxClassId) {
-          // Could look up product-specific tax class here
+        // Check city match
+        if (rate.city && rate.city !== targetCity) continue;
+        
+        // Check zip code match
+        if (rate.zipCode && targetZip && !targetZip.startsWith(rate.zipCode)) continue;
+
+        // This rate matches
+        return rate;
+      }
+
+      // Fallback: find a general rate for the country
+      return taxRates.find(r => !r.state && !r.city && !r.zipCode) || null;
+    };
+
+    // Find the base tax rate for this location
+    const baseTaxRate = findTaxRate(state, city, zipCode);
+    const baseRate = baseTaxRate ? Number(baseTaxRate.rate) : 0;
+    const baseTaxName = baseTaxRate?.name || 'Tax';
+
+    // Calculate tax per item (considering tax class)
+    let itemTaxes: any[] = [];
+    let totalTax = 0;
+
+    if (items && Array.isArray(items) && items.length > 0) {
+      // Calculate tax for each item based on its tax class
+      for (const item of items) {
+        let itemRate = baseRate;
+        let itemTaxName = baseTaxName;
+
+        // If item has a specific tax class, find the matching rate
+        if (item.taxClass && item.taxClass !== 'standard') {
+          // Find tax rate for this specific tax class
+          const classRate = taxRates.find(r => 
+            r.taxClass === item.taxClass && 
+            (!r.state || r.state === state) &&
+            (!r.city || r.city === city)
+          );
+
+          if (classRate) {
+            itemRate = Number(classRate.rate);
+            itemTaxName = classRate.name;
+          } else {
+            // If no specific rate found, check if tax class has 0% rate
+            // (e.g., digital products, reduced rate items)
+            const taxClassInfo = await prisma.taxClass.findUnique({
+              where: { name: item.taxClass },
+            });
+
+            if (taxClassInfo) {
+              // Use 0% for zero-tax classes
+              if (taxClassInfo.name === 'zero' || taxClassInfo.name === 'digital') {
+                itemRate = 0;
+                itemTaxName = `${taxClassInfo.name} tax`;
+              }
+            }
+          }
         }
 
-        return {
+        const itemTaxAmount = (item.price * item.quantity) * itemRate;
+        totalTax += itemTaxAmount;
+
+        itemTaxes.push({
           productId: item.productId,
           price: item.price,
           quantity: item.quantity,
-          taxRate: itemTaxRate,
-          taxAmount: (item.price * item.quantity) * itemTaxRate,
-        };
-      });
+          taxClass: item.taxClass || 'standard',
+          taxRate: itemRate,
+          taxAmount: Math.round(itemTaxAmount * 100) / 100,
+          taxName: itemTaxName,
+        });
+      }
+    } else {
+      // If no items provided, calculate on subtotal
+      totalTax = subtotal * baseRate;
     }
 
     res.json({
       status: 'success',
       data: {
-        taxRate: appliedRate,
-        taxName,
+        taxRate: baseRate,
+        taxName: baseTaxName,
         taxAmount: Math.round(totalTax * 100) / 100,
-        subtotal,
-        totalWithTax: Math.round((subtotal + totalTax) * 100) / 100,
+        subtotal: subtotal || 0,
+        totalWithTax: Math.round(((subtotal || 0) + totalTax) * 100) / 100,
         itemTaxes,
+        location: {
+          country,
+          state,
+          city,
+          zipCode,
+        },
       },
     });
   } catch (err) {
