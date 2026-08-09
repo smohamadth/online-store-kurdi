@@ -3,6 +3,7 @@
 import './globals.css';
 import { CartProvider, useCart } from '@/lib/store';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 
 function CartIcon() {
@@ -10,7 +11,7 @@ function CartIcon() {
   const count = getItemCount();
 
   return (
-    <a href="/cart" style={{
+    <Link href="/cart" style={{
       position: 'relative',
       textDecoration: 'none',
       color: '#000',
@@ -41,7 +42,7 @@ function CartIcon() {
           {count}
         </span>
       )}
-    </a>
+    </Link>
   );
 }
 
@@ -53,11 +54,7 @@ function UserMenu() {
     setMounted(true);
     loadUser();
     
-    // Listen for custom auth change event
-    const handleAuthChange = () => {
-      loadUser();
-    };
-    
+    const handleAuthChange = () => loadUser();
     window.addEventListener('authChange', handleAuthChange);
     window.addEventListener('storage', handleAuthChange);
     
@@ -78,9 +75,15 @@ function UserMenu() {
         setUser(null);
       }
     } catch (e) {
-      console.error('Failed to load user:', e);
       setUser(null);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.dispatchEvent(new Event('authChange'));
+    window.location.href = '/';
   };
 
   if (!mounted) {
@@ -92,10 +95,9 @@ function UserMenu() {
     
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {/* Admin users see admin panel link and logout */}
         {isAdmin && (
           <>
-            <a href="/admin" style={{ 
+            <Link href="/admin" style={{ 
               textDecoration: 'none', 
               color: '#fff', 
               fontSize: '14px', 
@@ -105,14 +107,9 @@ function UserMenu() {
               borderRadius: '4px',
             }}>
               ⚙️ Admin
-            </a>
+            </Link>
             <button
-              onClick={() => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                window.dispatchEvent(new Event('authChange'));
-                window.location.href = '/';
-              }}
+              onClick={handleLogout}
               style={{
                 background: 'none',
                 border: 'none',
@@ -126,22 +123,21 @@ function UserMenu() {
           </>
         )}
         
-        {/* Regular users see account and orders */}
         {!isAdmin && (
           <>
-            <a href="/account" style={{ 
+            <Link href="/account" style={{ 
               textDecoration: 'none', 
               color: '#333', 
               fontSize: '14px',
             }}>
               👤 My Account
-            </a>
-            <a href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+            </Link>
+            <Link href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
               Orders
-            </a>
-            <a href="/account/wishlist" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+            </Link>
+            <Link href="/account/wishlist" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
               Wishlist
-            </a>
+            </Link>
           </>
         )}
       </div>
@@ -150,10 +146,10 @@ function UserMenu() {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-      <a href="/login" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+      <Link href="/login" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
         Sign In
-      </a>
-      <a href="/register" style={{
+      </Link>
+      <Link href="/register" style={{
         textDecoration: 'none',
         backgroundColor: '#000',
         color: '#fff',
@@ -163,7 +159,7 @@ function UserMenu() {
         fontWeight: 500,
       }}>
         Sign Up
-      </a>
+      </Link>
     </div>
   );
 }
@@ -200,7 +196,7 @@ export default function RootLayout({
               height: '64px',
               alignItems: 'center',
             }}>
-              <a href="/" style={{
+              <Link href="/" style={{
                 marginRight: '24px',
                 display: 'flex',
                 alignItems: 'center',
@@ -208,7 +204,8 @@ export default function RootLayout({
                 color: '#000',
               }}>
                 <span style={{ fontSize: '20px', fontWeight: 'bold' }}>Store</span>
-              </a>
+              </Link>
+              
               <nav style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -216,15 +213,15 @@ export default function RootLayout({
                 fontSize: '14px',
                 fontWeight: 500,
               }}>
-                <a href="/products" style={{ textDecoration: 'none', color: '#333' }}>
+                <Link href="/products" style={{ textDecoration: 'none', color: '#333' }}>
                   Products
-                </a>
-                <a href="/products?category=electronics" style={{ textDecoration: 'none', color: '#333' }}>
+                </Link>
+                <Link href="/products?category=electronics" style={{ textDecoration: 'none', color: '#333' }}>
                   Electronics
-                </a>
-                <a href="/products?category=clothing" style={{ textDecoration: 'none', color: '#333' }}>
+                </Link>
+                <Link href="/products?category=clothing" style={{ textDecoration: 'none', color: '#333' }}>
                   Clothing
-                </a>
+                </Link>
               </nav>
               
               {/* Search Bar */}
@@ -273,26 +270,26 @@ export default function RootLayout({
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <a href="/products" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>All Products</a>
-                  <a href="/products?category=electronics" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Electronics</a>
-                  <a href="/products?category=clothing" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Clothing</a>
-                  <a href="/products?category=books" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Books</a>
+                  <Link href="/products" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>All Products</Link>
+                  <Link href="/products?category=electronics" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Electronics</Link>
+                  <Link href="/products?category=clothing" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Clothing</Link>
+                  <Link href="/products?category=books" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Books</Link>
                 </div>
               </div>
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <a href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</a>
-                  <a href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</a>
-                  <a href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</a>
+                  <Link href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</Link>
+                  <Link href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</Link>
+                  <Link href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</Link>
                 </div>
               </div>
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <a href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</a>
-                  <a href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</a>
-                  <a href="/shipping" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Shipping Info</a>
+                  <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
+                  <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
+                  <Link href="/shipping" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Shipping Info</Link>
                 </div>
               </div>
             </div>
