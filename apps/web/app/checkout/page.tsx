@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { api } from '@/lib/api';
+import ShippingSelector from '@/components/ShippingSelector';
+import TaxCalculator from '@/components/TaxCalculator';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -28,13 +30,20 @@ export default function CheckoutPage() {
     country: 'US',
   });
 
+  const [selectedShipping, setSelectedShipping] = useState<any>(null);
+  const [taxInfo, setTaxInfo] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState('credit_card');
+
+  const subtotal = getTotal();
+  const shippingCost = selectedShipping?.isFree ? 0 : (selectedShipping?.rate || 0);
+  const taxAmount = taxInfo?.taxAmount || subtotal * 0.1;
+  const total = subtotal - discount + shippingCost + taxAmount;
 
   useEffect(() => {
     // Check if user is logged in
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-    
+
     if (storedUser && token) {
       const userData = JSON.parse(storedUser);
       setUser(userData);
@@ -46,7 +55,7 @@ export default function CheckoutPage() {
       }));
     }
 
-    // Load applied coupon from cart
+    // Load applied coupon
     const storedCoupon = localStorage.getItem('appliedCoupon');
     if (storedCoupon) {
       try {
@@ -62,11 +71,6 @@ export default function CheckoutPage() {
     }
   }, [items, orderPlaced, router]);
 
-  const subtotal = getTotal();
-  const shipping = appliedCoupon?.type === 'free_shipping' ? 0 : (subtotal >= 100 ? 0 : 9.99);
-  const tax = subtotal * 0.1;
-  const total = subtotal - discount + shipping + tax;
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setShippingInfo({ ...shippingInfo, [e.target.name]: e.target.value });
   };
@@ -77,58 +81,45 @@ export default function CheckoutPage() {
 
     try {
       const token = localStorage.getItem('token');
-      
+
       if (!token) {
         router.push('/login');
         return;
       }
 
-      // Create order with coupon info
+      // Create order
       const orderData = {
         items: items.map(item => ({
           productId: item.productId,
+          variantId: item.variantId,
           quantity: item.quantity,
         })),
         shippingAddress: shippingInfo,
+        shippingMethodId: selectedShipping?.id,
         paymentMethod,
         couponCode: appliedCoupon?.code || null,
+        couponId: appliedCoupon?.id || null,
         discountAmount: discount,
-        subtotal: subtotal,
-        shippingAmount: shipping,
-        taxAmount: tax,
+        subtotal,
+        shippingAmount: shippingCost,
+        taxAmount,
         totalAmount: total,
       };
 
-      // Try API first
+      // Try API
       let orderNumber = 'ORD-' + Date.now();
-      let savedToDb = false;
       try {
-        const response = await api.createOrder(token, {
-          items: items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          })),
-          shippingAddress: shippingInfo,
-          paymentMethod,
-          couponCode: appliedCoupon?.code || null,
-          discountAmount: discount,
-          subtotal,
-          shippingAmount: shipping,
-          taxAmount: tax,
-          totalAmount: total,
-        });
-        
-        if (response.data) {
-          orderNumber = response.data.orderNumber || orderNumber;
-          savedToDb = true;
+        const response = await api.createOrder(token, orderData);
+        if (response.data?.orderNumber) {
+          orderNumber = response.data.orderNumber;
         }
       } catch (err) {
         console.log('API not available, saving locally');
       }
 
-      // Save order locally (always, as backup)
+      // Save order locally
       saveOrderLocally(orderNumber);
-      
+
       setOrderNumber(orderNumber);
       setOrderPlaced(true);
       clearCart();
@@ -146,7 +137,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const saveOrderLocally = (orderNumber: string, orderData: any) => {
+  const saveOrderLocally = (orderNumber: string) => {
     const order = {
       id: Date.now().toString(),
       orderNumber,
@@ -163,8 +154,9 @@ export default function CheckoutPage() {
       subtotal,
       discountAmount: discount,
       couponCode: appliedCoupon?.code || null,
-      shippingAmount: shipping,
-      taxAmount: tax,
+      shippingAmount: shippingCost,
+      shippingMethod: selectedShipping?.name || 'Standard',
+      taxAmount,
       totalAmount: total,
       shippingAddress: shippingInfo,
       paymentMethod,
@@ -176,7 +168,6 @@ export default function CheckoutPage() {
       } : null,
     };
 
-    // Save to localStorage
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     orders.unshift(order);
     localStorage.setItem('orders', JSON.stringify(orders));
@@ -185,37 +176,19 @@ export default function CheckoutPage() {
   // Order confirmation
   if (orderPlaced) {
     return (
-      <div style={{
-        maxWidth: '600px',
-        margin: '64px auto',
-        padding: '0 20px',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          padding: '48px',
-          border: '1px solid #e5e5e5',
-          borderRadius: '8px',
-          backgroundColor: 'white',
-        }}>
+      <div style={{ maxWidth: '600px', margin: '64px auto', padding: '0 20px', textAlign: 'center' }}>
+        <div style={{ padding: '48px', border: '1px solid #e5e5e5', borderRadius: '8px', backgroundColor: 'white' }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>✅</div>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '16px' }}>
             Order Placed Successfully!
           </h1>
-          <p style={{ color: '#666', marginBottom: '8px' }}>
-            Thank you for your purchase
-          </p>
+          <p style={{ color: '#666', marginBottom: '8px' }}>Thank you for your purchase</p>
           <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px' }}>
             Order #{orderNumber}
           </p>
-          
+
           {/* Order Summary */}
-          <div style={{
-            padding: '24px',
-            backgroundColor: '#f9f9f9',
-            borderRadius: '8px',
-            marginBottom: '24px',
-            textAlign: 'left',
-          }}>
+          <div style={{ padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginBottom: '24px', textAlign: 'left' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Summary</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -229,12 +202,12 @@ export default function CheckoutPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Shipping</span>
-                <span>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</span>
+                <span style={{ color: '#666' }}>Shipping ({selectedShipping?.name || 'Standard'})</span>
+                <span>{shippingCost === 0 ? 'Free' : `$${shippingCost.toFixed(2)}`}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Tax</span>
-                <span>${tax.toFixed(2)}</span>
+                <span>${taxAmount.toFixed(2)}</span>
               </div>
               <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '8px', marginTop: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
@@ -244,38 +217,18 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
-          
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#f9f9f9',
-            borderRadius: '6px',
-            marginBottom: '32px',
-          }}>
+
+          <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', marginBottom: '32px' }}>
             <p style={{ fontSize: '14px', color: '#666' }}>
               Confirmation email sent to {shippingInfo.email}
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <Link href="/account/orders" style={{
-              padding: '12px 24px',
-              backgroundColor: '#000',
-              color: '#fff',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}>
+            <Link href="/account/orders" style={{ padding: '12px 24px', backgroundColor: '#000', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
               View Orders
             </Link>
-            <Link href="/products" style={{
-              padding: '12px 24px',
-              backgroundColor: 'white',
-              color: '#000',
-              border: '1px solid #000',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}>
+            <Link href="/products" style={{ padding: '12px 24px', backgroundColor: 'white', color: '#000', border: '1px solid #000', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
               Continue Shopping
             </Link>
           </div>
@@ -303,217 +256,94 @@ export default function CheckoutPage() {
 
       <form onSubmit={handleSubmit}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '48px' }}>
-          {/* Left Column - Shipping & Payment */}
+          {/* Left Column */}
           <div>
             {/* Shipping Information */}
             <div style={{ marginBottom: '40px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
-                Shipping Information
-              </h2>
-              
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Shipping Information</h2>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={shippingInfo.firstName}
-                    onChange={handleChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>First Name *</label>
+                  <input type="text" name="firstName" value={shippingInfo.firstName} onChange={handleChange} required
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={shippingInfo.lastName}
-                    onChange={handleChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Last Name *</label>
+                  <input type="text" name="lastName" value={shippingInfo.lastName} onChange={handleChange} required
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={shippingInfo.email}
-                    onChange={handleChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Email *</label>
+                  <input type="email" name="email" value={shippingInfo.email} onChange={handleChange} required
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    Phone
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={shippingInfo.phone}
-                    onChange={handleChange}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Phone</label>
+                  <input type="tel" name="phone" value={shippingInfo.phone} onChange={handleChange}
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                  Address *
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={shippingInfo.address}
-                  onChange={handleChange}
-                  placeholder="123 Main St"
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: '6px',
-                    fontSize: '16px',
-                    outline: 'none',
-                  }}
-                />
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Address *</label>
+                <input type="text" name="address" value={shippingInfo.address} onChange={handleChange} placeholder="123 Main St" required
+                  style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    name="city"
-                    value={shippingInfo.city}
-                    onChange={handleChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>City *</label>
+                  <input type="text" name="city" value={shippingInfo.city} onChange={handleChange} required
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    name="state"
-                    value={shippingInfo.state}
-                    onChange={handleChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>State *</label>
+                  <input type="text" name="state" value={shippingInfo.state} onChange={handleChange} required
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                    ZIP Code *
-                  </label>
-                  <input
-                    type="text"
-                    name="zipCode"
-                    value={shippingInfo.zipCode}
-                    onChange={handleChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>ZIP Code *</label>
+                  <input type="text" name="zipCode" value={shippingInfo.zipCode} onChange={handleChange} required
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
             </div>
 
+            {/* Shipping Method */}
+            <div style={{ marginBottom: '40px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Shipping Method</h2>
+              <ShippingSelector
+                country={shippingInfo.country}
+                state={shippingInfo.state}
+                zipCode={shippingInfo.zipCode}
+                subtotal={subtotal}
+                onSelect={setSelectedShipping}
+                selectedMethodId={selectedShipping?.id}
+              />
+            </div>
+
             {/* Payment Method */}
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
-                Payment Method
-              </h2>
-              
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Payment Method</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {[
                   { id: 'credit_card', label: 'Credit Card', icon: '💳' },
                   { id: 'paypal', label: 'PayPal', icon: '🅿️' },
                   { id: 'bank_transfer', label: 'Bank Transfer', icon: '🏦' },
                 ].map(method => (
-                  <label
-                    key={method.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '16px',
-                      border: `1px solid ${paymentMethod === method.id ? '#000' : '#e5e5e5'}`,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      backgroundColor: paymentMethod === method.id ? '#f9f9f9' : 'white',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value={method.id}
+                  <label key={method.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
+                    border: `1px solid ${paymentMethod === method.id ? '#000' : '#e5e5e5'}`,
+                    borderRadius: '6px', cursor: 'pointer',
+                    backgroundColor: paymentMethod === method.id ? '#f9f9f9' : 'white',
+                  }}>
+                    <input type="radio" name="paymentMethod" value={method.id}
                       checked={paymentMethod === method.id}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    />
+                      onChange={(e) => setPaymentMethod(e.target.value)} />
                     <span style={{ fontSize: '24px' }}>{method.icon}</span>
                     <span style={{ fontWeight: 500 }}>{method.label}</span>
                   </label>
@@ -524,32 +354,16 @@ export default function CheckoutPage() {
 
           {/* Right Column - Order Summary */}
           <div>
-            <div style={{
-              padding: '32px',
-              border: '1px solid #e5e5e5',
-              borderRadius: '8px',
-              backgroundColor: '#f9f9f9',
-              position: 'sticky',
-              top: '100px',
-            }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
-                Order Summary
-              </h2>
+            <div style={{ padding: '32px', border: '1px solid #e5e5e5', borderRadius: '8px', backgroundColor: '#f9f9f9', position: 'sticky', top: '100px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Order Summary</h2>
 
               {/* Items */}
               <div style={{ marginBottom: '24px' }}>
                 {items.map(item => (
-                  <div key={item.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    padding: '12px 0',
-                    borderBottom: '1px solid #e5e5e5',
-                  }}>
+                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #e5e5e5' }}>
                     <div>
                       <p style={{ fontWeight: 500 }}>{item.name}</p>
-                      {item.variant && (
-                        <p style={{ fontSize: '12px', color: '#666' }}>{item.variant}</p>
-                      )}
+                      {item.variant && <p style={{ fontSize: '12px', color: '#666' }}>{item.variant}</p>}
                       <p style={{ fontSize: '12px', color: '#666' }}>Qty: {item.quantity}</p>
                     </div>
                     <span style={{ fontWeight: 600 }}>${(item.price * item.quantity).toFixed(2)}</span>
@@ -570,15 +384,19 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Shipping</span>
+                  <span style={{ color: '#666' }}>Shipping ({selectedShipping?.name || '...'})</span>
                   <span style={{ fontWeight: 600 }}>
-                    {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `$${shipping.toFixed(2)}`}
+                    {shippingCost === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `$${shippingCost.toFixed(2)}`}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Tax</span>
-                  <span style={{ fontWeight: 600 }}>${tax.toFixed(2)}</span>
-                </div>
+                <TaxCalculator
+                  country={shippingInfo.country}
+                  state={shippingInfo.state}
+                  city={shippingInfo.city}
+                  zipCode={shippingInfo.zipCode}
+                  subtotal={subtotal}
+                  onTaxCalculated={setTaxInfo}
+                />
                 <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
@@ -587,23 +405,13 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Place Order Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  marginTop: '24px',
-                  padding: '16px',
-                  backgroundColor: loading ? '#ccc' : '#000',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                }}
-              >
+              <button type="submit" disabled={loading || !selectedShipping} style={{
+                width: '100%', marginTop: '24px', padding: '16px',
+                backgroundColor: (loading || !selectedShipping) ? '#ccc' : '#000',
+                color: '#fff', border: 'none', borderRadius: '6px',
+                fontSize: '16px', fontWeight: 600,
+                cursor: (loading || !selectedShipping) ? 'not-allowed' : 'pointer',
+              }}>
                 {loading ? 'Placing Order...' : 'Place Order'}
               </button>
 
