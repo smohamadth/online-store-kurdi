@@ -145,15 +145,27 @@ router.post('/', authenticate, async (req, res, next) => {
     }
 
     // Check if item already in cart
-    const existingItem = await prisma.cartItem.findUnique({
-      where: {
-        userId_productId_variantId: {
+    let existingItem = null;
+    
+    if (variantId) {
+      // If variant provided, find by product + variant
+      existingItem = await prisma.cartItem.findFirst({
+        where: {
           userId,
           productId,
-          variantId: variantId || null,
+          variantId,
         },
-      },
-    });
+      });
+    } else {
+      // If no variant, find by product only (where variant is null)
+      existingItem = await prisma.cartItem.findFirst({
+        where: {
+          userId,
+          productId,
+          variantId: null,
+        },
+      });
+    }
 
     let cartItem;
 
@@ -344,15 +356,34 @@ router.post('/sync', authenticate, async (req, res, next) => {
     // Add items from local cart
     const cartItems = [];
     for (const item of items) {
-      const cartItem = await prisma.cartItem.create({
-        data: {
+      // Check if item already exists
+      const existing = await prisma.cartItem.findFirst({
+        where: {
           userId,
           productId: item.productId,
           variantId: item.variantId || null,
-          quantity: item.quantity || 1,
         },
       });
-      cartItems.push(cartItem);
+
+      if (existing) {
+        // Update quantity
+        const updated = await prisma.cartItem.update({
+          where: { id: existing.id },
+          data: { quantity: existing.quantity + (item.quantity || 1) },
+        });
+        cartItems.push(updated);
+      } else {
+        // Create new item
+        const cartItem = await prisma.cartItem.create({
+          data: {
+            userId,
+            productId: item.productId,
+            variantId: item.variantId || null,
+            quantity: item.quantity || 1,
+          },
+        });
+        cartItems.push(cartItem);
+      }
     }
 
     logger.info(`Cart synced for user ${userId}: ${cartItems.length} items`);
