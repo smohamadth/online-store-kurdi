@@ -27,6 +27,8 @@ import settingsRoutes from './modules/settings/settings.routes';
 import inventoryRoutes from './modules/inventory/inventory.routes';
 import shippingRoutes from './modules/shipping/shipping.routes';
 import taxRoutes from './modules/tax/tax.routes';
+import cartRoutes from './modules/cart/cart.routes';
+import wishlistRoutes from './modules/wishlist/wishlist.routes';
 
 // Create Express app
 const app = express();
@@ -131,6 +133,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/tax', taxRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/wishlist', wishlistRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

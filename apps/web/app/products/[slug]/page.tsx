@@ -20,6 +20,7 @@ export default function ProductPage() {
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [inWishlist, setInWishlist] = useState(false);
 
   // Fetch product from API
   useEffect(() => {
@@ -112,6 +113,39 @@ export default function ProductPage() {
   const handleBuyNow = () => {
     handleAddToCart();
     router.push('/cart');
+  };
+
+  // Handle wishlist
+  const handleWishlist = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      if (inWishlist) {
+        // Remove from wishlist
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${product?.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setInWishlist(false);
+      } else {
+        // Add to wishlist
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ productId: product?.id }),
+        });
+        setInWishlist(true);
+      }
+    } catch (err) {
+      console.error('Wishlist error:', err);
+    }
   };
 
   return (
@@ -324,6 +358,20 @@ export default function ProductPage() {
               }}
             >
               Buy Now
+            </button>
+            <button
+              onClick={handleWishlist}
+              style={{
+                padding: '16px',
+                backgroundColor: inWishlist ? '#fef2f2' : 'white',
+                color: inWishlist ? '#ef4444' : '#000',
+                border: `2px solid ${inWishlist ? '#ef4444' : '#e5e5e5'}`,
+                borderRadius: '6px',
+                fontSize: '20px',
+                cursor: 'pointer',
+              }}
+            >
+              {inWishlist ? '❤️' : '🤍'}
             </button>
           </div>
         </div>
