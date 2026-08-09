@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate, authorize } from '../../middleware/auth';
-import { uploadFile, deleteFile } from '../../services/storage.service';
+import { uploadImage, deleteImage, getImageUrl } from '../../services/storage.service';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -35,18 +35,28 @@ router.post('/image', authenticate, upload.single('file'), async (req, res, next
 
     const folder = req.body.folder || 'products';
     
-    const result = await uploadFile(
+    const result = await uploadImage(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype,
       folder
     );
 
-    logger.info(`Image uploaded by user ${req.user?.id}: ${result.fileName}`);
+    logger.info(`Image uploaded by user ${req.user?.id}: ${result.id}`);
 
+    // Return all variants
     res.json({
       status: 'success',
-      data: result,
+      data: {
+        id: result.id,
+        url: result.originalUrl,
+        thumbnail: getImageUrl(result.variants, 'thumbnail'),
+        medium: getImageUrl(result.variants, 'card'),
+        large: getImageUrl(result.variants, 'detail'),
+        zoom: getImageUrl(result.variants, 'zoom'),
+        variants: result.variants,
+        originalName: result.originalName,
+      },
     });
   } catch (error) {
     next(error);
@@ -69,13 +79,21 @@ router.post('/images', authenticate, upload.array('files', 10), async (req, res,
     const results = [];
 
     for (const file of files) {
-      const result = await uploadFile(
+      const result = await uploadImage(
         file.buffer,
         file.originalname,
         file.mimetype,
         folder
       );
-      results.push(result);
+      
+      results.push({
+        id: result.id,
+        url: result.originalUrl,
+        thumbnail: getImageUrl(result.variants, 'thumbnail'),
+        medium: getImageUrl(result.variants, 'card'),
+        large: getImageUrl(result.variants, 'detail'),
+        variants: result.variants,
+      });
     }
 
     logger.info(`${results.length} images uploaded by user ${req.user?.id}`);
@@ -89,18 +107,18 @@ router.post('/images', authenticate, upload.array('files', 10), async (req, res,
   }
 });
 
-// DELETE /api/upload/:fileName - Delete file
-router.delete('/:fileName(*)', authenticate, authorize('admin'), async (req, res, next) => {
+// DELETE /api/upload/:folder/:id - Delete image
+router.delete('/:folder/:id', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const { fileName } = req.params;
+    const { folder, id } = req.params;
 
-    await deleteFile(fileName);
+    await deleteImage(folder, id);
 
-    logger.info(`File deleted by admin ${req.user?.id}: ${fileName}`);
+    logger.info(`Image deleted by admin ${req.user?.id}: ${folder}/${id}`);
 
     res.json({
       status: 'success',
-      message: 'File deleted successfully',
+      message: 'Image deleted successfully',
     });
   } catch (error) {
     next(error);
