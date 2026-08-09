@@ -18,7 +18,7 @@ const createProductSchema = z.object({
   shortDescription: z.string().optional().nullable(),
   sku: z.string().min(1).max(100),
   type: z.enum(['physical', 'digital']).default('physical'),
-  status: z.enum(['draft', 'active', 'inactive', 'archived']).default('draft'),
+  status: z.enum(['draft', 'active', 'inactive', 'archived']).default('active'),  // Changed to active
   price: z.number().positive(),
   compareAtPrice: z.number().positive().optional().nullable(),
   costPrice: z.number().positive().optional().nullable(),

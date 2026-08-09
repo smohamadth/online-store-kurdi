@@ -34,7 +34,7 @@ export default function AdminProductsPage() {
 
   const fetchProducts = async () => {
     try {
-      // Try API first
+      // Try API first - get ALL products (including drafts)
       let apiProducts: Product[] = [];
       try {
         const response = await api.getProducts({ limit: 100 });
