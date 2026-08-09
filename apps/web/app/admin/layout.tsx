@@ -288,24 +288,25 @@ export default function AdminLayout({
                 }}
               />
             )}
-            {/* Mobile sidebar */}
-            <div style={{
-              width: '260px',
-              backgroundColor: '#1a1a2e',
-              color: 'white',
-              padding: '24px 0',
-              position: 'fixed',
-              top: 0,
-              left: sidebarOpen ? 0 : '-260px',
-              height: '100vh',
-              zIndex: 1000,
-              transition: 'left 0.3s ease',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}>
-              <SidebarContent />
-            </div>
+          {/* Mobile sidebar */}
+          <div style={{
+            width: '260px',
+            backgroundColor: '#1a1a2e',
+            color: 'white',
+            padding: '24px 0',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            height: '100vh',
+            zIndex: 1000,
+            transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            <SidebarContent />
+          </div>
           </>
         )}
 

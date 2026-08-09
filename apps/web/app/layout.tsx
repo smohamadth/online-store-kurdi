@@ -4,6 +4,7 @@ import './globals.css';
 import { CartProvider, useCart } from '@/lib/store';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 
 // Custom hook for mobile detection
@@ -69,8 +70,6 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
   user: any;
   onLogout: () => void;
 }) {
-  if (!isOpen) return null;
-
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
 
   return (
@@ -80,8 +79,11 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: isOpen ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0)',
       zIndex: 1000,
+      opacity: isOpen ? 1 : 0,
+      pointerEvents: isOpen ? 'auto' : 'none',
+      transition: 'opacity 0.3s ease',
     }} onClick={onClose}>
       <div 
         style={{
@@ -95,6 +97,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
           boxShadow: '4px 0 20px rgba(0,0,0,0.1)',
           padding: '24px',
           overflowY: 'auto',
+          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -311,6 +315,8 @@ function Header() {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useIsMobile();
+  const pathname = usePathname();
+  const isAdminPage = pathname?.startsWith('/admin');
 
   useEffect(() => {
     setMounted(true);
@@ -349,6 +355,11 @@ function Header() {
   };
 
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+
+  // Don't show main header on admin pages
+  if (isAdminPage) {
+    return null;
+  }
 
   return (
     <>
