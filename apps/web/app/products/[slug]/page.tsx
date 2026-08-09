@@ -29,6 +29,37 @@ export default function ProductPage() {
     }
   }, [slug]);
 
+  // Check wishlist status after product loads
+  useEffect(() => {
+    if (product?.id) {
+      checkWishlistStatus(product.id);
+    }
+  }, [product?.id]);
+
+  // Check if product is in wishlist
+  const checkWishlistStatus = async (productId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setInWishlist(data.data?.inWishlist || false);
+      }
+    } catch (err) {
+      console.log('Could not check wishlist status');
+    }
+  };
+
   const fetchProduct = async () => {
     setLoading(true);
     setError(null);
@@ -124,9 +155,11 @@ export default function ProductPage() {
         return;
       }
 
+      if (!product?.id) return;
+
       if (inWishlist) {
         // Remove from wishlist
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${product?.id}`, {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${product.id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -139,7 +172,7 @@ export default function ProductPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ productId: product?.id }),
+          body: JSON.stringify({ productId: product.id }),
         });
         setInWishlist(true);
       }
