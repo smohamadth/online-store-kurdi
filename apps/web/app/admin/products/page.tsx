@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
+import ImageUpload from '@/components/ImageUpload';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -11,6 +12,7 @@ export default function AdminProductsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [productImage, setProductImage] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -78,6 +80,7 @@ export default function AdminProductsPage() {
         price: parseFloat(formData.price),
         compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : undefined,
         quantity: parseInt(formData.quantity) || 0,
+        image: productImage || undefined,
       };
 
       const url = editingProduct 
@@ -117,6 +120,7 @@ export default function AdminProductsPage() {
       type: 'physical',
       status: 'active',
     });
+    setProductImage('');
   };
 
   const startEdit = (product: Product) => {
@@ -441,6 +445,16 @@ export default function AdminProductsPage() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Image Upload */}
+              <div style={{ marginBottom: '24px' }}>
+                <ImageUpload
+                  onUpload={(url) => setProductImage(url)}
+                  currentImage={productImage}
+                  folder="products"
+                  label="Product Image"
+                />
               </div>
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>

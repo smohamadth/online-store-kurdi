@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
+import path from 'path';
 import { rateLimit } from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -29,6 +30,7 @@ import shippingRoutes from './modules/shipping/shipping.routes';
 import taxRoutes from './modules/tax/tax.routes';
 import cartRoutes from './modules/cart/cart.routes';
 import wishlistRoutes from './modules/wishlist/wishlist.routes';
+import uploadRoutes from './modules/upload/upload.routes';
 
 // Create Express app
 const app = express();
@@ -135,6 +137,10 @@ app.use('/api/shipping', shippingRoutes);
 app.use('/api/tax', taxRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
