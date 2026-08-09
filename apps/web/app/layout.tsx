@@ -87,12 +87,12 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
         style={{
           position: 'absolute',
           top: 0,
-          right: 0,
+          left: 0,
           width: '300px',
           maxWidth: '85vw',
           height: '100%',
           backgroundColor: 'white',
-          boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
+          boxShadow: '4px 0 20px rgba(0,0,0,0.1)',
           padding: '24px',
           overflowY: 'auto',
         }}

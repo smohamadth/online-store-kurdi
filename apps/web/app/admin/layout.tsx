@@ -4,6 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 export default function AdminLayout({
   children,
 }: {
@@ -14,6 +25,7 @@ export default function AdminLayout({
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     checkAdminAuth();
@@ -93,214 +105,238 @@ export default function AdminLayout({
     { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
   ];
 
+  const SidebarContent = () => (
+    <>
+      {/* Logo */}
+      <div style={{ padding: '0 24px', marginBottom: '24px', marginTop: isMobile ? '16px' : '0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }} onClick={() => isMobile && setSidebarOpen(false)}>
+            <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+          </Link>
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              style={{ background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <p style={{ fontSize: '12px', color: '#8888aa', marginTop: '4px' }}>
+          Online Store Management
+        </p>
+      </div>
+
+      {/* Navigation */}
+      <nav style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '2px', 
+        padding: '0 12px',
+        flex: 1,
+        overflowY: 'auto',
+      }}>
+        {menuItems.map((item) => (
+          <Link
+            key={item.path}
+            href={item.path}
+            onClick={() => isMobile && setSidebarOpen(false)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px 16px',
+              borderRadius: '6px',
+              textDecoration: 'none',
+              color: isActive(item.path) ? 'white' : '#8888aa',
+              backgroundColor: isActive(item.path) ? '#2d2d4e' : 'transparent',
+              transition: 'all 0.2s',
+            }}
+          >
+            <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
+            <span style={{ fontSize: '14px', fontWeight: isActive(item.path) ? 600 : 400 }}>
+              {item.label}
+            </span>
+          </Link>
+        ))}
+      </nav>
+
+      {/* User Info */}
+      <div style={{
+        padding: '16px',
+        margin: '12px',
+        backgroundColor: '#2d2d4e',
+        borderRadius: '6px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            backgroundColor: '#4a4a6a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '16px',
+          }}>
+            👤
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: '14px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user.firstName} {user.lastName}
+            </p>
+            <p style={{ fontSize: '12px', color: '#8888aa', textTransform: 'capitalize' }}>{user.role}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link href="/" style={{
+            flex: 1,
+            textAlign: 'center',
+            padding: '8px',
+            backgroundColor: '#4a4a6a',
+            borderRadius: '4px',
+            textDecoration: 'none',
+            color: 'white',
+            fontSize: '12px',
+          }}>
+            View Store
+          </Link>
+          <button
+            onClick={handleLogout}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: '#ef4444',
+              border: 'none',
+              borderRadius: '4px',
+              color: 'white',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
       {/* Mobile header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 16px',
-        backgroundColor: '#1a1a2e',
-        color: 'white',
-      }}>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'white',
-            fontSize: '24px',
-            cursor: 'pointer',
-            padding: '4px',
-          }}
-        >
-          ☰
-        </button>
-        <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
-          <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
-        </Link>
-        <div style={{ width: '32px' }} /> {/* Spacer */}
-      </div>
-
-      <div style={{ display: 'flex', flex: 1 }}>
-        {/* Sidebar */}
+      {isMobile && (
         <div style={{
-          width: '260px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
           backgroundColor: '#1a1a2e',
           color: 'white',
-          padding: '24px 0',
-          flexShrink: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          position: 'fixed',
-          top: 0,
-          left: sidebarOpen ? 0 : '-260px',
-          height: '100vh',
-          zIndex: 1000,
-          transition: 'left 0.3s ease',
         }}>
-          {/* Logo */}
-          <div style={{ padding: '0 24px', marginBottom: '24px', marginTop: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
-              </Link>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'white',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <p style={{ fontSize: '12px', color: '#8888aa', marginTop: '4px' }}>
-              Online Store Management
-            </p>
-          </div>
-
-          {/* Navigation */}
-          <nav style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '2px', 
-            padding: '0 12px',
-            flex: 1,
-            overflowY: 'auto',
-          }}>
-            {menuItems.map((item) => (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={() => setSidebarOpen(false)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 16px',
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  color: isActive(item.path) ? 'white' : '#8888aa',
-                  backgroundColor: isActive(item.path) ? '#2d2d4e' : 'transparent',
-                  transition: 'all 0.2s',
-                  flexShrink: 0,
-                }}
-              >
-                <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
-                <span style={{ fontSize: '14px', fontWeight: isActive(item.path) ? 600 : 400 }}>
-                  {item.label}
-                </span>
-              </Link>
-            ))}
-          </nav>
-
-          {/* User Info */}
-          <div style={{
-            padding: '16px',
-            margin: '12px',
-            backgroundColor: '#2d2d4e',
-            borderRadius: '6px',
-            flexShrink: 0,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                backgroundColor: '#4a4a6a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-              }}>
-                👤
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: '14px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {user.firstName} {user.lastName}
-                </p>
-                <p style={{ fontSize: '12px', color: '#8888aa', textTransform: 'capitalize' }}>{user.role}</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Link href="/" style={{
-                flex: 1,
-                textAlign: 'center',
-                padding: '8px',
-                backgroundColor: '#4a4a6a',
-                borderRadius: '4px',
-                textDecoration: 'none',
-                color: 'white',
-                fontSize: '12px',
-              }}>
-                View Store
-              </Link>
-              <button
-                onClick={handleLogout}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  backgroundColor: '#ef4444',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: 'white',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar overlay for mobile */}
-        {sidebarOpen && (
-          <div
-            onClick={() => setSidebarOpen(false)}
+          <button
+            onClick={() => setSidebarOpen(true)}
             style={{
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '4px',
+            }}
+          >
+            ☰
+          </button>
+          <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+          </Link>
+          <div style={{ width: '32px' }} />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flex: 1 }}>
+        {/* Sidebar - always visible on desktop, slide-out on mobile */}
+        {!isMobile ? (
+          <div style={{
+            width: '260px',
+            backgroundColor: '#1a1a2e',
+            color: 'white',
+            padding: '24px 0',
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: 'sticky',
+            top: 0,
+            height: '100vh',
+          }}>
+            <SidebarContent />
+          </div>
+        ) : (
+          <>
+            {/* Mobile sidebar overlay */}
+            {sidebarOpen && (
+              <div
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  zIndex: 999,
+                }}
+              />
+            )}
+            {/* Mobile sidebar */}
+            <div style={{
+              width: '260px',
+              backgroundColor: '#1a1a2e',
+              color: 'white',
+              padding: '24px 0',
               position: 'fixed',
               top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              zIndex: 999,
-            }}
-          />
+              left: sidebarOpen ? 0 : '-260px',
+              height: '100vh',
+              zIndex: 1000,
+              transition: 'left 0.3s ease',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}>
+              <SidebarContent />
+            </div>
+          </>
         )}
 
         {/* Main Content */}
-        <div style={{ flex: 1, backgroundColor: '#f5f5f5', overflow: 'auto' }}>
+        <div style={{ flex: 1, backgroundColor: '#f5f5f5', overflow: 'auto', minWidth: 0 }}>
           {/* Top Bar */}
           <div style={{
             backgroundColor: 'white',
-            padding: '16px 24px',
+            padding: isMobile ? '12px 16px' : '16px 24px',
             borderBottom: '1px solid #e5e5e5',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
           }}>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 'bold' }}>
+              <h2 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: 'bold' }}>
                 {menuItems.find(item => isActive(item.path))?.label || 'Dashboard'}
               </h2>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <span style={{ fontSize: '14px', color: '#666' }}>
-                Welcome, {user.firstName}
+                {isMobile ? user.firstName : `Welcome, ${user.firstName}`}
               </span>
             </div>
           </div>
 
           {/* Page Content */}
-          <div style={{ padding: '24px' }}>
+          <div style={{ padding: isMobile ? '16px' : '24px' }}>
             {children}
           </div>
         </div>
