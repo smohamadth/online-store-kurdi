@@ -34,15 +34,34 @@ export default function AdminProductsPage() {
 
   const fetchProducts = async () => {
     try {
-      const response = await api.getProducts({ limit: 100 });
-      setProducts(response.data || []);
-      if (response.data && response.data.length > 0) {
-        setApiStatus('connected');
+      // Try API first
+      let apiProducts: Product[] = [];
+      try {
+        const response = await api.getProducts({ limit: 100 });
+        apiProducts = response.data || [];
+        if (apiProducts.length > 0) {
+          setApiStatus('connected');
+        }
+      } catch (err) {
+        console.log('API not available');
+        setApiStatus('disconnected');
       }
+
+      // Get local products
+      const localProducts = JSON.parse(localStorage.getItem('localProducts') || '[]');
+
+      // Merge (API products first, then local)
+      const allProducts = [...apiProducts];
+      localProducts.forEach((local: any) => {
+        if (!allProducts.find(p => p.id === local.id)) {
+          allProducts.push(local);
+        }
+      });
+
+      setProducts(allProducts);
     } catch (err) {
       console.error('Failed to fetch products:', err);
       setProducts([]);
-      setApiStatus('disconnected');
     } finally {
       setLoading(false);
     }
@@ -71,44 +90,70 @@ export default function AdminProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Save product locally even if API fails
+    const productData = {
+      id: editingProduct?.id || Date.now().toString(),
+      ...formData,
+      price: parseFloat(formData.price) || 0,
+      compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : null,
+      quantity: parseInt(formData.quantity) || 0,
+      images: productImage ? [{ url: productImage, alt: formData.name, isPrimary: true }] : [],
+      category: { id: formData.categoryId || '1', name: 'General', slug: 'general' },
+      status: formData.status,
+      type: formData.type,
+      averageRating: 0,
+      reviewCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Try API first
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (token) {
+        const url = editingProduct 
+          ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${editingProduct.id}`
+          : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products`;
 
-      const productData = {
-        ...formData,
-        price: parseFloat(formData.price),
-        compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : undefined,
-        quantity: parseInt(formData.quantity) || 0,
-        images: productImage ? [{ url: productImage, alt: formData.name, isPrimary: true }] : [],
-      };
+        const response = await fetch(url, {
+          method: editingProduct ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(productData),
+        });
 
-      const url = editingProduct 
-        ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${editingProduct.id}`
-        : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products`;
-
-      const response = await fetch(url, {
-        method: editingProduct ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(productData),
-      });
-
-      if (response.ok) {
-        setShowAddModal(false);
-        setEditingProduct(null);
-        resetForm();
-        fetchProducts();
-      } else {
-        const error = await response.json().catch(() => ({}));
-        alert(error.message || 'Failed to save product');
+        if (response.ok) {
+          setShowAddModal(false);
+          setEditingProduct(null);
+          resetForm();
+          fetchProducts();
+          return;
+        }
       }
     } catch (err) {
-      console.error('Failed to save product:', err);
-      alert('Failed to save product. Is the API running?');
+      console.log('API not available, saving locally');
     }
+
+    // Save locally
+    const localProducts = JSON.parse(localStorage.getItem('localProducts') || '[]');
+    
+    if (editingProduct) {
+      const index = localProducts.findIndex((p: any) => p.id === editingProduct.id);
+      if (index >= 0) {
+        localProducts[index] = productData;
+      }
+    } else {
+      localProducts.push(productData);
+    }
+    
+    localStorage.setItem('localProducts', JSON.stringify(localProducts));
+    
+    setShowAddModal(false);
+    setEditingProduct(null);
+    resetForm();
+    fetchProducts();
   };
 
   const resetForm = () => {
