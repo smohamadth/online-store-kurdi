@@ -194,6 +194,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
         }}>
           {user ? (
             <>
+              {/* Admin Panel - only for admins */}
               {isAdmin && (
                 <Link 
                   href="/admin" 
@@ -207,12 +208,14 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                     fontSize: '16px',
                     fontWeight: 600,
                     textAlign: 'center',
-                    marginBottom: '12px',
+                    marginBottom: '16px',
                   }}
                 >
                   ⚙️ Admin Panel
                 </Link>
               )}
+              
+              {/* Regular user options */}
               <Link 
                 href="/account" 
                 onClick={onClose}
