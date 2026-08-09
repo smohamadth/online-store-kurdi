@@ -459,12 +459,17 @@ function Header() {
                       padding: '6px 12px',
                       borderRadius: '4px',
                     }}>
-                      ⚙️ Admin
+                      ⚙️ Admin Panel
                     </Link>
                   )}
                   <Link href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
-                    👤 {user.firstName}
+                    👤 My Account
                   </Link>
+                  {!isAdmin && (
+                    <Link href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                      Orders
+                    </Link>
+                  )}
                   <button
                     onClick={handleLogout}
                     style={{
