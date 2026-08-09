@@ -3,7 +3,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
-import { sendOrderConfirmation } from '../../services/email.service';
+import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
 
 const router = Router();
 
@@ -267,6 +267,14 @@ router.post('/', authenticate, async (req, res, next) => {
 
     logger.info(`Order created: ${order.orderNumber} by user ${req.user!.email}`);
 
+    // Track coupon usage if coupon was applied
+    if (req.body.couponId) {
+      await prisma.coupon.update({
+        where: { id: req.body.couponId },
+        data: { usedCount: { increment: 1 } },
+      }).catch(err => logger.error('Failed to update coupon usage:', err));
+    }
+
     // Send order confirmation email (non-blocking)
     const orderUser = await prisma.user.findUnique({
       where: { id: req.user!.id },
@@ -341,6 +349,20 @@ router.put('/:id/status', authenticate, authorize('admin', 'manager'), async (re
     });
 
     logger.info(`Order ${order.orderNumber} status updated to ${status}`);
+
+    // Send shipping notification email when status changes to shipped
+    if (status === 'shipped' && trackingNumber) {
+      const orderUser = await prisma.user.findUnique({
+        where: { id: order.userId },
+        select: { firstName: true, lastName: true, email: true },
+      });
+
+      if (orderUser) {
+        sendShippingNotification(updatedOrder, orderUser, trackingNumber).catch(err => {
+          logger.error('Failed to send shipping notification:', err);
+        });
+      }
+    }
 
     res.json({
       status: 'success',
