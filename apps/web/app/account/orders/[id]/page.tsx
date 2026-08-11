@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -20,6 +21,7 @@ export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { settings } = useStoreSettings();
   const orderId = params?.id as string;
   
   const [user, setUser] = useState<any>(null);
@@ -340,8 +342,8 @@ export default function OrderDetailPage() {
                 
                 {/* Price */}
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontWeight: 600 }}>${(getItemPrice(item) * (item.quantity || 1)).toFixed(2)}</p>
-                  <p style={{ fontSize: '12px', color: '#666' }}>${getItemPrice(item).toFixed(2)} each</p>
+                  <p style={{ fontWeight: 600 }}>{formatPrice(getItemPrice(item) * (item.quantity || 1), settings.currencySymbol)}</p>
+                  <p style={{ fontSize: '12px', color: '#666' }}>{formatPrice(getItemPrice(item), settings.currencySymbol)} each</p>
                 </div>
               </div>
             ))}
@@ -407,7 +409,7 @@ export default function OrderDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Subtotal</span>
-                <span style={{ fontWeight: 500 }}>${Number(order.subtotal || 0).toFixed(2)}</span>
+                <span style={{ fontWeight: 500 }}>{formatPrice(order.subtotal || 0, settings.currencySymbol)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Shipping</span>
@@ -415,26 +417,26 @@ export default function OrderDetailPage() {
                   {order.shippingAmount === 0 ? (
                     <span style={{ color: '#22c55e' }}>Free</span>
                   ) : (
-                    `$${Number(order.shippingAmount || 0).toFixed(2)}`
+                    `${formatPrice(order.shippingAmount || 0, settings.currencySymbol)}`
                   )}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Tax</span>
-                <span style={{ fontWeight: 500 }}>${Number(order.taxAmount || 0).toFixed(2)}</span>
+                <span style={{ fontWeight: 500 }}>{formatPrice(order.taxAmount || 0, settings.currencySymbol)}</span>
               </div>
               {order.discountAmount > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#22c55e' }}>
                     Discount {order.couponCode ? `(${order.couponCode})` : ''}
                   </span>
-                  <span style={{ fontWeight: 500, color: '#22c55e' }}>-${Number(order.discountAmount).toFixed(2)}</span>
+                  <span style={{ fontWeight: 500, color: '#22c55e' }}>-{formatPrice(order.discountAmount, settings.currencySymbol)}</span>
                 </div>
               )}
               <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${Number(order.totalAmount || 0).toFixed(2)}</span>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(order.totalAmount || 0, settings.currencySymbol)}</span>
                 </div>
               </div>
             </div>

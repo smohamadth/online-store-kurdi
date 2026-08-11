@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function AdminOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { settings } = useStoreSettings();
   const orderId = params?.id as string;
 
   const [order, setOrder] = useState<any>(null);
@@ -201,7 +203,7 @@ export default function AdminOrderDetailPage() {
                   {item.variant && <p style={{ fontSize: '14px', color: '#666' }}>{item.variant}</p>}
                   <p style={{ fontSize: '14px', color: '#666' }}>Qty: {item.quantity}</p>
                 </div>
-                <span style={{ fontWeight: 600 }}>${(item.price * item.quantity).toFixed(2)}</span>
+                <span style={{ fontWeight: 600 }}>{formatPrice(item.price * item.quantity, settings.currencySymbol)}</span>
               </div>
             ))}
           </div>
@@ -312,26 +314,26 @@ export default function AdminOrderDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Subtotal</span>
-                <span>${Number(order.subtotal || 0).toFixed(2)}</span>
+                <span>{formatPrice(order.subtotal || 0, settings.currencySymbol)}</span>
               </div>
               {order.discountAmount > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
                   <span>Discount</span>
-                  <span>-${Number(order.discountAmount).toFixed(2)}</span>
+                  <span>-{formatPrice(order.discountAmount, settings.currencySymbol)}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Shipping</span>
-                <span>{Number(order.shippingAmount) === 0 ? 'Free' : `$${Number(order.shippingAmount || 0).toFixed(2)}`}</span>
+                <span>{Number(order.shippingAmount) === 0 ? 'Free' : `${formatPrice(order.shippingAmount || 0, settings.currencySymbol)}`}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Tax</span>
-                <span>${Number(order.taxAmount || 0).toFixed(2)}</span>
+                <span>{formatPrice(order.taxAmount || 0, settings.currencySymbol)}</span>
               </div>
               <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '8px', marginTop: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '18px' }}>
                   <span>Total</span>
-                  <span>${Number(order.totalAmount || 0).toFixed(2)}</span>
+                  <span>{formatPrice(order.totalAmount || 0, settings.currencySymbol)}</span>
                 </div>
               </div>
             </div>

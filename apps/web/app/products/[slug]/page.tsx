@@ -339,11 +339,11 @@ export default function ProductPage() {
           {/* Price */}
           <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '32px', fontWeight: 'bold' }}>${currentPrice.toFixed(2)}</span>
+              <span style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(currentPrice, settings.currencySymbol)}</span>
               {product.compareAtPrice && !currentVariant && (
                 <>
                   <span style={{ fontSize: '18px', color: '#666', textDecoration: 'line-through' }}>
-                    ${Number(product.compareAtPrice).toFixed(2)}
+                    {formatPrice(product.compareAtPrice, settings.currencySymbol)}
                   </span>
                   <span style={{
                     padding: '4px 10px',
@@ -353,7 +353,7 @@ export default function ProductPage() {
                     fontSize: '14px',
                     fontWeight: 600,
                   }}>
-                    Save ${(Number(product.compareAtPrice) - currentPrice).toFixed(2)}
+                    Save {formatPrice(Number(product.compareAtPrice) - currentPrice, settings.currencySymbol)}
                   </span>
                 </>
               )}

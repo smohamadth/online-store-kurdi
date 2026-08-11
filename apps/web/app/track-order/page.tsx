@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function TrackOrderPage() {
+  const { settings } = useStoreSettings();
   const [orderNumber, setOrderNumber] = useState('');
   const [email, setEmail] = useState('');
   const [order, setOrder] = useState<any>(null);
@@ -273,7 +275,7 @@ export default function TrackOrderPage() {
                         <p style={{ fontWeight: 500 }}>{item.name || item.product?.name || 'Product'}</p>
                         <p style={{ fontSize: '13px', color: '#666' }}>Qty: {item.quantity || 1}</p>
                       </div>
-                      <p style={{ fontWeight: 600 }}>${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</p>
+                      <p style={{ fontWeight: 600 }}>{formatPrice((item.price || 0) * (item.quantity || 1), settings.currencySymbol)}</p>
                     </div>
                   ))}
                 </div>
@@ -288,7 +290,7 @@ export default function TrackOrderPage() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '18px' }}>
                 <span>Total</span>
-                <span>${Number(order.totalAmount || 0).toFixed(2)}</span>
+                <span>{formatPrice(order.totalAmount || 0, settings.currencySymbol)}</span>
               </div>
             </div>
           </div>

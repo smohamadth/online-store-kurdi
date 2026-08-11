@@ -4,24 +4,60 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com';
 
   // Static pages
-  const staticPages = [
+  const staticPages: MetadataRoute.Sitemap = [
     {
       url: baseUrl,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
+      changeFrequency: 'daily',
       priority: 1,
     },
     {
       url: `${baseUrl}/products`,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
+      changeFrequency: 'daily',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/categories`,
+      url: `${baseUrl}/deals`,
       lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
+      changeFrequency: 'daily',
       priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/contact`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/faq`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/track-order`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/privacy`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: `${baseUrl}/terms`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: `${baseUrl}/returns`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.4,
     },
   ];
 
@@ -37,16 +73,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       productPages = products.map((product: any) => ({
         url: `${baseUrl}/products/${product.slug}`,
         lastModified: new Date(product.updatedAt || product.createdAt),
-        changeFrequency: 'weekly' as const,
+        changeFrequency: 'weekly',
         priority: 0.8,
       }));
     }
   } catch (error) {
-    console.error('Failed to fetch products for sitemap:', error);
+    // API not available during build
   }
 
   // Category pages
-  const categoryPages = [
+  const categoryPages: MetadataRoute.Sitemap = [
     'electronics',
     'clothing',
     'books',
@@ -54,7 +90,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ].map(category => ({
     url: `${baseUrl}/products?category=${category}`,
     lastModified: new Date(),
-    changeFrequency: 'weekly' as const,
+    changeFrequency: 'weekly',
     priority: 0.7,
   }));
 

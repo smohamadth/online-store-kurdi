@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Global Styles */
+/* Note: Tailwind is not used - all styles are inline */
 
 * {
   margin: 0;
@@ -50,7 +49,7 @@ button {
   background: #555;
 }
 
-/* Focus styles */
+/* Focus styles for accessibility */
 *:focus-visible {
   outline: 2px solid #000;
   outline-offset: 2px;
@@ -67,7 +66,7 @@ html {
   color: #fff;
 }
 
-/* Mobile-first responsive utilities */
+/* Mobile responsive utilities */
 @media (max-width: 768px) {
   .hide-mobile {
     display: none !important;
@@ -80,7 +79,7 @@ html {
   }
 }
 
-/* Responsive grid */
+/* Responsive grid utility */
 .grid-responsive {
   display: grid;
   gap: 1rem;
@@ -105,18 +104,7 @@ html {
   }
 }
 
-/* Responsive text */
-.text-responsive {
-  font-size: 1rem;
-}
-
-@media (min-width: 768px) {
-  .text-responsive {
-    font-size: 1.125rem;
-  }
-}
-
-/* Container responsive */
+/* Container utility */
 .container-responsive {
   width: 100%;
   max-width: 1200px;

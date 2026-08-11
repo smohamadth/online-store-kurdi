@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function AdminOrdersPage() {
+  const { settings } = useStoreSettings();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -227,10 +229,10 @@ export default function AdminOrdersPage() {
                     }) : 'N/A'}
                   </td>
                   <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600 }}>
-                    ${Number(order.totalAmount || 0).toFixed(2)}
+                    {formatPrice(order.totalAmount || 0, settings.currencySymbol)}
                     {order.discountAmount > 0 && (
                       <p style={{ fontSize: '11px', color: '#22c55e' }}>
-                        -${Number(order.discountAmount).toFixed(2)} discount
+                        -{formatPrice(order.discountAmount, settings.currencySymbol)} discount
                       </p>
                     )}
                   </td>

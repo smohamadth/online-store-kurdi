@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function AdminDashboard() {
+  const { settings } = useStoreSettings();
   const [stats, setStats] = useState({
     totalProducts: 0,
     totalOrders: 0,
@@ -121,7 +123,7 @@ export default function AdminDashboard() {
 
         <div style={{ padding: '24px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Revenue</p>
-          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>${stats.totalRevenue.toFixed(2)}</p>
+          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(stats.totalRevenue, settings.currencySymbol)}</p>
           <Link href="/admin/analytics" style={{ fontSize: '14px', color: '#8b5cf6', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
             View details →
           </Link>
@@ -146,7 +148,7 @@ export default function AdminDashboard() {
                     <p style={{ fontSize: '12px', color: '#666' }}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}</p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontWeight: 600 }}>${Number(order.totalAmount || 0).toFixed(2)}</p>
+                    <p style={{ fontWeight: 600 }}>{formatPrice(order.totalAmount || 0, settings.currencySymbol)}</p>
                     <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '50px', backgroundColor: '#d1fae5', color: '#22c55e' }}>
                       {order.status || 'pending'}
                     </span>

@@ -3,8 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function OrdersPage() {
+  const isMobile = useIsMobile();
+  const { settings } = useStoreSettings();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -137,7 +141,7 @@ export default function OrdersPage() {
                       borderBottom: index < order.items.length - 1 ? '1px solid #e5e5e5' : 'none',
                     }}>
                       <span style={{ fontWeight: 500 }}>{item.name || item.product?.name || 'Product'}</span>
-                      <span style={{ fontWeight: 600 }}>${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                      <span style={{ fontWeight: 600 }}>{formatPrice((item.price || 0) * (item.quantity || 1), settings.currencySymbol)}</span>
                     </div>
                   ))}
                 </div>
@@ -148,12 +152,12 @@ export default function OrdersPage() {
                 <div>
                   {order.discountAmount > 0 && (
                     <p style={{ fontSize: '14px', color: '#22c55e', marginBottom: '4px' }}>
-                      Discount: -${Number(order.discountAmount).toFixed(2)}
+                      Discount: -{formatPrice(order.discountAmount, settings.currencySymbol)}
                       {order.couponCode && ` (${order.couponCode})`}
                     </p>
                   )}
                   <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                    Total: ${Number(order.totalAmount || 0).toFixed(2)}
+                    Total: {formatPrice(order.totalAmount || 0, settings.currencySymbol)}
                   </span>
                 </div>
                 <Link href={`/account/orders/${order.id}`} style={{

@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function AdminAnalyticsPage() {
+  const { settings } = useStoreSettings();
   const [analytics, setAnalytics] = useState({
     totalProducts: 0,
     totalOrders: 0,
@@ -102,7 +104,7 @@ export default function AdminAnalyticsPage() {
           border: '1px solid #e5e5e5',
         }}>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Revenue</p>
-          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>${analytics.totalRevenue.toFixed(2)}</p>
+          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(analytics.totalRevenue, settings.currencySymbol)}</p>
           <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>↑ 12% from last month</p>
         </div>
 
@@ -124,7 +126,7 @@ export default function AdminAnalyticsPage() {
           border: '1px solid #e5e5e5',
         }}>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Average Order Value</p>
-          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>${analytics.averageOrderValue.toFixed(2)}</p>
+          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(analytics.averageOrderValue, settings.currencySymbol)}</p>
           <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>↑ 5% from last month</p>
         </div>
 
@@ -203,7 +205,7 @@ export default function AdminAnalyticsPage() {
                   <p style={{ fontWeight: 500, fontSize: '14px' }}>{product.name}</p>
                   <p style={{ fontSize: '12px', color: '#666' }}>{product.sold} sold</p>
                 </div>
-                <span style={{ fontWeight: 600 }}>${product.revenue?.toFixed(2)}</span>
+                <span style={{ fontWeight: 600 }}>{formatPrice(product.revenue || 0, settings.currencySymbol)}</span>
               </div>
             ))}
           </div>
@@ -270,7 +272,7 @@ export default function AdminAnalyticsPage() {
                   {order.user?.firstName || 'Guest'} {order.user?.lastName || ''}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>
-                  ${Number(order.totalAmount || 0).toFixed(2)}
+                  {formatPrice(order.totalAmount || 0, settings.currencySymbol)}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                   <span style={{
