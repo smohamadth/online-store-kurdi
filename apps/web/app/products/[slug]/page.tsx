@@ -25,6 +25,9 @@ export default function ProductPage() {
   const [addedToCart, setAddedToCart] = useState(false);
   const [inWishlist, setInWishlist] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [stockAlertSet, setStockAlertSet] = useState(false);
+  const [stockAlertEmail, setStockAlertEmail] = useState('');
+  const [showStockAlertForm, setShowStockAlertForm] = useState(false);
 
   useEffect(() => {
     if (slug) fetchProduct();
@@ -150,6 +153,38 @@ export default function ProductPage() {
       }
     } catch (err) {
       console.error('Wishlist error:', err);
+    }
+  };
+
+  const handleStockAlert = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const email = stockAlertEmail || localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}').email : '';
+      
+      if (!email && !stockAlertEmail) {
+        setShowStockAlertForm(true);
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-alerts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          productId: product?.id,
+          variantId: selectedVariant || undefined,
+          email: stockAlertEmail || email,
+        }),
+      });
+
+      if (response.ok) {
+        setStockAlertSet(true);
+        setShowStockAlertForm(false);
+      }
+    } catch (err) {
+      console.error('Stock alert error:', err);
     }
   };
 
@@ -324,6 +359,65 @@ export default function ProductPage() {
             <p style={{ marginTop: '8px', fontSize: '14px', color: product.quantity > 0 ? '#22c55e' : '#ef4444' }}>
               {product.quantity > 0 ? `✓ In stock (${product.quantity} available)` : '✗ Out of stock'}
             </p>
+            
+            {/* Stock Alert for out of stock */}
+            {product.quantity <= 0 && (
+              <div style={{ marginTop: '12px' }}>
+                {stockAlertSet ? (
+                  <p style={{ fontSize: '14px', color: '#22c55e' }}>
+                    ✓ You will be notified when this product is back in stock!
+                  </p>
+                ) : showStockAlertForm ? (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="email"
+                      value={stockAlertEmail}
+                      onChange={(e) => setStockAlertEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        border: '1px solid #e5e5e5',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                      }}
+                    />
+                    <button
+                      onClick={handleStockAlert}
+                      style={{
+                        padding: '8px 16px',
+                        backgroundColor: '#000',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Notify Me
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleStockAlert}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#f5f5f5',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    🔔 Notify me when back in stock
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Short Description */}

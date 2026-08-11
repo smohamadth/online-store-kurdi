@@ -1,11 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCart } from '@/lib/store';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import CouponInput from '@/components/CouponInput';
 import { Coupon } from '@/lib/coupons';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
 
 function getCategoryEmoji(category: string): string {
   switch (category) {
@@ -18,8 +29,9 @@ function getCategoryEmoji(category: string): string {
 }
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, clearCart, getTotal, getItemCount } = useCart();
+  const { items, savedItems, removeItem, updateQuantity, clearCart, getTotal, getItemCount, saveForLater, moveToCart, removeSavedItem } = useCart();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [discount, setDiscount] = useState(0);
 
@@ -38,7 +50,7 @@ export default function CartPage() {
     setDiscount(0);
   };
 
-  if (items.length === 0) {
+  if (items.length === 0 && savedItems.length === 0) {
     return (
       <div style={{
         maxWidth: '1200px',
@@ -68,7 +80,7 @@ export default function CartPage() {
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '16px' : '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
         <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
@@ -76,15 +88,16 @@ export default function CartPage() {
         <span style={{ color: '#000' }}>Cart</span>
       </nav>
 
-      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '24px' }}>
+      <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: 'bold', marginBottom: '24px' }}>
         Shopping Cart ({getItemCount()} items)
       </h1>
 
       {/* Responsive layout */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-        gap: '32px' 
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', 
+        gap: '32px',
+        alignItems: 'start',
       }}>
         {/* Cart Items */}
         <div>
@@ -103,14 +116,14 @@ export default function CartPage() {
             >
               {/* Product Image */}
               <div style={{
-                width: '80px',
-                height: '80px',
+                width: isMobile ? '60px' : '80px',
+                height: isMobile ? '60px' : '80px',
                 backgroundColor: '#f5f5f5',
                 borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '32px',
+                fontSize: isMobile ? '24px' : '32px',
                 flexShrink: 0,
               }}>
                 {getCategoryEmoji(item.category)}
@@ -123,7 +136,7 @@ export default function CartPage() {
                     <Link href={`/products/${item.slug}`} style={{
                       textDecoration: 'none',
                       color: '#000',
-                      fontSize: '16px',
+                      fontSize: isMobile ? '14px' : '16px',
                       fontWeight: 600,
                       display: 'block',
                       overflow: 'hidden',
@@ -152,7 +165,7 @@ export default function CartPage() {
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', flexWrap: 'wrap', gap: '8px' }}>
                   {/* Quantity Controls */}
                   <div style={{
                     display: 'inline-flex',
@@ -176,141 +189,240 @@ export default function CartPage() {
                     </button>
                   </div>
 
-                  {/* Price */}
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                    ${(item.price * item.quantity).toFixed(2)}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {/* Save for Later */}
+                    <button
+                      onClick={() => saveForLater(item.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#3b82f6',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Save for Later
+                    </button>
+
+                    {/* Price */}
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                      ${(item.price * item.quantity).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
 
           {/* Clear Cart */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
-            <Link href="/products" style={{
-              textDecoration: 'none',
-              color: '#000',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
-              ← Continue Shopping
-            </Link>
-            <button
-              onClick={clearCart}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#ef4444',
-                cursor: 'pointer',
+          {items.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
+              <Link href="/products" style={{
+                textDecoration: 'none',
+                color: '#000',
                 fontSize: '14px',
-              }}
-            >
-              Clear Cart
-            </button>
-          </div>
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                ← Continue Shopping
+              </Link>
+              <button
+                onClick={clearCart}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                Clear Cart
+              </button>
+            </div>
+          )}
+
+          {/* Saved Items Section */}
+          {savedItems.length > 0 && (
+            <div style={{ marginTop: '32px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
+                Saved for Later ({savedItems.length} items)
+              </h2>
+              {savedItems.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    gap: '16px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: '8px',
+                    backgroundColor: 'white',
+                  }}
+                >
+                  <div style={{
+                    width: '60px',
+                    height: '60px',
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                    flexShrink: 0,
+                  }}>
+                    {getCategoryEmoji(item.category)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Link href={`/products/${item.slug}`} style={{
+                      textDecoration: 'none',
+                      color: '#000',
+                      fontWeight: 600,
+                      fontSize: '14px',
+                    }}>
+                      {item.name}
+                    </Link>
+                    <p style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '4px' }}>${item.price.toFixed(2)}</p>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                      <button
+                        onClick={() => moveToCart(item.id)}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#000',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Move to Cart
+                      </button>
+                      <button
+                        onClick={() => removeSavedItem(item.id)}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#fef2f2',
+                          color: '#ef4444',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Order Summary */}
-        <div>
-          <div style={{
-            padding: '24px',
-            border: '1px solid #e5e5e5',
-            borderRadius: '8px',
-            backgroundColor: '#f9f9f9',
-            position: 'sticky',
-            top: '80px',
-          }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>Order Summary</h2>
+        {items.length > 0 && (
+          <div>
+            <div style={{
+              padding: '24px',
+              border: '1px solid #e5e5e5',
+              borderRadius: '8px',
+              backgroundColor: '#f9f9f9',
+              position: 'sticky',
+              top: '80px',
+            }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>Order Summary</h2>
 
-            {/* Coupon Input */}
-            <div style={{ marginBottom: '20px' }}>
-              <CouponInput
-                subtotal={subtotal}
-                onApply={handleApplyCoupon}
-                onRemove={handleRemoveCoupon}
-                appliedCoupon={appliedCoupon}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Subtotal</span>
-                <span style={{ fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
+              {/* Coupon Input */}
+              <div style={{ marginBottom: '20px' }}>
+                <CouponInput
+                  subtotal={subtotal}
+                  onApply={handleApplyCoupon}
+                  onRemove={handleRemoveCoupon}
+                  appliedCoupon={appliedCoupon}
+                />
               </div>
 
-              {discount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
-                  <span>Discount ({appliedCoupon?.code})</span>
-                  <span style={{ fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#666' }}>Subtotal</span>
+                  <span style={{ fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
                 </div>
+
+                {discount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
+                    <span>Discount ({appliedCoupon?.code})</span>
+                    <span style={{ fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#666' }}>Shipping</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `$${shipping.toFixed(2)}`}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#666' }}>Tax</span>
+                  <span style={{ fontWeight: 600 }}>${tax.toFixed(2)}</span>
+                </div>
+
+                <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${total.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {shipping > 0 && !appliedCoupon && (
+                <p style={{ marginTop: '12px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
+                  Add ${(100 - subtotal).toFixed(2)} more for free shipping
+                </p>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Shipping</span>
-                <span style={{ fontWeight: 600 }}>
-                  {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `$${shipping.toFixed(2)}`}
-                </span>
+              <button
+                onClick={() => {
+                  if (appliedCoupon) {
+                    localStorage.setItem('appliedCoupon', JSON.stringify({
+                      coupon: appliedCoupon,
+                      discount: discount,
+                    }));
+                  } else {
+                    localStorage.removeItem('appliedCoupon');
+                  }
+                  router.push('/checkout');
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '20px',
+                  padding: '14px',
+                  backgroundColor: '#000',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Proceed to Checkout
+              </button>
+
+              <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                <p style={{ fontSize: '12px', color: '#666' }}>
+                  🔒 Secure checkout
+                </p>
+                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  💳 We accept all major credit cards
+                </p>
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Tax</span>
-                <span style={{ fontWeight: 600 }}>${tax.toFixed(2)}</span>
-              </div>
-
-              <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${total.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-
-            {shipping > 0 && !appliedCoupon && (
-              <p style={{ marginTop: '12px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
-                Add ${(100 - subtotal).toFixed(2)} more for free shipping
-              </p>
-            )}
-
-            <button
-              onClick={() => {
-                if (appliedCoupon) {
-                  localStorage.setItem('appliedCoupon', JSON.stringify({
-                    coupon: appliedCoupon,
-                    discount: discount,
-                  }));
-                } else {
-                  localStorage.removeItem('appliedCoupon');
-                }
-                router.push('/checkout');
-              }}
-              style={{
-                width: '100%',
-                marginTop: '20px',
-                padding: '14px',
-                backgroundColor: '#000',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '16px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Proceed to Checkout
-            </button>
-
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
-              <p style={{ fontSize: '12px', color: '#666' }}>
-                🔒 Secure checkout
-              </p>
-              <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                💳 We accept all major credit cards
-              </p>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

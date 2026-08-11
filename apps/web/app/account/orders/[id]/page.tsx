@@ -428,9 +428,23 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
+          {/* Tracking Info */}
+          {order.trackingNumber && (
+            <div style={{
+              padding: '16px',
+              border: '1px solid #e5e5e5',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              backgroundColor: '#f0f9ff',
+            }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>Tracking Number</h3>
+              <p style={{ fontFamily: 'monospace', fontSize: '16px', color: '#3b82f6' }}>{order.trackingNumber}</p>
+            </div>
+          )}
+
           {/* Actions */}
           <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Link href="/account/orders" style={{
+            <Link href={`/track-order`} style={{
               display: 'block',
               textAlign: 'center',
               padding: '12px',
@@ -440,9 +454,9 @@ export default function OrderDetailPage() {
               textDecoration: 'none',
               fontWeight: 500,
             }}>
-              ← Back to Orders
+              🚚 Track Order
             </Link>
-            <Link href="/products" style={{
+            <Link href="/account/orders" style={{
               display: 'block',
               textAlign: 'center',
               padding: '12px',
@@ -453,7 +467,7 @@ export default function OrderDetailPage() {
               textDecoration: 'none',
               fontWeight: 500,
             }}>
-              Continue Shopping
+              ← Back to Orders
             </Link>
           </div>
         </div>
