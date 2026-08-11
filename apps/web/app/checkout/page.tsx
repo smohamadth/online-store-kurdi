@@ -7,6 +7,7 @@ import { useCart } from '@/lib/store';
 import { api } from '@/lib/api';
 import ShippingSelector from '@/components/ShippingSelector';
 import TaxCalculator from '@/components/TaxCalculator';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -23,6 +24,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const { items, getTotal, clearCart } = useCart();
+  const { settings } = useStoreSettings();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
@@ -226,26 +228,26 @@ export default function CheckoutPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{formatPrice(subtotal, settings.currencySymbol)}</span>
               </div>
               {discount > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
                   <span>Discount ({appliedCoupon?.code})</span>
-                  <span>-${discount.toFixed(2)}</span>
+                  <span>-{formatPrice(discount, settings.currencySymbol)}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Shipping ({selectedShipping?.name || 'Standard'})</span>
-                <span>{shippingCost === 0 ? 'Free' : `$${shippingCost.toFixed(2)}`}</span>
+                <span>{shippingCost === 0 ? 'Free' : `${formatPrice(shippingCost, settings.currencySymbol)}`}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#666' }}>Tax</span>
-                <span>${taxAmount.toFixed(2)}</span>
+                <span>{formatPrice(taxAmount, settings.currencySymbol)}</span>
               </div>
               <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '8px', marginTop: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                   <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>{formatPrice(total, settings.currencySymbol)}</span>
                 </div>
               </div>
             </div>
@@ -399,7 +401,7 @@ export default function CheckoutPage() {
                       {item.variant && <p style={{ fontSize: '12px', color: '#666' }}>{item.variant}</p>}
                       <p style={{ fontSize: '12px', color: '#666' }}>Qty: {item.quantity}</p>
                     </div>
-                    <span style={{ fontWeight: 600 }}>${(item.price * item.quantity).toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>{formatPrice(item.price * item.quantity, settings.currencySymbol)}</span>
                   </div>
                 ))}
               </div>
@@ -408,18 +410,18 @@ export default function CheckoutPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#666' }}>Subtotal</span>
-                  <span style={{ fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
+                  <span style={{ fontWeight: 600 }}>{formatPrice(subtotal, settings.currencySymbol)}</span>
                 </div>
                 {discount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
                     <span>Discount ({appliedCoupon?.code})</span>
-                    <span style={{ fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>-{formatPrice(discount, settings.currencySymbol)}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#666' }}>Shipping ({selectedShipping?.name || '...'})</span>
                   <span style={{ fontWeight: 600 }}>
-                    {shippingCost === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `$${shippingCost.toFixed(2)}`}
+                    {shippingCost === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `${formatPrice(shippingCost, settings.currencySymbol)}`}
                   </span>
                 </div>
                 <TaxCalculator
@@ -433,7 +435,7 @@ export default function CheckoutPage() {
                 <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${total.toFixed(2)}</span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(total, settings.currencySymbol)}</span>
                   </div>
                 </div>
               </div>

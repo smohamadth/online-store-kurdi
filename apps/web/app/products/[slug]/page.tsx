@@ -451,7 +451,7 @@ export default function ProductPage() {
                     }}
                   >
                     {getVariantDisplay(variant)}
-                    <span style={{ marginLeft: '6px', color: '#666' }}>${Number(variant.price).toFixed(2)}</span>
+                    <span style={{ marginLeft: '6px', color: '#666' }}>{formatPrice(Number(variant.price), settings.currencySymbol)}</span>
                   </button>
                 ))}
               </div>

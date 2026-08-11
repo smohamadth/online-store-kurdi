@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import CouponInput from '@/components/CouponInput';
 import { Coupon } from '@/lib/coupons';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -32,6 +33,7 @@ export default function CartPage() {
   const { items, savedItems, removeItem, updateQuantity, clearCart, getTotal, getItemCount, saveForLater, moveToCart, removeSavedItem } = useCart();
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { settings } = useStoreSettings();
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [discount, setDiscount] = useState(0);
 
@@ -207,7 +209,7 @@ export default function CartPage() {
 
                     {/* Price */}
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                      ${(item.price * item.quantity).toFixed(2)}
+                      {formatPrice(item.price * item.quantity, settings.currencySymbol)}
                     </span>
                   </div>
                 </div>
@@ -284,7 +286,7 @@ export default function CartPage() {
                     }}>
                       {item.name}
                     </Link>
-                    <p style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '4px' }}>${item.price.toFixed(2)}</p>
+                    <p style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '4px' }}>{formatPrice(item.price, settings.currencySymbol)}</p>
                     <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                       <button
                         onClick={() => moveToCart(item.id)}
@@ -348,39 +350,39 @@ export default function CartPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#666' }}>Subtotal</span>
-                  <span style={{ fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
+                  <span style={{ fontWeight: 600 }}>{formatPrice(subtotal, settings.currencySymbol)}</span>
                 </div>
 
                 {discount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
                     <span>Discount ({appliedCoupon?.code})</span>
-                    <span style={{ fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+                    <span style={{ fontWeight: 600 }}>-{formatPrice(discount, settings.currencySymbol)}</span>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#666' }}>Shipping</span>
                   <span style={{ fontWeight: 600 }}>
-                    {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `$${shipping.toFixed(2)}`}
+                    {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : formatPrice(shipping, settings.currencySymbol)}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#666' }}>Tax</span>
-                  <span style={{ fontWeight: 600 }}>${tax.toFixed(2)}</span>
+                  <span style={{ fontWeight: 600 }}>{formatPrice(tax, settings.currencySymbol)}</span>
                 </div>
 
                 <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${total.toFixed(2)}</span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(total, settings.currencySymbol)}</span>
                   </div>
                 </div>
               </div>
 
               {shipping > 0 && !appliedCoupon && (
                 <p style={{ marginTop: '12px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
-                  Add ${(100 - subtotal).toFixed(2)} more for free shipping
+                  Add {formatPrice(100 - subtotal, settings.currencySymbol)} more for free shipping
                 </p>
               )}
 
