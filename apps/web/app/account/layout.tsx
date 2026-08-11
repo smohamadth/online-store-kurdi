@@ -88,8 +88,8 @@ export default function AccountLayout({
 
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-        gap: '32px' 
+        gridTemplateColumns: '200px 1fr', 
+        gap: '24px' 
       }}>
         {/* Sidebar */}
         <div style={{

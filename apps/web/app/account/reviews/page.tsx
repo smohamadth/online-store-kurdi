@@ -17,7 +17,6 @@ interface Review {
 
 export default function MyReviewsPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,15 +34,6 @@ export default function MyReviewsPage() {
         return;
       }
 
-      let userData;
-      try {
-        userData = JSON.parse(storedUser);
-      } catch (e) {
-        router.push('/login');
-        return;
-      }
-
-      setUser(userData);
       fetchReviews(token);
     } catch (err) {
       console.error('Auth check error:', err);
@@ -90,93 +80,17 @@ export default function MyReviewsPage() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', padding: '64px 20px' }}>
         <p style={{ color: '#666' }}>Loading reviews...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
-      {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
-        <span>/</span>
-        <Link href="/account" style={{ textDecoration: 'none', color: '#666' }}>Account</Link>
-        <span>/</span>
-        <span style={{ color: '#000' }}>My Reviews</span>
-      </nav>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '48px' }}>
-        {/* Sidebar */}
-        <div>
-          <div style={{
-            padding: '24px',
-            border: '1px solid #e5e5e5',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-          }}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '50%',
-              backgroundColor: '#f5f5f5',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              margin: '0 auto 12px',
-            }}>
-              👤
-            </div>
-            <h2 style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center', marginBottom: '16px' }}>
-              {user?.firstName} {user?.lastName}
-            </h2>
-
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Link href="/account" style={{
-                padding: '10px 16px',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#666',
-              }}>
-                Dashboard
-              </Link>
-              <Link href="/account/orders" style={{
-                padding: '10px 16px',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#666',
-              }}>
-                Orders
-              </Link>
-              <Link href="/account/reviews" style={{
-                padding: '10px 16px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#000',
-                fontWeight: 500,
-              }}>
-                Reviews
-              </Link>
-              <Link href="/account/profile" style={{
-                padding: '10px 16px',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#666',
-              }}>
-                Edit Profile
-              </Link>
-            </nav>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '32px' }}>
-            My Reviews
-          </h1>
+    <div>
+      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '32px' }}>
+        My Reviews
+      </h1>
 
           {reviews.length === 0 ? (
             <div style={{
@@ -259,8 +173,6 @@ export default function MyReviewsPage() {
               ))}
             </div>
           )}
-        </div>
-      </div>
     </div>
   );
 }

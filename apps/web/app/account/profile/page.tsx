@@ -160,81 +160,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
-      {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
-        <span>/</span>
-        <Link href="/account" style={{ textDecoration: 'none', color: '#666' }}>Account</Link>
-        <span>/</span>
-        <span style={{ color: '#000' }}>Edit Profile</span>
-      </nav>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '48px' }}>
-        {/* Sidebar */}
-        <div>
-          <div style={{
-            padding: '24px',
-            border: '1px solid #e5e5e5',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-          }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              backgroundColor: '#f5f5f5',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '32px',
-              margin: '0 auto 16px',
-            }}>
-              👤
-            </div>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', textAlign: 'center' }}>
-              {user.firstName} {user.lastName}
-            </h2>
-            <p style={{ fontSize: '14px', color: '#666', textAlign: 'center', marginBottom: '24px' }}>
-              {user.email}
-            </p>
-
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Link href="/account" style={{
-                padding: '10px 16px',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#666',
-              }}>
-                Dashboard
-              </Link>
-              <Link href="/account/orders" style={{
-                padding: '10px 16px',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#666',
-              }}>
-                Orders
-              </Link>
-              <Link href="/account/profile" style={{
-                padding: '10px 16px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '6px',
-                textDecoration: 'none',
-                color: '#000',
-                fontWeight: 500,
-              }}>
-                Edit Profile
-              </Link>
-            </nav>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '32px' }}>
-            Edit Profile
-          </h1>
+    <div>
+      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '32px' }}>
+        Edit Profile
+      </h1>
 
           {/* Success/Error Message */}
           {message.text && (
@@ -463,8 +392,6 @@ export default function ProfilePage() {
               </button>
             </form>
           </div>
-        </div>
-      </div>
     </div>
   );
 }
