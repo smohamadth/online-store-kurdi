@@ -83,9 +83,11 @@ export default function AdminSettingsPage() {
       });
 
       localStorage.setItem('storeSettings', JSON.stringify(storeSettings));
+      window.dispatchEvent(new Event('settingsChange'));
       setMessage({ type: 'success', text: 'Store settings saved!' });
     } catch (err) {
       localStorage.setItem('storeSettings', JSON.stringify(storeSettings));
+      window.dispatchEvent(new Event('settingsChange'));
       setMessage({ type: 'success', text: 'Store settings saved locally!' });
     } finally {
       setSaving(false);

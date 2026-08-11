@@ -44,70 +44,50 @@ const DEFAULT_SETTINGS: StoreSettings = {
   maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
 };
 
-// Load settings from localStorage or API
 export function loadStoreSettings(): StoreSettings {
-  if (typeof window === 'undefined') {
-    return DEFAULT_SETTINGS;
-  }
-
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
     const stored = localStorage.getItem('storeSettings');
-    if (stored) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
-    }
+    if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
   } catch (e) {}
-
   return DEFAULT_SETTINGS;
 }
 
-// Hook to use store settings
+export function saveStoreSettings(settings: Partial<StoreSettings>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = loadStoreSettings();
+    const updated = { ...current, ...settings };
+    localStorage.setItem('storeSettings', JSON.stringify(updated));
+    window.dispatchEvent(new Event('settingsChange'));
+  } catch (e) {}
+}
+
 export function useStoreSettings() {
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load from localStorage immediately
-    setSettings(loadStoreSettings());
-    setLoading(false);
+    const load = () => {
+      setSettings(loadStoreSettings());
+      setLoading(false);
+    };
 
-    // Try to fetch from API
-    fetchSettings();
+    load();
+
+    const handleChange = () => load();
+    window.addEventListener('settingsChange', handleChange);
+    window.addEventListener('storage', handleChange);
+
+    return () => {
+      window.removeEventListener('settingsChange', handleChange);
+      window.removeEventListener('storage', handleChange);
+    };
   }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/settings`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data) {
-          const merged = { ...DEFAULT_SETTINGS, ...data.data };
-          setSettings(merged);
-          localStorage.setItem('storeSettings', JSON.stringify(merged));
-        }
-      }
-    } catch (err) {
-      // Use local settings
-    }
-  };
 
   return { settings, loading };
 }
 
-// Format price with currency
 export function formatPrice(price: number, currencySymbol: string = '$'): string {
   return `${currencySymbol}${price.toFixed(2)}`;
-}
-
-// Get store name
-export function getStoreName(): string {
-  return loadStoreSettings().storeName;
-}
-
-// Get meta tags
-export function getMetaTags() {
-  const settings = loadStoreSettings();
-  return {
-    title: settings.metaTitle || settings.storeName,
-    description: settings.metaDescription || settings.storeDescription,
-  };
 }
