@@ -52,7 +52,7 @@ export function ProductGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
       gap: '24px',
     }}>
       {Array.from({ length: count }).map((_, i) => (

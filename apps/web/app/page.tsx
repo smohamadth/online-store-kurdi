@@ -7,7 +7,19 @@ import { api, Product, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 export default function HomePage() {
+  const isMobile = useIsMobile();
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState([
     { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 0 },
@@ -122,11 +134,11 @@ export default function HomePage() {
         <div style={{
           maxWidth: '1200px',
           margin: '0 auto',
-          padding: '96px 20px',
+          padding: isMobile ? '48px 20px' : '96px 20px',
         }}>
           <div style={{ maxWidth: '600px' }}>
             <h1 style={{
-              fontSize: '48px',
+              fontSize: isMobile ? '28px' : '48px',
               fontWeight: 'bold',
               letterSpacing: '-0.02em',
               lineHeight: 1.1,
@@ -185,7 +197,7 @@ export default function HomePage() {
           justifyContent: 'space-between',
         }}>
           <div>
-            <h2 style={{ fontSize: '30px', fontWeight: 'bold' }}>Shop by Category</h2>
+            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>Shop by Category</h2>
             <p style={{ marginTop: '8px', color: '#666' }}>
               Browse our wide selection of products
             </p>
@@ -202,7 +214,7 @@ export default function HomePage() {
         <div style={{
           marginTop: '32px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
           gap: '16px',
         }}>
           {categories.map((category) => (
@@ -253,7 +265,7 @@ export default function HomePage() {
           justifyContent: 'space-between',
         }}>
           <div>
-            <h2 style={{ fontSize: '30px', fontWeight: 'bold' }}>Featured Products</h2>
+            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>Featured Products</h2>
             <p style={{ marginTop: '8px', color: '#666' }}>
               Our most popular items
             </p>
@@ -280,7 +292,7 @@ export default function HomePage() {
           <div style={{
             marginTop: '32px',
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
             gap: '24px',
           }}>
             {featuredProducts.map((product) => (
@@ -359,7 +371,7 @@ export default function HomePage() {
         }}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
             gap: '32px',
           }}>
             <div style={{ textAlign: 'center' }}>
@@ -451,13 +463,14 @@ export default function HomePage() {
             margin: '0 auto',
             textAlign: 'center',
           }}>
-            <h2 style={{ fontSize: '30px', fontWeight: 'bold' }}>Subscribe to Our Newsletter</h2>
+            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>Subscribe to Our Newsletter</h2>
             <p style={{ marginTop: '16px', fontSize: '18px', opacity: 0.9 }}>
               Get the latest updates on new products, sales, and exclusive offers.
             </p>
             <form onSubmit={handleNewsletterSubmit} style={{
               marginTop: '32px',
               display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
               gap: '16px',
             }}>
               <input

@@ -8,8 +8,20 @@ import { api } from '@/lib/api';
 import ShippingSelector from '@/components/ShippingSelector';
 import TaxCalculator from '@/components/TaxCalculator';
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const { items, getTotal, clearCart } = useCart();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -273,17 +285,17 @@ export default function CheckoutPage() {
         <span style={{ color: '#000' }}>Checkout</span>
       </nav>
 
-      <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '32px' }}>Checkout</h1>
+      <h1 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 'bold', marginBottom: '32px' }}>Checkout</h1>
 
       <form onSubmit={handleSubmit}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '48px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: isMobile ? '24px' : '48px' }}>
           {/* Left Column */}
           <div>
             {/* Shipping Information */}
             <div style={{ marginBottom: '40px' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Shipping Information</h2>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>First Name *</label>
                   <input type="text" name="firstName" value={shippingInfo.firstName} onChange={handleChange} required
@@ -296,7 +308,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Email *</label>
                   <input type="email" name="email" value={shippingInfo.email} onChange={handleChange} required
@@ -315,7 +327,7 @@ export default function CheckoutPage() {
                   style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>City *</label>
                   <input type="text" name="city" value={shippingInfo.city} onChange={handleChange} required
