@@ -31,6 +31,7 @@ import taxRoutes from './modules/tax/tax.routes';
 import cartRoutes from './modules/cart/cart.routes';
 import wishlistRoutes from './modules/wishlist/wishlist.routes';
 import uploadRoutes from './modules/upload/upload.routes';
+import categoryRoutes from './modules/categories/category.routes';
 
 // Create Express app
 const app = express();
@@ -138,6 +139,7 @@ app.use('/api/tax', taxRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api', categoryRoutes);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

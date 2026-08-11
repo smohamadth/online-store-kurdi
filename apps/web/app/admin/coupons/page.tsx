@@ -31,15 +31,26 @@ export default function AdminCouponsPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      // Try API first
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/coupons`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data && data.data.length > 0) {
+            setCoupons(data.data);
+            setApiStatus('connected');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // Fallback to sample coupons
       const data = await getCoupons(token);
       setCoupons(data);
-      
-      // Check if we got data from API (not sample data)
-      if (data.length > 0 && data[0].id !== '1') {
-        setApiStatus('connected');
-      } else {
-        setApiStatus('disconnected');
-      }
+      setApiStatus('disconnected');
     } catch (err) {
       console.error('Failed to fetch coupons:', err);
       setApiStatus('disconnected');
