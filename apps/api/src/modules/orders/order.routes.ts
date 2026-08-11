@@ -134,14 +134,37 @@ router.get('/:id', authenticate, async (req, res, next) => {
 // POST /api/orders - Create new order
 router.post('/', authenticate, async (req, res, next) => {
   try {
-    const { items, shippingAddressId, paymentMethod, notes } = req.body;
+    const { items, shippingAddressId, shippingAddress, paymentMethod, notes, 
+            couponCode, couponId, discountAmount, subtotal, shippingAmount, taxAmount, totalAmount } = req.body;
 
     if (!items || items.length === 0) {
       throw new AppError('Order must contain at least one item', 400);
     }
 
-    // Calculate order totals
-    let subtotal = 0;
+    // Handle shipping address - either ID or full object
+    let addressId = shippingAddressId;
+    
+    if (!addressId && shippingAddress) {
+      // Create address from full object
+      const newAddress = await prisma.address.create({
+        data: {
+          userId: req.user!.id,
+          firstName: shippingAddress.firstName,
+          lastName: shippingAddress.lastName,
+          address1: shippingAddress.address,
+          city: shippingAddress.city,
+          state: shippingAddress.state,
+          postalCode: shippingAddress.zipCode,
+          country: shippingAddress.country || 'US',
+          phone: shippingAddress.phone,
+          type: 'shipping',
+        },
+      });
+      addressId = newAddress.id;
+    }
+
+    // Calculate order totals if not provided
+    let calculatedSubtotal = 0;
     const orderItems = [];
 
     for (const item of items) {
@@ -178,7 +201,7 @@ router.post('/', authenticate, async (req, res, next) => {
         : Number(product.price);
 
       const totalPrice = unitPrice * item.quantity;
-      subtotal += totalPrice;
+      calculatedSubtotal += totalPrice;
 
       orderItems.push({
         productId: item.productId,
@@ -189,15 +212,12 @@ router.post('/', authenticate, async (req, res, next) => {
       });
     }
 
-    // Calculate tax (simplified - 10% tax)
-    const taxRate = 0.10;
-    const taxAmount = subtotal * taxRate;
-
-    // Calculate shipping (simplified - free over $100)
-    const shippingAmount = subtotal >= 100 ? 0 : 10;
-
-    // Calculate total
-    const totalAmount = subtotal + taxAmount + shippingAmount;
+    // Use provided amounts or calculated ones
+    const finalSubtotal = subtotal || calculatedSubtotal;
+    const finalTaxAmount = taxAmount || (finalSubtotal * 0.10);
+    const finalShippingAmount = shippingAmount !== undefined ? shippingAmount : (finalSubtotal >= 100 ? 0 : 10);
+    const finalDiscountAmount = discountAmount || 0;
+    const finalTotalAmount = totalAmount || (finalSubtotal + finalTaxAmount + finalShippingAmount - finalDiscountAmount);
 
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -208,11 +228,13 @@ router.post('/', authenticate, async (req, res, next) => {
         orderNumber,
         userId: req.user!.id,
         status: 'pending',
-        subtotal,
-        taxAmount,
-        shippingAmount,
-        totalAmount,
-        shippingAddressId,
+        subtotal: finalSubtotal,
+        taxAmount: finalTaxAmount,
+        shippingAmount: finalShippingAmount,
+        discountAmount: finalDiscountAmount,
+        totalAmount: finalTotalAmount,
+        shippingAddressId: addressId,
+        shippingMethodId: req.body.shippingMethodId,
         paymentMethod,
         paymentStatus: 'pending',
         notes,
@@ -268,9 +290,9 @@ router.post('/', authenticate, async (req, res, next) => {
     logger.info(`Order created: ${order.orderNumber} by user ${req.user!.email}`);
 
     // Track coupon usage if coupon was applied
-    if (req.body.couponId) {
+    if (couponId) {
       await prisma.coupon.update({
-        where: { id: req.body.couponId },
+        where: { id: couponId },
         data: { usedCount: { increment: 1 } },
       }).catch(err => logger.error('Failed to update coupon usage:', err));
     }

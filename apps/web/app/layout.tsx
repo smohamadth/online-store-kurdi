@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 import { useStoreSettings } from '@/lib/settings';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Custom hook for mobile detection
 function useIsMobile() {
@@ -588,12 +589,15 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <ErrorBoundary>
         <CartProvider>
           <Header />
 
           {/* Main Content */}
           <main style={{ minHeight: 'calc(100vh - 64px - 200px)' }}>
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </main>
 
           {/* Footer */}
@@ -683,6 +687,7 @@ export default function RootLayout({
             </div>
           </footer>
         </CartProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

@@ -171,6 +171,27 @@ export default function CheckoutPage() {
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     orders.unshift(order);
     localStorage.setItem('orders', JSON.stringify(orders));
+    
+    // Track inventory changes locally when API is unavailable
+    updateLocalInventory(items);
+  };
+  
+  const updateLocalInventory = (orderItems: any[]) => {
+    try {
+      // Store pending inventory deductions to sync later
+      const pendingDeductions = JSON.parse(localStorage.getItem('pendingInventoryDeductions') || '[]');
+      orderItems.forEach(item => {
+        pendingDeductions.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          timestamp: new Date().toISOString(),
+        });
+      });
+      localStorage.setItem('pendingInventoryDeductions', JSON.stringify(pendingDeductions));
+    } catch (err) {
+      console.error('Failed to track local inventory:', err);
+    }
   };
 
   // Order confirmation

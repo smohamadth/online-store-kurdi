@@ -8,11 +8,18 @@ import { useStoreSettings } from '@/lib/settings';
 
 export default function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState([
+    { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 0 },
+    { name: 'Clothing', slug: 'clothing', emoji: '👕', count: 0 },
+    { name: 'Books', slug: 'books', emoji: '📚', count: 0 },
+    { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 0 },
+  ]);
   const [loading, setLoading] = useState(true);
   const { settings } = useStoreSettings();
 
   useEffect(() => {
     fetchFeaturedProducts();
+    fetchCategories();
   }, []);
 
   const fetchFeaturedProducts = async () => {
@@ -27,13 +34,35 @@ export default function HomePage() {
       setLoading(false);
     }
   };
-
-  const categories = [
-    { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 156 },
-    { name: 'Clothing', slug: 'clothing', emoji: '👕', count: 243 },
-    { name: 'Books', slug: 'books', emoji: '📚', count: 89 },
-    { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 67 },
-  ];
+  
+  const fetchCategories = async () => {
+    try {
+      const response = await api.getCategories();
+      if (response.data && Array.isArray(response.data)) {
+        // Map API categories to our display format
+        const categoryEmojis: Record<string, string> = {
+          'electronics': '💻',
+          'clothing': '👕',
+          'books': '📚',
+          'digital': '📱',
+          'digital products': '📱',
+        };
+        
+        const fetchedCategories = response.data.map((cat: any) => ({
+          name: cat.name,
+          slug: cat.slug,
+          emoji: categoryEmojis[cat.slug] || categoryEmojis[cat.name?.toLowerCase()] || '📦',
+          count: cat._count?.products || 0,
+        }));
+        
+        if (fetchedCategories.length > 0) {
+          setCategories(fetchedCategories);
+        }
+      }
+    } catch (err) {
+      console.log('Categories API not available, using defaults');
+    }
+  };
 
   return (
     <>

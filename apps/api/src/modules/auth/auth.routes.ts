@@ -335,21 +335,36 @@ router.post('/forgot-password', async (req, res, next) => {
       });
     }
 
+    // Invalidate any existing reset tokens for this user
+    await prisma.passwordReset.deleteMany({
+      where: { userId: user.id },
+    });
+
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Send password reset email
-    try {
-      await sendPasswordResetEmail(user, resetToken);
-      logger.info(`Password reset email sent to: ${email}`);
-    } catch (emailError) {
-      logger.error('Failed to send password reset email:', emailError);
-      // Don't fail the request if email fails
-    }
+    // Store reset token in database
+    await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        token: resetToken,
+        expiresAt,
+      },
+    });
+
+    // Send password reset email (non-blocking)
+    sendPasswordResetEmail(user, resetToken).catch(err => {
+      logger.error('Failed to send password reset email:', err);
+    });
+
+    logger.info(`Password reset token generated for: ${email}`);
 
     res.json({
       status: 'success',
       message: successMessage,
+      // Include token in development for testing
+      ...(process.env.NODE_ENV === 'development' && { resetToken }),
     });
   } catch (error) {
     next(error);
@@ -375,16 +390,61 @@ router.post('/reset-password', async (req, res, next) => {
       });
     }
 
+    // Find and validate reset token
+    const resetRecord = await prisma.passwordReset.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    if (resetRecord.used) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'This reset token has already been used',
+      });
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      // Delete expired token
+      await prisma.passwordReset.delete({
+        where: { id: resetRecord.id },
+      });
+      return res.status(400).json({
+        status: 'error',
+        message: 'Reset token has expired. Please request a new one.',
+      });
+    }
+
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // In production, verify token and find user
-    // For now, just return success
-    logger.info('Password reset completed');
+    // Update user password and mark token as used
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetRecord.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.passwordReset.update({
+        where: { id: resetRecord.id },
+        data: { used: true },
+      }),
+      // Invalidate all existing sessions for security
+      prisma.session.deleteMany({
+        where: { userId: resetRecord.userId },
+      }),
+    ]);
+
+    logger.info(`Password reset completed for user: ${resetRecord.user.email}`);
 
     res.json({
       status: 'success',
-      message: 'Password reset successfully',
+      message: 'Password reset successfully. Please login with your new password.',
     });
   } catch (error) {
     next(error);

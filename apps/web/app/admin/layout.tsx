@@ -31,7 +31,7 @@ export default function AdminLayout({
     checkAdminAuth();
   }, []);
 
-  const checkAdminAuth = () => {
+  const checkAdminAuth = async () => {
     try {
       const storedUser = localStorage.getItem('user');
       const token = localStorage.getItem('token');
@@ -49,12 +49,40 @@ export default function AdminLayout({
         return;
       }
 
-      if (userData.role !== 'admin' && userData.role !== 'manager') {
-        router.push('/');
-        return;
+      // Verify admin status with server
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Auth verification failed');
+        }
+        
+        const data = await response.json();
+        const serverUser = data.data;
+        
+        if (!serverUser || (serverUser.role !== 'admin' && serverUser.role !== 'manager')) {
+          // Clear invalid auth data
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.dispatchEvent(new Event('authChange'));
+          router.push('/');
+          return;
+        }
+        
+        // Update local user data with server data
+        setUser(serverUser);
+      } catch (apiError) {
+        // API not available, fall back to local check
+        console.warn('Admin auth verification API unavailable, using local data');
+        if (userData.role !== 'admin' && userData.role !== 'manager') {
+          router.push('/');
+          return;
+        }
+        setUser(userData);
       }
-
-      setUser(userData);
     } catch (err) {
       console.error('Auth check error:', err);
       router.push('/login');

@@ -132,8 +132,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         };
         return updated;
       } else {
-        // Add new item
-        return [...prev, { ...item, id: Date.now().toString() }];
+        // Add new item with unique ID (combining timestamp and random)
+        const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return [...prev, { ...item, id: uniqueId }];
       }
     });
 

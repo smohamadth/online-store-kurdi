@@ -44,6 +44,8 @@ const DEFAULT_SETTINGS: StoreSettings = {
   maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
 export function loadStoreSettings(): StoreSettings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
@@ -63,19 +65,65 @@ export function saveStoreSettings(settings: Partial<StoreSettings>): void {
   } catch (e) {}
 }
 
+// Fetch settings from API and update localStorage
+async function fetchSettingsFromAPI(): Promise<StoreSettings | null> {
+  try {
+    const response = await fetch(`${API_URL}/settings`);
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.data) {
+      const apiSettings: StoreSettings = {
+        storeName: data.data.storeName || DEFAULT_SETTINGS.storeName,
+        storeDescription: data.data.storeDescription || DEFAULT_SETTINGS.storeDescription,
+        storeEmail: data.data.storeEmail || DEFAULT_SETTINGS.storeEmail,
+        storePhone: data.data.storePhone || DEFAULT_SETTINGS.storePhone,
+        storeAddress: data.data.storeAddress || DEFAULT_SETTINGS.storeAddress,
+        storeCity: data.data.storeCity || DEFAULT_SETTINGS.storeCity,
+        storeState: data.data.storeState || DEFAULT_SETTINGS.storeState,
+        storeCountry: data.data.storeCountry || DEFAULT_SETTINGS.storeCountry,
+        currency: data.data.currency || DEFAULT_SETTINGS.currency,
+        currencySymbol: data.data.currencySymbol || DEFAULT_SETTINGS.currencySymbol,
+        metaTitle: data.data.metaTitle || DEFAULT_SETTINGS.metaTitle,
+        metaDescription: data.data.metaDescription || DEFAULT_SETTINGS.metaDescription,
+        facebookUrl: data.data.facebookUrl || DEFAULT_SETTINGS.facebookUrl,
+        instagramUrl: data.data.instagramUrl || DEFAULT_SETTINGS.instagramUrl,
+        twitterUrl: data.data.twitterUrl || DEFAULT_SETTINGS.twitterUrl,
+        youtubeUrl: data.data.youtubeUrl || DEFAULT_SETTINGS.youtubeUrl,
+        maintenanceMode: data.data.maintenanceMode ?? DEFAULT_SETTINGS.maintenanceMode,
+        maintenanceMessage: data.data.maintenanceMessage || DEFAULT_SETTINGS.maintenanceMessage,
+      };
+      
+      // Update localStorage with API data
+      localStorage.setItem('storeSettings', JSON.stringify(apiSettings));
+      return apiSettings;
+    }
+  } catch (error) {
+    console.log('Settings API not available, using localStorage cache');
+  }
+  return null;
+}
+
 export function useStoreSettings() {
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = () => {
+    // Load from localStorage immediately for fast UI
+    const localSettings = loadStoreSettings();
+    setSettings(localSettings);
+    setLoading(false);
+    
+    // Then fetch from API in background and update if different
+    fetchSettingsFromAPI().then(apiSettings => {
+      if (apiSettings) {
+        setSettings(apiSettings);
+      }
+    });
+
+    const handleChange = () => {
       setSettings(loadStoreSettings());
-      setLoading(false);
     };
-
-    load();
-
-    const handleChange = () => load();
     window.addEventListener('settingsChange', handleChange);
     window.addEventListener('storage', handleChange);
 
