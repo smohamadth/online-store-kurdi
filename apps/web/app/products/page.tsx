@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
-import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { api, Product, Category, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function ProductsPage() {
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'all');
   const [sortBy, setSortBy] = useState('newest');
@@ -18,6 +19,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
   
   // Update from URL params when they change
@@ -36,6 +38,17 @@ export default function ProductsPage() {
       console.error('Failed to fetch products:', err);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchCategories = async () => {
+    try {
+      const response = await api.getCategories();
+      if (response.data && Array.isArray(response.data)) {
+        setCategories(response.data);
+      }
+    } catch (err) {
+      console.log('Categories API not available');
     }
   };
 
@@ -127,25 +140,43 @@ export default function ProductsPage() {
           paddingBottom: '8px',
           WebkitOverflowScrolling: 'touch',
         }}>
-          {['all', 'electronics', 'clothing', 'books', 'digital-products'].map((cat) => (
+          <button
+            onClick={() => setSelectedCategory('all')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: 500,
+              border: selectedCategory === 'all' ? '2px solid #000' : '1px solid #e5e5e5',
+              backgroundColor: selectedCategory === 'all' ? '#000' : 'white',
+              color: selectedCategory === 'all' ? '#fff' : '#000',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            All
+          </button>
+          {categories.map((cat) => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              key={cat.slug}
+              onClick={() => setSelectedCategory(cat.slug)}
               style={{
                 padding: '8px 16px',
                 borderRadius: '6px',
                 fontSize: '14px',
                 fontWeight: 500,
-                border: selectedCategory === cat ? '2px solid #000' : '1px solid #e5e5e5',
-                backgroundColor: selectedCategory === cat ? '#000' : 'white',
-                color: selectedCategory === cat ? '#fff' : '#000',
+                border: selectedCategory === cat.slug ? '2px solid #000' : '1px solid #e5e5e5',
+                backgroundColor: selectedCategory === cat.slug ? '#000' : 'white',
+                color: selectedCategory === cat.slug ? '#fff' : '#000',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
             >
-              {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1).replace('-', ' ')}
+              {cat.name}
             </button>
           ))}
         </div>

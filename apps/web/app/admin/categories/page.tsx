@@ -41,17 +41,15 @@ export default function AdminCategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const token = getToken();
-      if (!token) return;
-
-      const response = await fetch(`${getApiUrl()}/categories`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // GET /api/categories is public, no auth needed for reading
+      const response = await fetch(`${getApiUrl()}/categories`);
 
       if (response.ok) {
         const data = await response.json();
         setCategories(data.data || []);
         setApiConnected(true);
+      } else {
+        console.error('Failed to fetch categories:', response.status);
       }
     } catch (err) {
       console.log('API not available');

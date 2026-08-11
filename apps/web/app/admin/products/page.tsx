@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { api, Product, Category, getCategoryEmoji } from '@/lib/api';
 import ImageUpload from '@/components/ImageUpload';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -30,7 +31,19 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.getCategories();
+      if (response.data && Array.isArray(response.data)) {
+        setCategories(response.data);
+      }
+    } catch (err) {
+      console.log('Categories API not available');
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -90,15 +103,24 @@ export default function AdminProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Find category info for local storage
+    const selectedCategory = categories.find(c => c.id === formData.categoryId);
+    
     // Save product locally even if API fails
     const productData = {
       id: editingProduct?.id || Date.now().toString(),
-      ...formData,
+      name: formData.name,
+      sku: formData.sku,
+      description: formData.description,
+      shortDescription: formData.shortDescription,
+      slug: formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
       price: parseFloat(formData.price) || 0,
       compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : null,
       quantity: parseInt(formData.quantity) || 0,
+      categoryId: formData.categoryId,
       images: productImage ? [{ url: productImage, alt: formData.name, isPrimary: true }] : [],
-      category: { id: formData.categoryId || '1', name: 'General', slug: 'general' },
+      category: selectedCategory || { id: formData.categoryId || '', name: 'General', slug: 'general' },
+      variants: [],
       status: formData.status,
       type: formData.type,
       averageRating: 0,
@@ -479,7 +501,21 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Category *</label>
+                  <select
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData({...formData, categoryId: e.target.value})}
+                    required
+                    style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Type</label>
                   <select
