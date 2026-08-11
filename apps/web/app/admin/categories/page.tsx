@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface Category {
   id: string;
@@ -71,9 +71,12 @@ export default function AdminCategoriesPage() {
       const slug = formData.slug || formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       
       const body = {
-        ...formData,
+        name: formData.name,
         slug,
+        description: formData.description || null,
         parentId: formData.parentId || null,
+        isActive: formData.isActive,
+        sortOrder: formData.sortOrder,
       };
 
       const url = editingCategory 
@@ -201,8 +204,8 @@ export default function AdminCategoriesPage() {
           </thead>
           <tbody>
             {hierarchicalCategories.map((category) => (
-              <>
-                <tr key={category.id} style={{ borderBottom: '1px solid #e5e5e5', backgroundColor: '#fafafa' }}>
+              <React.Fragment key={category.id}>
+                <tr style={{ borderBottom: '1px solid #e5e5e5', backgroundColor: '#fafafa' }}>
                   <td style={{ padding: '16px', fontWeight: 600 }}>📁 {category.name}</td>
                   <td style={{ padding: '16px', fontSize: '14px', color: '#666', fontFamily: 'monospace' }}>{category.slug}</td>
                   <td style={{ padding: '16px', textAlign: 'center' }}>{category._count?.products || 0}</td>
@@ -232,7 +235,7 @@ export default function AdminCategoriesPage() {
                     </td>
                   </tr>
                 ))}
-              </>
+              </React.Fragment>
             ))}
           </tbody>
         </table>

@@ -12,7 +12,7 @@ const categorySchema = z.object({
   slug: z.string().min(1).max(100).optional(),
   description: z.string().optional().nullable(),
   image: z.string().optional().nullable(),
-  parentId: z.string().uuid().optional().nullable(),
+  parentId: z.string().uuid().optional().nullable().or(z.literal('').transform(() => null)),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
@@ -71,8 +71,8 @@ router.get('/categories/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/categories - Create category (admin)
-router.post('/categories', authenticate, authorize('admin'), async (req, res, next) => {
+// POST /api/categories - Create category (admin/manager)
+router.post('/categories', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const data = categorySchema.parse(req.body);
 
@@ -109,8 +109,8 @@ router.post('/categories', authenticate, authorize('admin'), async (req, res, ne
   }
 });
 
-// PUT /api/categories/:id - Update category (admin)
-router.put('/categories/:id', authenticate, authorize('admin'), async (req, res, next) => {
+// PUT /api/categories/:id - Update category (admin/manager)
+router.put('/categories/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const data = categorySchema.partial().parse(req.body);
@@ -153,8 +153,8 @@ router.put('/categories/:id', authenticate, authorize('admin'), async (req, res,
   }
 });
 
-// DELETE /api/categories/:id - Delete category (admin)
-router.delete('/categories/:id', authenticate, authorize('admin'), async (req, res, next) => {
+// DELETE /api/categories/:id - Delete category (admin/manager)
+router.delete('/categories/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const { id } = req.params;
 
