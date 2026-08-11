@@ -102,7 +102,8 @@ export default function AdminLayout({
     { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
     { path: '/admin/tax', label: 'Tax', icon: '💰' },
     { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
-    { path: '/admin/settings', label: 'Admin Settings', icon: '⚙️' },
+    { path: '/admin/settings', label: 'Store Settings', icon: '⚙️' },
+    { path: '/admin/profile', label: 'My Profile', icon: '👤' },
   ];
 
   const SidebarContent = () => (
