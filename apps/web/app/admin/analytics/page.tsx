@@ -11,8 +11,8 @@ export default function AdminAnalyticsPage() {
     totalOrders: 0,
     totalRevenue: 0,
     averageOrderValue: 0,
-    topProducts: [],
-    recentOrders: [],
+    topProducts: [] as any[],
+    recentOrders: [] as any[],
     ordersByStatus: {} as Record<string, number>,
   });
   const [loading, setLoading] = useState(true);
@@ -27,14 +27,14 @@ export default function AdminAnalyticsPage() {
       if (!token) return;
 
       // Fetch products
-      let products = [];
+      let products: any[] = [];
       try {
         const productsRes = await api.getProducts({ limit: 100 });
         products = productsRes.data || [];
       } catch (e) {}
 
       // Fetch orders
-      let orders = [];
+      let orders: any[] = [];
       try {
         const ordersRes = await api.getOrders(token);
         orders = ordersRes.data || [];

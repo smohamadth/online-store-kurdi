@@ -13,8 +13,8 @@ export default function AdminDashboard() {
     totalUsers: 0,
     totalCategories: 0,
     totalRevenue: 0,
-    recentOrders: [],
-    topProducts: [],
+    recentOrders: [] as any[],
+    topProducts: [] as any[],
   });
   const [loading, setLoading] = useState(true);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');

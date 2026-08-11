@@ -546,7 +546,6 @@ export default function AdminProductsPage() {
                 <ImageUpload
                   onUpload={(url) => setProductImage(url)}
                   currentImage={productImage}
-                  folder="products"
                   label="Product Image"
                 />
               </div>

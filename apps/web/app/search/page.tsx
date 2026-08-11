@@ -1,23 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { useIsMobile } from '@/lib/hooks';
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-  return isMobile;
-}
-
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
   const isMobile = useIsMobile();
@@ -262,5 +252,12 @@ export default function SearchPage() {
         </div>
       )}
     </div>
+  );
+}
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading search...</p></div>}>
+      <SearchContent />
+    </Suspense>
   );
 }

@@ -321,7 +321,7 @@ export function useTranslation() {
     setLanguage(lang);
     
     const langConfig = languages.find(l => l.code === lang);
-    setDirection(langConfig?.dir || 'ltr');
+    setDirection((langConfig?.dir as 'ltr' | 'rtl') || 'ltr');
     
     // Set document direction
     document.documentElement.dir = langConfig?.dir || 'ltr';
@@ -333,7 +333,7 @@ export function useTranslation() {
     localStorage.setItem('language', langCode);
     
     const langConfig = languages.find(l => l.code === langCode);
-    setDirection(langConfig?.dir || 'ltr');
+    setDirection((langConfig?.dir as 'ltr' | 'rtl') || 'ltr');
     
     document.documentElement.dir = langConfig?.dir || 'ltr';
     document.documentElement.lang = langCode;

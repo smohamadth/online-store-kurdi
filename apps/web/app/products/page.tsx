@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
@@ -8,7 +8,7 @@ import { api, Product, Category, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
 
-export default function ProductsPage() {
+function ProductsContent() {
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
@@ -360,5 +360,13 @@ export default function ProductsPage() {
       )}
     </div>
     </>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading products...</p></div>}>
+      <ProductsContent />
+    </Suspense>
   );
 }
