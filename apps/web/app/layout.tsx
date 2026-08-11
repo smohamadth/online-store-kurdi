@@ -9,6 +9,7 @@ import SearchBar from '@/components/SearchBar';
 import { useStoreSettings } from '@/lib/settings';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 // Custom hook for mobile detection
 function useIsMobile() {
@@ -466,9 +467,10 @@ function Header() {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
+            gap: '12px',
             flexShrink: 0,
           }}>
+            <LanguageSwitcher />
             <CartIcon />
             
             {/* Desktop user menu - hidden on mobile */}
@@ -646,7 +648,16 @@ export default function RootLayout({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <Link href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</Link>
                   <Link href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</Link>
+                  <Link href="/account/addresses" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Addresses</Link>
                   <Link href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</Link>
+                </div>
+              </div>
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
+                  <Link href="/track-order" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Track Order</Link>
+                  <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
                 </div>
               </div>
               <div>

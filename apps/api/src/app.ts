@@ -34,6 +34,9 @@ import wishlistRoutes from './modules/wishlist/wishlist.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import categoryRoutes from './modules/categories/category.routes';
 import newsletterRoutes from './modules/newsletter/newsletter.routes';
+import addressRoutes from './modules/addresses/address.routes';
+import contactRoutes from './modules/contact/contact.routes';
+import stockAlertRoutes from './modules/stock-alerts/stock-alert.routes';
 
 // Create Express app
 const app = express();
@@ -146,6 +149,9 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api', categoryRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/addresses', addressRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/stock-alerts', stockAlertRoutes);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

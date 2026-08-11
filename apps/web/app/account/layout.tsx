@@ -72,6 +72,7 @@ export default function AccountLayout({
     { path: '/account/orders', label: 'Orders', icon: '📦' },
     { path: '/account/wishlist', label: 'Wishlist', icon: '❤️' },
     { path: '/account/reviews', label: 'Reviews', icon: '⭐' },
+    { path: '/account/addresses', label: 'Addresses', icon: '📍' },
     { path: '/account/profile', label: 'Edit Profile', icon: '✏️' },
   ];
 

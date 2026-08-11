@@ -18,6 +18,7 @@ export interface CartItem {
 
 interface CartStore {
   items: CartItem[];
+  savedItems: CartItem[];
   addItem: (item: Omit<CartItem, 'id'>) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
@@ -25,6 +26,9 @@ interface CartStore {
   getTotal: () => number;
   getItemCount: () => number;
   syncWithDatabase: () => Promise<void>;
+  saveForLater: (id: string) => void;
+  moveToCart: (id: string) => void;
+  removeSavedItem: (id: string) => void;
 }
 
 // Cart Context
@@ -33,9 +37,10 @@ const CartContext = createContext<CartStore | null>(null);
 // Cart Provider
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [savedItems, setSavedItems] = useState<CartItem[]>([]);
   const [mounted, setMounted] = useState(false);
 
-  // Load cart from localStorage on mount
+  // Load cart and saved items from localStorage on mount
   useEffect(() => {
     setMounted(true);
     const savedCart = localStorage.getItem('cart');
@@ -44,6 +49,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setItems(JSON.parse(savedCart));
       } catch (e) {
         console.error('Failed to parse cart:', e);
+      }
+    }
+    
+    const saved = localStorage.getItem('savedItems');
+    if (saved) {
+      try {
+        setSavedItems(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse saved items:', e);
       }
     }
 
@@ -60,6 +74,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('cart', JSON.stringify(items));
     }
   }, [items, mounted]);
+
+  // Save savedItems to localStorage when it changes
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('savedItems', JSON.stringify(savedItems));
+    }
+  }, [savedItems, mounted]);
 
   // Fetch cart from database
   const fetchCartFromDatabase = async (token: string) => {
@@ -215,9 +236,39 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return items.reduce((sum, item) => sum + item.quantity, 0);
   };
 
+  // Save for later - move item from cart to saved items
+  const saveForLater = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (item) {
+      setSavedItems(prev => {
+        // Check if already saved
+        if (prev.find(i => i.productId === item.productId && i.variant === item.variant)) {
+          return prev;
+        }
+        return [...prev, item];
+      });
+      setItems(prev => prev.filter(i => i.id !== id));
+    }
+  };
+
+  // Move to cart - move item from saved items to cart
+  const moveToCart = (id: string) => {
+    const item = savedItems.find(i => i.id === id);
+    if (item) {
+      addItem(item);
+      setSavedItems(prev => prev.filter(i => i.id !== id));
+    }
+  };
+
+  // Remove saved item
+  const removeSavedItem = (id: string) => {
+    setSavedItems(prev => prev.filter(i => i.id !== id));
+  };
+
   return (
     <CartContext.Provider value={{
       items,
+      savedItems,
       addItem,
       removeItem,
       updateQuantity,
@@ -225,6 +276,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       getTotal,
       getItemCount,
       syncWithDatabase,
+      saveForLater,
+      moveToCart,
+      removeSavedItem,
     }}>
       {children}
     </CartContext.Provider>
