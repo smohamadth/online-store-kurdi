@@ -6,9 +6,11 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { api, Product, Category, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function ProductsPage() {
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

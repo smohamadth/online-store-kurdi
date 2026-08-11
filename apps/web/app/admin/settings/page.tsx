@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 
 export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
   const [storeSettings, setStoreSettings] = useState({
     storeName: 'Online Store',
@@ -28,13 +31,36 @@ export default function AdminSettingsPage() {
   });
 
   useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      // Try API first
+      const response = await fetch(`${API_URL}/settings`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data) {
+          setStoreSettings(prev => ({ ...prev, ...data.data }));
+          // Also save to localStorage for offline access
+          localStorage.setItem('storeSettings', JSON.stringify({ ...storeSettings, ...data.data }));
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.log('Settings API not available');
+    }
+
+    // Fallback to localStorage
     const stored = localStorage.getItem('storeSettings');
     if (stored) {
       try {
         setStoreSettings(prev => ({ ...prev, ...JSON.parse(stored) }));
       } catch (e) {}
     }
-  }, []);
+    setLoading(false);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -184,7 +210,10 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Save Button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+        <button onClick={fetchSettings} disabled={loading} style={{ padding: '12px 24px', backgroundColor: '#f5f5f5', color: '#000', border: '1px solid #e5e5e5', borderRadius: '6px', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', fontSize: '14px' }}>
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
         <button onClick={handleSave} disabled={saving} style={{ padding: '12px 32px', backgroundColor: saving ? '#ccc' : '#000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '16px' }}>
           {saving ? 'Saving...' : 'Save All Settings'}
         </button>

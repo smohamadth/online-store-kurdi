@@ -8,10 +8,12 @@ import { useCart } from '@/lib/store';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const { addItem, items } = useCart();
   const { settings } = useStoreSettings();
   
@@ -257,8 +259,8 @@ export default function ProductPage() {
       {/* Product Details - Responsive Grid */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-        gap: '32px',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))', 
+        gap: isMobile ? '24px' : '32px',
         marginBottom: '48px',
       }}>
         {/* Product Images */}

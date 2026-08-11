@@ -3,6 +3,18 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getCategoryEmoji } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
 
 interface WishlistItem {
   id: string;
@@ -12,6 +24,8 @@ interface WishlistItem {
 }
 
 export default function WishlistPage() {
+  const isMobile = useIsMobile();
+  const { settings } = useStoreSettings();
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,7 +85,6 @@ export default function WishlistPage() {
 
       if (response.ok) {
         setWishlistItems(wishlistItems.filter(item => item.productId !== productId));
-        alert('Item moved to cart!');
       }
     } catch (err) {
       console.error('Failed to move to cart:', err);
@@ -84,7 +97,7 @@ export default function WishlistPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '24px' }}>
+      <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: 'bold', marginBottom: '24px' }}>
         My Wishlist ({wishlistItems.length} items)
       </h1>
 
@@ -113,7 +126,7 @@ export default function WishlistPage() {
           </Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
           {wishlistItems.map((item) => (
             <div
               key={item.id}
@@ -143,14 +156,14 @@ export default function WishlistPage() {
               {/* Product Info */}
               <div style={{ padding: '16px' }}>
                 <Link href={`/products/${item.product?.slug || '#'}`} style={{ textDecoration: 'none', color: '#000' }}>
-                  <h3 style={{ fontWeight: 600, marginBottom: '8px' }}>{item.product?.name || 'Product'}</h3>
+                  <h3 style={{ fontWeight: 600, marginBottom: '8px', fontSize: '15px' }}>{item.product?.name || 'Product'}</h3>
                 </Link>
-                <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
+                <p style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
                   {item.product?.category?.name || ''}
                 </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${item.product?.price || 0}</span>
-                </div>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', display: 'block', marginBottom: '12px' }}>
+                  {formatPrice(item.product?.price || 0, settings.currencySymbol)}
+                </span>
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -158,11 +171,11 @@ export default function WishlistPage() {
                     onClick={() => moveToCart(item.productId)}
                     style={{
                       flex: 1,
-                      padding: '8px',
+                      padding: '10px',
                       backgroundColor: '#000',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '6px',
                       fontSize: '14px',
                       cursor: 'pointer',
                     }}
@@ -172,10 +185,10 @@ export default function WishlistPage() {
                   <button
                     onClick={() => removeFromWishlist(item.productId)}
                     style={{
-                      padding: '8px 12px',
+                      padding: '10px 14px',
                       backgroundColor: '#f5f5f5',
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '6px',
                       fontSize: '14px',
                       cursor: 'pointer',
                     }}

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function ContactPage() {
+  const isMobile = useIsMobile();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -73,7 +75,7 @@ export default function ContactPage() {
         Have a question or feedback? We'd love to hear from you.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '40px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(250px, 1fr))', gap: isMobile ? '24px' : '40px' }}>
         {/* Contact Info */}
         <div>
           <div style={{ marginBottom: '32px' }}>

@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function AccountDashboard() {
+  const isMobile = useIsMobile();
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function AccountDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
         <Link href="/account/orders" style={{
           padding: '24px',
           border: '1px solid #e5e5e5',

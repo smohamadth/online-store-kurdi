@@ -4,10 +4,24 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
+  const isMobile = useIsMobile();
+  const { settings } = useStoreSettings();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +167,7 @@ export default function SearchPage() {
 
       {/* Results Grid */}
       {!loading && products.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '24px' }}>
           {products.map((product) => (
             <Link
               key={product.id}
@@ -217,7 +231,7 @@ export default function SearchPage() {
 
                 {/* Price */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '20px', fontWeight: 'bold' }}>${product.price}</span>
+                  <span style={{ fontSize: '20px', fontWeight: 'bold' }}>{formatPrice(product.price, settings.currencySymbol)}</span>
                   {product.compareAtPrice && (
                     <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
                       ${product.compareAtPrice}
@@ -239,7 +253,7 @@ export default function SearchPage() {
       {!loading && products.length > 0 && (
         <div style={{ marginTop: '48px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Search Tips</h3>
-          <ul style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', listStyle: 'none', padding: 0 }}>
+          <ul style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', listStyle: 'none', padding: 0 }}>
             <li style={{ fontSize: '14px', color: '#666' }}>✓ Try different keywords</li>
             <li style={{ fontSize: '14px', color: '#666' }}>✓ Check your spelling</li>
             <li style={{ fontSize: '14px', color: '#666' }}>✓ Use more general terms</li>
