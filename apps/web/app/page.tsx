@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
+import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 
 export default function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
@@ -15,6 +16,9 @@ export default function HomePage() {
     { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 0 },
   ]);
   const [loading, setLoading] = useState(true);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [newsletterMessage, setNewsletterMessage] = useState('');
   const { settings } = useStoreSettings();
 
   useEffect(() => {
@@ -62,6 +66,41 @@ export default function HomePage() {
     } catch (err) {
       console.log('Categories API not available, using defaults');
     }
+  };
+  
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail) return;
+    
+    setNewsletterStatus('loading');
+    
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${API_URL}/newsletter/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newsletterEmail }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setNewsletterStatus('success');
+        setNewsletterMessage(data.message || 'Successfully subscribed!');
+        setNewsletterEmail('');
+      } else {
+        setNewsletterStatus('error');
+        setNewsletterMessage(data.message || 'Failed to subscribe');
+      }
+    } catch (err) {
+      setNewsletterStatus('error');
+      setNewsletterMessage('Network error. Please try again.');
+    }
+    
+    setTimeout(() => {
+      setNewsletterStatus('idle');
+      setNewsletterMessage('');
+    }, 5000);
   };
 
   return (
@@ -231,8 +270,8 @@ export default function HomePage() {
 
         {/* Loading State */}
         {loading && (
-          <div style={{ textAlign: 'center', padding: '64px' }}>
-            <p style={{ color: '#666' }}>Loading products...</p>
+          <div style={{ marginTop: '32px' }}>
+            <ProductGridSkeleton count={4} />
           </div>
         )}
 
@@ -416,14 +455,17 @@ export default function HomePage() {
             <p style={{ marginTop: '16px', fontSize: '18px', opacity: 0.9 }}>
               Get the latest updates on new products, sales, and exclusive offers.
             </p>
-            <div style={{
+            <form onSubmit={handleNewsletterSubmit} style={{
               marginTop: '32px',
               display: 'flex',
               gap: '16px',
             }}>
               <input
                 type="email"
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
                 placeholder="Enter your email"
+                required
                 style={{
                   flex: 1,
                   padding: '12px 16px',
@@ -434,19 +476,32 @@ export default function HomePage() {
                   fontSize: '16px',
                 }}
               />
-              <button style={{
-                padding: '12px 24px',
-                backgroundColor: 'white',
-                color: '#000',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '16px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}>
-                Subscribe
+              <button 
+                type="submit"
+                disabled={newsletterStatus === 'loading'}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: newsletterStatus === 'loading' ? '#ccc' : 'white',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  cursor: newsletterStatus === 'loading' ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {newsletterStatus === 'loading' ? 'Subscribing...' : 'Subscribe'}
               </button>
-            </div>
+            </form>
+            {newsletterMessage && (
+              <p style={{
+                marginTop: '16px',
+                fontSize: '14px',
+                color: newsletterStatus === 'success' ? '#22c55e' : '#ef4444',
+              }}>
+                {newsletterStatus === 'success' ? '✓ ' : '✕ '}{newsletterMessage}
+              </p>
+            )}
           </div>
         </div>
       </section>

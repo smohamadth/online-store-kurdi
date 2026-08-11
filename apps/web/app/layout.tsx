@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 import { useStoreSettings } from '@/lib/settings';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { ToastContainer } from '@/components/Toast';
 
 // Custom hook for mobile detection
 function useIsMobile() {
@@ -590,6 +591,7 @@ export default function RootLayout({
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <ErrorBoundary>
+        <ToastContainer />
         <CartProvider>
           <Header />
 

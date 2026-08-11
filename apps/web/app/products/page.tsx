@@ -1,22 +1,32 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function ProductsPage() {
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'all');
   const [sortBy, setSortBy] = useState('newest');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   const { settings } = useStoreSettings();
 
   useEffect(() => {
     fetchProducts();
   }, []);
+  
+  // Update from URL params when they change
+  useEffect(() => {
+    const category = searchParams.get('category');
+    const query = searchParams.get('q');
+    if (category) setSelectedCategory(category);
+    if (query) setSearchQuery(query);
+  }, [searchParams]);
 
   const fetchProducts = async () => {
     try {

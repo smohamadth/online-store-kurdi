@@ -12,6 +12,7 @@ import { env, isDevelopment } from './config/environment';
 import { logger, loggerStream } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
+import { csrfTokenRoute } from './middleware/csrf';
 
 // Import routes
 import productRoutes from './modules/products/product.routes';
@@ -32,6 +33,7 @@ import cartRoutes from './modules/cart/cart.routes';
 import wishlistRoutes from './modules/wishlist/wishlist.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import categoryRoutes from './modules/categories/category.routes';
+import newsletterRoutes from './modules/newsletter/newsletter.routes';
 
 // Create Express app
 const app = express();
@@ -103,6 +105,9 @@ app.get('/health', (req, res) => {
   });
 });
 
+// CSRF token endpoint
+app.get('/api/csrf-token', csrfTokenRoute);
+
 // API documentation endpoint
 app.get('/api', (req, res) => {
   res.json({
@@ -140,6 +145,7 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api', categoryRoutes);
+app.use('/api/newsletter', newsletterRoutes);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
