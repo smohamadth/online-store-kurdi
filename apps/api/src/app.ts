@@ -37,6 +37,7 @@ import newsletterRoutes from './modules/newsletter/newsletter.routes';
 import addressRoutes from './modules/addresses/address.routes';
 import contactRoutes from './modules/contact/contact.routes';
 import stockAlertRoutes from './modules/stock-alerts/stock-alert.routes';
+import menuRoutes from './modules/menus/menu.routes';
 
 // Create Express app
 const app = express();
@@ -152,6 +153,7 @@ app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/stock-alerts', stockAlertRoutes);
+app.use('/api/menus', menuRoutes);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

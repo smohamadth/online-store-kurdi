@@ -127,6 +127,7 @@ export default function AdminLayout({
     { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
     { path: '/admin/reviews', label: 'Reviews', icon: '⭐' },
     { path: '/admin/users', label: 'Users', icon: '👥' },
+    { path: '/admin/menus', label: 'Menus', icon: '📑' },
     { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
     { path: '/admin/tax', label: 'Tax', icon: '💰' },
     { path: '/admin/analytics', label: 'Analytics', icon: '📈' },

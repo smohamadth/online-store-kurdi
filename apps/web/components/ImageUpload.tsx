@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface ImageVariants {
   thumbnail?: string;
@@ -23,7 +23,23 @@ export default function ImageUpload({
   const [preview, setPreview] = useState<string | null>(currentImage || null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [variants, setVariants] = useState<ImageVariants | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string>('large');
+  const [originalFileName, setOriginalFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const sizeLabels: Record<string, { label: string; dimensions: string; use: string }> = {
+    thumbnail: { label: 'Thumbnail', dimensions: '300×300', use: 'Product cards, search results' },
+    medium: { label: 'Medium', dimensions: '600×600', use: 'Product grid, mobile' },
+    large: { label: 'Large', dimensions: '1200×1200', use: 'Product detail page' },
+    zoom: { label: 'Zoom', dimensions: '2000×2000', use: 'Image zoom on hover' },
+  };
+
+  useEffect(() => {
+    if (currentImage) {
+      setPreview(currentImage);
+    }
+  }, [currentImage]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,12 +60,13 @@ export default function ImageUpload({
 
     setError('');
     setUploading(true);
+    setOriginalFileName(file.name);
 
     try {
       // Create local preview
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreview(e.target?.result as string);
+      reader.onload = (ev) => {
+        setPreview(ev.target?.result as string);
       };
       reader.readAsDataURL(file);
 
@@ -72,27 +89,27 @@ export default function ImageUpload({
         const data = await response.json();
         const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace('/api', '');
         
-        // Get the best URL and prepend base URL for relative paths
-        const rawUrl = data.data?.large || data.data?.medium || data.data?.url;
-        const imageUrl = rawUrl?.startsWith('http') ? rawUrl : `${API_BASE}${rawUrl}`;
+        // Build full URLs for all variants
+        const buildUrl = (path: string) => path?.startsWith('http') ? path : `${API_BASE}${path}`;
         
-        const thumbnailUrl = data.data?.thumbnail?.startsWith('http') ? data.data.thumbnail : `${API_BASE}${data.data?.thumbnail || ''}`;
-        const mediumUrl = data.data?.medium?.startsWith('http') ? data.data.medium : `${API_BASE}${data.data?.medium || ''}`;
-        const largeUrl = data.data?.large?.startsWith('http') ? data.data.large : `${API_BASE}${data.data?.large || ''}`;
-        const zoomUrl = data.data?.zoom?.startsWith('http') ? data.data.zoom : `${API_BASE}${data.data?.zoom || ''}`;
+        const imageVariants: ImageVariants = {
+          thumbnail: buildUrl(data.data?.thumbnail),
+          medium: buildUrl(data.data?.medium),
+          large: buildUrl(data.data?.large),
+          zoom: buildUrl(data.data?.zoom),
+        };
         
-        setPreview(imageUrl);
-        onUpload(imageUrl, {
-          thumbnail: thumbnailUrl,
-          medium: mediumUrl,
-          large: largeUrl,
-          zoom: zoomUrl,
-        });
+        setVariants(imageVariants);
+        
+        // Use selected size
+        const selectedUrl = imageVariants[selectedSize as keyof ImageVariants] || imageVariants.large || imageVariants.medium;
+        setPreview(selectedUrl || null);
+        onUpload(selectedUrl || '', imageVariants);
       } else {
         // If API fails, use base64 as fallback
         const reader = new FileReader();
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string;
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
           setPreview(dataUrl);
           onUpload(dataUrl);
         };
@@ -102,8 +119,8 @@ export default function ImageUpload({
       console.error('Upload error:', err);
       // Fallback to base64
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
         setPreview(dataUrl);
         onUpload(dataUrl);
       };
@@ -113,8 +130,21 @@ export default function ImageUpload({
     }
   };
 
+  const handleSizeChange = (size: string) => {
+    setSelectedSize(size);
+    if (variants) {
+      const url = variants[size as keyof ImageVariants];
+      if (url) {
+        setPreview(url);
+        onUpload(url, variants);
+      }
+    }
+  };
+
   const handleRemove = () => {
     setPreview(null);
+    setVariants(null);
+    setOriginalFileName('');
     onUpload('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -129,57 +159,105 @@ export default function ImageUpload({
 
       {/* Preview */}
       {preview ? (
-        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '12px' }}>
-          <img
-            src={preview}
-            alt="Preview"
-            style={{
-              width: '200px',
-              height: '200px',
-              objectFit: 'cover',
-              borderRadius: '8px',
-              border: '2px solid #e5e5e5',
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleRemove}
-            style={{
-              position: 'absolute',
-              top: '-8px',
-              right: '-8px',
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: '2px solid white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              fontWeight: 'bold',
-            }}
-          >
-            ✕
-          </button>
-          {uploading && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: '12px' }}>
+            <img
+              src={preview}
+              alt="Preview"
+              style={{
+                width: '200px',
+                height: '200px',
+                objectFit: 'cover',
+                borderRadius: '8px',
+                border: '2px solid #e5e5e5',
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleRemove}
+              style={{
+                position: 'absolute',
+                top: '-8px',
+                right: '-8px',
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                border: '2px solid white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 'bold',
+              }}
+            >
+              ✕
+            </button>
+            {uploading && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '14px',
+              }}>
+                Uploading...
+              </div>
+            )}
+          </div>
+
+          {/* File info */}
+          {originalFileName && (
+            <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+              📁 {originalFileName}
+            </p>
+          )}
+
+          {/* Image Size Selector */}
+          {variants && (
             <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.5)',
+              padding: '16px',
+              backgroundColor: '#f9f9f9',
               borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '14px',
+              border: '1px solid #e5e5e5',
             }}>
-              Uploading...
+              <p style={{ fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
+                📐 Select Image Size to Use:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                {Object.entries(sizeLabels).map(([size, info]) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => handleSizeChange(size)}
+                    style={{
+                      padding: '10px 12px',
+                      border: selectedSize === size ? '2px solid #000' : '1px solid #e5e5e5',
+                      borderRadius: '6px',
+                      backgroundColor: selectedSize === size ? '#f0f0f0' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{info.label}</span>
+                      {selectedSize === size && <span style={{ color: '#22c55e' }}>✓</span>}
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{info.dimensions}</p>
+                    <p style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>{info.use}</p>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

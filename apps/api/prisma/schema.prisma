@@ -695,3 +695,43 @@ model TaxClass {
 
   products      Product[]
 }
+
+// ============================================
+// MENU MANAGEMENT
+// ============================================
+
+model Menu {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  location      String    @default("header")  // header, footer, sidebar
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items         MenuItem[]
+  
+  @@index([location])
+  @@index([isActive])
+}
+
+model MenuItem {
+  id            String    @id @default(uuid())
+  menuId        String
+  parentId      String?
+  label         String
+  url           String
+  icon          String?
+  target        String    @default("_self")  // _self, _blank
+  sortOrder     Int       @default(0)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  menu          Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  parent        MenuItem? @relation("MenuTree", fields: [parentId], references: [id])
+  children      MenuItem[] @relation("MenuTree")
+  
+  @@index([menuId])
+  @@index([parentId])
+  @@index([sortOrder])
+}
