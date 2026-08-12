@@ -44,26 +44,30 @@ export default function AdminProfilePage() {
       const token = localStorage.getItem('token');
       if (!token || !user) return;
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/${user.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/${user.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(profileForm),
       });
 
-      const updatedUser = { ...user, ...profileForm };
+      if (!res.ok) {
+        // Previously the catch/success paths both wrote to localStorage and
+        // reported success, so a failed update persisted only in this browser
+        // and silently reverted on the next login.
+        const err = await res.json().catch(() => ({}));
+        setMessage({ type: 'error', text: err.message || `Update failed (${res.status}). Nothing was saved.` });
+        return;
+      }
+
+      const saved = await res.json();
+      // Cache what the SERVER actually stored, not what we hoped to store.
+      const updatedUser = { ...user, ...(saved.data || profileForm) };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       window.dispatchEvent(new Event('authChange'));
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setMessage({ type: 'success', text: 'Profile saved to the database.' });
     } catch (err) {
-      const updatedUser = { ...user, ...profileForm };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-      window.dispatchEvent(new Event('authChange'));
-      setMessage({ type: 'success', text: 'Profile updated!' });
+      setMessage({ type: 'error', text: 'Could not reach the server. Your profile was NOT updated.' });
     } finally {
       setSaving(false);
     }

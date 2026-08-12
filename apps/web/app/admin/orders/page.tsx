@@ -21,38 +21,18 @@ export default function AdminOrdersPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Try API first
-      let apiOrders: any[] = [];
-      try {
-        const response = await api.getOrders(token);
-        apiOrders = response.data || [];
-        if (apiOrders.length > 0) {
-          setApiConnected(true);
-        }
-      } catch (err) {
-        console.log('API not available');
-      }
+      // Orders are financial records - the database is the only source of
+      // truth. Merging browser-local "orders" showed phantom orders that no
+      // other admin could see and that were absent from every report.
+      const response = await api.getOrders(token);
+      const apiOrders = response.data || [];
+      setApiConnected(true);
 
-      // Get local orders
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-
-      // Merge orders (API orders first, then local)
-      const allOrders = [...apiOrders];
-      localOrders.forEach((localOrder: any) => {
-        if (!allOrders.find(o => o.id === localOrder.id || o.orderNumber === localOrder.orderNumber)) {
-          allOrders.push({
-            ...localOrder,
-            user: localOrder.user || { firstName: 'Guest', lastName: '', email: 'N/A' },
-          });
-        }
-      });
-
-      // Sort by date (newest first)
-      allOrders.sort((a: any, b: any) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      apiOrders.sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
 
-      setOrders(allOrders);
+      setOrders(apiOrders);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
     } finally {
@@ -65,35 +45,28 @@ export default function AdminOrdersPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Try API
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`, {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`,
+        {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ status: newStatus }),
-        });
-      } catch (err) {
-        console.log('API not available, updating locally');
+        }
+      );
+
+      if (!res.ok) {
+        // The old code ignored the response and updated the UI anyway, so a
+        // rejected status change still looked like it had been applied.
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || `Could not update the order (${res.status}). No change was saved.`);
+        return;
       }
 
-      // Update locally
-      const updatedOrders = orders.map(order => 
-        order.id === orderId ? { ...order, status: newStatus } : order
-      );
-      setOrders(updatedOrders);
-
-      // Update localStorage
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const updatedLocal = localOrders.map((o: any) => 
-        o.id === orderId ? { ...o, status: newStatus } : o
-      );
-      localStorage.setItem('orders', JSON.stringify(updatedLocal));
-
+      // Re-read from the server so the row reflects what was actually stored.
+      fetchOrders();
     } catch (err) {
       console.error('Failed to update order:', err);
+      alert('Could not reach the server. The order status was NOT changed.');
     }
   };
 

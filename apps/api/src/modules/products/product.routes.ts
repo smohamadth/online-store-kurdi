@@ -34,7 +34,16 @@ const createProductSchema = z.object({
   categoryId: z.string().optional().nullable(),
   metaTitle: z.string().max(255).optional().nullable(),
   metaDescription: z.string().max(500).optional().nullable(),
-  metaKeywords: z.any().default([]),
+  // Stored as a JSON string column. Accept an array or a string from the
+  // client and always normalise to a string before it reaches Prisma;
+  // passing the raw array made every product create/update fail with a 500.
+  metaKeywords: z
+    .union([z.array(z.string()), z.string()])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      return typeof v === 'string' ? v : JSON.stringify(v);
+    }),
   images: z.array(z.any()).default([]),
   variants: z.array(z.any()).default([]),
 });
@@ -410,6 +419,7 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
     const product = await prisma.product.create({
       data: {
         ...data,
+        metaKeywords: data.metaKeywords ?? '[]',
         categoryId,
         slug,
         images: { create: data.images },

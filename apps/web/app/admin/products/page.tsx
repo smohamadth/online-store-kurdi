@@ -26,6 +26,7 @@ export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [saveError, setSaveError] = useState('');
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [productImages, setProductImages] = useState<GalleryImage[]>([]);
 
@@ -74,18 +75,10 @@ export default function AdminProductsPage() {
         setApiStatus('disconnected');
       }
 
-      // Get local products
-      const localProducts = JSON.parse(localStorage.getItem('localProducts') || '[]');
-
-      // Merge (API products first, then local)
-      const allProducts = [...apiProducts];
-      localProducts.forEach((local: any) => {
-        if (!allProducts.find(p => p.id === local.id)) {
-          allProducts.push(local);
-        }
-      });
-
-      setProducts(allProducts);
+      // Database is the single source of truth. Merging in localStorage
+      // "products" made records look saved when they had never reached the
+      // server - they vanished on any other device or browser.
+      setProducts(apiProducts);
     } catch (err) {
       console.error('Failed to fetch products:', err);
       setProducts([]);
@@ -101,12 +94,17 @@ export default function AdminProductsPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      // Refresh products
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || `Delete failed (${res.status})`);
+        return;
+      }
+
       fetchProducts();
     } catch (err) {
       console.error('Failed to delete product:', err);
@@ -116,13 +114,11 @@ export default function AdminProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Find category info for local storage
-    const selectedCategory = categories.find(c => c.id === formData.categoryId);
-    
-    // Save product locally even if API fails
-    const productData = {
-      id: editingProduct?.id || Date.now().toString(),
+    setSaveError('');
+
+    // The database generates ids. This used to mint a Date.now() id for the
+    // localStorage copy and send it to the API as well.
+    const productData: any = {
       name: formData.name,
       sku: formData.sku,
       description: formData.description,
@@ -141,7 +137,6 @@ export default function AdminProductsPage() {
         large: img.variants?.large || null,
         zoom: img.variants?.zoom || null,
       })),
-      category: selectedCategory || { id: formData.categoryId || '', name: 'General', slug: 'general' },
       variants: [],
       status: formData.status,
       type: formData.type,
@@ -175,29 +170,22 @@ export default function AdminProductsPage() {
           fetchProducts();
           return;
         }
-      }
-    } catch (err) {
-      console.log('API not available, saving locally');
-    }
 
-    // Save locally
-    const localProducts = JSON.parse(localStorage.getItem('localProducts') || '[]');
-    
-    if (editingProduct) {
-      const index = localProducts.findIndex((p: any) => p.id === editingProduct.id);
-      if (index >= 0) {
-        localProducts[index] = productData;
+        // Show the real reason instead of pretending the save worked.
+        const err = await response.json().catch(() => ({}));
+        const detail = Array.isArray(err.errors) && err.errors.length
+          ? err.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+          : err.message || `Request failed (${response.status})`;
+        setSaveError(detail);
+        return;
       }
-    } else {
-      localProducts.push(productData);
+
+      setSaveError('You are signed out. Please sign in again.');
+    } catch (err) {
+      // Previously this silently wrote to localStorage and closed the modal,
+      // so the product looked saved but never reached the database.
+      setSaveError('Could not reach the server. The product was NOT saved.');
     }
-    
-    localStorage.setItem('localProducts', JSON.stringify(localProducts));
-    
-    setShowAddModal(false);
-    setEditingProduct(null);
-    resetForm();
-    fetchProducts();
   };
 
   const resetForm = () => {
@@ -483,6 +471,19 @@ export default function AdminProductsPage() {
             </h2>
             
             <form onSubmit={handleSubmit}>
+              {saveError && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                  color: '#991b1b',
+                  fontSize: '14px',
+                }}>
+                  <strong>Not saved.</strong> {saveError}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Name *</label>

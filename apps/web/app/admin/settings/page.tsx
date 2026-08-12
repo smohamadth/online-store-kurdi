@@ -68,24 +68,33 @@ export default function AdminSettingsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      if (token) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/settings`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(storeSettings),
-        });
+      if (!token) {
+        setMessage({ type: 'error', text: 'You are signed out. Please sign in again.' });
+        return;
       }
 
-      localStorage.setItem('storeSettings', JSON.stringify(storeSettings));
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(storeSettings),
+      });
+
+      if (!res.ok) {
+        // This used to report "Settings saved!" regardless of the response and
+        // then write to localStorage, so a rejected save looked successful and
+        // the change was invisible to every other device.
+        const err = await res.json().catch(() => ({}));
+        setMessage({ type: 'error', text: err.message || `Save failed (${res.status}). Nothing was stored.` });
+        return;
+      }
+
+      const saved = await res.json();
+      // Mirror the SERVER's response locally purely as an offline cache.
+      localStorage.setItem('storeSettings', JSON.stringify(saved.data || storeSettings));
       window.dispatchEvent(new Event('settingsChange'));
-      setMessage({ type: 'success', text: 'Settings saved!' });
+      setMessage({ type: 'success', text: 'Settings saved to the database.' });
     } catch (err) {
-      localStorage.setItem('storeSettings', JSON.stringify(storeSettings));
-      window.dispatchEvent(new Event('settingsChange'));
-      setMessage({ type: 'success', text: 'Settings saved locally!' });
+      setMessage({ type: 'error', text: 'Could not reach the server. Your changes were NOT saved.' });
     } finally {
       setSaving(false);
     }

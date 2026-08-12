@@ -6,33 +6,43 @@ import { z } from 'zod';
 
 const router = Router();
 
+// Every optional text field must tolerate null. The admin form round-trips the
+// object it fetched from this same endpoint, and unset columns come back as
+// null - so saving settings failed with a 400 whenever any field was empty.
+// The old UI reported "Settings saved!" regardless, hiding the failure.
+const nullableText = z.string().optional().nullable();
+const nullableUrl = z
+  .union([z.string().url(), z.literal(''), z.null()])
+  .optional()
+  .transform((v) => (v === '' ? null : v));
+
 // Validation schema
 const settingsSchema = z.object({
   storeName: z.string().min(1).max(255).optional(),
-  storeDescription: z.string().optional(),
-  storeEmail: z.string().email().optional(),
-  storePhone: z.string().optional(),
-  storeAddress: z.string().optional(),
-  storeCity: z.string().optional(),
-  storeState: z.string().optional(),
-  storeZipCode: z.string().optional(),
-  storeCountry: z.string().optional(),
-  currency: z.string().optional(),
-  currencySymbol: z.string().optional(),
-  currencyPosition: z.enum(['before', 'after']).optional(),
-  weightUnit: z.enum(['kg', 'lb']).optional(),
-  dimensionUnit: z.enum(['cm', 'in']).optional(),
-  timezone: z.string().optional(),
-  dateFormat: z.string().optional(),
-  facebookUrl: z.string().url().optional().nullable(),
-  instagramUrl: z.string().url().optional().nullable(),
-  twitterUrl: z.string().url().optional().nullable(),
-  youtubeUrl: z.string().url().optional().nullable(),
+  storeDescription: nullableText,
+  storeEmail: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
+  storePhone: nullableText,
+  storeAddress: nullableText,
+  storeCity: nullableText,
+  storeState: nullableText,
+  storeZipCode: nullableText,
+  storeCountry: nullableText,
+  currency: nullableText,
+  currencySymbol: nullableText,
+  currencyPosition: z.enum(['before', 'after']).optional().nullable(),
+  weightUnit: z.enum(['kg', 'lb']).optional().nullable(),
+  dimensionUnit: z.enum(['cm', 'in']).optional().nullable(),
+  timezone: nullableText,
+  dateFormat: nullableText,
+  facebookUrl: nullableUrl,
+  instagramUrl: nullableUrl,
+  twitterUrl: nullableUrl,
+  youtubeUrl: nullableUrl,
   metaTitle: z.string().max(255).optional().nullable(),
   metaDescription: z.string().max(500).optional().nullable(),
   googleAnalyticsId: z.string().optional().nullable(),
   googleTagManagerId: z.string().optional().nullable(),
-  maintenanceMode: z.boolean().optional(),
+  maintenanceMode: z.boolean().optional().nullable(),
   maintenanceMessage: z.string().optional().nullable(),
   privacyPolicyUrl: z.string().optional().nullable(),
   termsOfServiceUrl: z.string().optional().nullable(),

@@ -155,7 +155,7 @@ export default function AdminReviewsPage() {
         }}>
           <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
           <p style={{ fontSize: '14px', color: '#92400e', marginTop: '4px' }}>
-            Reviews shown are from localStorage. Start API to see database reviews: <code>npm run dev:api</code>
+            Could not load reviews from the database. Start the API and refresh: <code>npm run dev:api</code>
           </p>
         </div>
       )}
