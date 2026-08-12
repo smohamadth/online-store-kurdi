@@ -79,13 +79,22 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS),
-  max: parseInt(env.RATE_LIMIT_MAX),
+  // A single page view makes ~8 API calls (settings, menus, categories,
+  // products, banners...), so a 100/15min budget locked the whole storefront
+  // out after roughly a dozen page views and every request returned 429.
+  // Development gets a generous budget; production keeps a real limit.
+  max: isDevelopment ? 10000 : parseInt(env.RATE_LIMIT_MAX),
   message: {
-    error: 'Too many requests from this IP, please try again later.',
+    status: 'error',
+    message: 'Too many requests from this IP, please try again later.',
+    code: 'RATE_LIMITED',
     retryAfter: Math.ceil(parseInt(env.RATE_LIMIT_WINDOW_MS) / 1000),
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Read-only GETs are cheap and are what page loads are made of; only count
+  // mutations plus auth attempts against the budget.
+  skip: (req) => isDevelopment && req.method === 'GET',
 });
 
 // Apply rate limiting to API routes
