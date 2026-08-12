@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
 import { api, Product, Category, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
@@ -10,6 +10,7 @@ import { useIsMobile } from '@/lib/hooks';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -24,13 +25,18 @@ function ProductsContent() {
     fetchCategories();
   }, []);
   
-  // Update from URL params when they change
+  // Legacy support: /category/clothing is no longer the canonical
+  // category URL. Redirect to /category/clothing so old links, bookmarks and
+  // anything already indexed keep working and consolidate on one URL.
   useEffect(() => {
     const category = searchParams.get('category');
+    if (category && category !== 'all') {
+      router.replace(`/category/${category}`);
+      return;
+    }
     const query = searchParams.get('q');
-    if (category) setSelectedCategory(category);
     if (query) setSearchQuery(query);
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const fetchProducts = async () => {
     try {
@@ -161,10 +167,12 @@ function ProductsContent() {
             All
           </button>
           {categories.map((cat) => (
-            <button
+            <Link
               key={cat.slug}
-              onClick={() => setSelectedCategory(cat.slug)}
+              href={`/category/${cat.slug}`}
               style={{
+                display: 'inline-block',
+                textDecoration: 'none',
                 padding: '8px 16px',
                 borderRadius: '6px',
                 fontSize: '14px',
@@ -179,7 +187,7 @@ function ProductsContent() {
               }}
             >
               {cat.name}
-            </button>
+            </Link>
           ))}
         </div>
 

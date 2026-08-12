@@ -490,7 +490,7 @@ function CategoryTile({
 
   return (
     <Link
-      href={`/products?category=${category.slug}`}
+      href={`/category/${category.slug}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

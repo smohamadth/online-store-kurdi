@@ -81,18 +81,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // API not available during build
   }
 
-  // Category pages
-  const categoryPages: MetadataRoute.Sitemap = [
-    'electronics',
-    'clothing',
-    'books',
-    'digital-products',
-  ].map(category => ({
-    url: `${baseUrl}/products?category=${category}`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly',
-    priority: 0.7,
-  }));
+  // Category pages - fetched from the API rather than hardcoded, so
+  // categories the admin adds are included automatically.
+  let categoryPages: MetadataRoute.Sitemap = [];
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/categories`);
+    if (res.ok) {
+      const data = await res.json();
+      categoryPages = (data.data || []).map((c: any) => ({
+        url: `${baseUrl}/category/${c.slug}`,
+        lastModified: new Date(),
+        changeFrequency: 'weekly' as const,
+        priority: 0.7,
+      }));
+    }
+  } catch {
+    // API unavailable at build time - ship the sitemap without categories
+    // rather than failing the whole build.
+  }
 
   return [...staticPages, ...productPages, ...categoryPages];
 }

@@ -122,8 +122,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
   // Default menu items if API doesn't return a menu
   const defaultItems: MenuItemData[] = [
     { id: '1', label: 'Products', url: '/products', icon: '📦' },
-    { id: '2', label: 'Electronics', url: '/products?category=electronics', icon: '💻' },
-    { id: '3', label: 'Clothing', url: '/products?category=clothing', icon: '👕' },
+    { id: '2', label: 'Electronics', url: '/category/electronics', icon: '💻' },
+    { id: '3', label: 'Clothing', url: '/category/clothing', icon: '👕' },
     { id: '4', label: 'Cart', url: '/cart', icon: '🛒' },
   ];
 
@@ -399,8 +399,8 @@ function Header() {
   // Default menu items if API doesn't return a menu
   const defaultItems: MenuItemData[] = [
     { id: '1', label: 'Products', url: '/products' },
-    { id: '2', label: 'Electronics', url: '/products?category=electronics' },
-    { id: '3', label: 'Clothing', url: '/products?category=clothing' },
+    { id: '2', label: 'Electronics', url: '/category/electronics' },
+    { id: '3', label: 'Clothing', url: '/category/clothing' },
   ];
 
   const navItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
@@ -679,9 +679,9 @@ function DynamicFooter() {
   // Default footer items
   const defaultFooterItems: MenuItemData[] = [
     { id: 'f1', label: 'All Products', url: '/products' },
-    { id: 'f2', label: 'Electronics', url: '/products?category=electronics' },
-    { id: 'f3', label: 'Clothing', url: '/products?category=clothing' },
-    { id: 'f4', label: 'Books', url: '/products?category=books' },
+    { id: 'f2', label: 'Electronics', url: '/category/electronics' },
+    { id: 'f3', label: 'Clothing', url: '/category/clothing' },
+    { id: 'f4', label: 'Books', url: '/category/books' },
   ];
 
   const footerItems = footerMenu?.items?.length ? footerMenu.items : defaultFooterItems;

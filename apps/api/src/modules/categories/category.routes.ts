@@ -44,8 +44,12 @@ router.get('/categories/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { id },
+    // Accept either a UUID or a slug. Category pages are addressed by slug
+    // (/category/clothing), and looking that up by id alone returned 404.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const category = await prisma.category.findFirst({
+      where: isUuid ? { id } : { slug: id },
       include: {
         _count: {
           select: { products: true },
@@ -158,8 +162,12 @@ router.delete('/categories/:id', authenticate, authorize('admin', 'manager'), as
   try {
     const { id } = req.params;
 
-    const category = await prisma.category.findUnique({
-      where: { id },
+    // Accept either a UUID or a slug. Category pages are addressed by slug
+    // (/category/clothing), and looking that up by id alone returned 404.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const category = await prisma.category.findFirst({
+      where: isUuid ? { id } : { slug: id },
       include: { _count: { select: { products: true } } },
     });
 
