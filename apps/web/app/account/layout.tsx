@@ -1,5 +1,7 @@
 'use client';
 
+import { LoadingState } from '@/components/Spinner';
+
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -58,7 +60,7 @@ export default function AccountLayout({
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <p style={{ color: '#666' }}>Loading...</p>
+        <LoadingState message="Loading…" minHeight={240} />
       </div>
     );
   }

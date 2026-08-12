@@ -1,5 +1,7 @@
 'use client';
 
+import { LoadingState } from '@/components/Spinner';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -68,7 +70,7 @@ export default function AdminDashboard() {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading dashboard...</p></div>;
+    return <LoadingState message="Loading dashboard…" minHeight={400} />;
   }
 
   return (

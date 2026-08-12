@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import ImageUpload from '@/components/ImageUpload';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
+import { LoadingState } from '@/components/Spinner';
 
 interface Banner {
   id: string;
@@ -219,7 +220,7 @@ export default function AdminBannersPage() {
       )}
 
       {loading ? (
-        <p style={{ marginTop: '32px', color: '#666' }}>Loading…</p>
+        <LoadingState message="Loading banners…" minHeight={260} />
       ) : banners.length === 0 ? (
         <div style={{ marginTop: '32px', padding: '48px', textAlign: 'center', border: '2px dashed #e5e5e5', borderRadius: '12px' }}>
           <div style={{ fontSize: '44px' }}>🖼️</div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { ButtonSpinner } from '@/components/Spinner';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -227,7 +229,11 @@ export default function RegisterPage() {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <ButtonSpinner /> Creating account…
+              </span>
+            ) : 'Create Account'}
           </button>
         </form>
 

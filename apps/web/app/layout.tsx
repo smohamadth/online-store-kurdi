@@ -1,6 +1,7 @@
 'use client';
 
 import './globals.css';
+import { Suspense } from 'react';
 import { CartProvider, useCart } from '@/lib/store';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -9,6 +10,7 @@ import SearchBar from '@/components/SearchBar';
 import { useStoreSettings } from '@/lib/settings';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
+import RouteProgress from '@/components/RouteProgress';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 // Types
@@ -833,6 +835,11 @@ export default function RootLayout({
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <ErrorBoundary>
+        {/* useSearchParams() must sit inside Suspense or the whole route
+            opts out of static rendering and the build errors. */}
+        <Suspense fallback={null}>
+          <RouteProgress />
+        </Suspense>
         <ToastContainer />
         <CartProvider>
           <Header />

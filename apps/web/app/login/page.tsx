@@ -1,5 +1,7 @@
 'use client';
 
+import { ButtonSpinner } from '@/components/Spinner';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -165,7 +167,11 @@ export default function LoginPage() {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <ButtonSpinner /> Signing in…
+              </span>
+            ) : 'Sign In'}
           </button>
         </form>
 

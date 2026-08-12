@@ -1,5 +1,7 @@
 'use client';
 
+import { LoadingState } from '@/components/Spinner';
+
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -235,7 +237,7 @@ function ResetPasswordContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading...</p></div>}>
+    <Suspense fallback={<LoadingState message="Loading…" minHeight={320} />}>
       <ResetPasswordContent />
     </Suspense>
   );

@@ -123,3 +123,52 @@ html {
     padding: 0 2rem;
   }
 }
+
+/* ------------------------------------------------------------------
+   Global keyframes
+   These live here (not in styled-jsx) because components animate via
+   inline style={{ animation: 'pulse ...' }}. styled-jsx SCOPES keyframe
+   names to the component, so an inline style could never resolve them —
+   every skeleton "animation" in the app was silently dead.
+   ------------------------------------------------------------------ */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%) scaleX(0.4); }
+  50%  { transform: translateX(0%)    scaleX(0.7); }
+  100% { transform: translateX(100%)  scaleX(0.4); }
+}
+
+/* Anyone who asks for less motion gets none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

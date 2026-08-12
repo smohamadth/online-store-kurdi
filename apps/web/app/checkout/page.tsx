@@ -1,5 +1,7 @@
 'use client';
 
+import { ButtonSpinner } from '@/components/Spinner';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -447,7 +449,11 @@ export default function CheckoutPage() {
                 fontSize: '16px', fontWeight: 600,
                 cursor: (loading || !selectedShipping) ? 'not-allowed' : 'pointer',
               }}>
-                {loading ? 'Placing Order...' : 'Place Order'}
+                {loading ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                    <ButtonSpinner /> Placing Order…
+                  </span>
+                ) : 'Place Order'}
               </button>
 
               <p style={{ marginTop: '16px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
