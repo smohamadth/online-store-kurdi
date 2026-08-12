@@ -199,6 +199,10 @@ model ProductImage {
   productId     String
   url           String
   alt           String?
+  thumbnail     String?
+  medium        String?
+  large         String?
+  zoom          String?
   sortOrder     Int       @default(0)
   isPrimary     Boolean   @default(false)
   createdAt     DateTime  @default(now())

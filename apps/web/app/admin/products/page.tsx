@@ -14,6 +14,12 @@ export default function AdminProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [productImage, setProductImage] = useState('');
+  const [productImageVariants, setProductImageVariants] = useState<{
+    thumbnail?: string;
+    medium?: string;
+    large?: string;
+    zoom?: string;
+  } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -118,7 +124,15 @@ export default function AdminProductsPage() {
       compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : null,
       quantity: parseInt(formData.quantity) || 0,
       categoryId: formData.categoryId,
-      images: productImage ? [{ url: productImage, alt: formData.name, isPrimary: true }] : [],
+      images: productImage ? [{ 
+        url: productImage, 
+        alt: formData.name, 
+        isPrimary: true,
+        thumbnail: productImageVariants?.thumbnail || null,
+        medium: productImageVariants?.medium || null,
+        large: productImageVariants?.large || null,
+        zoom: productImageVariants?.zoom || null,
+      }] : [],
       category: selectedCategory || { id: formData.categoryId || '', name: 'General', slug: 'general' },
       variants: [],
       status: formData.status,
@@ -544,7 +558,10 @@ export default function AdminProductsPage() {
               {/* Image Upload */}
               <div style={{ marginBottom: '24px' }}>
                 <ImageUpload
-                  onUpload={(url) => setProductImage(url)}
+                  onUpload={(url, variants) => {
+                    setProductImage(url);
+                    setProductImageVariants(variants || null);
+                  }}
                   currentImage={productImage}
                   label="Product Image"
                 />

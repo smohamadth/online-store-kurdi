@@ -192,22 +192,50 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
         )}
 
         {/* Navigation */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {menuItems.map((item) => (
-            <Link 
-              key={item.id}
-              href={item.url} 
-              onClick={onClose}
-              target={item.target || '_self'}
-              style={{ 
-                padding: '12px 16px', 
-                borderRadius: '6px',
-                fontSize: '16px',
-                display: 'block',
-              }}
-            >
-              {item.icon ? `${item.icon} ` : ''}{item.label}
-            </Link>
+            <div key={item.id}>
+              <Link 
+                href={item.url} 
+                onClick={onClose}
+                target={item.target || '_self'}
+                style={{ 
+                  padding: '12px 16px', 
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span>{item.icon ? `${item.icon} ` : ''}{item.label}</span>
+                {item.children && item.children.length > 0 && (
+                  <span style={{ fontSize: '12px', color: '#999' }}>›</span>
+                )}
+              </Link>
+              {/* Children */}
+              {item.children && item.children.length > 0 && (
+                <div style={{ paddingLeft: '24px' }}>
+                  {item.children.map((child) => (
+                    <Link 
+                      key={child.id}
+                      href={child.url} 
+                      onClick={onClose}
+                      target={child.target || '_self'}
+                      style={{ 
+                        padding: '10px 16px', 
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        display: 'block',
+                        color: '#666',
+                      }}
+                    >
+                      {child.icon ? `${child.icon} ` : ''}{child.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 
@@ -361,6 +389,7 @@ function Header() {
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
@@ -478,14 +507,65 @@ function Header() {
               fontWeight: 500,
             }}>
               {navItems.map((item) => (
-                <Link 
+                <div
                   key={item.id}
-                  href={item.url} 
-                  target={item.target || '_self'}
-                  style={{ textDecoration: 'none', color: '#333' }}
+                  style={{ position: 'relative' }}
+                  onMouseEnter={() => setHoveredItem(item.id)}
+                  onMouseLeave={() => setHoveredItem(null)}
                 >
-                  {item.icon ? `${item.icon} ` : ''}{item.label}
-                </Link>
+                  <Link 
+                    href={item.url} 
+                    target={item.target || '_self'}
+                    style={{ 
+                      textDecoration: 'none', 
+                      color: '#333',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '8px 0',
+                    }}
+                  >
+                    {item.icon ? `${item.icon} ` : ''}{item.label}
+                    {item.children && item.children.length > 0 && (
+                      <span style={{ fontSize: '10px', marginLeft: '2px' }}>▼</span>
+                    )}
+                  </Link>
+                  
+                  {/* Dropdown for items with children */}
+                  {item.children && item.children.length > 0 && hoveredItem === item.id && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: '0',
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      minWidth: '180px',
+                      padding: '8px 0',
+                      zIndex: 100,
+                    }}>
+                      {item.children.map((child) => (
+                        <Link
+                          key={child.id}
+                          href={child.url}
+                          target={child.target || '_self'}
+                          style={{
+                            display: 'block',
+                            padding: '10px 16px',
+                            fontSize: '14px',
+                            color: '#333',
+                            textDecoration: 'none',
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                        >
+                          {child.icon ? `${child.icon} ` : ''}{child.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </nav>
           )}
@@ -640,9 +720,16 @@ function DynamicFooter() {
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {footerItems.map((item) => (
-              <Link key={item.id} href={item.url} style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
-                {item.icon ? `${item.icon} ` : ''}{item.label}
-              </Link>
+              <div key={item.id}>
+                <Link href={item.url} style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                  {item.icon ? `${item.icon} ` : ''}{item.label}
+                </Link>
+                {item.children?.map((child) => (
+                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: '#888', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
+                    {child.icon ? `${child.icon} ` : ''}{child.label}
+                  </Link>
+                ))}
+              </div>
             ))}
           </div>
         </div>

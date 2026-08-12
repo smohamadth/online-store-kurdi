@@ -222,6 +222,32 @@ export function getImageUrl(url: string | undefined | null): string {
   return `${baseUrl}${url}`;
 }
 
+// Helper to get appropriate image size for context
+export function getProductImage(image: any, context: 'thumbnail' | 'card' | 'detail' | 'zoom' = 'card'): string {
+  if (!image) return '';
+  
+  // Try to use specific variant based on context
+  let url = '';
+  switch (context) {
+    case 'thumbnail':
+      url = image.thumbnail || image.url;
+      break;
+    case 'card':
+      url = image.medium || image.thumbnail || image.url;
+      break;
+    case 'detail':
+      url = image.large || image.medium || image.url;
+      break;
+    case 'zoom':
+      url = image.zoom || image.large || image.url;
+      break;
+    default:
+      url = image.url;
+  }
+  
+  return getImageUrl(url);
+}
+
 // Helper to get category emoji
 export function getCategoryEmoji(category: string): string {
   switch (category?.toLowerCase()) {

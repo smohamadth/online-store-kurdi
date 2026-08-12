@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
-import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
+import { api, Product, Category, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
 
@@ -296,7 +296,7 @@ function ProductsContent() {
               }}>
                 {product.images && product.images.length > 0 && product.images[0]?.url ? (
                   <img 
-                    src={getImageUrl(product.images[0].url)} 
+                    src={getProductImage(product.images[0], 'card')} 
                     alt={product.name}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />

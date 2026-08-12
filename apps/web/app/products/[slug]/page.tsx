@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useCart } from '@/lib/store';
-import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
+import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
@@ -278,7 +278,7 @@ export default function ProductPage() {
           }}>
             {allImages[selectedImageIndex]?.url ? (
               <img 
-                src={getImageUrl(allImages[selectedImageIndex].url)} 
+                src={getProductImage(allImages[selectedImageIndex], 'detail')} 
                 alt={product.name}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -309,7 +309,7 @@ export default function ProductPage() {
                   }}
                 >
                   {img.url ? (
-                    <img src={getImageUrl(img.url)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={getProductImage(img, 'thumbnail')} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: '24px' }}>{getCategoryEmoji(product.category?.name)}</span>
                   )}
