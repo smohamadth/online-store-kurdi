@@ -11,6 +11,23 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
+// Types
+interface MenuItemData {
+  id: string;
+  label: string;
+  url: string;
+  icon?: string | null;
+  target?: string;
+  children?: MenuItemData[];
+}
+
+interface MenuData {
+  id: string;
+  name: string;
+  location: string;
+  items: MenuItemData[];
+}
+
 // Custom hook for mobile detection
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -26,6 +43,31 @@ function useIsMobile() {
   }, []);
 
   return isMobile;
+}
+
+// Fetch menu by location from API
+function useMenu(location: string) {
+  const [menu, setMenu] = useState<MenuData | null>(null);
+
+  useEffect(() => {
+    const fetchMenu = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${API_URL}/menus/location/${location}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data) {
+            setMenu(data.data);
+          }
+        }
+      } catch (err) {
+        // API not available, use defaults
+      }
+    };
+    fetchMenu();
+  }, [location]);
+
+  return menu;
 }
 
 function CartIcon() {
@@ -75,6 +117,17 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
   onLogout: () => void;
 }) {
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const headerMenu = useMenu('header');
+
+  // Default menu items if API doesn't return a menu
+  const defaultItems: MenuItemData[] = [
+    { id: '1', label: 'Products', url: '/products', icon: '📦' },
+    { id: '2', label: 'Electronics', url: '/products?category=electronics', icon: '💻' },
+    { id: '3', label: 'Clothing', url: '/products?category=clothing', icon: '👕' },
+    { id: '4', label: 'Cart', url: '/cart', icon: '🛒' },
+  ];
+
+  const menuItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
 
   return (
     <div style={{
@@ -140,54 +193,22 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
 
         {/* Navigation */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <Link 
-            href="/products" 
-            onClick={onClose}
-            style={{ 
-              padding: '12px 16px', 
-              borderRadius: '6px',
-              fontSize: '16px',
-              display: 'block',
-            }}
-          >
-            📦 Products
-          </Link>
-          <Link 
-            href="/products?category=electronics" 
-            onClick={onClose}
-            style={{ 
-              padding: '12px 16px', 
-              borderRadius: '6px',
-              fontSize: '16px',
-              display: 'block',
-            }}
-          >
-            💻 Electronics
-          </Link>
-          <Link 
-            href="/products?category=clothing" 
-            onClick={onClose}
-            style={{ 
-              padding: '12px 16px', 
-              borderRadius: '6px',
-              fontSize: '16px',
-              display: 'block',
-            }}
-          >
-            👕 Clothing
-          </Link>
-          <Link 
-            href="/cart" 
-            onClick={onClose}
-            style={{ 
-              padding: '12px 16px', 
-              borderRadius: '6px',
-              fontSize: '16px',
-              display: 'block',
-            }}
-          >
-            🛒 Cart
-          </Link>
+          {menuItems.map((item) => (
+            <Link 
+              key={item.id}
+              href={item.url} 
+              onClick={onClose}
+              target={item.target || '_self'}
+              style={{ 
+                padding: '12px 16px', 
+                borderRadius: '6px',
+                fontSize: '16px',
+                display: 'block',
+              }}
+            >
+              {item.icon ? `${item.icon} ` : ''}{item.label}
+            </Link>
+          ))}
         </nav>
 
         {/* User actions */}
@@ -344,6 +365,16 @@ function Header() {
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
   const { settings } = useStoreSettings();
+  const headerMenu = useMenu('header');
+
+  // Default menu items if API doesn't return a menu
+  const defaultItems: MenuItemData[] = [
+    { id: '1', label: 'Products', url: '/products' },
+    { id: '2', label: 'Electronics', url: '/products?category=electronics' },
+    { id: '3', label: 'Clothing', url: '/products?category=clothing' },
+  ];
+
+  const navItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
 
   useEffect(() => {
     setMounted(true);
@@ -446,15 +477,16 @@ function Header() {
               fontSize: '14px',
               fontWeight: 500,
             }}>
-              <Link href="/products" style={{ textDecoration: 'none', color: '#333' }}>
-                Products
-              </Link>
-              <Link href="/products?category=electronics" style={{ textDecoration: 'none', color: '#333' }}>
-                Electronics
-              </Link>
-              <Link href="/products?category=clothing" style={{ textDecoration: 'none', color: '#333' }}>
-                Clothing
-              </Link>
+              {navItems.map((item) => (
+                <Link 
+                  key={item.id}
+                  href={item.url} 
+                  target={item.target || '_self'}
+                  style={{ textDecoration: 'none', color: '#333' }}
+                >
+                  {item.icon ? `${item.icon} ` : ''}{item.label}
+                </Link>
+              ))}
             </nav>
           )}
           
@@ -560,6 +592,127 @@ function Header() {
   );
 }
 
+function DynamicFooter() {
+  const { settings } = useStoreSettings();
+  const footerMenu = useMenu('footer');
+
+  // Default footer items
+  const defaultFooterItems: MenuItemData[] = [
+    { id: 'f1', label: 'All Products', url: '/products' },
+    { id: 'f2', label: 'Electronics', url: '/products?category=electronics' },
+    { id: 'f3', label: 'Clothing', url: '/products?category=clothing' },
+    { id: 'f4', label: 'Books', url: '/products?category=books' },
+  ];
+
+  const footerItems = footerMenu?.items?.length ? footerMenu.items : defaultFooterItems;
+
+  return (
+    <footer style={{
+      borderTop: '1px solid #e5e5e5',
+      backgroundColor: '#f9f9f9',
+      marginTop: '64px',
+    }}>
+      <div style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '40px 16px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '32px',
+      }}>
+        <div>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>{settings.storeName}</h3>
+          <p style={{ fontSize: '14px', color: '#666' }}>
+            {settings.storeDescription}
+          </p>
+          {settings.storeEmail && (
+            <p style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>
+              📧 {settings.storeEmail}
+            </p>
+          )}
+          {settings.storePhone && (
+            <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+              📞 {settings.storePhone}
+            </p>
+          )}
+        </div>
+        <div>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {footerItems.map((item) => (
+              <Link key={item.id} href={item.url} style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                {item.icon ? `${item.icon} ` : ''}{item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Link href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</Link>
+            <Link href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</Link>
+            <Link href="/account/addresses" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Addresses</Link>
+            <Link href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</Link>
+          </div>
+        </div>
+        <div>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
+            <Link href="/track-order" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Track Order</Link>
+            <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
+            <Link href="/returns" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Returns</Link>
+          </div>
+        </div>
+        <div>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Legal</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Link href="/privacy" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Privacy Policy</Link>
+            <Link href="/terms" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Terms of Service</Link>
+          </div>
+        </div>
+        <div>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Connect</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {settings.facebookUrl && (
+              <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                Facebook
+              </a>
+            )}
+            {settings.instagramUrl && (
+              <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                Instagram
+              </a>
+            )}
+            {settings.twitterUrl && (
+              <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                Twitter
+              </a>
+            )}
+            {settings.youtubeUrl && (
+              <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                YouTube
+              </a>
+            )}
+            {!settings.facebookUrl && !settings.instagramUrl && !settings.twitterUrl && !settings.youtubeUrl && (
+              <p style={{ fontSize: '14px', color: '#666' }}>Coming soon</p>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={{
+        borderTop: '1px solid #e5e5e5',
+        padding: '20px',
+        textAlign: 'center',
+      }}>
+        <p style={{ fontSize: '14px', color: '#666' }}>
+          © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
+        </p>
+      </div>
+    </footer>
+  );
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -605,108 +758,7 @@ export default function RootLayout({
           </main>
 
           {/* Footer */}
-          <footer style={{
-            borderTop: '1px solid #e5e5e5',
-            backgroundColor: '#f9f9f9',
-            marginTop: '64px',
-          }}>
-            <div style={{
-              maxWidth: '1200px',
-              margin: '0 auto',
-              padding: '40px 16px',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '32px',
-            }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>{settings.storeName}</h3>
-                <p style={{ fontSize: '14px', color: '#666' }}>
-                  {settings.storeDescription}
-                </p>
-                {settings.storeEmail && (
-                  <p style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>
-                    📧 {settings.storeEmail}
-                  </p>
-                )}
-                {settings.storePhone && (
-                  <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
-                    📞 {settings.storePhone}
-                  </p>
-                )}
-              </div>
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Link href="/products" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>All Products</Link>
-                  <Link href="/products?category=electronics" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Electronics</Link>
-                  <Link href="/products?category=clothing" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Clothing</Link>
-                  <Link href="/products?category=books" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Books</Link>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Link href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</Link>
-                  <Link href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</Link>
-                  <Link href="/account/addresses" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Addresses</Link>
-                  <Link href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</Link>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
-                  <Link href="/track-order" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Track Order</Link>
-                  <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
-                  <Link href="/returns" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Returns</Link>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Legal</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Link href="/privacy" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Privacy Policy</Link>
-                  <Link href="/terms" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Terms of Service</Link>
-                </div>
-              </div>
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Connect</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {settings.facebookUrl && (
-                    <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
-                      Facebook
-                    </a>
-                  )}
-                  {settings.instagramUrl && (
-                    <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
-                      Instagram
-                    </a>
-                  )}
-                  {settings.twitterUrl && (
-                    <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
-                      Twitter
-                    </a>
-                  )}
-                  {settings.youtubeUrl && (
-                    <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
-                      YouTube
-                    </a>
-                  )}
-                  {!settings.facebookUrl && !settings.instagramUrl && !settings.twitterUrl && !settings.youtubeUrl && (
-                    <p style={{ fontSize: '14px', color: '#666' }}>Coming soon</p>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div style={{
-              borderTop: '1px solid #e5e5e5',
-              padding: '20px',
-              textAlign: 'center',
-            }}>
-              <p style={{ fontSize: '14px', color: '#666' }}>
-                © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
-              </p>
-            </div>
-          </footer>
+          <DynamicFooter />
         </CartProvider>
         </ErrorBoundary>
       </body>
