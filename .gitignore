@@ -38,7 +38,9 @@ next-env.d.ts
 # Prisma
 apps/api/prisma/dev.db
 apps/api/prisma/dev.db-journal
-apps/api/prisma/migrations/
+# NOTE: migrations/ must be COMMITTED. It was ignored here, so a fresh clone
+# received no schema at all - `prisma migrate deploy` had nothing to apply and
+# tables like Banner never existed, making the admin gallery unusable.
 
 # IDE
 .vscode/

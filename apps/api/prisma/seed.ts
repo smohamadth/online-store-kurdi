@@ -397,6 +397,7 @@ async function main() {
 
   // Seed email templates
   await seedEmailTemplates();
+  const bannerCount = await seedBanners();
 
   console.log('✅ Database seeded successfully!');
   console.log('\n📋 Summary:');
@@ -406,6 +407,95 @@ async function main() {
   console.log(`   - Reviews: 3`);
   console.log(`   - Coupons: 2`);
   console.log(`   - Analytics events: 50`);
+  console.log(`   - Banners (homepage gallery): ${bannerCount}`);
+}
+
+// Homepage gallery (hero slider + promo tiles).
+// Without these rows the storefront falls back to a pre-load placeholder and
+// /admin/banners has nothing to edit, which makes the gallery look broken and
+// uneditable on a fresh install.
+async function seedBanners() {
+  const existing = await prisma.banner.count();
+  if (existing > 0) {
+    console.log(`   - Banners: ${existing} already present, skipping`);
+    return existing;
+  }
+
+  const banners = [
+    {
+      title: 'Discover Amazing Products',
+      subtitle: 'New Season',
+      description:
+        'Shop the latest electronics, clothing, books and digital products with fast shipping and great support.',
+      image: '',
+      linkUrl: '/products',
+      buttonText: 'Shop Now',
+      secondaryText: 'View Deals',
+      secondaryUrl: '/deals',
+      badge: 'Featured',
+      overlayColor: 'linear-gradient(120deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%)',
+      position: 'hero',
+      sortOrder: 0,
+    },
+    {
+      title: 'Up to 50% Off Selected Items',
+      subtitle: 'Limited Time',
+      description: 'Grab the best deals of the season before they are gone.',
+      image: '',
+      linkUrl: '/deals',
+      buttonText: 'Browse Deals',
+      overlayColor: 'linear-gradient(120deg,#7f1d1d 0%,#b91c1c 55%,#f97316 100%)',
+      position: 'hero',
+      sortOrder: 1,
+    },
+    {
+      title: 'Free Shipping On Orders Over 50',
+      subtitle: 'Every Day',
+      description: 'Fast, tracked delivery straight to your door.',
+      image: '',
+      linkUrl: '/products',
+      buttonText: 'Start Shopping',
+      overlayColor: 'linear-gradient(120deg,#064e3b 0%,#047857 60%,#10b981 100%)',
+      position: 'hero',
+      sortOrder: 2,
+    },
+    {
+      title: 'New Arrivals',
+      subtitle: 'Just In',
+      image: '',
+      linkUrl: '/products?sort=newest',
+      buttonText: 'Explore',
+      overlayColor: 'linear-gradient(120deg,#312e81,#6366f1)',
+      position: 'promo',
+      sortOrder: 0,
+    },
+    {
+      title: 'Best Sellers',
+      subtitle: 'Top Rated',
+      image: '',
+      linkUrl: '/products?sort=popular',
+      buttonText: 'See All',
+      overlayColor: 'linear-gradient(120deg,#7c2d12,#ea580c)',
+      position: 'promo',
+      sortOrder: 1,
+    },
+    {
+      title: 'Clearance',
+      subtitle: 'Final Sale',
+      image: '',
+      linkUrl: '/deals',
+      buttonText: 'Save Now',
+      overlayColor: 'linear-gradient(120deg,#0c4a6e,#0ea5e9)',
+      position: 'promo',
+      sortOrder: 2,
+    },
+  ];
+
+  for (const data of banners) {
+    await prisma.banner.create({ data });
+  }
+
+  return banners.length;
 }
 
 main()

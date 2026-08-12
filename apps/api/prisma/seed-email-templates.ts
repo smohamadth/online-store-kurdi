@@ -26,7 +26,7 @@ const emailTemplates = [
           <div class="content">
             <p>Hi {{customerName}},</p>
             <p>Thank you for your order #{{orderNumber}}!</p>
-            <p>Total: ${{orderTotal}}</p>
+            <p>Total: \${{orderTotal}}</p>
             <p>We'll send you shipping updates soon.</p>
           </div>
         </div>
