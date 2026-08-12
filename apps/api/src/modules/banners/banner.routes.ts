@@ -6,13 +6,27 @@ import { logger } from '../../utils/logger';
 
 const router = Router();
 
-const nullableStr = z.string().max(1000).optional().nullable().or(z.literal('').transform(() => null));
+// Normalizes '' -> null. Note: putting .or(z.literal('')) AFTER an optional string
+// never fires, because a plain string schema already accepts ''. Transform instead.
+const nullableStr = z
+  .string()
+  .max(1000)
+  .optional()
+  .nullable()
+  .transform((v) => (v === undefined ? undefined : v === null || v.trim() === '' ? null : v));
+
+const nullableDate = z
+  .string()
+  .optional()
+  .nullable()
+  .transform((v) => (v === undefined ? undefined : v === null || v.trim() === '' ? null : v))
+  .refine((v) => v == null || !Number.isNaN(Date.parse(v)), { message: 'Invalid date' });
 
 const bannerSchema = z.object({
   title: z.string().min(1).max(200),
   subtitle: nullableStr,
   description: nullableStr,
-  image: z.string().min(1),
+  image: z.string().max(1000).optional().default('').transform((v) => v ?? ''),
   mobileImage: nullableStr,
   linkUrl: nullableStr,
   buttonText: nullableStr,
@@ -20,13 +34,13 @@ const bannerSchema = z.object({
   secondaryUrl: nullableStr,
   badge: nullableStr,
   textColor: z.string().max(30).optional(),
-  overlayColor: z.string().max(60).optional(),
+  overlayColor: z.string().max(300).optional(),
   align: z.enum(['left', 'center', 'right']).optional(),
   position: z.enum(['hero', 'promo', 'strip']).optional(),
   sortOrder: z.number().int().optional(),
   isActive: z.boolean().optional(),
-  startsAt: z.string().datetime().optional().nullable().or(z.literal('').transform(() => null)),
-  endsAt: z.string().datetime().optional().nullable().or(z.literal('').transform(() => null)),
+  startsAt: nullableDate,
+  endsAt: nullableDate,
 });
 
 // GET /api/banners - public, active banners (optionally by position)

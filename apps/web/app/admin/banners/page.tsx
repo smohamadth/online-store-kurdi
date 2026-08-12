@@ -113,11 +113,8 @@ export default function AdminBannersPage() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) return notify('error', 'Title is required');
-    if (!form.image.trim() && !editing) {
-      // allow gradient-only banners
-    }
     try {
-      const payload: any = { ...form, image: form.image || ' ' };
+      const payload: any = { ...form, image: form.image || '' };
       const res = await fetch(
         editing ? `${API_URL}/banners/${editing.id}` : `${API_URL}/banners`,
         {
@@ -163,12 +160,14 @@ export default function AdminBannersPage() {
   const move = async (b: Banner, dir: -1 | 1) => {
     const group = banners.filter((x) => x.position === b.position);
     const idx = group.findIndex((x) => x.id === b.id);
-    const target = group[idx + dir];
-    if (!target) return;
-    const items = [
-      { id: b.id, sortOrder: target.sortOrder },
-      { id: target.id, sortOrder: b.sortOrder },
-    ];
+    const target = idx + dir;
+    if (target < 0 || target >= group.length) return;
+    // Reorder the array then renumber sequentially. Swapping the two stored
+    // values fails when several banners share the same sortOrder (e.g. all 0).
+    const reordered = [...group];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(target, 0, moved);
+    const items = reordered.map((x, i) => ({ id: x.id, sortOrder: i }));
     await fetch(`${API_URL}/banners/bulk/reorder`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -327,7 +326,8 @@ export default function AdminBannersPage() {
             <div style={{ marginTop: '18px' }}>
               <ImageUpload
                 label="Desktop Image (recommended 1920×800)"
-                currentImage={form.image ? getImageUrl(form.image) : undefined}
+                folder="banners"
+                currentImage={form.image || undefined}
                 onUpload={(url) => setForm({ ...form, image: url })}
               />
             </div>
@@ -335,7 +335,8 @@ export default function AdminBannersPage() {
             <div style={{ marginTop: '18px' }}>
               <ImageUpload
                 label="Mobile Image (optional, portrait crop)"
-                currentImage={form.mobileImage ? getImageUrl(form.mobileImage) : undefined}
+                folder="banners"
+                currentImage={form.mobileImage || undefined}
                 onUpload={(url) => setForm({ ...form, mobileImage: url })}
               />
             </div>

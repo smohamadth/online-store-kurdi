@@ -89,6 +89,21 @@ export const errorHandler = (
     return res.status(err.statusCode).json(response);
   }
 
+  // Handle Zod validation errors -> 400 with field details.
+  // Without this, every `schema.parse()` failure in any module fell through
+  // to the generic 500 handler, hiding the real cause from API clients.
+  if (err.name === 'ZodError' && Array.isArray((err as any).issues)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      errors: (err as any).issues.map((i: any) => ({
+        field: Array.isArray(i.path) ? i.path.join('.') : String(i.path ?? ''),
+        message: i.message,
+      })),
+    });
+  }
+
   // Handle Prisma errors
   if (err.name === 'PrismaClientKnownRequestError') {
     const prismaError = err as any;

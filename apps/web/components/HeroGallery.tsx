@@ -73,9 +73,12 @@ interface Props {
 
 export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
   const isMobile = useIsMobile();
+  // Fall back to the built-in slides whenever the store has none configured,
+  // so a fresh install (or an offline API) still shows a complete home page.
   const slides = banners && banners.length > 0 ? banners : DEFAULT_SLIDES;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const touchStart = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -84,11 +87,24 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
   const next = useCallback(() => go(index + 1), [go, index]);
   const prev = useCallback(() => go(index - 1), [go, index]);
 
+  // Respect users who ask for reduced motion: no autoplay, no zoom.
   useEffect(() => {
-    if (paused || count <= 1) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const apply = () => setReducedMotion(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  useEffect(() => {
+    if (paused || reducedMotion || count <= 1) return;
     const t = setTimeout(next, autoPlayMs);
     return () => clearTimeout(t);
-  }, [index, paused, count, next, autoPlayMs]);
+  }, [index, paused, reducedMotion, count, next, autoPlayMs]);
+
+  useEffect(() => {
+    if (index > count - 1) setIndex(0);
+  }, [count, index]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -101,6 +117,8 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
   }, [next, prev]);
 
   const height = isMobile ? '420px' : '520px';
+
+  if (count === 0) return null;
 
   return (
     <section
@@ -141,13 +159,18 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
           <div
             key={slide.id}
             aria-hidden={!active}
+            aria-roledescription="slide"
+            aria-label={`${i + 1} of ${count}`}
             style={{
               position: 'absolute',
               inset: 0,
               opacity: active ? 1 : 0,
-              transform: active ? 'scale(1)' : 'scale(1.06)',
-              transition: 'opacity 700ms ease, transform 7000ms linear',
+              transform: reducedMotion ? 'none' : active ? 'scale(1)' : 'scale(1.06)',
+              transition: reducedMotion
+                ? 'opacity 200ms linear'
+                : 'opacity 700ms ease, transform 7000ms linear',
               pointerEvents: active ? 'auto' : 'none',
+              visibility: active ? 'visible' : 'hidden',
             }}
           >
             {/* Background */}
@@ -197,9 +220,9 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
               <div
                 style={{
                   maxWidth: '620px',
-                  transform: active ? 'translateY(0)' : 'translateY(24px)',
+                  transform: reducedMotion ? 'none' : active ? 'translateY(0)' : 'translateY(24px)',
                   opacity: active ? 1 : 0,
-                  transition: 'all 700ms ease 120ms',
+                  transition: reducedMotion ? 'opacity 200ms linear' : 'all 700ms ease 120ms',
                 }}
               >
                 {slide.badge && (
@@ -235,7 +258,8 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
                     {slide.subtitle}
                   </p>
                 )}
-                <h2
+                <Heading
+                  level={i === 0 ? 1 : 2}
                   style={{
                     fontSize: isMobile ? '30px' : '54px',
                     lineHeight: 1.05,
@@ -245,7 +269,7 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
                   }}
                 >
                   {slide.title}
-                </h2>
+                </Heading>
                 {slide.description && (
                   <p
                     style={{
@@ -358,6 +382,19 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
       )}
     </section>
   );
+}
+
+function Heading({
+  level,
+  style,
+  children,
+}: {
+  level: 1 | 2;
+  style: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  const Tag = (level === 1 ? 'h1' : 'h2') as 'h1' | 'h2';
+  return <Tag style={style}>{children}</Tag>;
 }
 
 function arrowStyle(side: 'left' | 'right'): React.CSSProperties {

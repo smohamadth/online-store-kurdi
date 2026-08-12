@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { getImageUrl } from '@/lib/api';
 
 interface ImageVariants {
   thumbnail?: string;
@@ -13,12 +14,14 @@ interface ImageUploadProps {
   onUpload: (url: string, variants?: ImageVariants) => void;
   currentImage?: string;
   label?: string;
+  folder?: string;
 }
 
 export default function ImageUpload({
   onUpload,
   currentImage,
   label = 'Upload Image',
+  folder = 'products',
 }: ImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(currentImage || null);
   const [uploading, setUploading] = useState(false);
@@ -73,7 +76,7 @@ export default function ImageUpload({
       // Try to upload to API
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('folder', 'products');
+      formData.append('folder', folder);
 
       const token = localStorage.getItem('token');
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -87,10 +90,9 @@ export default function ImageUpload({
 
       if (response.ok) {
         const data = await response.json();
-        const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace('/api', '');
-        
-        // Build full URLs for all variants
-        const buildUrl = (path: string) => path?.startsWith('http') ? path : `${API_BASE}${path}`;
+        // Keep paths RELATIVE so they stay portable across environments.
+        // getImageUrl() prepends the API base at render time.
+        const buildUrl = (path: string) => path || '';
         
         const imageVariants: ImageVariants = {
           thumbnail: buildUrl(data.data?.thumbnail),
@@ -162,7 +164,7 @@ export default function ImageUpload({
         <div style={{ marginBottom: '16px' }}>
           <div style={{ position: 'relative', display: 'inline-block', marginBottom: '12px' }}>
             <img
-              src={preview}
+              src={getImageUrl(preview)}
               alt="Preview"
               style={{
                 width: '200px',

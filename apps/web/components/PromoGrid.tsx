@@ -9,16 +9,19 @@ export default function PromoGrid({ banners }: { banners: Banner[] }) {
   const isMobile = useIsMobile();
   if (!banners || banners.length === 0) return null;
 
+  const visible = banners.slice(0, 6);
+  const cols = Math.min(visible.length, 3);
+
   return (
     <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px 0' }}>
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(banners.length, 3)}, 1fr)`,
+          gridTemplateColumns: isMobile ? '1fr' : `repeat(${cols}, 1fr)`,
           gap: '16px',
         }}
       >
-        {banners.slice(0, 6).map((b) => {
+        {visible.map((b) => {
           const inner = (
             <div
               style={{
