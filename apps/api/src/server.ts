@@ -70,9 +70,16 @@ async function startServer() {
 
     // Start HTTP server
     const port = parseInt(env.PORT);
-    
-    httpServer.listen(port, () => {
-      logger.info(`✅ Server running on port ${port}`);
+
+    // Bind to a specific interface. Node defaults to 0.0.0.0 (all interfaces),
+    // which Windows refuses with `EACCES: permission denied 0.0.0.0:<port>`
+    // when the port falls inside a reserved/excluded range (Hyper-V, WSL2,
+    // Docker Desktop) or a firewall policy blocks binding every interface.
+    // Set HOST=0.0.0.0 explicitly if you need LAN access.
+    const host = process.env.HOST || '127.0.0.1';
+
+    httpServer.listen(port, host, () => {
+      logger.info(`✅ Server running on http://${host}:${port}`);
       logger.info(`🌍 Environment: ${env.NODE_ENV}`);
       logger.info(`🔗 API URL: http://localhost:${port}/api`);
       logger.info(`💚 Health check: http://localhost:${port}/health`);
@@ -83,6 +90,23 @@ async function startServer() {
         logger.info(`🗄️ pgAdmin: http://localhost:5050`);
         logger.info(`📦 MinIO Console: http://localhost:9001`);
       }
+    });
+
+    // listen() reports failures via an event, not a throw, so the surrounding
+    // try/catch never sees EADDRINUSE / EACCES.
+    httpServer.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`❌ Port ${port} is already in use.`);
+        logger.error(`   Another process is on ${host}:${port}. Stop it, or set PORT in apps/api/.env`);
+      } else if (err.code === 'EACCES') {
+        logger.error(`❌ Permission denied binding ${host}:${port}.`);
+        logger.error('   On Windows this usually means the port is inside a reserved range.');
+        logger.error('   Check:   netsh interface ipv4 show excludedportrange protocol=tcp');
+        logger.error('   Fix:     set a different PORT in apps/api/.env (e.g. 4001)');
+      } else {
+        logger.error('❌ Server error:', err);
+      }
+      process.exit(1);
     });
 
   } catch (error) {
