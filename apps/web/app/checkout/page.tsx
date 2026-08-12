@@ -30,6 +30,7 @@ export default function CheckoutPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [orderError, setOrderError] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [discount, setDiscount] = useState(0);
@@ -93,6 +94,7 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setOrderError('');
     setLoading(true);
 
     try {
@@ -122,91 +124,33 @@ export default function CheckoutPage() {
         totalAmount: total,
       };
 
-      // Try API
-      let orderNumber = 'ORD-' + Date.now();
-      try {
-        const response = await api.createOrder(token, orderData);
-        if (response.data?.orderNumber) {
-          orderNumber = response.data.orderNumber;
-        }
-      } catch (err) {
-        console.log('API not available, saving locally');
+      // An order is only real once the SERVER has stored it.
+      //
+      // This used to catch every failure, invent an 'ORD-<timestamp>' number,
+      // write the order to localStorage, clear the cart and show the success
+      // screen. A customer whose order was rejected (out of stock, expired
+      // coupon, payment declined, API down) was told it succeeded, while the
+      // store never received the order and the cart was already emptied.
+      const response = await api.createOrder(token, orderData);
+      const confirmed = response?.data?.orderNumber;
+
+      if (!confirmed) {
+        throw new Error('The server did not confirm the order. Please try again.');
       }
 
-      // Save order locally
-      saveOrderLocally(orderNumber);
-
-      setOrderNumber(orderNumber);
+      setOrderNumber(confirmed);
       setOrderPlaced(true);
       clearCart();
       localStorage.removeItem('appliedCoupon');
     } catch (err: any) {
+      // Keep the cart intact so the customer can correct the problem and retry.
       console.error('Order failed:', err);
-      const orderNumber = 'ORD-' + Date.now();
-      saveOrderLocally(orderNumber);
-      setOrderNumber(orderNumber);
-      setOrderPlaced(true);
-      clearCart();
-      localStorage.removeItem('appliedCoupon');
+      setOrderError(
+        err?.message || 'We could not place your order. Your cart has not been changed.'
+      );
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const saveOrderLocally = (orderNumber: string) => {
-    const order = {
-      id: Date.now().toString(),
-      orderNumber,
-      userId: user?.id,
-      status: 'processing',
-      items: items.map(item => ({
-        id: item.id,
-        productId: item.productId,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        variant: item.variant,
-      })),
-      subtotal,
-      discountAmount: discount,
-      couponCode: appliedCoupon?.code || null,
-      shippingAmount: shippingCost,
-      shippingMethod: selectedShipping?.name || 'Standard',
-      taxAmount,
-      totalAmount: total,
-      shippingAddress: shippingInfo,
-      paymentMethod,
-      createdAt: new Date().toISOString(),
-      user: user ? {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-      } : null,
-    };
-
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    orders.unshift(order);
-    localStorage.setItem('orders', JSON.stringify(orders));
-    
-    // Track inventory changes locally when API is unavailable
-    updateLocalInventory(items);
-  };
-  
-  const updateLocalInventory = (orderItems: any[]) => {
-    try {
-      // Store pending inventory deductions to sync later
-      const pendingDeductions = JSON.parse(localStorage.getItem('pendingInventoryDeductions') || '[]');
-      orderItems.forEach(item => {
-        pendingDeductions.push({
-          productId: item.productId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          timestamp: new Date().toISOString(),
-        });
-      });
-      localStorage.setItem('pendingInventoryDeductions', JSON.stringify(pendingDeductions));
-    } catch (err) {
-      console.error('Failed to track local inventory:', err);
     }
   };
 
@@ -290,6 +234,27 @@ export default function CheckoutPage() {
       </nav>
 
       <h1 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 'bold', marginBottom: '32px' }}>Checkout</h1>
+
+      {orderError && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: '20px',
+            padding: '14px 16px',
+            borderRadius: '8px',
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fca5a5',
+            color: '#991b1b',
+            fontSize: '14px',
+            lineHeight: 1.6,
+          }}
+        >
+          <strong>Your order was not placed.</strong> {orderError}
+          <div style={{ marginTop: '4px', color: '#7f1d1d' }}>
+            Nothing has been charged and your cart is unchanged.
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: isMobile ? '24px' : '48px' }}>

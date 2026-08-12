@@ -30,16 +30,10 @@ export default function OrdersPage() {
         console.log('API not available');
       }
 
-      // Get local orders
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-
-      // Merge
+      // Orders live in the database only. Checkout no longer writes orders to
+      // localStorage, and merging leftovers in would show the customer
+      // "orders" the store has no record of.
       const allOrders = [...apiOrders];
-      localOrders.forEach((localOrder: any) => {
-        if (!allOrders.find(o => o.id === localOrder.id || o.orderNumber === localOrder.orderNumber)) {
-          allOrders.push(localOrder);
-        }
-      });
 
       // Sort by date
       allOrders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

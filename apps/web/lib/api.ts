@@ -80,7 +80,25 @@ class ApiClient {
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        // Surface the server's actual message ("Insufficient stock for X",
+        // validation details, ...) instead of a bare status code. Callers were
+        // showing "API error: 400" or swallowing it entirely.
+        let message = `Request failed (${response.status})`;
+        try {
+          const body = await response.json();
+          if (Array.isArray(body?.errors) && body.errors.length) {
+            message = body.errors
+              .map((e: any) => (e.field ? `${e.field}: ${e.message}` : e.message))
+              .join(', ');
+          } else if (body?.message) {
+            message = body.message;
+          }
+        } catch {
+          /* non-JSON error body - keep the status message */
+        }
+        const err = new Error(message) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
       }
 
       return await response.json();

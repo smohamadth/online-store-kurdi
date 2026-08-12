@@ -65,10 +65,21 @@ export default function ShippingSelector({
       if (response.ok) {
         const data = await response.json();
         const shippingMethods = data.data || [];
-        setMethods(shippingMethods);
 
-        // Auto-select first method
-        if (shippingMethods.length > 0 && !selectedMethodId) {
+        // A 200 with an EMPTY list is the common case on a fresh store, and it
+        // used to fall through with nothing selected - which left "Place Order"
+        // permanently disabled and made checkout impossible. Treat "no methods
+        // configured" the same as "shipping API unavailable" and offer the
+        // built-in defaults so the customer can always complete the purchase.
+        if (shippingMethods.length === 0) {
+          const fallback = buildDefaultMethods(subtotal);
+          setMethods(fallback);
+          if (!selectedMethodId) onSelect(fallback[0]);
+          return;
+        }
+
+        setMethods(shippingMethods);
+        if (!selectedMethodId) {
           onSelect(shippingMethods[0]);
         }
       } else {
@@ -192,4 +203,28 @@ export default function ShippingSelector({
       ))}
     </div>
   );
+}
+
+/** Built-in shipping options used when the store has none configured. */
+function buildDefaultMethods(subtotal: number): ShippingMethod[] {
+  return [
+    {
+      id: 'standard',
+      name: 'Standard Shipping',
+      type: 'flat',
+      rate: subtotal >= 100 ? 0 : 5.99,
+      isFree: subtotal >= 100,
+      minDeliveryDays: 5,
+      maxDeliveryDays: 7,
+    },
+    {
+      id: 'express',
+      name: 'Express Shipping',
+      type: 'flat',
+      rate: 12.99,
+      isFree: false,
+      minDeliveryDays: 2,
+      maxDeliveryDays: 3,
+    },
+  ];
 }

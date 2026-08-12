@@ -7,6 +7,7 @@ import Head from 'next/head';
 import { api, Product, Category, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
+import ProductCard from '@/components/ProductCard';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -259,92 +260,17 @@ function ProductsContent() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
           gap: '16px' 
         }}>
+          {/* Uses the shared ProductCard so the listing behaves like the
+              home page and category pages: hover preview, discount and stock
+              badges, correct currency, and quick add-to-cart. This page
+              previously duplicated the card markup and had NO way to add a
+              product to the cart without opening the detail page. */}
           {filteredProducts.map((product) => (
-            <Link
+            <ProductCard
               key={product.id}
-              href={`/products/${product.slug}`}
-              style={{
-                display: 'block',
-                overflow: 'hidden',
-                borderRadius: '8px',
-                border: '1px solid #e5e5e5',
-                backgroundColor: 'white',
-                textDecoration: 'none',
-                color: '#000',
-                transition: 'box-shadow 0.2s',
-                position: 'relative',
-              }}
-            >
-              {/* Discount Badge */}
-              {product.compareAtPrice && (
-                <div style={{
-                  position: 'absolute',
-                  left: '8px',
-                  top: '8px',
-                  zIndex: 10,
-                  borderRadius: '4px',
-                  backgroundColor: '#ef4444',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'white',
-                }}>
-                  -{Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}%
-                </div>
-              )}
-
-              {/* Product Image */}
-              <div style={{
-                aspectRatio: '1',
-                backgroundColor: '#f5f5f5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}>
-                {product.images && product.images.length > 0 && product.images[0]?.url ? (
-                  <img 
-                    src={getProductImage(product.images[0], 'card')} 
-                    alt={product.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <span style={{ fontSize: '48px' }}>{getCategoryEmoji(product.category?.name)}</span>
-                )}
-              </div>
-
-              {/* Product Info */}
-              <div style={{ padding: '12px' }}>
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                  {product.category?.name}
-                </p>
-                <h3 style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px', lineHeight: 1.3 }}>
-                  {product.name}
-                </h3>
-                
-                {/* Rating */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-                  <span style={{ color: '#f59e0b', fontSize: '12px' }}>★</span>
-                  <span style={{ fontSize: '12px' }}>{product.averageRating || 0}</span>
-                  <span style={{ fontSize: '12px', color: '#666' }}>({product.reviewCount || 0})</span>
-                </div>
-
-                {/* Price */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(product.price, settings.currencySymbol)}</span>
-                  {product.compareAtPrice && (
-                    <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
-                      {formatPrice(product.compareAtPrice, settings.currencySymbol)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Stock */}
-                <p style={{ marginTop: '8px', fontSize: '12px', color: product.quantity > 0 ? '#22c55e' : '#ef4444' }}>
-                  {product.quantity > 0 ? '✓ In Stock' : '✗ Out of Stock'}
-                </p>
-              </div>
-            </Link>
+              product={product}
+              currencySymbol={settings.currencySymbol}
+            />
           ))}
         </div>
       )}

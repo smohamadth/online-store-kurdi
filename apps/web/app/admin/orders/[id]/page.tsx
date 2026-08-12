@@ -41,15 +41,8 @@ export default function AdminOrderDetailPage() {
         console.log('API not available');
       }
 
-      // Fallback to localStorage
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const localOrder = localOrders.find((o: any) => o.id === orderId || o.orderNumber === orderId);
-      
-      if (localOrder) {
-        setOrder(localOrder);
-        setTrackingNumber(localOrder.trackingNumber || '');
-        setAdminNotes(localOrder.adminNotes || '');
-      }
+      // No localStorage fallback: an order that is not in the database does
+      // not exist, and showing a browser-local copy hid that fact.
     } catch (err) {
       console.error('Failed to fetch order:', err);
     } finally {
@@ -64,35 +57,29 @@ export default function AdminOrderDetailPage() {
       if (!token) return;
 
       // Try API
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`, {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`,
+        {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            status: newStatus,
-            trackingNumber,
-            adminNotes,
-          }),
-        });
-      } catch (err) {
-        console.log('API not available, updating locally');
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status: newStatus, trackingNumber, adminNotes }),
+        }
+      );
+
+      if (!res.ok) {
+        // The old code ignored the response and updated the UI plus
+        // localStorage regardless, so a rejected status change still looked
+        // applied - and the customer never saw it.
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || `Could not update the order (${res.status}). Nothing was saved.`);
+        return;
       }
 
-      // Update locally
-      setOrder({ ...order, status: newStatus, trackingNumber, adminNotes });
-
-      // Update localStorage
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const updated = localOrders.map((o: any) => 
-        o.id === orderId ? { ...o, status: newStatus, trackingNumber, adminNotes } : o
-      );
-      localStorage.setItem('orders', JSON.stringify(updated));
-
+      const saved = await res.json();
+      setOrder(saved.data || { ...order, status: newStatus, trackingNumber, adminNotes });
     } catch (err) {
       console.error('Failed to update order:', err);
+      alert('Could not reach the server. The order was NOT updated.');
     } finally {
       setUpdating(false);
     }

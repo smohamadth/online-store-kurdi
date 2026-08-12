@@ -398,6 +398,7 @@ async function main() {
   // Seed email templates
   await seedEmailTemplates();
   const bannerCount = await seedBanners();
+  await seedShipping();
 
   console.log('✅ Database seeded successfully!');
   console.log('\n📋 Summary:');
@@ -408,6 +409,7 @@ async function main() {
   console.log(`   - Coupons: 2`);
   console.log(`   - Analytics events: 50`);
   console.log(`   - Banners (homepage gallery): ${bannerCount}`);
+  console.log(`   - Shipping: 1 zone, 2 methods`);
 }
 
 // Homepage gallery (hero slider + promo tiles).
@@ -496,6 +498,53 @@ async function seedBanners() {
   }
 
   return banners.length;
+}
+
+// Shipping zones + methods.
+// Checkout disables "Place Order" until a shipping method is selected, and
+// the selector is populated from the API. With an empty table the button was
+// permanently disabled, so a fresh install could not take a single order.
+async function seedShipping() {
+  const existing = await prisma.shippingZone.count();
+  if (existing > 0) {
+    console.log(`   - Shipping: ${existing} zone(s) already present, skipping`);
+    return existing;
+  }
+
+  const zone = await prisma.shippingZone.create({
+    data: {
+      name: 'Default Zone',
+      countries: JSON.stringify(['*']),
+      isActive: true,
+      sortOrder: 0,
+    },
+  });
+
+  await prisma.shippingMethod.createMany({
+    data: [
+      {
+        zoneId: zone.id,
+        name: 'Standard Shipping',
+        description: '3-7 business days',
+        type: 'flat',
+        baseRate: 5.99,
+        freeShippingThreshold: 50,
+        isActive: true,
+        sortOrder: 0,
+      },
+      {
+        zoneId: zone.id,
+        name: 'Express Shipping',
+        description: '1-2 business days',
+        type: 'flat',
+        baseRate: 14.99,
+        isActive: true,
+        sortOrder: 1,
+      },
+    ],
+  });
+
+  return 1;
 }
 
 main()

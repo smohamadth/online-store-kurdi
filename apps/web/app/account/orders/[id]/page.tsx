@@ -60,50 +60,14 @@ export default function OrderDetailPage() {
 
   const fetchOrder = async (token: string, id: string) => {
     try {
-      // First try to get from localStorage
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const localOrder = localOrders.find((o: any) => o.id === id || o.orderNumber === id);
-      
-      if (localOrder) {
-        setOrder(localOrder);
-        setLoading(false);
-        return;
-      }
-
-      // Try API
+      // The database is the only source of truth. This used to read the order
+      // from localStorage first and, on any failure, display a hardcoded
+      // "John Doe / iPhone 15 Pro" demo order as if it were the customer's.
       const response = await api.getOrder(token, id);
       setOrder(response.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch order:', err);
-      // Use mock data for demo
-      setOrder({
-        id: id,
-        orderNumber: 'ORD-2024-001',
-        status: 'delivered',
-        totalAmount: 1049.98,
-        subtotal: 1029.98,
-        taxAmount: 103.00,
-        shippingAmount: 0,
-        discountAmount: 0,
-        paymentMethod: 'credit_card',
-        paymentStatus: 'completed',
-        createdAt: '2024-01-15T10:30:00Z',
-        shippedAt: '2024-01-16T14:00:00Z',
-        deliveredAt: '2024-01-20T09:00:00Z',
-        shippingAddress: {
-          firstName: 'John',
-          lastName: 'Doe',
-          address: '123 Main St',
-          city: 'New York',
-          state: 'NY',
-          zipCode: '10001',
-          country: 'US',
-        },
-        items: [
-          { id: '1', name: 'iPhone 15 Pro', quantity: 1, price: 999.99, variant: '128GB - Natural Titanium' },
-          { id: '2', name: 'Classic T-Shirt', quantity: 1, price: 29.99, variant: 'Medium - Black' },
-        ],
-      });
+      setError(err?.message || 'We could not load this order.');
     } finally {
       setLoading(false);
     }

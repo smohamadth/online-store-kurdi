@@ -19,36 +19,31 @@ export default function TrackOrderPage() {
     setOrder(null);
 
     try {
-      // Check local orders first
-      const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const found = localOrders.find((o: any) => 
-        o.orderNumber === orderNumber && 
-        (!email || o.user?.email === email || o.shippingAddress?.email === email)
-      );
+      // Look the order up in the DATABASE. This previously searched
+      // localStorage first, so an order that never reached the server still
+      // appeared "trackable" - reinforcing the illusion that it existed.
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please sign in to track your order.');
+        return;
+      }
 
-      if (found) {
-        setOrder(found);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${API_URL}/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        setError('Could not reach the server. Please try again.');
+        return;
+      }
+
+      const data = await response.json();
+      const apiOrder = data.data?.find((o: any) => o.orderNumber === orderNumber);
+      if (apiOrder) {
+        setOrder(apiOrder);
       } else {
-        // Try API
-        const token = localStorage.getItem('token');
-        if (token) {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-          const response = await fetch(`${API_URL}/orders`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            const apiOrder = data.data?.find((o: any) => o.orderNumber === orderNumber);
-            if (apiOrder) {
-              setOrder(apiOrder);
-            } else {
-              setError('Order not found. Please check your order number.');
-            }
-          }
-        } else {
-          setError('Order not found. Please check your order number.');
-        }
+        setError('Order not found. Please check your order number.');
       }
     } catch (err) {
       setError('Failed to track order. Please try again.');
