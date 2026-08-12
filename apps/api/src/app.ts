@@ -60,6 +60,11 @@ app.set('io', io);
 app.use(helmet({
   contentSecurityPolicy: isDevelopment ? false : undefined,
   crossOriginEmbedderPolicy: false,
+  // The storefront runs on a different origin (:3000) than this API (:3001),
+  // so helmet's default 'same-origin' policy blocks every product/banner image
+  // with ERR_BLOCKED_BY_RESPONSE.NotSameOrigin. Uploaded media is public
+  // content and is meant to be embedded by the storefront.
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
 // CORS configuration

@@ -8,6 +8,10 @@ import { useStoreSettings } from '@/lib/settings';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
 import PromoGrid from '@/components/PromoGrid';
+import ProductCard, { PlaceholderTile } from '@/components/ProductCard';
+import ProductCarousel from '@/components/ProductCarousel';
+import { TrustBar, DealCountdown, Testimonials, StatsStrip } from '@/components/HomeSections';
+import { formatPrice } from '@/lib/settings';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -23,7 +27,9 @@ function useIsMobile() {
 export default function HomePage() {
   const isMobile = useIsMobile();
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState([
+  const [categories, setCategories] = useState<
+    { name: string; slug: string; emoji: string; count: number; image?: string }[]
+  >([
     { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 0 },
     { name: 'Clothing', slug: 'clothing', emoji: '👕', count: 0 },
     { name: 'Books', slug: 'books', emoji: '📚', count: 0 },
@@ -32,6 +38,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [heroBanners, setHeroBanners] = useState<Banner[]>([]);
   const [promoBanners, setPromoBanners] = useState<Banner[]>([]);
+  const [newArrivals, setNewArrivals] = useState<Product[]>([]);
+  const [trending, setTrending] = useState<Product[]>([]);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
@@ -41,6 +49,8 @@ export default function HomePage() {
     fetchFeaturedProducts();
     fetchCategories();
     fetchBanners();
+    fetchNewArrivals();
+    fetchTrending();
   }, []);
 
   const fetchBanners = async () => {
@@ -58,9 +68,27 @@ export default function HomePage() {
     }
   };
 
+  const fetchNewArrivals = async () => {
+    try {
+      const res = await api.getNewArrivals();
+      setNewArrivals(res.data || []);
+    } catch {
+      setNewArrivals([]);
+    }
+  };
+
+  const fetchTrending = async () => {
+    try {
+      const res = await api.getTrendingProducts();
+      setTrending(res.data || []);
+    } catch {
+      setTrending([]);
+    }
+  };
+
   const fetchFeaturedProducts = async () => {
     try {
-      const response = await api.getFeaturedProducts(4);
+      const response = await api.getFeaturedProducts(8);
       setFeaturedProducts(response.data || []);
     } catch (err) {
       console.error('Failed to fetch featured products:', err);
@@ -89,6 +117,7 @@ export default function HomePage() {
           slug: cat.slug,
           emoji: categoryEmojis[cat.slug] || categoryEmojis[cat.name?.toLowerCase()] || '📦',
           count: cat._count?.products || 0,
+          image: cat.image || '',
         }));
         
         if (fetchedCategories.length > 0) {
@@ -152,6 +181,9 @@ export default function HomePage() {
       {/* Promo Banners */}
       <PromoGrid banners={promoBanners} />
 
+      {/* Trust / guarantees bar */}
+      <TrustBar />
+
 
       {/* Categories Section */}
       <section style={{
@@ -186,37 +218,7 @@ export default function HomePage() {
           gap: '16px',
         }}>
           {categories.map((category) => (
-            <Link
-              key={category.slug}
-              href={`/products?category=${category.slug}`}
-              style={{
-                display: 'block',
-                overflow: 'hidden',
-                borderRadius: '8px',
-                border: '1px solid #e5e5e5',
-                backgroundColor: 'white',
-                textDecoration: 'none',
-                color: '#000',
-                transition: 'box-shadow 0.2s',
-              }}
-            >
-              <div style={{
-                aspectRatio: '1',
-                backgroundColor: '#f5f5f5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '48px',
-              }}>
-                {category.emoji}
-              </div>
-              <div style={{ padding: '16px' }}>
-                <h3 style={{ fontWeight: 600 }}>{category.name}</h3>
-                <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
-                  {category.count} products
-                </p>
-              </div>
-            </Link>
+            <CategoryTile key={category.slug} category={category} />
           ))}
         </div>
       </section>
@@ -251,7 +253,7 @@ export default function HomePage() {
         {/* Loading State */}
         {loading && (
           <div style={{ marginTop: '32px' }}>
-            <ProductGridSkeleton count={4} />
+            <ProductGridSkeleton count={8} />
           </div>
         )}
 
@@ -263,59 +265,17 @@ export default function HomePage() {
             gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
             gap: '24px',
           }}>
-            {featuredProducts.map((product) => (
-              <Link
-                key={product.id}
-                href={`/products/${product.slug}`}
-                style={{
-                  display: 'block',
-                  overflow: 'hidden',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e5e5',
-                  backgroundColor: 'white',
-                  textDecoration: 'none',
-                  color: '#000',
-                }}
-              >
-                <div style={{
-                  aspectRatio: '1',
-                  backgroundColor: '#f5f5f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                }}>
-                  {product.images && product.images.length > 0 && product.images[0]?.url ? (
-                    <img 
-                      src={getImageUrl(product.images[0].url)} 
-                      alt={product.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <span style={{ fontSize: '64px' }}>{getCategoryEmoji(product.category?.name)}</span>
-                  )}
-                </div>
-                <div style={{ padding: '16px' }}>
-                  <p style={{ fontSize: '12px', color: '#666' }}>{product.category?.name}</p>
-                  <h3 style={{ marginTop: '4px', fontWeight: 600 }}>{product.name}</h3>
-                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>${product.price}</span>
-                    {product.compareAtPrice && (
-                      <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
-                        ${product.compareAtPrice}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ color: '#f59e0b' }}>★</span>
-                    <span style={{ fontSize: '14px' }}>{product.averageRating || 0}</span>
-                    <span style={{ fontSize: '14px', color: '#666' }}>
-                      ({product.reviewCount || 0})
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+            {featuredProducts
+              // Keep the grid flush: only render full rows of 4 (2 on mobile)
+              // so we never leave a single orphan card on the last row.
+              .slice(0, Math.max(isMobile ? 2 : 4, Math.floor(featuredProducts.length / (isMobile ? 2 : 4)) * (isMobile ? 2 : 4)))
+              .map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  currencySymbol={settings.currencySymbol}
+                />
+              ))}
           </div>
         )}
 
@@ -329,6 +289,33 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {/* New Arrivals */}
+      <ProductCarousel
+        title="New Arrivals"
+        subtitle="Fresh picks added this week"
+        products={newArrivals}
+        viewAllHref="/products?sort=newest"
+        currencySymbol={settings.currencySymbol}
+      />
+
+      {/* Deal of the day */}
+      <DealCountdown />
+
+      {/* Trending - hidden automatically when the API returns nothing */}
+      <ProductCarousel
+        title="Trending Now"
+        subtitle="What other shoppers are buying"
+        products={trending}
+        viewAllHref="/products"
+        currencySymbol={settings.currencySymbol}
+      />
+
+      {/* Testimonials */}
+      <Testimonials />
+
+      {/* Stats */}
+      <StatsStrip />
 
       {/* Features Section */}
       <section style={{ backgroundColor: '#f9f9f9' }}>
@@ -488,5 +475,70 @@ export default function HomePage() {
       </section>
     </div>
     </>
+  );
+}
+
+/** Category tile: uses the real category image when present, emoji otherwise. */
+function CategoryTile({
+  category,
+}: {
+  category: { name: string; slug: string; emoji: string; count: number; image?: string };
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = category.image && !imgFailed;
+
+  return (
+    <Link
+      href={`/products?category=${category.slug}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'block',
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: '12px',
+        border: '1px solid #e8e8e8',
+        backgroundColor: 'white',
+        textDecoration: 'none',
+        color: '#111',
+        transition: 'transform 200ms ease, box-shadow 200ms ease',
+        transform: hovered ? 'translateY(-4px)' : 'none',
+        boxShadow: hovered ? '0 12px 28px rgba(0,0,0,0.10)' : '0 1px 2px rgba(0,0,0,0.04)',
+      }}
+    >
+      <div style={{
+        aspectRatio: '1',
+        backgroundColor: '#f5f5f5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
+        {showImage ? (
+          <img
+            src={getImageUrl(category.image!)}
+            alt={category.name}
+            loading="lazy"
+            onError={() => setImgFailed(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transition: 'transform 500ms ease',
+              transform: hovered ? 'scale(1.07)' : 'scale(1)',
+            }}
+          />
+        ) : (
+          <PlaceholderTile label="Category" emoji={category.emoji} seed={category.name} />
+        )}
+      </div>
+      <div style={{ padding: '14px 16px' }}>
+        <h3 style={{ fontWeight: 700, fontSize: '15px' }}>{category.name}</h3>
+        <p style={{ fontSize: '13px', color: '#777', marginTop: '3px' }}>
+          {category.count} {category.count === 1 ? 'product' : 'products'}
+        </p>
+      </div>
+    </Link>
   );
 }
