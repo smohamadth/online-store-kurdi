@@ -38,6 +38,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [heroBanners, setHeroBanners] = useState<Banner[]>([]);
   const [promoBanners, setPromoBanners] = useState<Banner[]>([]);
+  const [bannersLoaded, setBannersLoaded] = useState(false);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [trending, setTrending] = useState<Product[]>([]);
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -56,7 +57,9 @@ export default function HomePage() {
   const fetchBanners = async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const res = await fetch(`${API_URL}/banners`);
+      // no-store: an admin edit must be visible on the next page load, not
+      // served from a stale cached response.
+      const res = await fetch(`${API_URL}/banners`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const all: Banner[] = data.data || [];
@@ -64,7 +67,11 @@ export default function HomePage() {
         setPromoBanners(all.filter((b) => b.position === 'promo'));
       }
     } catch (err) {
-      console.log('Banners API not available, using defaults');
+      console.log('Banners API unavailable');
+    } finally {
+      // Mark as loaded even on failure, so the gallery stops showing the
+      // pre-load placeholder and reflects what the database actually has.
+      setBannersLoaded(true);
     }
   };
 
@@ -176,7 +183,7 @@ export default function HomePage() {
       </Head>
       <div>
       {/* Hero Gallery / Slider */}
-      <HeroGallery banners={heroBanners} />
+      <HeroGallery banners={heroBanners} loaded={bannersLoaded} />
 
       {/* Promo Banners */}
       <PromoGrid banners={promoBanners} />

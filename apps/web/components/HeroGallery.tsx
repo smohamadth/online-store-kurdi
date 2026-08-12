@@ -68,14 +68,27 @@ const DEFAULT_SLIDES: Banner[] = [
 
 interface Props {
   banners?: Banner[];
+  /**
+   * True once the banners API has responded. Until then we cannot tell an
+   * unconfigured store from a slow network, so we render a placeholder rather
+   * than guessing.
+   */
+  loaded?: boolean;
   autoPlayMs?: number;
 }
 
-export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
+export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000 }: Props) {
   const isMobile = useIsMobile();
-  // Fall back to the built-in slides whenever the store has none configured,
-  // so a fresh install (or an offline API) still shows a complete home page.
-  const slides = banners && banners.length > 0 ? banners : DEFAULT_SLIDES;
+
+  // The DATABASE is the source of truth.
+  //
+  // This used to fall back to DEFAULT_SLIDES whenever `banners` was empty,
+  // which meant an admin who deleted or hid every slide still saw three
+  // hardcoded slides on the storefront - the gallery was not actually
+  // controllable from the admin panel. The built-in slides are now only a
+  // pre-load placeholder, never a substitute for real data.
+  const hasData = Array.isArray(banners) && banners.length > 0;
+  const slides = hasData ? banners! : loaded ? [] : DEFAULT_SLIDES;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -118,6 +131,8 @@ export default function HeroGallery({ banners, autoPlayMs = 6000 }: Props) {
 
   const height = isMobile ? '420px' : '520px';
 
+  // Admin has no active hero slides: render nothing rather than inventing
+  // content the store owner never configured.
   if (count === 0) return null;
 
   return (
