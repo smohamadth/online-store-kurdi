@@ -244,7 +244,7 @@ export default function AdminTaxPage() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
             {taxClasses.map((cls) => (
               <div key={cls.id} style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', padding: '24px' }}>
                 <h3 style={{ fontWeight: 600, marginBottom: '8px' }}>{cls.name}</h3>

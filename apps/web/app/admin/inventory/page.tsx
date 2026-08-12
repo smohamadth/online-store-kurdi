@@ -114,7 +114,7 @@ export default function AdminInventoryPage() {
       )}
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <div style={{ padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
           <p style={{ fontSize: '14px', color: '#666' }}>Total Products</p>
           <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{stats.total}</p>

@@ -589,7 +589,7 @@ export default function RootLayout({
         <link rel="canonical" href={process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'} />
         
         {/* Favicon */}
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <ErrorBoundary>

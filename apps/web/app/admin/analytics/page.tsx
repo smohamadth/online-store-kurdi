@@ -96,7 +96,7 @@ export default function AdminAnalyticsPage() {
   return (
     <div>
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         <div style={{
           padding: '24px',
           backgroundColor: 'white',
