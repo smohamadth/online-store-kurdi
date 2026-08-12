@@ -6,8 +6,11 @@ import { logger } from '../../utils/logger';
 
 const router = Router();
 
-// Normalizes '' -> null. Note: putting .or(z.literal('')) AFTER an optional string
-// never fires, because a plain string schema already accepts ''. Transform instead.
+// Normalizes '' -> null.
+// Note: the `.or(z.literal('').transform(...))` idiom used elsewhere only works
+// when the left branch REJECTS '' (e.g. z.string().uuid()). For a plain
+// z.string() the left branch already accepts '', so the .or() never fires and
+// empty fields persist as ''. Hence the explicit transform below.
 const nullableStr = z
   .string()
   .max(1000)

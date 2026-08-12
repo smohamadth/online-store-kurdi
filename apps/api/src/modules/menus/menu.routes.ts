@@ -16,7 +16,14 @@ const menuSchema = z.object({
 const menuItemSchema = z.object({
   label: z.string().min(1).max(100),
   url: z.string().min(1).max(500),
-  icon: z.string().max(50).optional().nullable(),
+  // Normalize '' -> null so empty form fields do not persist as empty strings.
+  // (parentId is fine as-is: .uuid() rejects '', so its .or() branch does fire.)
+  icon: z
+    .string()
+    .max(50)
+    .optional()
+    .nullable()
+    .transform((v) => (v === undefined ? undefined : v === null || v.trim() === '' ? null : v)),
   target: z.enum(['_self', '_blank']).default('_self'),
   parentId: z.string().uuid().optional().nullable().or(z.literal('').transform(() => null)),
   sortOrder: z.number().int().optional(),
