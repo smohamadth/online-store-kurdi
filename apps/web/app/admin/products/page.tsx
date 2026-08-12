@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { api, Product, Category, getCategoryEmoji } from '@/lib/api';
+import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import ImageUpload from '@/components/ImageUpload';
 
 export default function AdminProductsPage() {
@@ -319,7 +319,7 @@ export default function AdminProductsPage() {
                     }}>
                       {product.images && product.images.length > 0 && product.images[0]?.url ? (
                         <img 
-                          src={product.images[0].url} 
+                          src={getImageUrl(product.images[0].url)} 
                           alt={product.name}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />

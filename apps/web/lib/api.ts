@@ -212,6 +212,16 @@ class ApiClient {
 // Export singleton instance
 export const api = new ApiClient();
 
+// Helper to get full image URL
+export function getImageUrl(url: string | undefined | null): string {
+  if (!url) return '';
+  // Already a full URL (http/https) or data URI
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
+  // Relative URL - prepend API base
+  const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace('/api', '');
+  return `${baseUrl}${url}`;
+}
+
 // Helper to get category emoji
 export function getCategoryEmoji(category: string): string {
   switch (category?.toLowerCase()) {

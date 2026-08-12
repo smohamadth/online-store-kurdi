@@ -2,11 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   
-  // Disable turbopack for builds (use webpack)
-  experimental: {},
-  
   images: {
     remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3001',
+        pathname: '/uploads/**',
+      },
       {
         protocol: 'http',
         hostname: 'localhost',
@@ -14,6 +17,7 @@ const nextConfig = {
         pathname: '/store-files/**',
       },
     ],
+    unoptimized: true,
   },
   
   env: {

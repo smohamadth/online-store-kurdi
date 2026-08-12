@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useCart } from '@/lib/store';
-import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
@@ -204,7 +204,7 @@ export default function ProductPage() {
         <meta property="og:type" content="product" />
         <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products/${slug}`} />
         {product.images?.[0]?.url && (
-          <meta property="og:image" content={product.images[0].url} />
+          <meta property="og:image" content={getImageUrl(product.images[0].url)} />
         )}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={product.name} />
@@ -218,7 +218,7 @@ export default function ProductPage() {
               '@type': 'Product',
               name: product.name,
               description: product.description,
-              image: product.images?.map((img: any) => img.url) || [],
+              image: product.images?.map((img: any) => getImageUrl(img.url)) || [],
               sku: product.sku,
               offers: {
                 '@type': 'Offer',
@@ -278,7 +278,7 @@ export default function ProductPage() {
           }}>
             {allImages[selectedImageIndex]?.url ? (
               <img 
-                src={allImages[selectedImageIndex].url} 
+                src={getImageUrl(allImages[selectedImageIndex].url)} 
                 alt={product.name}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -309,7 +309,7 @@ export default function ProductPage() {
                   }}
                 >
                   {img.url ? (
-                    <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={getImageUrl(img.url)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: '24px' }}>{getCategoryEmoji(product.category?.name)}</span>
                   )}

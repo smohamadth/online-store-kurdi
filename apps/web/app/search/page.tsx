@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
 

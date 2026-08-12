@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 export default function DealsPage() {
@@ -116,7 +116,7 @@ export default function DealsPage() {
                 overflow: 'hidden',
               }}>
                 {product.images && product.images.length > 0 && product.images[0]?.url ? (
-                  <img src={product.images[0].url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={getImageUrl(product.images[0].url)} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <span style={{ fontSize: '64px' }}>{getCategoryEmoji(product.category?.name)}</span>
                 )}

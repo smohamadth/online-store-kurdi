@@ -59,7 +59,8 @@ export default function ImageUpload({
       formData.append('folder', 'products');
 
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/upload/image', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${API_URL}/upload/image`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -69,17 +70,23 @@ export default function ImageUpload({
 
       if (response.ok) {
         const data = await response.json();
-        const variants = data.data?.variants || [];
+        const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace('/api', '');
         
-        // Get the best URL (prefer large, fallback to medium, then thumbnail)
-        const imageUrl = data.data?.large || data.data?.medium || data.data?.url;
+        // Get the best URL and prepend base URL for relative paths
+        const rawUrl = data.data?.large || data.data?.medium || data.data?.url;
+        const imageUrl = rawUrl?.startsWith('http') ? rawUrl : `${API_BASE}${rawUrl}`;
+        
+        const thumbnailUrl = data.data?.thumbnail?.startsWith('http') ? data.data.thumbnail : `${API_BASE}${data.data?.thumbnail || ''}`;
+        const mediumUrl = data.data?.medium?.startsWith('http') ? data.data.medium : `${API_BASE}${data.data?.medium || ''}`;
+        const largeUrl = data.data?.large?.startsWith('http') ? data.data.large : `${API_BASE}${data.data?.large || ''}`;
+        const zoomUrl = data.data?.zoom?.startsWith('http') ? data.data.zoom : `${API_BASE}${data.data?.zoom || ''}`;
         
         setPreview(imageUrl);
         onUpload(imageUrl, {
-          thumbnail: data.data?.thumbnail,
-          medium: data.data?.medium,
-          large: data.data?.large,
-          zoom: data.data?.zoom,
+          thumbnail: thumbnailUrl,
+          medium: mediumUrl,
+          large: largeUrl,
+          zoom: zoomUrl,
         });
       } else {
         // If API fails, use base64 as fallback
