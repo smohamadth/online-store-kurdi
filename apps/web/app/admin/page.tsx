@@ -28,54 +28,40 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      let products: any[] = [];
-      let orders: any[] = [];
-      let categories: any[] = [];
-
-      // Fetch products
-      try {
-        const productsRes = await api.getProducts({ limit: 100 });
-        products = productsRes.data || [];
-      } catch (e) {}
-
-      // Fetch orders
-      try {
-        const ordersRes = await api.getOrders(token);
-        orders = ordersRes.data || [];
-      } catch (e) {
-        // Fallback to local orders
-        orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      }
-
-      // Fetch categories
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/categories`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          categories = data.data || [];
-        }
-      } catch (e) {}
-
-      // Calculate stats
-      const totalRevenue = orders.reduce((sum: number, order: any) => sum + (order.totalAmount || 0), 0);
-
-      setStats({
-        totalProducts: products.length,
-        totalOrders: orders.length,
-        totalUsers: 2, // admin + customer
-        totalCategories: categories.length,
-        totalRevenue,
-        recentOrders: orders.slice(0, 5),
-        topProducts: products.slice(0, 5),
+      // Single source of truth: real aggregates computed in the database.
+      // Previously this page pulled 100 products + the orders list and summed
+      // them in the browser, hardcoded totalUsers to 2, and counted cancelled
+      // orders as revenue.
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${API_URL}/dashboard/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (products.length > 0 || orders.length > 0) {
-        setApiStatus('connected');
+      if (!res.ok) {
+        setApiStatus('disconnected');
+        return;
       }
+
+      const { data } = await res.json();
+      let categories: any[] = [];
+      try {
+        const cRes = await fetch(`${API_URL}/categories`);
+        if (cRes.ok) categories = (await cRes.json()).data || [];
+      } catch {}
+
+      setStats({
+        totalProducts: data.totalProducts || 0,
+        totalOrders: data.totalOrders || 0,
+        totalUsers: data.totalCustomers || 0,
+        totalCategories: categories.length,
+        totalRevenue: data.totalRevenue || 0,
+        recentOrders: data.recentOrders || [],
+        topProducts: data.topProducts || [],
+      });
+      setApiStatus('connected');
     } catch (err) {
-      console.error('Failed to fetch dashboard data:', err);
+      console.error('Failed to load dashboard:', err);
+      setApiStatus('disconnected');
     } finally {
       setLoading(false);
     }
@@ -173,11 +159,15 @@ export default function AdminDashboard() {
                 <div key={product.id || index} style={{ padding: '16px 24px', borderBottom: index < stats.topProducts.length - 1 ? '1px solid #e5e5e5' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <p style={{ fontWeight: 500 }}>{product.name}</p>
-                    <p style={{ fontSize: '12px', color: '#666' }}>{product.category?.name}</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>
+                      {product.sold || 0} sold · Stock: {product.stock ?? 0}
+                    </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontWeight: 600 }}>${product.price}</p>
-                    <p style={{ fontSize: '12px', color: '#666' }}>Stock: {product.quantity || 0}</p>
+                    <p style={{ fontWeight: 600 }}>
+                      {formatPrice(product.revenue || 0, settings.currencySymbol)}
+                    </p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>revenue</p>
                   </div>
                 </div>
               ))

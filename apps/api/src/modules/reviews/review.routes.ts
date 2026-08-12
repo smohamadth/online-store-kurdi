@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 
@@ -97,7 +97,12 @@ router.post('/products/:productId/reviews', authenticate, async (req, res, next)
         title: title || null,
         comment: comment || null,
         isVerified: true,
-        isApproved: true,
+        // Reviews enter the moderation queue by default. Previously every
+        // review was created with isApproved: true, which published all
+        // reviews instantly and made the admin moderation queue pointless
+        // (and let a customer effectively self-approve their own review).
+        // Set REVIEWS_AUTO_APPROVE=true to restore auto-publishing.
+        isApproved: process.env.REVIEWS_AUTO_APPROVE === 'true',
       },
       include: {
         user: {
@@ -126,8 +131,9 @@ router.post('/products/:productId/reviews', authenticate, async (req, res, next)
 router.put('/reviews/:reviewId', authenticate, async (req, res, next) => {
   try {
     const { reviewId } = req.params;
-    const { rating, title, comment } = req.body;
+    const { rating, title, comment, isApproved } = req.body;
     const userId = req.user?.id;
+    const isModerator = req.user?.role === 'admin' || req.user?.role === 'manager';
 
     // Find review
     const review = await prisma.review.findUnique({
@@ -142,7 +148,7 @@ router.put('/reviews/:reviewId', authenticate, async (req, res, next) => {
     }
 
     // Check ownership
-    if (review.userId !== userId && req.user?.role !== 'admin') {
+    if (review.userId !== userId && !isModerator) {
       return res.status(403).json({
         status: 'error',
         message: 'Not authorized to update this review',
@@ -156,6 +162,11 @@ router.put('/reviews/:reviewId', authenticate, async (req, res, next) => {
         rating: rating ? parseInt(rating) : undefined,
         title: title !== undefined ? title : undefined,
         comment: comment !== undefined ? comment : undefined,
+        // Moderation flag. Only admins/managers may change it - previously this
+        // field was ignored entirely, so the admin UI reported success while the
+        // approval silently never persisted.
+        isApproved:
+          isApproved !== undefined && isModerator ? Boolean(isApproved) : undefined,
       },
       include: {
         user: {
@@ -261,6 +272,44 @@ router.get('/users/me/reviews', authenticate, async (req, res, next) => {
     res.json({
       status: 'success',
       data: formattedReviews,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/reviews - List every review (admin moderation queue).
+// The admin UI previously fetched all products and then issued one request per
+// product to collect reviews (an N+1 that also missed reviews on page 2+).
+router.get('/reviews', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const skip = (page - 1) * limit;
+    const { status } = req.query as { status?: string };
+
+    const where: any = {};
+    if (status === 'approved') where.isApproved = true;
+    if (status === 'pending') where.isApproved = false;
+
+    const [reviews, total] = await Promise.all([
+      prisma.review.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
+          product: { select: { id: true, name: true, slug: true } },
+        },
+      }),
+      prisma.review.count({ where }),
+    ]);
+
+    res.json({
+      status: 'success',
+      data: reviews,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
     next(err);

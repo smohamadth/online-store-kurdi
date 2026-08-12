@@ -26,46 +26,25 @@ export default function AdminAnalyticsPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Fetch products
-      let products: any[] = [];
-      try {
-        const productsRes = await api.getProducts({ limit: 100 });
-        products = productsRes.data || [];
-      } catch (e) {}
-
-      // Fetch orders
-      let orders: any[] = [];
-      try {
-        const ordersRes = await api.getOrders(token);
-        orders = ordersRes.data || [];
-      } catch (e) {}
-
-      // Calculate analytics
-      const totalRevenue = orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
-      const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
-
-      // Orders by status
-      const ordersByStatus: Record<string, number> = {};
-      orders.forEach((order: any) => {
-        const status = order.status || 'pending';
-        ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
+      // Real figures from the database. This page used to fabricate per-product
+      // "revenue" and "sold" counts with Math.random(), so the numbers changed
+      // on every refresh and never matched actual sales.
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${API_URL}/dashboard/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) return;
 
-      // Top products by revenue (mock)
-      const topProducts = products.slice(0, 5).map((p: any) => ({
-        ...p,
-        revenue: p.price * Math.floor(Math.random() * 10 + 1),
-        sold: Math.floor(Math.random() * 10 + 1),
-      }));
+      const { data } = await res.json();
 
       setAnalytics({
-        totalProducts: products.length,
-        totalOrders: orders.length,
-        totalRevenue,
-        averageOrderValue,
-        topProducts,
-        recentOrders: orders.slice(0, 5),
-        ordersByStatus,
+        totalProducts: data.totalProducts || 0,
+        totalOrders: data.totalOrders || 0,
+        totalRevenue: data.totalRevenue || 0,
+        averageOrderValue: data.averageOrderValue || 0,
+        topProducts: data.topProducts || [],
+        recentOrders: data.recentOrders || [],
+        ordersByStatus: data.ordersByStatus || {},
       });
     } catch (err) {
       console.error('Failed to fetch analytics:', err);

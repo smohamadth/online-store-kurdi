@@ -37,65 +37,31 @@ export default function AdminReviewsPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Try API first
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.data && data.data.length > 0) {
-            // Get reviews for each product
-            const allReviews: Review[] = [];
-            for (const product of data.data) {
-              try {
-                const reviewsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${product.id}/reviews`);
-                if (reviewsRes.ok) {
-                  const reviewsData = await reviewsRes.json();
-                  if (reviewsData.data) {
-                    reviewsData.data.forEach((review: any) => {
-                      allReviews.push({
-                        ...review,
-                        productName: product.name,
-                        productSlug: product.slug,
-                      });
-                    });
-                  }
-                }
-              } catch (e) {}
-            }
-            
-            if (allReviews.length > 0) {
-              allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-              setReviews(allReviews);
-              setApiStatus('connected');
-              setLoading(false);
-              return;
-            }
-          }
-        }
-      } catch (err) {
-        console.log('Reviews API not available');
-      }
-
-      // Fallback: Get reviews from localStorage
-      setApiStatus('disconnected');
-      const allReviews: Review[] = [];
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith('reviews_')) {
-          try {
-            const stored = JSON.parse(localStorage.getItem(key) || '[]');
-            allReviews.push(...stored);
-          } catch (e) {}
-        }
+      // One request for the whole moderation queue. This previously fetched all
+      // products and then issued a request per product (N+1), which also missed
+      // any product beyond the first page.
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${API_URL}/reviews?limit=200`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Sort by date
-      allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setReviews(allReviews);
+      if (response.ok) {
+        const data = await response.json();
+        const mapped: Review[] = (data.data || []).map((r: any) => ({
+          ...r,
+          productName: r.product?.name || 'Unknown product',
+          productSlug: r.product?.slug || '',
+          userName: r.user ? `${r.user.firstName || ''} ${r.user.lastName || ''}`.trim() : 'Anonymous',
+        }));
+        setReviews(mapped);
+        setApiStatus('connected');
+        return;
+      }
+
+      setApiStatus('disconnected');
     } catch (err) {
       console.error('Failed to fetch reviews:', err);
+      setApiStatus('disconnected');
     } finally {
       setLoading(false);
     }
@@ -105,7 +71,7 @@ export default function AdminReviewsPage() {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -113,9 +79,9 @@ export default function AdminReviewsPage() {
           },
           body: JSON.stringify({ isApproved: true }),
         });
+        if (!res.ok) throw new Error('Approve failed');
       }
 
-      // Update locally
       setReviews(reviews.map(r => r.id === reviewId ? { ...r, isApproved: true } : r));
     } catch (err) {
       console.error('Failed to approve review:', err);
@@ -126,7 +92,7 @@ export default function AdminReviewsPage() {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -134,9 +100,9 @@ export default function AdminReviewsPage() {
           },
           body: JSON.stringify({ isApproved: false }),
         });
+        if (!res.ok) throw new Error('Reject failed');
       }
 
-      // Update locally
       setReviews(reviews.map(r => r.id === reviewId ? { ...r, isApproved: false } : r));
     } catch (err) {
       console.error('Failed to reject review:', err);
