@@ -3,7 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
-import ImageUpload from '@/components/ImageUpload';
+import ImageGalleryUpload from '@/components/ImageGalleryUpload';
+
+interface GalleryImage {
+  id: string;
+  url: string;
+  alt: string;
+  isPrimary: boolean;
+  variants?: {
+    thumbnail?: string;
+    medium?: string;
+    large?: string;
+    zoom?: string;
+  };
+  sortOrder: number;
+}
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -13,13 +27,7 @@ export default function AdminProductsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
-  const [productImage, setProductImage] = useState('');
-  const [productImageVariants, setProductImageVariants] = useState<{
-    thumbnail?: string;
-    medium?: string;
-    large?: string;
-    zoom?: string;
-  } | null>(null);
+  const [productImages, setProductImages] = useState<GalleryImage[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -124,15 +132,15 @@ export default function AdminProductsPage() {
       compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : null,
       quantity: parseInt(formData.quantity) || 0,
       categoryId: formData.categoryId,
-      images: productImage ? [{ 
-        url: productImage, 
-        alt: formData.name, 
-        isPrimary: true,
-        thumbnail: productImageVariants?.thumbnail || null,
-        medium: productImageVariants?.medium || null,
-        large: productImageVariants?.large || null,
-        zoom: productImageVariants?.zoom || null,
-      }] : [],
+      images: productImages.map(img => ({
+        url: img.url,
+        alt: img.alt || formData.name,
+        isPrimary: img.isPrimary,
+        thumbnail: img.variants?.thumbnail || null,
+        medium: img.variants?.medium || null,
+        large: img.variants?.large || null,
+        zoom: img.variants?.zoom || null,
+      })),
       category: selectedCategory || { id: formData.categoryId || '', name: 'General', slug: 'general' },
       variants: [],
       status: formData.status,
@@ -205,7 +213,7 @@ export default function AdminProductsPage() {
       type: 'physical',
       status: 'active',
     });
-    setProductImage('');
+    setProductImages([]);
   };
 
   const startEdit = (product: Product) => {
@@ -222,6 +230,18 @@ export default function AdminProductsPage() {
       type: product.type,
       status: product.status,
     });
+    // Load existing images into gallery
+    if (product.images && product.images.length > 0) {
+      setProductImages(product.images.map((img, i) => ({
+        id: img.id || `img-${i}`,
+        url: getImageUrl(img.url),
+        alt: img.alt || product.name,
+        isPrimary: img.isPrimary || i === 0,
+        sortOrder: img.sortOrder || i,
+      })));
+    } else {
+      setProductImages([]);
+    }
     setShowAddModal(true);
   };
 
@@ -330,6 +350,7 @@ export default function AdminProductsPage() {
                       justifyContent: 'center',
                       overflow: 'hidden',
                       flexShrink: 0,
+                      position: 'relative',
                     }}>
                       {product.images && product.images.length > 0 && product.images[0]?.url ? (
                         <img 
@@ -339,6 +360,20 @@ export default function AdminProductsPage() {
                         />
                       ) : (
                         <span style={{ fontSize: '20px' }}>{getCategoryEmoji(product.category?.name)}</span>
+                      )}
+                      {product.images && product.images.length > 1 && (
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '2px',
+                          right: '2px',
+                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          color: '#fff',
+                          fontSize: '9px',
+                          padding: '1px 4px',
+                          borderRadius: '3px',
+                        }}>
+                          +{product.images.length - 1}
+                        </div>
                       )}
                     </div>
                     <div>
@@ -555,15 +590,12 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
-              {/* Image Upload */}
+              {/* Image Gallery Upload */}
               <div style={{ marginBottom: '24px' }}>
-                <ImageUpload
-                  onUpload={(url, variants) => {
-                    setProductImage(url);
-                    setProductImageVariants(variants || null);
-                  }}
-                  currentImage={productImage}
-                  label="Product Image"
+                <ImageGalleryUpload
+                  images={productImages}
+                  onChange={setProductImages}
+                  maxImages={10}
                 />
               </div>
 
