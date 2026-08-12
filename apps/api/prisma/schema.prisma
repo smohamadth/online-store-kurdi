@@ -739,3 +739,30 @@ model MenuItem {
   @@index([parentId])
   @@index([sortOrder])
 }
+model Banner {
+  id            String    @id @default(uuid())
+  title         String
+  subtitle      String?
+  description   String?
+  image         String
+  mobileImage   String?
+  linkUrl       String?
+  buttonText    String?
+  secondaryText String?
+  secondaryUrl  String?
+  badge         String?
+  textColor     String    @default("#ffffff")
+  overlayColor  String    @default("rgba(0,0,0,0.35)")
+  align         String    @default("left")   // left, center, right
+  position      String    @default("hero")   // hero, promo, strip
+  sortOrder     Int       @default(0)
+  isActive      Boolean   @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([position])
+  @@index([isActive])
+  @@index([sortOrder])
+}

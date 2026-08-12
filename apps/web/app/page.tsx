@@ -6,6 +6,8 @@ import Head from 'next/head';
 import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
+import HeroGallery, { Banner } from '@/components/HeroGallery';
+import PromoGrid from '@/components/PromoGrid';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -28,6 +30,8 @@ export default function HomePage() {
     { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 0 },
   ]);
   const [loading, setLoading] = useState(true);
+  const [heroBanners, setHeroBanners] = useState<Banner[]>([]);
+  const [promoBanners, setPromoBanners] = useState<Banner[]>([]);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
@@ -36,7 +40,23 @@ export default function HomePage() {
   useEffect(() => {
     fetchFeaturedProducts();
     fetchCategories();
+    fetchBanners();
   }, []);
+
+  const fetchBanners = async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const res = await fetch(`${API_URL}/banners`);
+      if (res.ok) {
+        const data = await res.json();
+        const all: Banner[] = data.data || [];
+        setHeroBanners(all.filter((b) => (b.position || 'hero') === 'hero'));
+        setPromoBanners(all.filter((b) => b.position === 'promo'));
+      }
+    } catch (err) {
+      console.log('Banners API not available, using defaults');
+    }
+  };
 
   const fetchFeaturedProducts = async () => {
     try {
@@ -126,64 +146,12 @@ export default function HomePage() {
         <link rel="canonical" href={process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'} />
       </Head>
       <div>
-      {/* Hero Section */}
-      <section style={{
-        background: 'linear-gradient(to right, #1a1a2e, #16213e)',
-        color: 'white',
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          padding: isMobile ? '48px 20px' : '96px 20px',
-        }}>
-          <div style={{ maxWidth: '600px' }}>
-            <h1 style={{
-              fontSize: isMobile ? '28px' : '48px',
-              fontWeight: 'bold',
-              letterSpacing: '-0.02em',
-              lineHeight: 1.1,
-            }}>
-              Discover Amazing Products
-            </h1>
-            <p style={{
-              marginTop: '24px',
-              fontSize: '18px',
-              lineHeight: 1.6,
-              color: '#d1d5db',
-            }}>
-              Shop the latest electronics, clothing, books, and digital products. 
-              Get the best deals with fast shipping and excellent customer service.
-            </p>
-            <div style={{
-              marginTop: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-            }}>
-              <Link href="/products" style={{
-                display: 'inline-block',
-                padding: '12px 24px',
-                backgroundColor: 'white',
-                color: '#111',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}>
-                Shop Now
-              </Link>
-              <Link href="/deals" style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'white',
-                textDecoration: 'none',
-              }}>
-                View Deals →
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Hero Gallery / Slider */}
+      <HeroGallery banners={heroBanners} />
+
+      {/* Promo Banners */}
+      <PromoGrid banners={promoBanners} />
+
 
       {/* Categories Section */}
       <section style={{

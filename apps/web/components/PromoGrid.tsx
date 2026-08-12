@@ -1,0 +1,82 @@
+'use client';
+
+import Link from 'next/link';
+import { getImageUrl } from '@/lib/api';
+import { useIsMobile } from '@/lib/hooks';
+import type { Banner } from './HeroGallery';
+
+export default function PromoGrid({ banners }: { banners: Banner[] }) {
+  const isMobile = useIsMobile();
+  if (!banners || banners.length === 0) return null;
+
+  return (
+    <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px 0' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(banners.length, 3)}, 1fr)`,
+          gap: '16px',
+        }}
+      >
+        {banners.slice(0, 6).map((b) => {
+          const inner = (
+            <div
+              style={{
+                position: 'relative',
+                height: isMobile ? '160px' : '200px',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                background: b.image
+                  ? `url(${getImageUrl(b.image)}) center/cover no-repeat`
+                  : b.overlayColor && b.overlayColor.includes('gradient')
+                  ? b.overlayColor
+                  : 'linear-gradient(120deg,#111827,#374151)',
+                border: '1px solid #e5e5e5',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'linear-gradient(90deg, rgba(0,0,0,0.6), rgba(0,0,0,0.05))',
+                }}
+              />
+              <div
+                style={{
+                  position: 'relative',
+                  padding: '22px',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  color: b.textColor || '#fff',
+                }}
+              >
+                {b.subtitle && (
+                  <span style={{ fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.85 }}>
+                    {b.subtitle}
+                  </span>
+                )}
+                <h3 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 700, marginTop: '6px' }}>{b.title}</h3>
+                {b.description && (
+                  <p style={{ marginTop: '6px', fontSize: '14px', opacity: 0.9, maxWidth: '260px' }}>{b.description}</p>
+                )}
+                {b.buttonText && (
+                  <span style={{ marginTop: '14px', fontSize: '14px', fontWeight: 700 }}>{b.buttonText} →</span>
+                )}
+              </div>
+            </div>
+          );
+
+          return b.linkUrl ? (
+            <Link key={b.id} href={b.linkUrl} style={{ textDecoration: 'none' }}>
+              {inner}
+            </Link>
+          ) : (
+            <div key={b.id}>{inner}</div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
