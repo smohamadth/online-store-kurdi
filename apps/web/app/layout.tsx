@@ -11,6 +11,7 @@ import { useStoreSettings } from '@/lib/settings';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
 import RouteProgress from '@/components/RouteProgress';
+import MaintenanceGate from '@/components/MaintenanceGate';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 // Types
@@ -847,7 +848,9 @@ export default function RootLayout({
           {/* Main Content */}
           <main style={{ minHeight: 'calc(100vh - 64px - 200px)' }}>
             <ErrorBoundary>
-              {children}
+              <MaintenanceGate>
+                {children}
+              </MaintenanceGate>
             </ErrorBoundary>
           </main>
 

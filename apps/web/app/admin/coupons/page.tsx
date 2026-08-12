@@ -1,9 +1,12 @@
 'use client';
 
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+
 import { useState, useEffect } from 'react';
 import { getCoupons, createCoupon, updateCoupon, deleteCoupon, Coupon, formatDiscount } from '@/lib/coupons';
 
 export default function AdminCouponsPage() {
+  const { settings } = useStoreSettings();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -243,7 +246,7 @@ export default function AdminCouponsPage() {
                   {formatDiscount(coupon)}
                 </td>
                 <td style={{ padding: '16px', fontSize: '14px' }}>
-                  {coupon.minOrderAmount ? `$${coupon.minOrderAmount}` : '-'}
+                  {coupon.minOrderAmount ? formatPrice(coupon.minOrderAmount, settings.currencySymbol) : '-'}
                 </td>
                 <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px' }}>
                   {coupon.usageLimit ? `${coupon.usedCount}/${coupon.usageLimit}` : coupon.usedCount}

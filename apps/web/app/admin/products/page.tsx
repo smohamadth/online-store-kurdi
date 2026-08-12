@@ -1,5 +1,7 @@
 'use client';
 
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
@@ -20,6 +22,7 @@ interface GalleryImage {
 }
 
 export default function AdminProductsPage() {
+  const { settings } = useStoreSettings();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -373,7 +376,7 @@ export default function AdminProductsPage() {
                 <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>{product.sku}</td>
                 <td style={{ padding: '16px', fontSize: '14px' }}>{product.category?.name}</td>
                 <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600 }}>
-                  ${product.price}
+                  {formatPrice(product.price, settings.currencySymbol)}
                   {product.compareAtPrice && (
                     <span style={{ fontSize: '12px', color: '#666', textDecoration: 'line-through', marginLeft: '8px' }}>
                       ${product.compareAtPrice}

@@ -69,8 +69,27 @@ app.use(helmet({
 }));
 
 // CORS configuration
+// 127.0.0.1 and localhost are DIFFERENT origins to a browser. The dev servers
+// now bind 127.0.0.1 (to avoid EACCES on Windows), so a developer browsing
+// http://127.0.0.1:3000 was blocked by CORS while http://localhost:3000 worked
+// - every API call failed and even login silently did nothing.
+// In development accept both loopback spellings on any port.
+const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const allowedOrigins = [env.FRONTEND_URL, ...extraOrigins];
+const loopback = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: (origin, cb) => {
+    // Non-browser clients (curl, server-to-server) send no Origin header.
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (isDevelopment && loopback.test(origin)) return cb(null, true);
+    return cb(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Session-ID'],

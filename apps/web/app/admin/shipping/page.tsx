@@ -1,5 +1,7 @@
 'use client';
 
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+
 import { useState, useEffect } from 'react';
 
 interface ShippingZone {
@@ -22,6 +24,7 @@ interface ShippingMethod {
 }
 
 export default function AdminShippingPage() {
+  const { settings } = useStoreSettings();
   const [zones, setZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddZone, setShowAddZone] = useState(false);
@@ -211,7 +214,7 @@ export default function AdminShippingPage() {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontWeight: 600 }}>
-                          {method.freeShippingThreshold ? 'Free' : `$${method.baseRate}`}
+                          {method.freeShippingThreshold ? 'Free' : formatPrice(method.baseRate, settings.currencySymbol)}
                         </p>
                         {method.freeShippingThreshold && (
                           <p style={{ fontSize: '12px', color: '#666' }}>

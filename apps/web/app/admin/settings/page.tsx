@@ -1,5 +1,28 @@
 'use client';
 
+// Currency list used by the settings dropdown. Selecting one fills in the
+// matching symbol, which can still be overridden by hand below.
+const CURRENCIES = [
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'IQD', symbol: 'ع.د', name: 'Iraqi Dinar' },
+  { code: 'TRY', symbol: '₺', name: 'Turkish Lira' },
+  { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+  { code: 'SAR', symbol: '﷼', name: 'Saudi Riyal' },
+  { code: 'IRR', symbol: '﷼', name: 'Iranian Rial' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+  { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
+  { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
+  { code: 'RUB', symbol: '₽', name: 'Russian Ruble' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+  { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
+];
+
 import { useState, useEffect } from 'react';
 
 export default function AdminSettingsPage() {
@@ -154,11 +177,44 @@ export default function AdminSettingsPage() {
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Currency</label>
-            <select value={storeSettings.currency} onChange={(e) => setStoreSettings({ ...storeSettings, currency: e.target.value, currencySymbol: e.target.value === 'EUR' ? '€' : e.target.value === 'GBP' ? '£' : '$' })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}>
-              <option value="USD">$ USD</option>
-              <option value="EUR">€ EUR</option>
-              <option value="GBP">£ GBP</option>
+            <select
+              value={storeSettings.currency}
+              onChange={(e) => {
+                const code = e.target.value;
+                setStoreSettings({
+                  ...storeSettings,
+                  currency: code,
+                  currencySymbol: CURRENCIES.find((c) => c.code === code)?.symbol || storeSettings.currencySymbol,
+                });
+              }}
+              style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.symbol} {c.code} — {c.name}
+                </option>
+              ))}
             </select>
+          </div>
+
+          {/* The dropdown only offered USD/EUR/GBP, and there was no way to set
+              a symbol for any other currency. Stores outside those three could
+              not display their own currency at all. */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
+              Currency Symbol
+            </label>
+            <input
+              type="text"
+              maxLength={6}
+              value={storeSettings.currencySymbol}
+              onChange={(e) => setStoreSettings({ ...storeSettings, currencySymbol: e.target.value })}
+              placeholder="$"
+              style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+            />
+            <p style={{ fontSize: '12px', color: '#777', marginTop: '4px' }}>
+              Shown next to every price. Overrides the symbol from the currency above.
+            </p>
           </div>
         </div>
       </div>
