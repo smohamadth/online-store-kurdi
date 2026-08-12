@@ -10,8 +10,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
  * a click on an internal <a>, or a history back/forward. The bar then clears
  * when the resulting pathname/search actually changes.
  *
- * Deliberately delayed: showing a loading bar for an instant navigation just
- * makes the UI flicker, so nothing appears unless the page takes >150ms.
+ * Shows on EVERY navigation, fast or slow. A minimum visible duration keeps
+ * quick transitions from flashing the bar in and straight back out.
  */
 export default function RouteProgress() {
   const pathname = usePathname();
@@ -19,38 +19,44 @@ export default function RouteProgress() {
   const [visible, setVisible] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trickle = useRef<ReturnType<typeof setInterval> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shownAt = useRef<number>(0);
+
+  // Keep the bar on screen at least this long once shown, so a 40ms
+  // navigation still reads as deliberate feedback rather than a glitch.
+  const MIN_VISIBLE_MS = 400;
 
   const clearTimers = () => {
-    if (showTimer.current) clearTimeout(showTimer.current);
     if (trickle.current) clearInterval(trickle.current);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    showTimer.current = null;
     trickle.current = null;
     hideTimer.current = null;
   };
 
   const start = () => {
     clearTimers();
-    showTimer.current = setTimeout(() => {
-      setVisible(true);
-      setProgress(12);
-      // Creep toward 90% but never reach it — completion happens on arrival.
-      trickle.current = setInterval(() => {
-        setProgress((p) => (p >= 90 ? p : p + Math.max(0.6, (90 - p) * 0.08)));
-      }, 180);
-    }, 150);
+    // Show immediately - the user asked for feedback on every navigation.
+    setVisible(true);
+    setProgress(12);
+    shownAt.current = Date.now();
+    // Creep toward 90% but never reach it - completion happens on arrival.
+    trickle.current = setInterval(() => {
+      setProgress((p) => (p >= 90 ? p : p + Math.max(0.6, (90 - p) * 0.08)));
+    }, 180);
   };
 
   const done = () => {
     clearTimers();
-    setProgress(100);
+    const elapsed = Date.now() - shownAt.current;
+    const wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
     hideTimer.current = setTimeout(() => {
-      setVisible(false);
-      setProgress(0);
-    }, 240);
+      setProgress(100);
+      hideTimer.current = setTimeout(() => {
+        setVisible(false);
+        setProgress(0);
+      }, 240);
+    }, wait);
   };
 
   useEffect(() => {
@@ -99,8 +105,15 @@ export default function RouteProgress() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The route actually changed → finish.
+  // The route actually changed -> finish.
+  // Skip the very first run: this effect also fires on mount, and completing
+  // a navigation that never started would flash the bar on every page load.
+  const mounted = useRef(false);
   useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
     done();
     return clearTimers;
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import ImageUpload from '@/components/ImageUpload';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
-import { LoadingState } from '@/components/Spinner';
+import { LoadingState, ButtonSpinner } from '@/components/Spinner';
 
 interface Banner {
   id: string;
@@ -53,6 +53,7 @@ export default function AdminBannersPage() {
   const [editing, setEditing] = useState<Banner | null>(null);
   const [form, setForm] = useState({ ...empty });
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [importing, setImporting] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const getToken = () => localStorage.getItem('token');
@@ -79,6 +80,38 @@ export default function AdminBannersPage() {
       notify('error', 'Could not load banners');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // The homepage falls back to hardcoded slides when the table is empty, which
+  // makes the gallery look uneditable. This turns those placeholders into real
+  // rows so they can actually be managed.
+  const DEFAULTS = [
+    { title: 'Discover Amazing Products', subtitle: 'New Season', description: 'Shop the latest electronics, clothing, books and digital products with fast shipping and great support.', linkUrl: '/products', buttonText: 'Shop Now', secondaryText: 'View Deals', secondaryUrl: '/deals', badge: 'Featured', overlayColor: 'linear-gradient(120deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%)', position: 'hero', sortOrder: 0 },
+    { title: 'Up to 50% Off Selected Items', subtitle: 'Limited Time', description: 'Grab the best deals of the season before they are gone.', linkUrl: '/deals', buttonText: 'Browse Deals', overlayColor: 'linear-gradient(120deg,#7f1d1d 0%,#b91c1c 55%,#f97316 100%)', position: 'hero', sortOrder: 1 },
+    { title: 'Free Shipping On Orders Over 50', subtitle: 'Every Day', description: 'Fast, tracked delivery straight to your door.', linkUrl: '/products', buttonText: 'Start Shopping', overlayColor: 'linear-gradient(120deg,#064e3b 0%,#047857 60%,#10b981 100%)', position: 'hero', sortOrder: 2 },
+    { title: 'New Arrivals', subtitle: 'Just In', linkUrl: '/products?sort=newest', buttonText: 'Explore', overlayColor: 'linear-gradient(120deg,#312e81,#6366f1)', position: 'promo', sortOrder: 0 },
+    { title: 'Best Sellers', subtitle: 'Top Rated', linkUrl: '/products?sort=popular', buttonText: 'See All', overlayColor: 'linear-gradient(120deg,#7c2d12,#ea580c)', position: 'promo', sortOrder: 1 },
+    { title: 'Clearance', subtitle: 'Final Sale', linkUrl: '/deals', buttonText: 'Save Now', overlayColor: 'linear-gradient(120deg,#0c4a6e,#0ea5e9)', position: 'promo', sortOrder: 2 },
+  ];
+
+  const importDefaults = async () => {
+    setImporting(true);
+    try {
+      for (const d of DEFAULTS) {
+        const res = await fetch(`${API_URL}/banners`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ ...d, image: '', isActive: true }),
+        });
+        if (!res.ok) throw new Error('Import failed');
+      }
+      notify('success', 'Default slides imported - you can edit them now');
+      fetchBanners();
+    } catch {
+      notify('error', 'Could not import the default slides');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -225,9 +258,35 @@ export default function AdminBannersPage() {
         <div style={{ marginTop: '32px', padding: '48px', textAlign: 'center', border: '2px dashed #e5e5e5', borderRadius: '12px' }}>
           <div style={{ fontSize: '44px' }}>🖼️</div>
           <h3 style={{ marginTop: '12px', fontWeight: 700 }}>No banners yet</h3>
-          <p style={{ color: '#666', fontSize: '14px', marginTop: '6px' }}>
-            The storefront is showing built-in default slides. Add your own to replace them.
+          <p style={{ color: '#666', fontSize: '14px', marginTop: '6px', maxWidth: '520px', marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
+            Your homepage is currently showing three <strong>built-in placeholder slides</strong>.
+            They are not database records, so there is nothing here to edit yet.
+            Import them to turn them into real, editable banners &mdash; or create your own from scratch.
           </p>
+          <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={importDefaults}
+              disabled={importing}
+              style={{
+                padding: '11px 20px',
+                backgroundColor: '#111',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: importing ? 'default' : 'pointer',
+                fontWeight: 600,
+                opacity: importing ? 0.7 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              {importing ? <><ButtonSpinner /> Importing…</> : 'Import the default slides'}
+            </button>
+            <button onClick={openCreate} style={{ ...btn, padding: '11px 20px' }}>
+              Create my own
+            </button>
+          </div>
         </div>
       ) : (
         <div style={{ marginTop: '24px', display: 'grid', gap: '14px' }}>
