@@ -83,29 +83,41 @@ product initials, so nothing looks broken. Upload real images via
 
 ---
 
-## 7. Category 404 returns HTTP 200 (soft 404)
+## 7. Unknown pages return HTTP 200 instead of 404 (soft 404)
 
-`/category/<unknown>` renders the correct "Category not found" page, but the
-HTTP status is **200**, not 404.
+`/category/<unknown>` and `/products/<unknown>` render the correct
+"not found" page, but the HTTP status is **200**.
 
-`page.tsx` is a client component, so its `notFound()` call renders
-`not-found.tsx` without being able to set the status. A server layout
-(`category/[slug]/layout.tsx`) was added — it supplies correct per-category
-metadata, but its `notFound()` still does not change the status code because
-the client page has already committed the response.
+Investigated thoroughly. `notFound()` **is** being called from a server
+component — confirmed by logging (`exists=false`) — and a minimal probe route
+proved `notFound()` returns a real 404 elsewhere in this app. The cause is
+`app/layout.tsx` being a **client component** (`'use client'`, 872 lines):
+the HTML shell is committed before page rendering completes, so `notFound()`
+can still render `not-found.tsx` but can no longer change the status code.
 
-Impact: search engines may index the empty page instead of dropping it.
-Product pages are unaffected — they 404 correctly.
+Unknown *routes* (e.g. `/no-such-page`) do correctly return 404, because Next
+resolves those before rendering.
 
-Proper fix: convert `category/[slug]/page.tsx` to a server component that
-fetches the category itself and calls `notFound()` before rendering, moving the
-interactive filtering into a child client component.
+Proper fix: convert the root layout to a server component, moving Header,
+DynamicFooter, CartProvider, ThemeProvider and the other hook-using pieces
+into client children. That is a large, high-risk refactor of the app shell and
+was deliberately not attempted alongside other changes.
+
+Impact: search engines may index the "not found" page rather than dropping it.
+Users see the correct page either way.
 
 ---
 
-## 8. Only product and category pages have server-side SEO
+## 8. ~~Only product and category pages have server-side SEO~~ — FIXED
 
-`generateMetadata` is wired up for `/products/[slug]` and `/category/[slug]`.
-The home page, `/products` and other static pages still use the old client-side
-`next/head` pattern, which is a no-op in the App Router — they fall back to
-whatever the root layout provides.
+All main routes now use `generateMetadata` (server-side):
+
+| Route | Title |
+|---|---|
+| `/` | `My Store — Shop the Best Products` |
+| `/products` | `All Products \| My Store` |
+| `/category/<slug>` | `Clothing \| My Store` |
+| `/products/<slug>` | `Classic T-Shirt \| My Store` |
+
+Each has its own canonical URL, Open Graph and Twitter tags, and exactly one
+`<title>`. Shared helpers live in `lib/seo.ts`.

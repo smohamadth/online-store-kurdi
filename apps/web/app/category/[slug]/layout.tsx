@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 
 /**
  * Server-side wrapper for category pages.
@@ -69,18 +68,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function CategoryLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: { slug: string };
-}) {
-  const category = await getCategory(params.slug);
-
-  // `null` = the API answered and the category genuinely does not exist.
-  // `undefined` = the API was unreachable; fall through rather than 404.
-  if (category === null) notFound();
-
+// The existence check lives in page.tsx. Doing it here as well meant the
+// layout rendered its not-found branch before the page could set the status.
+export default function CategoryLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Head from 'next/head';
 import { api, Product, Category, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
@@ -84,13 +83,8 @@ function ProductsContent() {
 
   return (
     <>
-      <Head>
-        <title>Products | {settings.storeName}</title>
-        <meta name="description" content={`Browse our collection of products. ${settings.storeDescription}`} />
-        <meta property="og:title" content={`Products | ${settings.storeName}`} />
-        <meta property="og:description" content={`Browse our collection of products.`} />
-        <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products`} />
-      </Head>
+      {/* SEO metadata comes from products/layout.tsx (server).
+          next/head does nothing in App Router client components. */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ 

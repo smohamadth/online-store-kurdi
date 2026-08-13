@@ -4,9 +4,9 @@ export default function CategoryNotFound() {
   return (
     <div style={{ maxWidth: '640px', margin: '0 auto', padding: '96px 20px', textAlign: 'center' }}>
       <div style={{ fontSize: '52px' }}>🔍</div>
-      <h1 style={{ fontSize: '28px', fontWeight: 800, marginTop: '16px' }}>Category not found</h1>
+      <h1 style={{ fontSize: '28px', fontWeight: 800, marginTop: '16px' }}>Page not found</h1>
       <p style={{ color: 'var(--muted, #666)', marginTop: '10px', lineHeight: 1.6 }}>
-        We couldn&apos;t find that category. It may have been renamed or removed.
+        We couldn&apos;t find that page. It may have been moved or removed.
       </p>
       <div style={{ marginTop: '28px', display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
         <Link href="/products" style={{ padding: '12px 24px', backgroundColor: 'var(--brand, #111)', color: 'var(--brand-text, #fff)', borderRadius: '8px', textDecoration: 'none', fontWeight: 600 }}>
