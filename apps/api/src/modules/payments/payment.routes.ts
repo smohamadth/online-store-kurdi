@@ -51,6 +51,24 @@ router.post('/process', authenticate, async (req, res, next) => {
   try {
     const { orderId, paymentMethod, paymentDetails } = req.body;
 
+    // SECURITY: this endpoint does not talk to a payment gateway - it simply
+    // marks an order as paid. Exposed to customers, any logged-in buyer could
+    // POST their own orderId and receive the goods for free (verified: order
+    // moved to paymentStatus=completed / status=processing with no card).
+    //
+    // Until a real gateway (Stripe/PayPal) is integrated, only staff may
+    // settle a payment - e.g. recording a bank transfer or a cash-on-delivery
+    // collection. Set PAYMENTS_ALLOW_MOCK=true to re-open it for local demos.
+    const mockAllowed = process.env.PAYMENTS_ALLOW_MOCK === 'true';
+    const isStaff = req.user?.role === 'admin' || req.user?.role === 'manager';
+
+    if (!isStaff && !mockAllowed) {
+      throw new AppError(
+        'Online payment is not enabled for this store. Please choose cash on delivery or bank transfer.',
+        501
+      );
+    }
+
     const order = await prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -79,11 +97,13 @@ router.post('/process', authenticate, async (req, res, next) => {
         method: paymentMethod || 'stripe',
         status: 'completed',
         transactionId,
-        gatewayResponse: {
+        // Stored as a JSON string column - serialise it. Passing the raw
+        // object made every payment attempt fail with a Prisma 500.
+        gatewayResponse: JSON.stringify({
           success: true,
           transactionId,
           timestamp: new Date().toISOString(),
-        },
+        }),
       },
     });
 
@@ -137,12 +157,12 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
         method: 'refund',
         status: 'completed',
         transactionId: `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        gatewayResponse: {
+        gatewayResponse: JSON.stringify({
           success: true,
           reason,
           originalTransaction: order.paymentIntentId,
           timestamp: new Date().toISOString(),
-        },
+        }),
       },
     });
 

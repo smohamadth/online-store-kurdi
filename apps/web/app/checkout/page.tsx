@@ -49,7 +49,7 @@ export default function CheckoutPage() {
 
   const [selectedShipping, setSelectedShipping] = useState<any>(null);
   const [taxInfo, setTaxInfo] = useState<any>(null);
-  const [paymentMethod, setPaymentMethod] = useState('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState('cod');
 
   const subtotal = getTotal();
   const shippingCost = selectedShipping?.isFree ? 0 : (selectedShipping?.rate || 0);
@@ -333,8 +333,12 @@ export default function CheckoutPage() {
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Payment Method</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {[
-                  { id: 'credit_card', label: 'Credit Card', icon: '💳' },
-                  { id: 'paypal', label: 'PayPal', icon: '🅿️' },
+                  // Only offline methods are listed. No card gateway is wired
+                  // up: checkout never collected card details and nothing was
+                  // ever charged, so offering "Credit Card" / "PayPal" told
+                  // the customer their card had been taken when it had not.
+                  // Re-add them once Stripe/PayPal is integrated.
+                  { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
                   { id: 'bank_transfer', label: 'Bank Transfer', icon: '🏦' },
                 ].map(method => (
                   <label key={method.id} style={{
