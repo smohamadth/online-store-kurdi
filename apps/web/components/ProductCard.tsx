@@ -62,15 +62,15 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
         width: width ? `${width}px` : undefined,
         flex: width ? '0 0 auto' : undefined,
         overflow: 'hidden',
-        borderRadius: '12px',
-        border: '1px solid #e8e8e8',
+        borderRadius: 'var(--radius, 12px)',
+        border: '1px solid var(--border, #e8e8e8)',
         backgroundColor: 'white',
         textDecoration: 'none',
         color: '#111',
         transition: 'transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease',
         transform: hovered ? 'translateY(-4px)' : 'none',
-        boxShadow: hovered ? '0 12px 28px rgba(0,0,0,0.10)' : '0 1px 2px rgba(0,0,0,0.04)',
-        borderColor: hovered ? '#d4d4d4' : '#e8e8e8',
+        boxShadow: hovered ? 'var(--shadow-hover)' : 'var(--shadow)',
+        borderColor: hovered ? 'var(--brand, #d4d4d4)' : 'var(--border, #e8e8e8)',
       }}
     >
       {/* Media */}
@@ -143,7 +143,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
           }}
         >
           {hasDiscount && (
-            <span style={badge('#dc2626')}>-{discountPct}%</span>
+            <span style={badge('var(--sale, #dc2626)')}>-{discountPct}%</span>
           )}
           {outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
           {lowStock && <span style={badge('#f59e0b')}>Only {product.quantity} left</span>}
@@ -168,13 +168,13 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
             style={{
               width: '100%',
               padding: '11px 12px',
-              borderRadius: '8px',
+              borderRadius: 'var(--btn-radius, 8px)',
               border: 'none',
               cursor: outOfStock ? 'not-allowed' : 'pointer',
               fontWeight: 700,
               fontSize: '14px',
-              backgroundColor: outOfStock ? '#d4d4d4' : added ? '#16a34a' : '#111',
-              color: '#fff',
+              backgroundColor: outOfStock ? '#d4d4d4' : added ? '#16a34a' : 'var(--brand, #111)',
+              color: 'var(--brand-text, #fff)',
               transition: 'background-color 200ms ease',
             }}
           >
@@ -215,11 +215,11 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
         </div>
 
         <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', gap: '8px', paddingTop: '4px' }}>
-          <span style={{ fontSize: '18px', fontWeight: 800 }}>
+          <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--price, #111)' }}>
             {formatPrice(product.price, currencySymbol)}
           </span>
           {hasDiscount && (
-            <span style={{ fontSize: '14px', color: '#9a9a9a', textDecoration: 'line-through' }}>
+            <span style={{ fontSize: '14px', color: 'var(--muted, #9a9a9a)', textDecoration: 'line-through' }}>
               {formatPrice(product.compareAtPrice!, currencySymbol)}
             </span>
           )}

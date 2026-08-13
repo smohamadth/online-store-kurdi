@@ -766,3 +766,59 @@ model Banner {
   @@index([isActive])
   @@index([sortOrder])
 }
+
+/// Visual theme controlled from Admin → Appearance.
+/// A single row (id = "default"), mirroring StoreSettings.
+model ThemeSettings {
+  id                String   @id @default("default")
+
+  // Brand colours
+  primaryColor      String   @default("#111111")
+  primaryTextColor  String   @default("#ffffff")
+  accentColor       String   @default("#2563eb")
+  bodyBg            String   @default("#ffffff")
+  bodyText          String   @default("#111111")
+  mutedText         String   @default("#666666")
+  borderColor       String   @default("#e5e5e5")
+  headerBg          String   @default("#ffffff")
+  headerText        String   @default("#111111")
+  footerBg          String   @default("#fafafa")
+  footerText        String   @default("#111111")
+  priceColor        String   @default("#111111")
+  saleColor         String   @default("#dc2626")
+
+  // Typography
+  fontFamily        String   @default("system")
+  baseFontSize      Int      @default(16)
+  headingWeight     Int      @default(800)
+
+  // Shape & spacing
+  radius            Int      @default(8)
+  buttonRadius      Int      @default(8)
+  containerWidth    Int      @default(1200)
+  cardShadow        String   @default("soft")   // none | soft | strong
+
+  // Layout toggles
+  productsPerRow    Int      @default(4)
+  showTrustBar      Boolean  @default(true)
+  showTestimonials  Boolean  @default(true)
+  showStats         Boolean  @default(true)
+  showNewsletter    Boolean  @default(true)
+  showDealCountdown Boolean  @default(true)
+  showCategories    Boolean  @default(true)
+  showFeatured      Boolean  @default(true)
+  showNewArrivals   Boolean  @default(true)
+
+  // Announcement bar
+  announcementText  String?
+  announcementLink  String?
+  announcementBg    String   @default("#111111")
+  announcementText2 String   @default("#ffffff")
+  showAnnouncement  Boolean  @default(false)
+
+  // Escape hatch
+  customCss         String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

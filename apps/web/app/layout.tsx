@@ -12,6 +12,8 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
 import RouteProgress from '@/components/RouteProgress';
 import MaintenanceGate from '@/components/MaintenanceGate';
+import { ThemeProvider } from '@/lib/theme';
+import AnnouncementBar from '@/components/AnnouncementBar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 // Types
@@ -458,12 +460,13 @@ function Header() {
         top: 0,
         zIndex: 50,
         width: '100%',
-        borderBottom: '1px solid #e5e5e5',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderBottom: '1px solid var(--border, #e5e5e5)',
+        backgroundColor: 'var(--header-bg, rgba(255,255,255,0.95))',
+        color: 'var(--header-text, #111)',
         backdropFilter: 'blur(10px)',
       }}>
         <div style={{
-          maxWidth: '1200px',
+          maxWidth: 'var(--container, 1200px)',
           margin: '0 auto',
           padding: '0 16px',
           display: 'flex',
@@ -691,12 +694,13 @@ function DynamicFooter() {
 
   return (
     <footer style={{
-      borderTop: '1px solid #e5e5e5',
-      backgroundColor: '#f9f9f9',
+      borderTop: '1px solid var(--border, #e5e5e5)',
+      backgroundColor: 'var(--footer-bg, #f9f9f9)',
+      color: 'var(--footer-text, #111)',
       marginTop: '64px',
     }}>
       <div style={{
-        maxWidth: '1200px',
+        maxWidth: 'var(--container, 1200px)',
         margin: '0 auto',
         padding: '40px 16px',
         display: 'grid',
@@ -836,6 +840,7 @@ export default function RootLayout({
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <ErrorBoundary>
+        <ThemeProvider>
         {/* useSearchParams() must sit inside Suspense or the whole route
             opts out of static rendering and the build errors. */}
         <Suspense fallback={null}>
@@ -843,6 +848,7 @@ export default function RootLayout({
         </Suspense>
         <ToastContainer />
         <CartProvider>
+          <AnnouncementBar />
           <Header />
 
           {/* Main Content */}
@@ -857,6 +863,7 @@ export default function RootLayout({
           {/* Footer */}
           <DynamicFooter />
         </CartProvider>
+        </ThemeProvider>
         </ErrorBoundary>
       </body>
     </html>

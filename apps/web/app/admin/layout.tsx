@@ -129,6 +129,7 @@ export default function AdminLayout({
     { path: '/admin/users', label: 'Users', icon: '👥' },
     { path: '/admin/menus', label: 'Menus', icon: '📑' },
     { path: '/admin/banners', label: 'Gallery & Banners', icon: '🖼️' },
+    { path: '/admin/appearance', label: 'Appearance', icon: '🎨' },
     { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
     { path: '/admin/tax', label: 'Tax', icon: '💰' },
     { path: '/admin/analytics', label: 'Analytics', icon: '📈' },

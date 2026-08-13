@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
+import { useTheme } from '@/lib/theme';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
 import PromoGrid from '@/components/PromoGrid';
@@ -45,6 +46,7 @@ export default function HomePage() {
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
   const { settings } = useStoreSettings();
+  const { theme } = useTheme();
 
   useEffect(() => {
     fetchFeaturedProducts();
@@ -188,13 +190,13 @@ export default function HomePage() {
       {/* Promo Banners */}
       <PromoGrid banners={promoBanners} />
 
-      {/* Trust / guarantees bar */}
-      <TrustBar />
+      {/* Sections below are toggled from Admin -> Appearance */}
+      {theme.showTrustBar && <TrustBar />}
 
 
       {/* Categories Section */}
       <section style={{
-        maxWidth: '1200px',
+        maxWidth: 'var(--container, 1200px)',
         margin: '0 auto',
         padding: '64px 20px',
       }}>
@@ -232,7 +234,7 @@ export default function HomePage() {
 
       {/* Featured Products Section */}
       <section style={{
-        maxWidth: '1200px',
+        maxWidth: 'var(--container, 1200px)',
         margin: '0 auto',
         padding: '64px 20px',
       }}>
@@ -269,13 +271,13 @@ export default function HomePage() {
           <div style={{
             marginTop: '32px',
             display: 'grid',
-            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${theme.productsPerRow}, 1fr)`,
             gap: '24px',
           }}>
             {featuredProducts
               // Keep the grid flush: only render full rows of 4 (2 on mobile)
               // so we never leave a single orphan card on the last row.
-              .slice(0, Math.max(isMobile ? 2 : 4, Math.floor(featuredProducts.length / (isMobile ? 2 : 4)) * (isMobile ? 2 : 4)))
+              .slice(0, Math.max(isMobile ? 2 : theme.productsPerRow, Math.floor(featuredProducts.length / (isMobile ? 2 : theme.productsPerRow)) * (isMobile ? 2 : theme.productsPerRow)))
               .map((product) => (
                 <ProductCard
                   key={product.id}
@@ -306,8 +308,7 @@ export default function HomePage() {
         currencySymbol={settings.currencySymbol}
       />
 
-      {/* Deal of the day */}
-      <DealCountdown />
+      {theme.showDealCountdown && <DealCountdown />}
 
       {/* Trending - hidden automatically when the API returns nothing */}
       <ProductCarousel
@@ -318,16 +319,14 @@ export default function HomePage() {
         currencySymbol={settings.currencySymbol}
       />
 
-      {/* Testimonials */}
-      <Testimonials />
+      {theme.showTestimonials && <Testimonials />}
 
-      {/* Stats */}
-      <StatsStrip />
+      {theme.showStats && <StatsStrip />}
 
       {/* Features Section */}
       <section style={{ backgroundColor: '#f9f9f9' }}>
         <div style={{
-          maxWidth: '1200px',
+          maxWidth: 'var(--container, 1200px)',
           margin: '0 auto',
           padding: '64px 20px',
         }}>
@@ -408,9 +407,11 @@ export default function HomePage() {
         </div>
       </section>
 
+      {theme.showNewsletter && (
+      <>
       {/* Newsletter Section */}
       <section style={{
-        maxWidth: '1200px',
+        maxWidth: 'var(--container, 1200px)',
         margin: '0 auto',
         padding: '64px 20px',
       }}>
@@ -480,6 +481,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      </>
+      )}
     </div>
     </>
   );
