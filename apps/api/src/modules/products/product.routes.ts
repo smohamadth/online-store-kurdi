@@ -50,6 +50,39 @@ const createProductSchema = z.object({
 
 const updateProductSchema = createProductSchema.partial();
 
+
+/**
+ * Server-side sanitiser for product descriptions.
+ *
+ * The admin editor sanitises as you type, but a client can POST anything
+ * directly to the API. Since the storefront renders this HTML, stripping
+ * scripts and event handlers here is what actually prevents stored XSS.
+ */
+const ALLOWED_TAGS = [
+  'p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'strike',
+  'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a', 'span', 'div',
+];
+
+function sanitizeDescription(html: string): string {
+  if (!html) return html;
+
+  let out = html
+    // Drop whole dangerous elements including their contents.
+    .replace(/<\s*(script|style|iframe|object|embed|form|input|link|meta)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*(script|style|iframe|object|embed|form|input|link|meta)\b[^>]*\/?>/gi, '')
+    // Inline event handlers: onclick=, onerror=, ...
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    // javascript:/data: URLs
+    .replace(/(href|src)\s*=\s*("|')\s*(javascript|data)\s*:[^"']*\2/gi, '$1="#"');
+
+  // Remove any tag outside the allow-list, keeping inner text.
+  out = out.replace(/<\/?([a-zA-Z0-9]+)\b[^>]*>/g, (match, tag) =>
+    ALLOWED_TAGS.includes(String(tag).toLowerCase()) ? match : ''
+  );
+
+  return out.trim();
+}
+
 const productQuerySchema = z.object({
   page: z.string().transform(Number).default('1'),
   limit: z.string().transform(Number).default('20'),
@@ -419,6 +452,7 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
     const product = await prisma.product.create({
       data: {
         ...data,
+        description: sanitizeDescription(data.description),
         metaKeywords: data.metaKeywords ?? '[]',
         categoryId,
         slug,
@@ -479,6 +513,9 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
       where: { id },
       data: {
         ...productData,
+        ...(productData.description !== undefined
+          ? { description: sanitizeDescription(productData.description as string) }
+          : {}),
         slug: data.slug || (data.name ? slugify(data.name, { lower: true, strict: true }) : undefined),
       },
       include: {

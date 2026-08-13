@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Head from 'next/head';
 import { useCart } from '@/lib/store';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
@@ -196,47 +195,38 @@ export default function ProductPage() {
 
   return (
     <>
-      <Head>
-        <title>{product.name} | {settings.storeName}</title>
-        <meta name="description" content={product.shortDescription || product.description} />
-        <meta property="og:title" content={product.name} />
-        <meta property="og:description" content={product.shortDescription || product.description} />
-        <meta property="og:type" content="product" />
-        <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products/${slug}`} />
-        {product.images?.[0]?.url && (
-          <meta property="og:image" content={getImageUrl(product.images[0].url)} />
-        )}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={product.name} />
-        <meta name="twitter:description" content={product.shortDescription || product.description} />
-        <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'}/products/${slug}`} />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Product',
-              name: product.name,
-              description: product.description,
-              image: product.images?.map((img: any) => getImageUrl(img.url)) || [],
-              sku: product.sku,
-              offers: {
-                '@type': 'Offer',
-                price: product.price,
-                priceCurrency: settings.currency || 'USD',
-                availability: product.quantity > 0
-                  ? 'https://schema.org/InStock'
-                  : 'https://schema.org/OutOfStock',
-              },
-              aggregateRating: product.reviewCount > 0 ? {
-                '@type': 'AggregateRating',
-                ratingValue: product.averageRating,
-                reviewCount: product.reviewCount,
-              } : undefined,
-            }),
-          }}
-        />
-      </Head>
+      {/* Meta tags live in layout.tsx (generateMetadata). next/head is a
+          no-op in App Router client components, so the tags that used to be
+          here never reached the HTML - and once layout.tsx was added they
+          would have produced a second, conflicting <title>.
+          JSON-LD is kept: structured data is valid anywhere in the document. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            name: product.name,
+            description: (product.description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+            image: product.images?.map((img: any) => getImageUrl(img.url)) || [],
+            sku: product.sku,
+            offers: {
+              '@type': 'Offer',
+              url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/products/${slug}`,
+              price: product.price,
+              priceCurrency: settings.currency || 'USD',
+              availability: product.quantity > 0
+                ? 'https://schema.org/InStock'
+                : 'https://schema.org/OutOfStock',
+            },
+            aggregateRating: product.reviewCount > 0 ? {
+              '@type': 'AggregateRating',
+              ratingValue: product.averageRating,
+              reviewCount: product.reviewCount,
+            } : undefined,
+          }),
+        }}
+      />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ 
@@ -548,7 +538,13 @@ export default function ProductPage() {
       {/* Product Description */}
       <div style={{ padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginBottom: '48px' }}>
         <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '16px' }}>Description</h2>
-        <p style={{ lineHeight: 1.8, color: '#333', fontSize: '16px' }}>{product.description}</p>
+        {/* Descriptions are authored in the admin rich-text editor, so render
+            the HTML. The editor sanitises on input and the API sanitises on
+            save; this only ever displays tags from that allow-list. */}
+        <div
+          style={{ lineHeight: 1.8, color: 'var(--body-text, #333)', fontSize: '16px' }}
+          dangerouslySetInnerHTML={{ __html: product.description || '' }}
+        />
       </div>
 
       {/* Reviews Section */}

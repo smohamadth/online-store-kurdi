@@ -819,21 +819,22 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <title>{settings.metaTitle || settings.storeName}</title>
-        <meta name="description" content={settings.metaDescription || settings.storeDescription} />
-        <meta name="keywords" content="online store, shop, electronics, clothing, books, digital products" />
+        {/* NOTE: no <title>/<description> here.
+            This layout renders on EVERY route, so a hardcoded title was
+            emitted alongside the per-page metadata - product pages ended up
+            with two <title> tags and two descriptions, and crawlers take the
+            first one, which was the generic site title. Page-level SEO now
+            comes from generateMetadata (see products/[slug]/layout.tsx).
+            Only route-independent tags belong here. */}
         <meta name="author" content={settings.storeName} />
-        
-        {/* Open Graph */}
-        <meta property="og:type" content="website" />
         <meta property="og:site_name" content={settings.storeName} />
         <meta property="og:locale" content="en_US" />
-        
-        {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
         
         {/* Canonical URL */}
-        <link rel="canonical" href={process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com'} />
+        {/* No site-wide canonical: it pointed every page at the homepage,
+            telling crawlers each product was a duplicate of "/". Canonicals
+            are set per route via generateMetadata. */}
         
         {/* Favicon */}
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

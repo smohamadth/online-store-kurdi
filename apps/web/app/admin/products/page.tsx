@@ -1,6 +1,8 @@
 'use client';
 
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import RichTextEditor, { htmlToText } from '@/components/RichTextEditor';
+import SeoPanel, { SeoValues, slugify, buildMetaTitle, buildMetaDescription, buildKeywords } from '@/components/SeoPanel';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -34,6 +36,10 @@ export default function AdminProductsPage() {
   const [productImages, setProductImages] = useState<GalleryImage[]>([]);
 
   // Form state
+  const [seo, setSeo] = useState<SeoValues>({
+    metaTitle: '', metaDescription: '', metaKeywords: [], slug: '',
+  });
+
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -126,7 +132,12 @@ export default function AdminProductsPage() {
       sku: formData.sku,
       description: formData.description,
       shortDescription: formData.shortDescription,
-      slug: formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+      // Slug and meta tags come from the SEO panel, which auto-fills them
+      // from the product but lets the admin override each one.
+      slug: seo.slug || slugify(formData.name),
+      metaTitle: seo.metaTitle || null,
+      metaDescription: seo.metaDescription || null,
+      metaKeywords: seo.metaKeywords,
       price: parseFloat(formData.price) || 0,
       compareAtPrice: formData.compareAtPrice ? parseFloat(formData.compareAtPrice) : null,
       quantity: parseInt(formData.quantity) || 0,
@@ -205,6 +216,7 @@ export default function AdminProductsPage() {
       status: 'active',
     });
     setProductImages([]);
+    setSeo({ metaTitle: '', metaDescription: '', metaKeywords: [], slug: '' });
   };
 
   const startEdit = (product: Product) => {
@@ -221,6 +233,24 @@ export default function AdminProductsPage() {
       type: product.type,
       status: product.status,
     });
+
+    // Load stored SEO, falling back to generated values for products created
+    // before the SEO panel existed (their meta columns are empty).
+    const p: any = product;
+    let storedKeywords: string[] = [];
+    try {
+      const raw = p.metaKeywords;
+      storedKeywords = Array.isArray(raw) ? raw : raw ? JSON.parse(raw) : [];
+    } catch {
+      storedKeywords = [];
+    }
+    setSeo({
+      metaTitle: p.metaTitle || buildMetaTitle(product.name, settings.storeName),
+      metaDescription: p.metaDescription || buildMetaDescription(product.description || '', product.name),
+      metaKeywords: storedKeywords.length ? storedKeywords : buildKeywords(product.name, product.category?.name, product.description),
+      slug: product.slug || slugify(product.name),
+    });
+
     // Load existing images into gallery
     if (product.images && product.images.length > 0) {
       setProductImages(product.images.map((img, i) => ({
@@ -512,12 +542,10 @@ export default function AdminProductsPage() {
 
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Description *</label>
-                <textarea
+                <RichTextEditor
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  required
-                  rows={3}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', resize: 'vertical' }}
+                  onChange={(html) => setFormData({ ...formData, description: html })}
+                  placeholder="Describe this product - features, materials, sizing…"
                 />
               </div>
 
@@ -600,6 +628,17 @@ export default function AdminProductsPage() {
                   images={productImages}
                   onChange={setProductImages}
                   maxImages={10}
+                />
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <SeoPanel
+                  productName={formData.name}
+                  descriptionHtml={formData.description}
+                  categoryName={categories.find((c: any) => c.id === formData.categoryId)?.name}
+                  storeName={settings.storeName}
+                  value={seo}
+                  onChange={setSeo}
                 />
               </div>
 
