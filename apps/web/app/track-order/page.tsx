@@ -75,7 +75,7 @@ export default function TrackOrderPage() {
         padding: '24px',
         border: '1px solid #e5e5e5',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
         marginBottom: '32px',
       }}>
         <div style={{ marginBottom: '16px' }}>
@@ -155,7 +155,7 @@ export default function TrackOrderPage() {
         <div style={{
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--card-bg, white)',
           overflow: 'hidden',
         }}>
           {/* Order Header */}

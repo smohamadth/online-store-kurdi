@@ -81,9 +81,9 @@ export default function AccountLayout({
   const SidebarContent = () => (
     <div style={{
       padding: isMobile ? '16px' : '24px',
-      border: '1px solid #e5e5e5',
+      border: '1px solid var(--border, #e5e5e5)',
       borderRadius: '8px',
-      backgroundColor: 'white',
+      backgroundColor: 'var(--card-bg, white)',
       position: isMobile ? 'static' : 'sticky',
       top: '80px',
     }}>
@@ -108,7 +108,7 @@ export default function AccountLayout({
       </h2>
       <p style={{ 
         fontSize: '13px', 
-        color: '#666', 
+        color: 'var(--muted, #666)', 
         textAlign: 'center', 
         marginBottom: '20px', 
         wordBreak: 'break-all',
@@ -177,8 +177,8 @@ export default function AccountLayout({
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '16px 12px' : '24px 16px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+      <nav style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>Account</span>
       </nav>
@@ -195,7 +195,7 @@ export default function AccountLayout({
             padding: '12px',
             marginBottom: '16px',
             backgroundColor: '#f5f5f5',
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e5e5)',
             borderRadius: '6px',
             fontSize: '14px',
             fontWeight: 500,

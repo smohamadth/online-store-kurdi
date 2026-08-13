@@ -162,7 +162,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '64px 20px' }}>
-        <p style={{ color: '#666' }}>Loading profile...</p>
+        <p style={{ color: 'var(--muted, #666)' }}>Loading profile...</p>
       </div>
     );
   }
@@ -195,9 +195,9 @@ export default function ProfilePage() {
       {/* Profile Form */}
       <div style={{
         padding: isMobile ? '16px' : '32px',
-        border: '1px solid #e5e5e5',
+        border: '1px solid var(--border, #e5e5e5)',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
         marginBottom: '20px',
       }}>
         <h2 style={{ fontSize: isMobile ? '17px' : '20px', fontWeight: 'bold', marginBottom: '20px' }}>
@@ -223,7 +223,7 @@ export default function ProfilePage() {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -243,7 +243,7 @@ export default function ProfilePage() {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -265,7 +265,7 @@ export default function ProfilePage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -274,7 +274,7 @@ export default function ProfilePage() {
               }}
               disabled
             />
-            <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginTop: '4px' }}>
               Email cannot be changed
             </p>
           </div>
@@ -291,7 +291,7 @@ export default function ProfilePage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -323,9 +323,9 @@ export default function ProfilePage() {
       {/* Change Password */}
       <div style={{
         padding: isMobile ? '16px' : '32px',
-        border: '1px solid #e5e5e5',
+        border: '1px solid var(--border, #e5e5e5)',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
       }}>
         <h2 style={{ fontSize: isMobile ? '17px' : '20px', fontWeight: 'bold', marginBottom: '20px' }}>
           Change Password
@@ -345,7 +345,7 @@ export default function ProfilePage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -373,7 +373,7 @@ export default function ProfilePage() {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -394,7 +394,7 @@ export default function ProfilePage() {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',

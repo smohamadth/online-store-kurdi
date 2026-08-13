@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <details style={{
               textAlign: 'left',
               padding: '12px',
-              backgroundColor: '#fff',
+              backgroundColor: 'var(--card-bg, #fff)',
               borderRadius: '4px',
               marginBottom: '16px',
               fontSize: '12px',

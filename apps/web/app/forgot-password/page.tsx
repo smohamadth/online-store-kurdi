@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
           padding: '40px',
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--card-bg, white)',
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>📧</div>
@@ -114,7 +114,7 @@ export default function ForgotPasswordPage() {
               onClick={() => { setSent(false); setResetToken(''); }}
               style={{
                 padding: '12px 24px',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--card-bg, white)',
                 color: '#000',
                 border: '1px solid #000',
                 borderRadius: '6px',
@@ -136,7 +136,7 @@ export default function ForgotPasswordPage() {
         padding: '40px',
         border: '1px solid #e5e5e5',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
       }}>
         <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
           Forgot Password?

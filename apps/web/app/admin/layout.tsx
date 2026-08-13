@@ -254,7 +254,25 @@ export default function AdminLayout({
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', overflow: 'hidden' }}>
+    // The admin panel deliberately opts OUT of the storefront theme.
+    // ThemeProvider sets --body-bg / --body-text on :root, which the admin
+    // inherited: picking a dark storefront theme turned admin headings into
+    // near-invisible light text on white cards. These resets pin the dashboard
+    // to its own neutral palette regardless of what the store looks like.
+    <div
+      data-admin-shell
+      style={{
+        display: 'flex',
+        minHeight: '100vh',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        backgroundColor: '#f5f5f7',
+        color: '#111111',
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontSize: '16px',
+      }}
+    >
       {/* Mobile header */}
       {isMobile && (
         <div style={{

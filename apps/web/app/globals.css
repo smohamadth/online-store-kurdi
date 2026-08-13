@@ -13,11 +13,15 @@ html, body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* These defer to Admin -> Appearance. The literals are only the fallback
+     used before the theme loads; previously they were hardcoded and competed
+     with the ThemeProvider's rule at equal specificity, so a dark theme could
+     leave the page white depending on stylesheet order. */
+  font-family: var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #ffffff;
-  color: #000000;
+  background-color: var(--body-bg, #ffffff);
+  color: var(--body-text, #000000);
   overflow-x: hidden;
 }
 
@@ -62,8 +66,8 @@ html {
 
 /* Selection color */
 ::selection {
-  background: #000;
-  color: #fff;
+  background: var(--brand, #000);
+  color: var(--brand-text, #fff);
 }
 
 /* Mobile responsive utilities */
@@ -171,4 +175,41 @@ html {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ------------------------------------------------------------------
+   Admin panel opts out of the storefront theme.
+
+   ThemeProvider defines --brand/--muted/--body-* on :root, so the admin
+   dashboard inherited them. A dark storefront theme (e.g. the Midnight
+   preset) made admin headings light-on-white and effectively unreadable.
+   Re-declaring the variables on the admin shell keeps the dashboard on a
+   fixed neutral palette no matter how the store is styled.
+   ------------------------------------------------------------------ */
+[data-admin-shell] {
+  --brand: #111111;
+  --brand-text: #ffffff;
+  --accent: #2563eb;
+  --body-bg: #f5f5f7;
+  --body-text: #111111;
+  --card-bg: #ffffff;
+  --muted: #666666;
+  --border: #e5e5e5;
+  --header-bg: #ffffff;
+  --header-text: #111111;
+  --footer-bg: #fafafa;
+  --footer-text: #111111;
+  --price: #111111;
+  --sale: #dc2626;
+  --radius: 8px;
+  --btn-radius: 6px;
+  --container: 100%;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.1);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size: 16px;
+  --heading-weight: 700;
+  color: var(--body-text);
+  font-family: var(--font);
+  font-size: var(--font-size);
 }

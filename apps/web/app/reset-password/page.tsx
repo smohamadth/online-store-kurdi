@@ -68,7 +68,7 @@ function ResetPasswordContent() {
           padding: '40px',
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--card-bg, white)',
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>✅</div>
@@ -104,7 +104,7 @@ function ResetPasswordContent() {
           padding: '40px',
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--card-bg, white)',
           textAlign: 'center',
         }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>⚠️</div>
@@ -139,7 +139,7 @@ function ResetPasswordContent() {
         padding: '40px',
         border: '1px solid #e5e5e5',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
       }}>
         <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
           Reset Your Password

@@ -64,7 +64,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
         overflow: 'hidden',
         borderRadius: 'var(--radius, 12px)',
         border: '1px solid var(--border, #e8e8e8)',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
         textDecoration: 'none',
         color: '#111',
         transition: 'transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease',
@@ -78,7 +78,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
         style={{
           position: 'relative',
           aspectRatio: '1',
-          backgroundColor: '#f6f6f6',
+          backgroundColor: 'var(--card-bg, #f6f6f6)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

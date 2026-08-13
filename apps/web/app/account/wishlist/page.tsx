@@ -92,7 +92,7 @@ export default function WishlistPage() {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '64px', color: '#666' }}>Loading wishlist...</div>;
+    return <div style={{ textAlign: 'center', padding: '64px', color: 'var(--muted, #666)' }}>Loading wishlist...</div>;
   }
 
   return (
@@ -105,19 +105,19 @@ export default function WishlistPage() {
         <div style={{
           textAlign: 'center',
           padding: '64px',
-          border: '1px solid #e5e5e5',
+          border: '1px solid var(--border, #e5e5e5)',
           borderRadius: '8px',
         }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>❤️</div>
           <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Your wishlist is empty</h2>
-          <p style={{ color: '#666', marginBottom: '24px' }}>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '24px' }}>
             Save items you love to your wishlist
           </p>
           <Link href="/products" style={{
             display: 'inline-block',
             padding: '12px 24px',
-            backgroundColor: '#000',
-            color: '#fff',
+            backgroundColor: 'var(--brand, #000)',
+            color: 'var(--brand-text, #fff)',
             borderRadius: '6px',
             textDecoration: 'none',
             fontWeight: 600,
@@ -131,10 +131,10 @@ export default function WishlistPage() {
             <div
               key={item.id}
               style={{
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '8px',
                 overflow: 'hidden',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--card-bg, white)',
               }}
             >
               {/* Product Image */}
@@ -158,7 +158,7 @@ export default function WishlistPage() {
                 <Link href={`/products/${item.product?.slug || '#'}`} style={{ textDecoration: 'none', color: '#000' }}>
                   <h3 style={{ fontWeight: 600, marginBottom: '8px', fontSize: '15px' }}>{item.product?.name || 'Product'}</h3>
                 </Link>
-                <p style={{ fontSize: '13px', color: '#666', marginBottom: '8px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--muted, #666)', marginBottom: '8px' }}>
                   {item.product?.category?.name || ''}
                 </p>
                 <span style={{ fontSize: '18px', fontWeight: 'bold', display: 'block', marginBottom: '12px' }}>
@@ -172,8 +172,8 @@ export default function WishlistPage() {
                     style={{
                       flex: 1,
                       padding: '10px',
-                      backgroundColor: '#000',
-                      color: '#fff',
+                      backgroundColor: 'var(--brand, #000)',
+                      color: 'var(--brand-text, #fff)',
                       border: 'none',
                       borderRadius: '6px',
                       fontSize: '14px',

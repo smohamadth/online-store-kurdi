@@ -74,14 +74,14 @@ export default function RegisterPage() {
     }}>
       <div style={{
         padding: '40px',
-        border: '1px solid #e5e5e5',
+        border: '1px solid var(--border, #e5e5e5)',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
       }}>
         <h1 style={{ fontSize: '28px', fontWeight: 'bold', textAlign: 'center', marginBottom: '8px' }}>
           Create Account
         </h1>
-        <p style={{ textAlign: 'center', color: '#666', marginBottom: '32px' }}>
+        <p style={{ textAlign: 'center', color: 'var(--muted, #666)', marginBottom: '32px' }}>
           Join us and start shopping
         </p>
 
@@ -115,7 +115,7 @@ export default function RegisterPage() {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -136,7 +136,7 @@ export default function RegisterPage() {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -159,7 +159,7 @@ export default function RegisterPage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -181,13 +181,13 @@ export default function RegisterPage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
               }}
             />
-            <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginTop: '4px' }}>
               Must be at least 8 characters
             </p>
           </div>
@@ -206,7 +206,7 @@ export default function RegisterPage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -238,7 +238,7 @@ export default function RegisterPage() {
         </form>
 
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
-          <p style={{ fontSize: '14px', color: '#666' }}>
+          <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
             Already have an account?{' '}
             <Link href="/login" style={{ color: '#000', fontWeight: 500 }}>
               Sign in

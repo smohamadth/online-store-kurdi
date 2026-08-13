@@ -110,7 +110,7 @@ export default function OrderDetailPage() {
   if (loading) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
-        <p style={{ color: '#666' }}>Loading order details...</p>
+        <p style={{ color: 'var(--muted, #666)' }}>Loading order details...</p>
       </div>
     );
   }
@@ -122,8 +122,8 @@ export default function OrderDetailPage() {
         <Link href="/account/orders" style={{
           display: 'inline-block',
           padding: '12px 24px',
-          backgroundColor: '#000',
-          color: '#fff',
+          backgroundColor: 'var(--brand, #000)',
+          color: 'var(--brand-text, #fff)',
           borderRadius: '6px',
           textDecoration: 'none',
         }}>
@@ -136,12 +136,12 @@ export default function OrderDetailPage() {
   if (!order) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px', textAlign: 'center' }}>
-        <p style={{ color: '#666', marginBottom: '16px' }}>Order not found</p>
+        <p style={{ color: 'var(--muted, #666)', marginBottom: '16px' }}>Order not found</p>
         <Link href="/account/orders" style={{
           display: 'inline-block',
           padding: '12px 24px',
-          backgroundColor: '#000',
-          color: '#fff',
+          backgroundColor: 'var(--brand, #000)',
+          color: 'var(--brand-text, #fff)',
           borderRadius: '6px',
           textDecoration: 'none',
         }}>
@@ -156,12 +156,12 @@ export default function OrderDetailPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
-        <Link href="/account" style={{ textDecoration: 'none', color: '#666' }}>Account</Link>
+        <Link href="/account" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Account</Link>
         <span>/</span>
-        <Link href="/account/orders" style={{ textDecoration: 'none', color: '#666' }}>Orders</Link>
+        <Link href="/account/orders" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Orders</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>#{order.orderNumber || order.id}</span>
       </nav>
@@ -172,7 +172,7 @@ export default function OrderDetailPage() {
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>
             Order #{order.orderNumber || order.id}
           </h1>
-          <p style={{ color: '#666' }}>
+          <p style={{ color: 'var(--muted, #666)' }}>
             Placed on {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
@@ -245,12 +245,12 @@ export default function OrderDetailPage() {
                   {step}
                 </span>
                 {index === 1 && order.shippedAt && (
-                  <p style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                  <p style={{ fontSize: '10px', color: 'var(--muted, #666)', marginTop: '4px' }}>
                     {new Date(order.shippedAt).toLocaleDateString()}
                   </p>
                 )}
                 {index === 3 && order.deliveredAt && (
-                  <p style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                  <p style={{ fontSize: '10px', color: 'var(--muted, #666)', marginTop: '4px' }}>
                     {new Date(order.deliveredAt).toLocaleDateString()}
                   </p>
                 )}
@@ -265,7 +265,7 @@ export default function OrderDetailPage() {
         <div>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Order Items</h2>
           <div style={{
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e5e5)',
             borderRadius: '8px',
             overflow: 'hidden',
           }}>
@@ -295,11 +295,11 @@ export default function OrderDetailPage() {
                 <div style={{ flex: 1 }}>
                   <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>{getItemName(item)}</h3>
                   {getItemVariant(item) && (
-                    <p style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>
+                    <p style={{ fontSize: '14px', color: 'var(--muted, #666)', marginBottom: '4px' }}>
                       {getItemVariant(item)}
                     </p>
                   )}
-                  <p style={{ fontSize: '14px', color: '#666' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
                     Qty: {item.quantity || 1}
                   </p>
                 </div>
@@ -307,7 +307,7 @@ export default function OrderDetailPage() {
                 {/* Price */}
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ fontWeight: 600 }}>{formatPrice(getItemPrice(item) * (item.quantity || 1), settings.currencySymbol)}</p>
-                  <p style={{ fontSize: '12px', color: '#666' }}>{formatPrice(getItemPrice(item), settings.currencySymbol)} each</p>
+                  <p style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>{formatPrice(getItemPrice(item), settings.currencySymbol)} each</p>
                 </div>
               </div>
             ))}
@@ -319,19 +319,19 @@ export default function OrderDetailPage() {
           {/* Payment Info */}
           <div style={{
             padding: '24px',
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e5e5)',
             borderRadius: '8px',
             marginBottom: '24px',
           }}>
             <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Payment</h2>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: '#666' }}>Method</span>
+              <span style={{ color: 'var(--muted, #666)' }}>Method</span>
               <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>
                 {order.paymentMethod?.replace('_', ' ') || 'Credit Card'}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#666' }}>Status</span>
+              <span style={{ color: 'var(--muted, #666)' }}>Status</span>
               <span style={{ 
                 fontWeight: 500, 
                 color: order.paymentStatus === 'completed' ? '#22c55e' : '#f59e0b',
@@ -346,7 +346,7 @@ export default function OrderDetailPage() {
           {order.shippingAddress && (
             <div style={{
               padding: '24px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e5e5)',
               borderRadius: '8px',
               marginBottom: '24px',
             }}>
@@ -354,29 +354,29 @@ export default function OrderDetailPage() {
               <p style={{ fontWeight: 500 }}>
                 {order.shippingAddress.firstName} {order.shippingAddress.lastName}
               </p>
-              <p style={{ color: '#666' }}>{order.shippingAddress.address}</p>
-              <p style={{ color: '#666' }}>
+              <p style={{ color: 'var(--muted, #666)' }}>{order.shippingAddress.address}</p>
+              <p style={{ color: 'var(--muted, #666)' }}>
                 {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
               </p>
-              <p style={{ color: '#666' }}>{order.shippingAddress.country}</p>
+              <p style={{ color: 'var(--muted, #666)' }}>{order.shippingAddress.country}</p>
             </div>
           )}
 
           {/* Order Summary */}
           <div style={{
             padding: '24px',
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e5e5)',
             borderRadius: '8px',
             backgroundColor: '#f9f9f9',
           }}>
             <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Summary</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Subtotal</span>
+                <span style={{ color: 'var(--muted, #666)' }}>Subtotal</span>
                 <span style={{ fontWeight: 500 }}>{formatPrice(order.subtotal || 0, settings.currencySymbol)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Shipping</span>
+                <span style={{ color: 'var(--muted, #666)' }}>Shipping</span>
                 <span style={{ fontWeight: 500 }}>
                   {order.shippingAmount === 0 ? (
                     <span style={{ color: '#22c55e' }}>Free</span>
@@ -386,7 +386,7 @@ export default function OrderDetailPage() {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Tax</span>
+                <span style={{ color: 'var(--muted, #666)' }}>Tax</span>
                 <span style={{ fontWeight: 500 }}>{formatPrice(order.taxAmount || 0, settings.currencySymbol)}</span>
               </div>
               {order.discountAmount > 0 && (
@@ -410,7 +410,7 @@ export default function OrderDetailPage() {
           {order.trackingNumber && (
             <div style={{
               padding: '16px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e5e5)',
               borderRadius: '8px',
               marginBottom: '16px',
               backgroundColor: '#f0f9ff',
@@ -426,8 +426,8 @@ export default function OrderDetailPage() {
               display: 'block',
               textAlign: 'center',
               padding: '12px',
-              backgroundColor: '#000',
-              color: '#fff',
+              backgroundColor: 'var(--brand, #000)',
+              color: 'var(--brand-text, #fff)',
               borderRadius: '6px',
               textDecoration: 'none',
               fontWeight: 500,
@@ -438,7 +438,7 @@ export default function OrderDetailPage() {
               display: 'block',
               textAlign: 'center',
               padding: '12px',
-              backgroundColor: 'white',
+              backgroundColor: 'var(--card-bg, white)',
               color: '#000',
               border: '1px solid #000',
               borderRadius: '6px',

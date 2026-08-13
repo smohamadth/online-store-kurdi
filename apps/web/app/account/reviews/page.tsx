@@ -81,7 +81,7 @@ export default function MyReviewsPage() {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '64px 20px' }}>
-        <p style={{ color: '#666' }}>Loading reviews...</p>
+        <p style={{ color: 'var(--muted, #666)' }}>Loading reviews...</p>
       </div>
     );
   }
@@ -96,19 +96,19 @@ export default function MyReviewsPage() {
             <div style={{
               textAlign: 'center',
               padding: '64px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e5e5)',
               borderRadius: '8px',
             }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>⭐</div>
               <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>No reviews yet</h2>
-              <p style={{ color: '#666', marginBottom: '24px' }}>
+              <p style={{ color: 'var(--muted, #666)', marginBottom: '24px' }}>
                 Share your thoughts on products you've purchased
               </p>
               <Link href="/products" style={{
                 display: 'inline-block',
                 padding: '12px 24px',
-                backgroundColor: '#000',
-                color: '#fff',
+                backgroundColor: 'var(--brand, #000)',
+                color: 'var(--brand-text, #fff)',
                 borderRadius: '6px',
                 textDecoration: 'none',
                 fontWeight: 600,
@@ -121,9 +121,9 @@ export default function MyReviewsPage() {
               {reviews.map((review) => (
                 <div key={review.id} style={{
                   padding: '24px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '8px',
-                  backgroundColor: 'white',
+                  backgroundColor: 'var(--card-bg, white)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div>
@@ -135,7 +135,7 @@ export default function MyReviewsPage() {
                       }}>
                         {review.productName}
                       </Link>
-                      <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginTop: '4px' }}>
                         {new Date(review.createdAt).toLocaleDateString()}
                       </p>
                     </div>

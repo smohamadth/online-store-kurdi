@@ -162,7 +162,7 @@ export default function SearchBar() {
           top: '100%',
           left: 0,
           right: 0,
-          backgroundColor: 'white',
+          backgroundColor: 'var(--card-bg, white)',
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
           marginTop: '4px',

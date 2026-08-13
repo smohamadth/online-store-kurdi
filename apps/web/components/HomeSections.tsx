@@ -140,7 +140,7 @@ export function DealCountdown() {
             href="/deals"
             style={{
               padding: '14px 26px',
-              backgroundColor: '#fff',
+              backgroundColor: 'var(--card-bg, #fff)',
               color: '#111',
               borderRadius: '8px',
               fontWeight: 700,
@@ -210,7 +210,7 @@ export function Testimonials() {
               border: '1px solid #ededed',
               borderRadius: '12px',
               padding: '24px',
-              backgroundColor: '#fff',
+              backgroundColor: 'var(--card-bg, #fff)',
               display: 'flex',
               flexDirection: 'column',
               gap: '14px',

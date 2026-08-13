@@ -7,6 +7,7 @@ export interface Theme {
   primaryTextColor: string;
   accentColor: string;
   bodyBg: string;
+  cardBg: string;
   bodyText: string;
   mutedText: string;
   borderColor: string;
@@ -50,6 +51,7 @@ export const DEFAULT_THEME: Theme = {
   primaryTextColor: '#ffffff',
   accentColor: '#2563eb',
   bodyBg: '#ffffff',
+  cardBg: '#ffffff',
   bodyText: '#111111',
   mutedText: '#666666',
   borderColor: '#e5e5e5',
@@ -112,6 +114,7 @@ export function themeToCssVars(t: Theme): string {
     --brand-text: ${t.primaryTextColor};
     --accent: ${t.accentColor};
     --body-bg: ${t.bodyBg};
+    --card-bg: ${t.cardBg || t.bodyBg};
     --body-text: ${t.bodyText};
     --muted: ${t.mutedText};
     --border: ${t.borderColor};

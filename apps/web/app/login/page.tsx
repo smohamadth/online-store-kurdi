@@ -66,7 +66,7 @@ export default function LoginPage() {
   if (checkingAuth) {
     return (
       <div style={{ maxWidth: '480px', margin: '64px auto', padding: '0 20px', textAlign: 'center' }}>
-        <p style={{ color: '#666' }}>Checking authentication...</p>
+        <p style={{ color: 'var(--muted, #666)' }}>Checking authentication...</p>
       </div>
     );
   }
@@ -79,14 +79,14 @@ export default function LoginPage() {
     }}>
       <div style={{
         padding: '40px',
-        border: '1px solid #e5e5e5',
+        border: '1px solid var(--border, #e5e5e5)',
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
       }}>
         <h1 style={{ fontSize: '28px', fontWeight: 'bold', textAlign: 'center', marginBottom: '8px' }}>
           Welcome Back
         </h1>
-        <p style={{ textAlign: 'center', color: '#666', marginBottom: '32px' }}>
+        <p style={{ textAlign: 'center', color: 'var(--muted, #666)', marginBottom: '32px' }}>
           Sign in to your account
         </p>
 
@@ -118,7 +118,7 @@ export default function LoginPage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -131,7 +131,7 @@ export default function LoginPage() {
               <label style={{ fontSize: '14px', fontWeight: 500 }}>
                 Password
               </label>
-              <Link href="/forgot-password" style={{ fontSize: '13px', color: '#666' }}>
+              <Link href="/forgot-password" style={{ fontSize: '13px', color: 'var(--muted, #666)' }}>
                 Forgot password?
               </Link>
             </div>
@@ -144,7 +144,7 @@ export default function LoginPage() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '16px',
                 outline: 'none',
@@ -176,7 +176,7 @@ export default function LoginPage() {
         </form>
 
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
-          <p style={{ fontSize: '14px', color: '#666' }}>
+          <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
             Don't have an account?{' '}
             <Link href="/register" style={{ color: '#000', fontWeight: 500 }}>
               Sign up
@@ -185,7 +185,7 @@ export default function LoginPage() {
         </div>
 
         <div style={{ marginTop: '24px', padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px' }}>
-          <p style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Test Accounts:</p>
+          <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginBottom: '8px' }}>Test Accounts:</p>
           <p style={{ fontSize: '12px', color: '#333' }}>
             <strong>Admin:</strong> admin@store.com / admin123
           </p>

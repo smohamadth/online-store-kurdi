@@ -296,7 +296,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
           border: '1px solid #e5e5e5',
           borderRadius: '8px',
           marginBottom: '32px',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--card-bg, white)',
         }}>
           <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>Write a Review</h3>
 
@@ -435,7 +435,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
               padding: '24px',
               border: '1px solid #e5e5e5',
               borderRadius: '8px',
-              backgroundColor: 'white',
+              backgroundColor: 'var(--card-bg, white)',
             }}>
               {/* Review Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>

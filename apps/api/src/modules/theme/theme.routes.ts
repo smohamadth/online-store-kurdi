@@ -17,6 +17,7 @@ const themeSchema = z.object({
   primaryTextColor: hex,
   accentColor: hex,
   bodyBg: hex,
+  cardBg: hex,
   bodyText: hex,
   mutedText: hex,
   borderColor: hex,

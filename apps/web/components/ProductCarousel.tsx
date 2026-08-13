@@ -119,7 +119,7 @@ function navBtn(disabled: boolean): React.CSSProperties {
     height: '36px',
     borderRadius: '50%',
     border: '1px solid #e0e0e0',
-    backgroundColor: '#fff',
+    backgroundColor: 'var(--card-bg, #fff)',
     color: disabled ? '#c4c4c4' : '#111',
     fontSize: '20px',
     lineHeight: 1,

@@ -74,8 +74,8 @@ function SearchContent() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+      <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>Search</span>
       </nav>
@@ -85,7 +85,7 @@ function SearchContent() {
         <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>
           Search Results
         </h1>
-        <p style={{ color: '#666' }}>
+        <p style={{ color: 'var(--muted, #666)' }}>
           {loading ? 'Searching...' : `${products.length} results for "${query}"`}
         </p>
       </div>
@@ -106,7 +106,7 @@ function SearchContent() {
                 padding: '8px 16px',
                 backgroundColor: sortBy === option.value ? '#000' : 'white',
                 color: sortBy === option.value ? '#fff' : '#000',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '6px',
                 fontSize: '14px',
                 cursor: 'pointer',
@@ -121,7 +121,7 @@ function SearchContent() {
       {/* Loading */}
       {loading && (
         <div style={{ textAlign: 'center', padding: '64px' }}>
-          <p style={{ color: '#666' }}>Searching products...</p>
+          <p style={{ color: 'var(--muted, #666)' }}>Searching products...</p>
         </div>
       )}
 
@@ -130,22 +130,22 @@ function SearchContent() {
         <div style={{
           textAlign: 'center',
           padding: '64px',
-          border: '1px solid #e5e5e5',
+          border: '1px solid var(--border, #e5e5e5)',
           borderRadius: '8px',
         }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
           <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>No results found</h2>
-          <p style={{ color: '#666', marginBottom: '24px' }}>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '24px' }}>
             We couldn't find any products matching "{query}"
           </p>
-          <p style={{ color: '#666', marginBottom: '24px' }}>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '24px' }}>
             Try different keywords or browse our categories
           </p>
           <Link href="/products" style={{
             display: 'inline-block',
             padding: '12px 24px',
-            backgroundColor: '#000',
-            color: '#fff',
+            backgroundColor: 'var(--brand, #000)',
+            color: 'var(--brand-text, #fff)',
             borderRadius: '6px',
             textDecoration: 'none',
             fontWeight: 600,
@@ -166,8 +166,8 @@ function SearchContent() {
                 display: 'block',
                 overflow: 'hidden',
                 borderRadius: '8px',
-                border: '1px solid #e5e5e5',
-                backgroundColor: 'white',
+                border: '1px solid var(--border, #e5e5e5)',
+                backgroundColor: 'var(--card-bg, white)',
                 textDecoration: 'none',
                 color: '#000',
                 transition: 'box-shadow 0.2s',
@@ -205,7 +205,7 @@ function SearchContent() {
 
               {/* Product Info */}
               <div style={{ padding: '16px' }}>
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginBottom: '4px' }}>
                   {product.category?.name}
                 </p>
                 <h3 style={{ fontWeight: 600, fontSize: '16px', marginBottom: '8px' }}>
@@ -216,14 +216,14 @@ function SearchContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
                   <span style={{ color: '#f59e0b' }}>★</span>
                   <span style={{ fontSize: '14px' }}>{product.averageRating || 0}</span>
-                  <span style={{ fontSize: '14px', color: '#666' }}>({product.reviewCount || 0})</span>
+                  <span style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>({product.reviewCount || 0})</span>
                 </div>
 
                 {/* Price */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '20px', fontWeight: 'bold' }}>{formatPrice(product.price, settings.currencySymbol)}</span>
                   {product.compareAtPrice && (
-                    <span style={{ fontSize: '14px', color: '#666', textDecoration: 'line-through' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--muted, #666)', textDecoration: 'line-through' }}>
                       ${product.compareAtPrice}
                     </span>
                   )}
@@ -244,10 +244,10 @@ function SearchContent() {
         <div style={{ marginTop: '48px', padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Search Tips</h3>
           <ul style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', listStyle: 'none', padding: 0 }}>
-            <li style={{ fontSize: '14px', color: '#666' }}>✓ Try different keywords</li>
-            <li style={{ fontSize: '14px', color: '#666' }}>✓ Check your spelling</li>
-            <li style={{ fontSize: '14px', color: '#666' }}>✓ Use more general terms</li>
-            <li style={{ fontSize: '14px', color: '#666' }}>✓ Browse categories instead</li>
+            <li style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>✓ Try different keywords</li>
+            <li style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>✓ Check your spelling</li>
+            <li style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>✓ Use more general terms</li>
+            <li style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>✓ Browse categories instead</li>
           </ul>
         </div>
       )}
@@ -256,7 +256,7 @@ function SearchContent() {
 }
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading search...</p></div>}>
+    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: 'var(--muted, #666)' }}>Loading search...</p></div>}>
       <SearchContent />
     </Suspense>
   );

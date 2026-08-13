@@ -62,14 +62,14 @@ export default function CartPage() {
       }}>
         <div style={{ fontSize: '64px', marginBottom: '24px' }}>🛒</div>
         <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '16px' }}>Your Cart is Empty</h1>
-        <p style={{ fontSize: '16px', color: '#666', marginBottom: '32px' }}>
+        <p style={{ fontSize: '16px', color: 'var(--muted, #666)', marginBottom: '32px' }}>
           Looks like you haven't added any items to your cart yet.
         </p>
         <Link href="/products" style={{
           display: 'inline-block',
           padding: '14px 28px',
-          backgroundColor: '#000',
-          color: '#fff',
+          backgroundColor: 'var(--brand, #000)',
+          color: 'var(--brand-text, #fff)',
           borderRadius: '6px',
           textDecoration: 'none',
           fontSize: '16px',
@@ -84,8 +84,8 @@ export default function CartPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '16px' : '24px 16px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+      <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>Cart</span>
       </nav>
@@ -111,9 +111,9 @@ export default function CartPage() {
                 gap: '16px',
                 padding: '16px',
                 marginBottom: '16px',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
                 borderRadius: '8px',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--card-bg, white)',
               }}
             >
               {/* Product Image */}
@@ -148,7 +148,7 @@ export default function CartPage() {
                       {item.name}
                     </Link>
                     {item.variant && (
-                      <p style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>{item.variant}</p>
+                      <p style={{ fontSize: '13px', color: 'var(--muted, #666)', marginTop: '2px' }}>{item.variant}</p>
                     )}
                   </div>
                   <button
@@ -173,7 +173,7 @@ export default function CartPage() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     borderRadius: '6px',
-                    border: '1px solid #e5e5e5',
+                    border: '1px solid var(--border, #e5e5e5)',
                     overflow: 'hidden',
                   }}>
                     <button
@@ -259,9 +259,9 @@ export default function CartPage() {
                     gap: '16px',
                     padding: '16px',
                     marginBottom: '12px',
-                    border: '1px solid #e5e5e5',
+                    border: '1px solid var(--border, #e5e5e5)',
                     borderRadius: '8px',
-                    backgroundColor: 'white',
+                    backgroundColor: 'var(--card-bg, white)',
                   }}
                 >
                   <div style={{
@@ -292,8 +292,8 @@ export default function CartPage() {
                         onClick={() => moveToCart(item.id)}
                         style={{
                           padding: '6px 12px',
-                          backgroundColor: '#000',
-                          color: '#fff',
+                          backgroundColor: 'var(--brand, #000)',
+                          color: 'var(--brand-text, #fff)',
                           border: 'none',
                           borderRadius: '4px',
                           fontSize: '12px',
@@ -329,7 +329,7 @@ export default function CartPage() {
           <div>
             <div style={{
               padding: '24px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e5e5)',
               borderRadius: '8px',
               backgroundColor: '#f9f9f9',
               position: 'sticky',
@@ -349,7 +349,7 @@ export default function CartPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Subtotal</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>Subtotal</span>
                   <span style={{ fontWeight: 600 }}>{formatPrice(subtotal, settings.currencySymbol)}</span>
                 </div>
 
@@ -361,14 +361,14 @@ export default function CartPage() {
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Shipping</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>Shipping</span>
                   <span style={{ fontWeight: 600 }}>
                     {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : formatPrice(shipping, settings.currencySymbol)}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Tax</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>Tax</span>
                   <span style={{ fontWeight: 600 }}>{formatPrice(tax, settings.currencySymbol)}</span>
                 </div>
 
@@ -381,7 +381,7 @@ export default function CartPage() {
               </div>
 
               {shipping > 0 && !appliedCoupon && (
-                <p style={{ marginTop: '12px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
+                <p style={{ marginTop: '12px', fontSize: '12px', color: 'var(--muted, #666)', textAlign: 'center' }}>
                   Add {formatPrice(100 - subtotal, settings.currencySymbol)} more for free shipping
                 </p>
               )}
@@ -402,8 +402,8 @@ export default function CartPage() {
                   width: '100%',
                   marginTop: '20px',
                   padding: '14px',
-                  backgroundColor: '#000',
-                  color: '#fff',
+                  backgroundColor: 'var(--brand, #000)',
+                  color: 'var(--brand-text, #fff)',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '16px',
@@ -415,10 +415,10 @@ export default function CartPage() {
               </button>
 
               <div style={{ marginTop: '16px', textAlign: 'center' }}>
-                <p style={{ fontSize: '12px', color: '#666' }}>
+                <p style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>
                   🔒 Secure checkout
                 </p>
-                <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginTop: '4px' }}>
                   💳 We accept all major credit cards
                 </p>
               </div>

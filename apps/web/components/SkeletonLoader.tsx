@@ -5,7 +5,7 @@ export function ProductCardSkeleton() {
     <div style={{
       borderRadius: '8px',
       border: '1px solid #e5e5e5',
-      backgroundColor: 'white',
+      backgroundColor: 'var(--card-bg, white)',
       overflow: 'hidden',
     }}>
       <div style={{

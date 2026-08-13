@@ -158,12 +158,12 @@ export default function CheckoutPage() {
   if (orderPlaced) {
     return (
       <div style={{ maxWidth: '600px', margin: '64px auto', padding: '0 20px', textAlign: 'center' }}>
-        <div style={{ padding: '48px', border: '1px solid #e5e5e5', borderRadius: '8px', backgroundColor: 'white' }}>
+        <div style={{ padding: '48px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '8px', backgroundColor: 'white' }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>✅</div>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '16px' }}>
             Order Placed Successfully!
           </h1>
-          <p style={{ color: '#666', marginBottom: '8px' }}>Thank you for your purchase</p>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '8px' }}>Thank you for your purchase</p>
           <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px' }}>
             Order #{orderNumber}
           </p>
@@ -173,7 +173,7 @@ export default function CheckoutPage() {
             <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Summary</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Subtotal</span>
+                <span style={{ color: 'var(--muted, #666)' }}>Subtotal</span>
                 <span>{formatPrice(subtotal, settings.currencySymbol)}</span>
               </div>
               {discount > 0 && (
@@ -183,11 +183,11 @@ export default function CheckoutPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Shipping ({selectedShipping?.name || 'Standard'})</span>
+                <span style={{ color: 'var(--muted, #666)' }}>Shipping ({selectedShipping?.name || 'Standard'})</span>
                 <span>{shippingCost === 0 ? 'Free' : `${formatPrice(shippingCost, settings.currencySymbol)}`}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#666' }}>Tax</span>
+                <span style={{ color: 'var(--muted, #666)' }}>Tax</span>
                 <span>{formatPrice(taxAmount, settings.currencySymbol)}</span>
               </div>
               <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '8px', marginTop: '8px' }}>
@@ -200,16 +200,16 @@ export default function CheckoutPage() {
           </div>
 
           <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '6px', marginBottom: '32px' }}>
-            <p style={{ fontSize: '14px', color: '#666' }}>
+            <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
               Confirmation email sent to {shippingInfo.email}
             </p>
           </div>
 
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <Link href="/account/orders" style={{ padding: '12px 24px', backgroundColor: '#000', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
+            <Link href="/account/orders" style={{ padding: '12px 24px', backgroundColor: 'var(--brand, #000)', color: 'var(--brand-text, #fff)', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
               View Orders
             </Link>
-            <Link href="/products" style={{ padding: '12px 24px', backgroundColor: 'white', color: '#000', border: '1px solid #000', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
+            <Link href="/products" style={{ padding: '12px 24px', backgroundColor: 'var(--card-bg, white)', color: '#000', border: '1px solid #000', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
               Continue Shopping
             </Link>
           </div>
@@ -225,10 +225,10 @@ export default function CheckoutPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
       {/* Breadcrumb */}
-      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+      <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
-        <Link href="/cart" style={{ textDecoration: 'none', color: '#666' }}>Cart</Link>
+        <Link href="/cart" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Cart</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>Checkout</span>
       </nav>
@@ -268,12 +268,12 @@ export default function CheckoutPage() {
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>First Name *</label>
                   <input type="text" name="firstName" value={shippingInfo.firstName} onChange={handleChange} required
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Last Name *</label>
                   <input type="text" name="lastName" value={shippingInfo.lastName} onChange={handleChange} required
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
 
@@ -281,36 +281,36 @@ export default function CheckoutPage() {
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Email *</label>
                   <input type="email" name="email" value={shippingInfo.email} onChange={handleChange} required
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Phone</label>
                   <input type="tel" name="phone" value={shippingInfo.phone} onChange={handleChange}
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Address *</label>
                 <input type="text" name="address" value={shippingInfo.address} onChange={handleChange} placeholder="123 Main St" required
-                  style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                  style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>City *</label>
                   <input type="text" name="city" value={shippingInfo.city} onChange={handleChange} required
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>State *</label>
                   <input type="text" name="state" value={shippingInfo.state} onChange={handleChange} required
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>ZIP Code *</label>
                   <input type="text" name="zipCode" value={shippingInfo.zipCode} onChange={handleChange} required
-                    style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
+                    style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
             </div>
@@ -360,7 +360,7 @@ export default function CheckoutPage() {
 
           {/* Right Column - Order Summary */}
           <div>
-            <div style={{ padding: '32px', border: '1px solid #e5e5e5', borderRadius: '8px', backgroundColor: '#f9f9f9', position: 'sticky', top: '100px' }}>
+            <div style={{ padding: '32px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '8px', backgroundColor: '#f9f9f9', position: 'sticky', top: '100px' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Order Summary</h2>
 
               {/* Items */}
@@ -369,8 +369,8 @@ export default function CheckoutPage() {
                   <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #e5e5e5' }}>
                     <div>
                       <p style={{ fontWeight: 500 }}>{item.name}</p>
-                      {item.variant && <p style={{ fontSize: '12px', color: '#666' }}>{item.variant}</p>}
-                      <p style={{ fontSize: '12px', color: '#666' }}>Qty: {item.quantity}</p>
+                      {item.variant && <p style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>{item.variant}</p>}
+                      <p style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>Qty: {item.quantity}</p>
                     </div>
                     <span style={{ fontWeight: 600 }}>{formatPrice(item.price * item.quantity, settings.currencySymbol)}</span>
                   </div>
@@ -380,7 +380,7 @@ export default function CheckoutPage() {
               {/* Totals */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Subtotal</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>Subtotal</span>
                   <span style={{ fontWeight: 600 }}>{formatPrice(subtotal, settings.currencySymbol)}</span>
                 </div>
                 {discount > 0 && (
@@ -390,7 +390,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#666' }}>Shipping ({selectedShipping?.name || '...'})</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>Shipping ({selectedShipping?.name || '...'})</span>
                   <span style={{ fontWeight: 600 }}>
                     {shippingCost === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : `${formatPrice(shippingCost, settings.currencySymbol)}`}
                   </span>
@@ -425,7 +425,7 @@ export default function CheckoutPage() {
                 ) : 'Place Order'}
               </button>
 
-              <p style={{ marginTop: '16px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
+              <p style={{ marginTop: '16px', fontSize: '12px', color: 'var(--muted, #666)', textAlign: 'center' }}>
                 🔒 Secure checkout
               </p>
             </div>

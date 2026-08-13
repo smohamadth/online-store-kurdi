@@ -57,7 +57,7 @@ export default function OrdersPage() {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '64px', color: '#666' }}>Loading orders...</div>;
+    return <div style={{ textAlign: 'center', padding: '64px', color: 'var(--muted, #666)' }}>Loading orders...</div>;
   }
 
   return (
@@ -70,19 +70,19 @@ export default function OrdersPage() {
         <div style={{
           textAlign: 'center',
           padding: '64px',
-          border: '1px solid #e5e5e5',
+          border: '1px solid var(--border, #e5e5e5)',
           borderRadius: '8px',
         }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
           <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>No orders yet</h2>
-          <p style={{ color: '#666', marginBottom: '24px' }}>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '24px' }}>
             Start shopping to see your orders here
           </p>
           <Link href="/products" style={{
             display: 'inline-block',
             padding: '12px 24px',
-            backgroundColor: '#000',
-            color: '#fff',
+            backgroundColor: 'var(--brand, #000)',
+            color: 'var(--brand-text, #fff)',
             borderRadius: '6px',
             textDecoration: 'none',
             fontWeight: 600,
@@ -95,9 +95,9 @@ export default function OrdersPage() {
           {orders.map((order) => (
             <div key={order.id} style={{
               padding: '24px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e5e5)',
               borderRadius: '8px',
-              backgroundColor: 'white',
+              backgroundColor: 'var(--card-bg, white)',
             }}>
               {/* Order Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -105,7 +105,7 @@ export default function OrdersPage() {
                   <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>
                     Order #{order.orderNumber || order.id}
                   </h3>
-                  <p style={{ fontSize: '14px', color: '#666' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
                     {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-US', {
                       year: 'numeric', month: 'long', day: 'numeric'
                     }) : 'N/A'}
@@ -156,8 +156,8 @@ export default function OrdersPage() {
                 </div>
                 <Link href={`/account/orders/${order.id}`} style={{
                   padding: '10px 20px',
-                  backgroundColor: '#000',
-                  color: '#fff',
+                  backgroundColor: 'var(--brand, #000)',
+                  color: 'var(--brand-text, #fff)',
                   borderRadius: '6px',
                   textDecoration: 'none',
                   fontSize: '14px',

@@ -48,7 +48,7 @@ export default function LanguageSwitcher() {
             top: '100%',
             right: 0,
             marginTop: '4px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--card-bg, white)',
             border: '1px solid #e5e5e5',
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',

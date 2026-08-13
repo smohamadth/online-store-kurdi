@@ -190,7 +190,7 @@ export default function AddressesPage() {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading addresses...</p></div>;
+    return <div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: 'var(--muted, #666)' }}>Loading addresses...</p></div>;
   }
 
   return (
@@ -201,8 +201,8 @@ export default function AddressesPage() {
           onClick={() => { resetForm(); setEditingAddress(null); setShowModal(true); }}
           style={{
             padding: '10px 20px',
-            backgroundColor: '#000',
-            color: '#fff',
+            backgroundColor: 'var(--brand, #000)',
+            color: 'var(--brand-text, #fff)',
             border: 'none',
             borderRadius: '6px',
             fontWeight: 600,
@@ -232,12 +232,12 @@ export default function AddressesPage() {
         <div style={{
           textAlign: 'center',
           padding: '64px',
-          border: '1px solid #e5e5e5',
+          border: '1px solid var(--border, #e5e5e5)',
           borderRadius: '8px',
         }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📍</div>
           <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>No addresses yet</h2>
-          <p style={{ color: '#666' }}>Add a shipping address to speed up checkout</p>
+          <p style={{ color: 'var(--muted, #666)' }}>Add a shipping address to speed up checkout</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: '16px' }}>
@@ -246,7 +246,7 @@ export default function AddressesPage() {
               padding: '20px',
               border: `1px solid ${address.isDefault ? '#000' : '#e5e5e5'}`,
               borderRadius: '8px',
-              backgroundColor: 'white',
+              backgroundColor: 'var(--card-bg, white)',
               position: 'relative',
             }}>
               {address.isDefault && (
@@ -255,8 +255,8 @@ export default function AddressesPage() {
                   top: '12px',
                   right: '12px',
                   padding: '4px 8px',
-                  backgroundColor: '#000',
-                  color: '#fff',
+                  backgroundColor: 'var(--brand, #000)',
+                  color: 'var(--brand-text, #fff)',
                   fontSize: '11px',
                   borderRadius: '4px',
                   fontWeight: 600,
@@ -265,20 +265,20 @@ export default function AddressesPage() {
                 </span>
               )}
               
-              <p style={{ fontSize: '12px', color: '#666', marginBottom: '8px', textTransform: 'uppercase' }}>
+              <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginBottom: '8px', textTransform: 'uppercase' }}>
                 {address.type}
               </p>
               <p style={{ fontWeight: 600, marginBottom: '4px' }}>
                 {address.firstName} {address.lastName}
               </p>
-              {address.company && <p style={{ color: '#666', fontSize: '14px' }}>{address.company}</p>}
-              <p style={{ color: '#666', fontSize: '14px' }}>{address.address1}</p>
-              {address.address2 && <p style={{ color: '#666', fontSize: '14px' }}>{address.address2}</p>}
-              <p style={{ color: '#666', fontSize: '14px' }}>
+              {address.company && <p style={{ color: 'var(--muted, #666)', fontSize: '14px' }}>{address.company}</p>}
+              <p style={{ color: 'var(--muted, #666)', fontSize: '14px' }}>{address.address1}</p>
+              {address.address2 && <p style={{ color: 'var(--muted, #666)', fontSize: '14px' }}>{address.address2}</p>}
+              <p style={{ color: 'var(--muted, #666)', fontSize: '14px' }}>
                 {address.city}, {address.state} {address.postalCode}
               </p>
-              <p style={{ color: '#666', fontSize: '14px' }}>{address.country}</p>
-              {address.phone && <p style={{ color: '#666', fontSize: '14px', marginTop: '4px' }}>📞 {address.phone}</p>}
+              <p style={{ color: 'var(--muted, #666)', fontSize: '14px' }}>{address.country}</p>
+              {address.phone && <p style={{ color: 'var(--muted, #666)', fontSize: '14px', marginTop: '4px' }}>📞 {address.phone}</p>}
 
               <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
                 {!address.isDefault && (
@@ -345,7 +345,7 @@ export default function AddressesPage() {
           padding: '20px',
         }}>
           <div style={{
-            backgroundColor: 'white',
+            backgroundColor: 'var(--card-bg, white)',
             borderRadius: '8px',
             padding: isMobile ? '20px' : '32px',
             width: '100%',
@@ -363,7 +363,7 @@ export default function AddressesPage() {
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as 'shipping' | 'billing' })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }}
                 >
                   <option value="shipping">Shipping</option>
                   <option value="billing">Billing</option>
@@ -373,48 +373,48 @@ export default function AddressesPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>First Name *</label>
-                  <input type="text" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                  <input type="text" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Last Name *</label>
-                  <input type="text" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                  <input type="text" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
                 </div>
               </div>
 
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Company</label>
-                <input type="text" value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                <input type="text" value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Address Line 1 *</label>
-                <input type="text" value={formData.address1} onChange={(e) => setFormData({ ...formData, address1: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                <input type="text" value={formData.address1} onChange={(e) => setFormData({ ...formData, address1: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Address Line 2</label>
-                <input type="text" value={formData.address2} onChange={(e) => setFormData({ ...formData, address2: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                <input type="text" value={formData.address2} onChange={(e) => setFormData({ ...formData, address2: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>City *</label>
-                  <input type="text" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                  <input type="text" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>State *</label>
-                  <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                  <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Postal Code *</label>
-                  <input type="text" value={formData.postalCode} onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                  <input type="text" value={formData.postalCode} onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Country</label>
-                  <select value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }}>
+                  <select value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }}>
                     <option value="US">United States</option>
                     <option value="CA">Canada</option>
                     <option value="GB">United Kingdom</option>
@@ -428,7 +428,7 @@ export default function AddressesPage() {
 
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Phone</label>
-                <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px', boxSizing: 'border-box' }} />
+                <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ marginBottom: '24px' }}>
@@ -440,7 +440,7 @@ export default function AddressesPage() {
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => { setShowModal(false); setEditingAddress(null); }} style={{ padding: '10px 20px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+                <button type="submit" style={{ padding: '10px 20px', backgroundColor: 'var(--brand, #000)', color: 'var(--brand-text, #fff)', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
                   {editingAddress ? 'Update' : 'Save'} Address
                 </button>
               </div>

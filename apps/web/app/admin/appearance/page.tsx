@@ -12,6 +12,7 @@ const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'primaryTextColor', label: 'Text on primary', hint: 'Label colour inside primary buttons' },
   { key: 'accentColor', label: 'Accent', hint: 'Links and highlights' },
   { key: 'bodyBg', label: 'Page background', hint: 'Main background of every page' },
+  { key: 'cardBg', label: 'Card / panel background', hint: 'Product cards, forms, summary boxes' },
   { key: 'bodyText', label: 'Body text', hint: 'Default text colour' },
   { key: 'mutedText', label: 'Muted text', hint: 'Captions, secondary labels' },
   { key: 'borderColor', label: 'Borders', hint: 'Card and input outlines' },
@@ -27,32 +28,32 @@ const PRESETS: { name: string; swatch: string; values: Partial<Theme> }[] = [
   {
     name: 'Classic',
     swatch: '#111111',
-    values: { primaryColor: '#111111', accentColor: '#2563eb', bodyBg: '#ffffff', headerBg: '#ffffff', footerBg: '#fafafa', bodyText: '#111111', priceColor: '#111111' },
+    values: { primaryColor: '#111111', primaryTextColor: '#ffffff', accentColor: '#2563eb', bodyBg: '#ffffff', cardBg: '#ffffff', mutedText: '#666666', borderColor: '#e5e5e5', headerText: '#111111', footerText: '#111111', headerBg: '#ffffff', footerBg: '#fafafa', bodyText: '#111111', priceColor: '#111111' },
   },
   {
     name: 'Ocean',
     swatch: '#0369a1',
-    values: { primaryColor: '#0369a1', accentColor: '#0ea5e9', bodyBg: '#f8fafc', headerBg: '#ffffff', footerBg: '#e0f2fe', bodyText: '#0f172a', priceColor: '#0369a1' },
+    values: { primaryColor: '#0369a1', primaryTextColor: '#ffffff', accentColor: '#0ea5e9', bodyBg: '#f8fafc', cardBg: '#ffffff', mutedText: '#64748b', borderColor: '#e2e8f0', headerText: '#0f172a', footerText: '#0f172a', headerBg: '#ffffff', footerBg: '#e0f2fe', bodyText: '#0f172a', priceColor: '#0369a1' },
   },
   {
     name: 'Forest',
     swatch: '#166534',
-    values: { primaryColor: '#166534', accentColor: '#16a34a', bodyBg: '#f7fdf9', headerBg: '#ffffff', footerBg: '#dcfce7', bodyText: '#14532d', priceColor: '#166534' },
+    values: { primaryColor: '#166534', primaryTextColor: '#ffffff', accentColor: '#16a34a', bodyBg: '#f7fdf9', cardBg: '#ffffff', mutedText: '#4b6b57', borderColor: '#d7eadd', headerText: '#14532d', footerText: '#14532d', headerBg: '#ffffff', footerBg: '#dcfce7', bodyText: '#14532d', priceColor: '#166534' },
   },
   {
     name: 'Sunset',
     swatch: '#c2410c',
-    values: { primaryColor: '#c2410c', accentColor: '#f97316', bodyBg: '#fffbf7', headerBg: '#ffffff', footerBg: '#ffedd5', bodyText: '#431407', priceColor: '#c2410c' },
+    values: { primaryColor: '#c2410c', primaryTextColor: '#ffffff', accentColor: '#f97316', bodyBg: '#fffbf7', cardBg: '#ffffff', mutedText: '#7c5b4a', borderColor: '#f3e0d3', headerText: '#431407', footerText: '#431407', headerBg: '#ffffff', footerBg: '#ffedd5', bodyText: '#431407', priceColor: '#c2410c' },
   },
   {
     name: 'Royal',
     swatch: '#6d28d9',
-    values: { primaryColor: '#6d28d9', accentColor: '#8b5cf6', bodyBg: '#fdfaff', headerBg: '#ffffff', footerBg: '#f3e8ff', bodyText: '#2e1065', priceColor: '#6d28d9' },
+    values: { primaryColor: '#6d28d9', primaryTextColor: '#ffffff', accentColor: '#8b5cf6', bodyBg: '#fdfaff', cardBg: '#ffffff', mutedText: '#6b5b7f', borderColor: '#ece1f7', headerText: '#2e1065', footerText: '#2e1065', headerBg: '#ffffff', footerBg: '#f3e8ff', bodyText: '#2e1065', priceColor: '#6d28d9' },
   },
   {
     name: 'Midnight',
     swatch: '#0f172a',
-    values: { primaryColor: '#e2e8f0', primaryTextColor: '#0f172a', accentColor: '#38bdf8', bodyBg: '#0f172a', bodyText: '#e2e8f0', mutedText: '#94a3b8', borderColor: '#1e293b', headerBg: '#0f172a', headerText: '#e2e8f0', footerBg: '#020617', footerText: '#e2e8f0', priceColor: '#e2e8f0' },
+    values: { primaryColor: '#e2e8f0', primaryTextColor: '#0f172a', accentColor: '#38bdf8', bodyBg: '#0f172a', cardBg: '#1e293b', bodyText: '#e2e8f0', mutedText: '#94a3b8', borderColor: '#1e293b', headerBg: '#0f172a', headerText: '#e2e8f0', footerBg: '#020617', footerText: '#e2e8f0', priceColor: '#e2e8f0' },
   },
 ];
 

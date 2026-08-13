@@ -99,11 +99,11 @@ function ProductsContent() {
         alignItems: 'center', 
         gap: '8px', 
         fontSize: '14px', 
-        color: '#666',
+        color: 'var(--muted, #666)',
         overflowX: 'auto',
         whiteSpace: 'nowrap',
       }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>Products</span>
       </nav>
@@ -111,7 +111,7 @@ function ProductsContent() {
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>Products</h1>
-        <p style={{ marginTop: '8px', color: '#666' }}>
+        <p style={{ marginTop: '8px', color: 'var(--muted, #666)' }}>
           {loading ? 'Loading...' : `Showing ${filteredProducts.length} products`}
         </p>
       </div>
@@ -127,7 +127,7 @@ function ProductsContent() {
             width: '100%',
             padding: '12px 16px',
             borderRadius: '6px',
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e5e5)',
             fontSize: '16px',
             outline: 'none',
           }}
@@ -194,15 +194,15 @@ function ProductsContent() {
 
         {/* Sort Dropdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#666', whiteSpace: 'nowrap' }}>Sort by:</span>
+          <span style={{ fontSize: '14px', color: 'var(--muted, #666)', whiteSpace: 'nowrap' }}>Sort by:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             style={{
               padding: '8px 12px',
               borderRadius: '6px',
-              border: '1px solid #e5e5e5',
-              backgroundColor: 'white',
+              border: '1px solid var(--border, #e5e5e5)',
+              backgroundColor: 'var(--card-bg, white)',
               fontSize: '14px',
               cursor: 'pointer',
               flex: 1,
@@ -221,7 +221,7 @@ function ProductsContent() {
       {loading && (
         <div style={{ textAlign: 'center', padding: '64px' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <p style={{ fontSize: '18px', color: '#666' }}>Loading products...</p>
+          <p style={{ fontSize: '18px', color: 'var(--muted, #666)' }}>Loading products...</p>
         </div>
       )}
 
@@ -230,7 +230,7 @@ function ProductsContent() {
         <div style={{ 
           textAlign: 'center', 
           padding: '48px 20px',
-          color: '#666'
+          color: 'var(--muted, #666)'
         }}>
           <p style={{ fontSize: '48px', marginBottom: '16px' }}>😕</p>
           <p style={{ fontSize: '18px' }}>No products found</p>
@@ -240,8 +240,8 @@ function ProductsContent() {
               style={{
                 marginTop: '16px',
                 padding: '10px 20px',
-                backgroundColor: '#000',
-                color: '#fff',
+                backgroundColor: 'var(--brand, #000)',
+                color: 'var(--brand-text, #fff)',
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -287,7 +287,7 @@ function ProductsContent() {
           <p style={{ fontSize: '16px', marginBottom: '8px' }}>
             ℹ️ No products loaded from API
           </p>
-          <p style={{ fontSize: '14px', color: '#666' }}>
+          <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
             Make sure the API server is running: <code>npm run dev:api</code>
           </p>
         </div>
@@ -299,7 +299,7 @@ function ProductsContent() {
 
 export default function ProductsPage() {
   return (
-    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: '#666' }}>Loading products...</p></div>}>
+    <Suspense fallback={<div style={{ textAlign: 'center', padding: '64px' }}><p style={{ color: 'var(--muted, #666)' }}>Loading products...</p></div>}>
       <ProductsContent />
     </Suspense>
   );

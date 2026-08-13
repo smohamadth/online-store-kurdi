@@ -75,7 +75,7 @@ export default function ProductPage() {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-        <p style={{ fontSize: '18px', color: '#666' }}>Loading product...</p>
+        <p style={{ fontSize: '18px', color: 'var(--muted, #666)' }}>Loading product...</p>
       </div>
     );
   }
@@ -84,12 +84,12 @@ export default function ProductPage() {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
-        <p style={{ fontSize: '18px', color: '#666', marginBottom: '32px' }}>{error || 'Product not found'}</p>
+        <p style={{ fontSize: '18px', color: 'var(--muted, #666)', marginBottom: '32px' }}>{error || 'Product not found'}</p>
         <Link href="/products" style={{
           display: 'inline-block',
           padding: '12px 24px',
-          backgroundColor: '#000',
-          color: '#fff',
+          backgroundColor: 'var(--brand, #000)',
+          color: 'var(--brand-text, #fff)',
           borderRadius: '6px',
           textDecoration: 'none',
         }}>
@@ -245,13 +245,13 @@ export default function ProductPage() {
         alignItems: 'center', 
         gap: '8px', 
         fontSize: '14px', 
-        color: '#666',
+        color: 'var(--muted, #666)',
         overflowX: 'auto',
         whiteSpace: 'nowrap',
       }}>
-        <Link href="/" style={{ textDecoration: 'none', color: '#666' }}>Home</Link>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
         <span>/</span>
-        <Link href="/products" style={{ textDecoration: 'none', color: '#666' }}>Products</Link>
+        <Link href="/products" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Products</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>{product.name}</span>
       </nav>
@@ -321,7 +321,7 @@ export default function ProductPage() {
 
         {/* Product Info */}
         <div>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{product.category?.name}</p>
+          <p style={{ fontSize: '14px', color: 'var(--muted, #666)', marginBottom: '8px' }}>{product.category?.name}</p>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>{product.name}</h1>
           
           {/* Rating */}
@@ -331,7 +331,7 @@ export default function ProductPage() {
                 <span key={i} style={{ color: i <= Math.floor(product.averageRating || 0) ? '#f59e0b' : '#d1d5db', fontSize: '18px' }}>★</span>
               ))}
             </div>
-            <span style={{ fontSize: '14px', color: '#666' }}>
+            <span style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
               {product.averageRating || 0} ({product.reviewCount || 0} reviews)
             </span>
           </div>
@@ -342,7 +342,7 @@ export default function ProductPage() {
               <span style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(currentPrice, settings.currencySymbol)}</span>
               {product.compareAtPrice && !currentVariant && (
                 <>
-                  <span style={{ fontSize: '18px', color: '#666', textDecoration: 'line-through' }}>
+                  <span style={{ fontSize: '18px', color: 'var(--muted, #666)', textDecoration: 'line-through' }}>
                     {formatPrice(product.compareAtPrice, settings.currencySymbol)}
                   </span>
                   <span style={{
@@ -379,7 +379,7 @@ export default function ProductPage() {
                       style={{
                         flex: 1,
                         padding: '8px 12px',
-                        border: '1px solid #e5e5e5',
+                        border: '1px solid var(--border, #e5e5e5)',
                         borderRadius: '6px',
                         fontSize: '14px',
                       }}
@@ -388,8 +388,8 @@ export default function ProductPage() {
                       onClick={handleStockAlert}
                       style={{
                         padding: '8px 16px',
-                        backgroundColor: '#000',
-                        color: '#fff',
+                        backgroundColor: 'var(--brand, #000)',
+                        color: 'var(--brand-text, #fff)',
                         border: 'none',
                         borderRadius: '6px',
                         fontSize: '14px',
@@ -406,7 +406,7 @@ export default function ProductPage() {
                     style={{
                       padding: '8px 16px',
                       backgroundColor: '#f5f5f5',
-                      border: '1px solid #e5e5e5',
+                      border: '1px solid var(--border, #e5e5e5)',
                       borderRadius: '6px',
                       fontSize: '14px',
                       cursor: 'pointer',
@@ -433,7 +433,7 @@ export default function ProductPage() {
           {product.variants && product.variants.length > 0 && (
             <div style={{ marginTop: '20px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
-                Options: {currentVariantName && <span style={{ fontWeight: 400, color: '#666' }}>{getVariantDisplay(currentVariant)}</span>}
+                Options: {currentVariantName && <span style={{ fontWeight: 400, color: 'var(--muted, #666)' }}>{getVariantDisplay(currentVariant)}</span>}
               </h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {product.variants.map((variant) => (
@@ -451,7 +451,7 @@ export default function ProductPage() {
                     }}
                   >
                     {getVariantDisplay(variant)}
-                    <span style={{ marginLeft: '6px', color: '#666' }}>{formatPrice(Number(variant.price), settings.currencySymbol)}</span>
+                    <span style={{ marginLeft: '6px', color: 'var(--muted, #666)' }}>{formatPrice(Number(variant.price), settings.currencySymbol)}</span>
                   </button>
                 ))}
               </div>
@@ -465,7 +465,7 @@ export default function ProductPage() {
               display: 'inline-flex',
               alignItems: 'center',
               borderRadius: '6px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e5e5)',
               overflow: 'hidden',
             }}>
               <button
@@ -525,7 +525,7 @@ export default function ProductPage() {
               style={{
                 width: '100%',
                 padding: '14px 24px',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--card-bg, white)',
                 color: product.quantity <= 0 ? '#ccc' : '#000',
                 border: `2px solid ${product.quantity <= 0 ? '#ccc' : '#000'}`,
                 borderRadius: '6px',

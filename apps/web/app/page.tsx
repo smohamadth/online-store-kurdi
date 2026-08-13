@@ -509,7 +509,7 @@ function CategoryTile({
         overflow: 'hidden',
         borderRadius: '12px',
         border: '1px solid #e8e8e8',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--card-bg, white)',
         textDecoration: 'none',
         color: '#111',
         transition: 'transform 200ms ease, box-shadow 200ms ease',

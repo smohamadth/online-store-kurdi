@@ -131,7 +131,7 @@ export default function ContactPage() {
             padding: '24px',
             border: '1px solid #e5e5e5',
             borderRadius: '8px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--card-bg, white)',
           }}>
             {error && (
               <div style={{

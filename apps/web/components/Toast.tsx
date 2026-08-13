@@ -86,7 +86,7 @@ export function ToastContainer() {
             alignItems: 'center',
             gap: '12px',
             padding: '14px 18px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--card-bg, white)',
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             borderLeft: `4px solid ${getBackgroundColor(toast.type)}`,

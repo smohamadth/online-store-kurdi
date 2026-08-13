@@ -115,12 +115,12 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px 64px' }}>
       {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" style={{ marginBottom: '20px', fontSize: '14px', color: '#666' }}>
-        <Link href="/" style={{ color: '#666', textDecoration: 'none' }}>
+      <nav aria-label="Breadcrumb" style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted, #666)' }}>
+        <Link href="/" style={{ color: 'var(--muted, #666)', textDecoration: 'none' }}>
           Home
         </Link>
         <span style={{ margin: '0 8px' }}>/</span>
-        <Link href="/products" style={{ color: '#666', textDecoration: 'none' }}>
+        <Link href="/products" style={{ color: 'var(--muted, #666)', textDecoration: 'none' }}>
           Products
         </Link>
         <span style={{ margin: '0 8px' }}>/</span>
@@ -171,7 +171,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
 
       {/* Sort */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-        <label htmlFor="sort" style={{ fontSize: '14px', color: '#666' }}>
+        <label htmlFor="sort" style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
           Sort by:
         </label>
         <select
@@ -183,7 +183,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
             borderRadius: '6px',
             border: '1px solid #e0e0e0',
             fontSize: '14px',
-            backgroundColor: '#fff',
+            backgroundColor: 'var(--card-bg, #fff)',
           }}
         >
           {SORTS.map((s) => (
@@ -201,7 +201,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         <div style={{ textAlign: 'center', padding: '64px 20px', border: '1px dashed #e0e0e0', borderRadius: '12px' }}>
           <div style={{ fontSize: '40px' }}>🛍️</div>
           <h2 style={{ marginTop: '12px', fontWeight: 700 }}>Nothing here yet</h2>
-          <p style={{ color: '#666', marginTop: '6px', fontSize: '14px' }}>
+          <p style={{ color: 'var(--muted, #666)', marginTop: '6px', fontSize: '14px' }}>
             This category has no products at the moment.
           </p>
           <Link
@@ -210,8 +210,8 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
               display: 'inline-block',
               marginTop: '18px',
               padding: '11px 22px',
-              backgroundColor: '#111',
-              color: '#fff',
+              backgroundColor: 'var(--brand, #111)',
+              color: 'var(--brand-text, #fff)',
               borderRadius: '8px',
               textDecoration: 'none',
               fontWeight: 600,
@@ -291,7 +291,7 @@ function pageBtn(disabled: boolean): React.CSSProperties {
     padding: '9px 15px',
     borderRadius: '8px',
     border: '1px solid #e0e0e0',
-    backgroundColor: '#fff',
+    backgroundColor: 'var(--card-bg, #fff)',
     cursor: disabled ? 'default' : 'pointer',
     opacity: disabled ? 0.45 : 1,
     fontSize: '14px',

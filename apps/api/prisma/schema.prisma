@@ -777,6 +777,7 @@ model ThemeSettings {
   primaryTextColor  String   @default("#ffffff")
   accentColor       String   @default("#2563eb")
   bodyBg            String   @default("#ffffff")
+  cardBg            String   @default("#ffffff")
   bodyText          String   @default("#111111")
   mutedText         String   @default("#666666")
   borderColor       String   @default("#e5e5e5")

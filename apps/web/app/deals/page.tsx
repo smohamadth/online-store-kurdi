@@ -50,18 +50,18 @@ export default function DealsPage() {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '64px' }}>
-          <p style={{ color: '#666' }}>Loading deals...</p>
+          <p style={{ color: 'var(--muted, #666)' }}>Loading deals...</p>
         </div>
       ) : products.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏷️</div>
           <h2 style={{ fontSize: '24px', marginBottom: '8px' }}>No deals right now</h2>
-          <p style={{ color: '#666', marginBottom: '24px' }}>Check back soon for new deals!</p>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '24px' }}>Check back soon for new deals!</p>
           <Link href="/products" style={{
             display: 'inline-block',
             padding: '12px 24px',
-            backgroundColor: '#000',
-            color: '#fff',
+            backgroundColor: 'var(--brand, #000)',
+            color: 'var(--brand-text, #fff)',
             borderRadius: '6px',
             textDecoration: 'none',
             fontWeight: 600,
@@ -83,8 +83,8 @@ export default function DealsPage() {
                 display: 'block',
                 overflow: 'hidden',
                 borderRadius: '8px',
-                border: '1px solid #e5e5e5',
-                backgroundColor: 'white',
+                border: '1px solid var(--border, #e5e5e5)',
+                backgroundColor: 'var(--card-bg, white)',
                 textDecoration: 'none',
                 color: '#000',
                 position: 'relative',
@@ -124,7 +124,7 @@ export default function DealsPage() {
 
               {/* Product Info */}
               <div style={{ padding: '16px' }}>
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{product.category?.name}</p>
+                <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginBottom: '4px' }}>{product.category?.name}</p>
                 <h3 style={{ fontWeight: 600, marginBottom: '8px', fontSize: '15px' }}>{product.name}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#ef4444' }}>
