@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/environment';
@@ -164,10 +165,19 @@ export const generateTokens = (user: { id: string; email: string; role: string }
     { expiresIn: env.JWT_EXPIRES_IN }
   );
 
+  // `jti` makes every refresh token unique.
+  //
+  // Without it the payload is only { userId, type } plus `iat`, which has
+  // one-second resolution - so two logins inside the same second produced
+  // BYTE-IDENTICAL tokens. Session.refreshToken is @unique, so the second
+  // login failed with a Prisma P2002 surfaced as
+  // "A record with this value already exists" (HTTP 409). Logging in twice
+  // quickly, or two devices at once, could not sign in.
   const refreshToken = jwt.sign(
     {
       userId: user.id,
       type: 'refresh',
+      jti: crypto.randomUUID(),
     },
     env.JWT_SECRET,
     { expiresIn: env.JWT_REFRESH_EXPIRES_IN }

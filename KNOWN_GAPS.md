@@ -79,3 +79,33 @@ Seed products reference `/images/products/*.jpg`, which do not exist on disk and
 return 404. `ProductCard` falls back to a generated gradient tile with the
 product initials, so nothing looks broken. Upload real images via
 **Admin → Products** to replace them.
+
+
+---
+
+## 7. Category 404 returns HTTP 200 (soft 404)
+
+`/category/<unknown>` renders the correct "Category not found" page, but the
+HTTP status is **200**, not 404.
+
+`page.tsx` is a client component, so its `notFound()` call renders
+`not-found.tsx` without being able to set the status. A server layout
+(`category/[slug]/layout.tsx`) was added — it supplies correct per-category
+metadata, but its `notFound()` still does not change the status code because
+the client page has already committed the response.
+
+Impact: search engines may index the empty page instead of dropping it.
+Product pages are unaffected — they 404 correctly.
+
+Proper fix: convert `category/[slug]/page.tsx` to a server component that
+fetches the category itself and calls `notFound()` before rendering, moving the
+interactive filtering into a child client component.
+
+---
+
+## 8. Only product and category pages have server-side SEO
+
+`generateMetadata` is wired up for `/products/[slug]` and `/category/[slug]`.
+The home page, `/products` and other static pages still use the old client-side
+`next/head` pattern, which is a no-op in the App Router — they fall back to
+whatever the root layout provides.
