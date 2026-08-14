@@ -1,5 +1,46 @@
 # Troubleshooting
 
+## "Cannot read properties of undefined (reading 'findUnique')"
+
+Symptom: the admin shows **Settings not loaded — Cannot read properties of
+undefined (reading 'findUnique')**, or any admin page 500s, even though the
+API is clearly running and says `✅ Database connected successfully`.
+
+**Cause:** the *generated* Prisma client is out of date. `@prisma/client` is
+only a stub - the real client is written into `node_modules/.prisma/client` by
+`prisma generate`. That directory is **not** tracked by git and is wiped by
+`npm install`, `npm ci` and `rm -rf node_modules`.
+
+A client generated before a model existed simply has no property for it:
+
+```
+prisma.product        -> object      (existed in the old schema)
+prisma.themeSettings  -> undefined   (added later)  ->  .findUnique of undefined
+```
+
+`prisma.$connect()` still succeeds, which is why the server looks healthy.
+
+### Fix
+
+```bash
+cd apps/api
+npx prisma generate
+npm run db:deploy        # only if you also pulled new migrations
+```
+
+Then restart the API.
+
+### This should not happen again
+
+* `postinstall` now runs `prisma generate` automatically in both the repo root
+  and `apps/api`, so `npm install` can no longer leave a stale client.
+* The API **refuses to start** against a stale client and prints exactly which
+  models are missing plus the commands above, instead of starting and failing
+  later.
+* If it somehow still happens at runtime, the API returns
+  `code: "PRISMA_CLIENT_STALE"` with an actionable message rather than the raw
+  `undefined` TypeError.
+
 ## "Appearance / admin settings don't save" (Windows)
 
 Symptom: you change a colour in **Admin → Appearance**, press *Save changes*,

@@ -33,7 +33,8 @@
     "test": "npm run test:api && npm run test:web",
     "test:api": "cd apps/api && npm run test",
     "test:web": "cd apps/web && npm run test",
-    "db:deploy": "cd apps/api && npm run db:deploy"
+    "db:deploy": "cd apps/api && npm run db:deploy",
+    "postinstall": "cd apps/api && npx prisma generate"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

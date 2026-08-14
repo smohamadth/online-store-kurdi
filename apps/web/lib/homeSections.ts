@@ -46,6 +46,7 @@ export const TYPE_LABELS: Record<string, string> = {
   carouselTrending: 'Trending carousel',
   dealCountdown: 'Deal countdown',
   bannerStrip: 'Call-to-action banner',
+  gallery: 'Image gallery',
   testimonials: 'Testimonials',
   stats: 'Stats strip',
   features: 'Feature icons',
@@ -63,6 +64,7 @@ export const TYPE_ICONS: Record<string, string> = {
   carouselTrending: '🔥',
   dealCountdown: '⏰',
   bannerStrip: '📢',
+  gallery: '🖼️',
   testimonials: '💬',
   stats: '📊',
   features: '✨',
@@ -71,7 +73,7 @@ export const TYPE_ICONS: Record<string, string> = {
 };
 
 /** Types an admin can add from scratch (the rest are singletons already seeded). */
-export const CREATABLE_TYPES = ['richText', 'features', 'trustBar', 'testimonials', 'stats'];
+export const CREATABLE_TYPES = ['richText', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
 
 export async function fetchHomeSections(): Promise<HomeSection[]> {
   const res = await http.get<HomeSection[]>('/home-sections');

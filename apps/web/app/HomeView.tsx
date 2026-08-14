@@ -23,6 +23,7 @@ import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
 import PromoGrid from '@/components/PromoGrid';
 import BannerStrip from '@/components/BannerStrip';
+import HomeGallery from '@/components/HomeGallery';
 import ProductCard, { PlaceholderTile } from '@/components/ProductCard';
 import ProductCarousel from '@/components/ProductCarousel';
 import {
@@ -333,6 +334,18 @@ export default function HomeView() {
 
       case 'stats':
         return <StatsStrip key={s.id} items={cfg.items} />;
+
+      case 'gallery':
+        return (
+          <HomeGallery
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            items={cfg.items}
+            layout={cfg.layout === 'grid' ? 'grid' : 'masonry'}
+            columns={cfg.columns}
+          />
+        );
 
       case 'richText':
         return (

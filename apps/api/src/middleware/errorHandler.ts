@@ -211,6 +211,31 @@ export const errorHandler = (
     });
   }
 
+  // A stale generated Prisma client shows up as a TypeError on an undefined
+  // model delegate, e.g. `prisma.themeSettings` is undefined because the
+  // client was generated before that model existed:
+  //
+  //   TypeError: Cannot read properties of undefined (reading 'findUnique')
+  //
+  // That message is impossible to act on. Translate it into the fix. We match
+  // on the query-method name so ordinary application TypeErrors are unaffected.
+  if (
+    err instanceof TypeError &&
+    /Cannot read propert(?:y|ies) of undefined \(reading '(findUnique|findFirst|findMany|create|createMany|update|updateMany|upsert|delete|deleteMany|count|aggregate|groupBy)'\)/.test(
+      err.message
+    )
+  ) {
+    return res.status(500).json({
+      status: 'error',
+      message:
+        'The API is running against an out-of-date Prisma client, so this model ' +
+        'does not exist yet. Run `npx prisma generate` in apps/api (then ' +
+        '`npm run db:deploy` if you also pulled new migrations) and restart the API.',
+      code: 'PRISMA_CLIENT_STALE',
+      ...(isDevelopment && { stack: err.stack }),
+    });
+  }
+
   // Default error response
   const statusCode = 500;
   const message = isDevelopment ? err.message : 'Internal server error';

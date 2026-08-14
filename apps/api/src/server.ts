@@ -1,7 +1,12 @@
 import { createServer } from 'http';
 import { app, httpServer } from './app';
 import { env } from './config/environment';
-import { connectDatabase, disconnectDatabase } from './config/database';
+import { connectDatabase, disconnectDatabase, prisma } from './config/database';
+import {
+  assertPrismaClientIsCurrent,
+  StalePrismaClientError,
+  stalePrismaClientHelp,
+} from './config/verifyPrismaClient';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
@@ -51,6 +56,23 @@ process.on('uncaughtException', (error) => {
 async function startServer() {
   try {
     logger.info('🚀 Starting Store API server...');
+
+    // Fail fast on a stale generated client.
+    //
+    // $connect() succeeds even when the client was generated from an older
+    // schema, so without this the server happily logs "Database connected"
+    // and then 500s on every endpoint touching a newer model. Checking here
+    // turns a baffling "Cannot read properties of undefined (reading
+    // 'findUnique')" into an instruction.
+    try {
+      assertPrismaClientIsCurrent(prisma);
+    } catch (err) {
+      if (err instanceof StalePrismaClientError) {
+        for (const line of stalePrismaClientHelp(err.missing)) logger.error(line);
+        process.exit(1);
+      }
+      throw err;
+    }
 
     // Connect to databases
     logger.info('📦 Connecting to databases...');

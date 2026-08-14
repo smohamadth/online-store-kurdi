@@ -144,6 +144,29 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
     },
   },
   {
+    key: 'gallery',
+    type: 'gallery',
+    title: 'From our shop',
+    subtitle: 'A look at what we stock and how we pack it.',
+    isVisible: true,
+    sortOrder: 95,
+    config: {
+      layout: 'masonry',      // masonry | grid
+      columns: 4,
+      // Each item: { image, caption, linkUrl }. `image` empty = a coloured
+      // placeholder tile is drawn, so a fresh install has a complete-looking
+      // gallery before the owner uploads anything.
+      items: [
+        { image: '', caption: 'New season arrivals', linkUrl: '/products?sort=newest', tone: '#2563eb' },
+        { image: '', caption: 'Everyday electronics', linkUrl: '/category/electronics', tone: '#0ea5e9' },
+        { image: '', caption: 'Wardrobe staples', linkUrl: '/category/clothing', tone: '#8b5cf6' },
+        { image: '', caption: 'Books worth your time', linkUrl: '/category/books', tone: '#f97316' },
+        { image: '', caption: 'Packed with care', linkUrl: '/products', tone: '#16a34a' },
+        { image: '', caption: 'Fast local delivery', linkUrl: '/track-order', tone: '#dc2626' },
+      ],
+    },
+  },
+  {
     key: 'stats',
     type: 'stats',
     title: null,
@@ -187,7 +210,7 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
 ];
 
 /** Block types an admin may create from scratch in the admin builder. */
-export const CREATABLE_TYPES = ['richText', 'features', 'trustBar', 'testimonials', 'stats'];
+export const CREATABLE_TYPES = ['richText', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
 
 export const ALL_TYPES = Array.from(
   new Set([...HOME_SECTION_SEED.map((s) => s.type), ...CREATABLE_TYPES])

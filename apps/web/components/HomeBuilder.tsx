@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import ImageUpload from '@/components/ImageUpload';
 import { useIsMobile } from '@/lib/hooks';
 import { ButtonSpinner, LoadingState } from '@/components/Spinner';
 import { errorMessage } from '@/lib/http';
@@ -692,6 +693,155 @@ function TypeEditor({
         </>
       );
 
+    case 'gallery': {
+      const items: any[] = Array.isArray(cfg.items) ? cfg.items : [];
+      const setItems = (next: any[]) => patchConfig(row.id, { items: next });
+      return (
+        <div style={{ display: 'grid', gap: '16px' }}>
+          {twoCol(
+            <>
+              <div>
+                <label style={labelStyle}>Layout</label>
+                <select
+                  style={inputStyle}
+                  value={cfg.layout || 'masonry'}
+                  onChange={(e) => patchConfig(row.id, { layout: e.target.value })}
+                >
+                  <option value="masonry">Masonry (varied heights)</option>
+                  <option value="grid">Grid (equal squares)</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Columns — {cfg.columns || 4}</label>
+                <input
+                  type="range"
+                  min={2}
+                  max={6}
+                  value={cfg.columns || 4}
+                  onChange={(e) => patchConfig(row.id, { columns: parseInt(e.target.value) })}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label style={labelStyle}>Images</label>
+            <p style={{ fontSize: '12px', color: '#888', margin: '0 0 10px' }}>
+              A tile with no image shows a coloured placeholder, so the gallery never
+              looks broken before you upload your own photos.
+            </p>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {items.map((it, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    border: '1px solid #eee',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : '150px 1fr auto',
+                    gap: '12px',
+                    alignItems: 'start',
+                  }}
+                >
+                  <ImageUpload
+                    label=""
+                    folder="banners"
+                    currentImage={it.image || undefined}
+                    onUpload={(url) => {
+                      const next = [...items];
+                      next[idx] = { ...next[idx], image: url };
+                      setItems(next);
+                    }}
+                  />
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <input
+                      style={inputStyle}
+                      placeholder="Caption"
+                      aria-label={`Gallery caption ${idx + 1}`}
+                      value={it.caption ?? ''}
+                      onChange={(e) => {
+                        const next = [...items];
+                        next[idx] = { ...next[idx], caption: e.target.value };
+                        setItems(next);
+                      }}
+                    />
+                    <input
+                      style={inputStyle}
+                      placeholder="Link URL (optional) e.g. /category/clothing"
+                      aria-label={`Gallery link ${idx + 1}`}
+                      value={it.linkUrl ?? ''}
+                      onChange={(e) => {
+                        const next = [...items];
+                        next[idx] = { ...next[idx], linkUrl: e.target.value };
+                        setItems(next);
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <button
+                      aria-label="Move image up"
+                      disabled={idx === 0}
+                      onClick={() => {
+                        const next = [...items];
+                        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                        setItems(next);
+                      }}
+                      style={arrowBtn(idx === 0)}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      aria-label="Move image down"
+                      disabled={idx === items.length - 1}
+                      onClick={() => {
+                        const next = [...items];
+                        [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                        setItems(next);
+                      }}
+                      style={arrowBtn(idx === items.length - 1)}
+                    >
+                      ▼
+                    </button>
+                    <button
+                      aria-label="Remove image"
+                      onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                      style={{
+                        padding: '6px 10px',
+                        border: '1px solid #fca5a5',
+                        color: '#b91c1c',
+                        background: '#fff',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setItems([...items, { image: '', caption: '', linkUrl: '' }])}
+              style={{
+                marginTop: '10px',
+                padding: '8px 14px',
+                border: '1px dashed #bbb',
+                borderRadius: '6px',
+                background: '#fff',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+              }}
+            >
+              + Add image
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     case 'richText':
       return (
         <div>
@@ -766,6 +916,17 @@ function defaultConfigFor(type: string): Record<string, any> {
       };
     case 'stats':
       return { items: [{ value: '1000', suffix: '+', label: 'Happy customers' }] };
+    case 'gallery':
+      return {
+        layout: 'masonry',
+        columns: 4,
+        items: [
+          { image: '', caption: 'New arrivals', linkUrl: '/products?sort=newest', tone: '#2563eb' },
+          { image: '', caption: 'Best sellers', linkUrl: '/products?sort=popular', tone: '#0ea5e9' },
+          { image: '', caption: 'On sale', linkUrl: '/deals', tone: '#f97316' },
+          { image: '', caption: 'Shop all', linkUrl: '/products', tone: '#16a34a' },
+        ],
+      };
     default:
       return {};
   }
