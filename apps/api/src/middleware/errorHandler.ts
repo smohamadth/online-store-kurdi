@@ -131,6 +131,23 @@ export const errorHandler = (
           code: 'FOREIGN_KEY_ERROR',
         });
       
+      // P2021 = table does not exist, P2022 = column does not exist.
+      // These almost always mean the database is behind the code because
+      // migrations were not run after pulling. The old generic
+      // "Database error occurred" gave no clue, so the symptom looked like
+      // "the admin page won't save" rather than "run your migrations".
+      case 'P2021':
+      case 'P2022': {
+        const missing = prismaError.meta?.table || prismaError.meta?.column || 'A table';
+        return res.status(500).json({
+          status: 'error',
+          message:
+            `${missing} does not exist in the database. Your database is out of date - ` +
+            `run \`npm run db:deploy\` (or \`npm run setup\`) in apps/api, then restart the API.`,
+          code: 'MIGRATION_REQUIRED',
+        });
+      }
+
       default:
         return res.status(400).json({
           status: 'error',

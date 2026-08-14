@@ -114,3 +114,58 @@ cd apps/api && npx prisma generate
 
 The rate limiter tripped. Development skips read-only GETs, but if you changed
 `RATE_LIMIT_MAX`, restart the API — the limiter state is in memory.
+
+
+---
+
+## Admin → Appearance (or any admin page) won't save
+
+**Symptom:** you change a setting, press Save, and nothing persists.
+
+**Cause:** almost always that your **database is behind the code**. Features
+added later (Appearance/theme, banners, menus) each ship a Prisma migration.
+If you pull new code without running migrations, the table does not exist and
+every read and write to it fails.
+
+The API now tells you this directly:
+
+```
+MIGRATION_REQUIRED — main.ThemeSettings does not exist in the database.
+Your database is out of date - run `npm run db:deploy` in apps/api,
+then restart the API.
+```
+
+**Fix:**
+
+```bash
+cd apps/api
+npm run db:deploy     # apply any pending migrations
+npx prisma generate   # regenerate the client
+```
+
+Then **restart the API**. `tsx` loads the code once at startup and does not
+watch, so a running server keeps using the old Prisma client.
+
+### If `db:deploy` reports "table already exists"
+
+This happens when a table was created with `prisma db push` (which does not
+record a migration). Tell Prisma the migration is already applied:
+
+```bash
+npx prisma migrate resolve --applied 20260813052757_add_theme_settings
+npx prisma migrate resolve --applied 20260813060826_add_card_bg
+npx prisma migrate status     # should say "Database schema is up to date!"
+```
+
+### Still not saving?
+
+Open the browser devtools Network tab and press Save. The `PUT /api/theme`
+response tells you exactly what happened:
+
+| Status | Meaning |
+|---|---|
+| **200** | Saved. If the storefront looks unchanged, hard-refresh — the theme is cached in `localStorage`. |
+| **401** | Session expired — sign out and back in. |
+| **403** | The account is not an admin/manager. |
+| **400** | Validation failed; the message names the field (e.g. a bad hex colour). |
+| **500 / MIGRATION_REQUIRED** | Run the migration steps above. |
