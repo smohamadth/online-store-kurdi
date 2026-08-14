@@ -7,7 +7,13 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  // Read from the environment so the database can be pointed elsewhere
+  // without editing this file. It was hardcoded to "file:./dev.db", which
+  // silently ignored DATABASE_URL - .env.example advertises a PostgreSQL URL
+  // that would never have been used.
+  // To move to PostgreSQL: change provider to "postgresql", set DATABASE_URL,
+  // then re-run `prisma migrate dev` to regenerate the migrations for PG.
+  url      = env("DATABASE_URL")
 }
 
 // User model
