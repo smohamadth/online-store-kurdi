@@ -89,10 +89,22 @@ router.put('/', authenticate, authorize('admin', 'manager'), async (req, res, ne
       });
     }
 
-    // Strip nulls so a partial save never wipes unrelated fields.
+    // Only `undefined` (field absent from the request) is skipped, so a
+    // partial save never wipes unrelated fields.
+    //
+    // `null` used to be skipped too, which meant the three nullable fields
+    // could never be CLEARED: sending {announcementText: null} returned 200
+    // and kept the old text. Deleting an announcement was impossible and
+    // looked like "my change didn't save". Nullable fields now accept null;
+    // the non-nullable colour/number columns still ignore it, because writing
+    // null there would violate the schema and 500.
+    const NULLABLE = new Set(['announcementText', 'announcementLink', 'customCss']);
+
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
-      if (v !== undefined && v !== null) clean[k] = v;
+      if (v === undefined) continue;
+      if (v === null && !NULLABLE.has(k)) continue;
+      clean[k] = v;
     }
 
     await getOrCreate();

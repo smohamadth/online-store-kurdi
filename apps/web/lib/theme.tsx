@@ -167,9 +167,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           // shipped default (avoids a flash of the wrong brand colour).
           localStorage.setItem('themeSettings', JSON.stringify(data));
         }
+      } else {
+        // A non-2xx is a real failure. Say so once in the console: silently
+        // keeping the cached theme is what made a broken API look like
+        // "the appearance settings don't save".
+        console.error(
+          `[theme] GET ${API_URL}/theme returned ${res.status}. ` +
+            'The storefront is showing the last cached theme, not the database.'
+        );
       }
-    } catch {
-      // API unreachable - fall back to the last known good theme.
+    } catch (err) {
+      // API unreachable - fall back to the last known good theme, but make the
+      // reason visible instead of failing silently. On Windows this is almost
+      // always `localhost` resolving to ::1 while the API bound IPv4 only.
+      console.error(
+        `[theme] Could not reach ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/theme. ` +
+          'Showing the cached theme. Is the API running?',
+        err
+      );
       try {
         const cached = localStorage.getItem('themeSettings');
         if (cached) setTheme({ ...DEFAULT_THEME, ...JSON.parse(cached) });

@@ -1,4 +1,5 @@
-import { httpServer } from './app';
+import { createServer } from 'http';
+import { app, httpServer } from './app';
 import { env } from './config/environment';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { connectRedis, disconnectRedis } from './config/redis';
@@ -78,8 +79,39 @@ async function startServer() {
     // Set HOST=0.0.0.0 explicitly if you need LAN access.
     const host = process.env.HOST || '127.0.0.1';
 
+    // --- Dual-stack loopback -------------------------------------------------
+    // Binding 127.0.0.1 alone is an IPv4-only socket. The browser calls
+    // `http://localhost:3001`, and on Windows (and modern macOS) `localhost`
+    // resolves to ::1 (IPv6) BEFORE 127.0.0.1. The connection to ::1 is
+    // refused, so every admin write fails - which looks exactly like
+    // "my settings don't save", because a GET served from the cached theme in
+    // localStorage still renders the old values.
+    //
+    // We therefore also listen on ::1 when the operator did not pick an
+    // explicit HOST. A second listener is used rather than binding '::'
+    // because '::' is an all-interfaces bind, which is what triggered the
+    // original `EACCES 0.0.0.0` failure on Windows.
+    const alsoBindIpv6Loopback = !process.env.HOST && host === '127.0.0.1';
+
     httpServer.listen(port, host, () => {
       logger.info(`✅ Server running on http://${host}:${port}`);
+      if (alsoBindIpv6Loopback) {
+        // net.Server can only listen once, so open a twin server that feeds
+        // the same Express app.
+        const twin = createServer(app);
+        twin.on('error', (err: NodeJS.ErrnoException) => {
+          // Not fatal: plenty of machines have IPv6 disabled entirely. IPv4
+          // is already serving, so we only note it.
+          logger.warn(
+            `⚠️  Could not also bind [::1]:${port} (${err.code}). ` +
+              'If the admin panel cannot save, set NEXT_PUBLIC_API_URL to ' +
+              `http://127.0.0.1:${port}/api in apps/web/.env.local`
+          );
+        });
+        twin.listen(port, '::1', () => {
+          logger.info(`✅ Also listening on http://[::1]:${port} (IPv6 loopback)`);
+        });
+      }
       logger.info(`🌍 Environment: ${env.NODE_ENV}`);
       logger.info(`🔗 API URL: http://localhost:${port}/api`);
       logger.info(`💚 Health check: http://localhost:${port}/health`);

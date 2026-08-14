@@ -22,6 +22,7 @@ import { useIsMobile } from '@/lib/hooks';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
 import PromoGrid from '@/components/PromoGrid';
+import BannerStrip from '@/components/BannerStrip';
 import ProductCard, { PlaceholderTile } from '@/components/ProductCard';
 import ProductCarousel from '@/components/ProductCarousel';
 import {
@@ -62,6 +63,7 @@ export default function HomeView() {
   >([]);
   const [heroBanners, setHeroBanners] = useState<Banner[]>([]);
   const [promoBanners, setPromoBanners] = useState<Banner[]>([]);
+  const [stripBanners, setStripBanners] = useState<Banner[]>([]);
   const [bannersLoaded, setBannersLoaded] = useState(false);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [trending, setTrending] = useState<Product[]>([]);
@@ -132,6 +134,7 @@ export default function HomeView() {
         const all: Banner[] = d.data || [];
         setHeroBanners(all.filter((b) => (b.position || 'hero') === 'hero'));
         setPromoBanners(all.filter((b) => b.position === 'promo'));
+        setStripBanners(all.filter((b) => b.position === 'strip'));
       })
       .catch(() => {})
       .finally(() => setBannersLoaded(true));
@@ -199,6 +202,9 @@ export default function HomeView() {
 
       case 'promo':
         return <PromoGrid key={s.id} banners={promoBanners} />;
+
+      case 'bannerStrip':
+        return <BannerStrip key={s.id} banners={stripBanners} />;
 
       case 'trustBar':
         return <TrustBar key={s.id} items={cfg.items} />;

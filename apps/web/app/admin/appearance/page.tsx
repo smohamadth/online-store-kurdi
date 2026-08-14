@@ -81,11 +81,29 @@ export default function AdminAppearancePage() {
 
   const token = () => localStorage.getItem('token');
 
+  // `loadFailed` matters: if the GET fails we must NOT present the shipped
+  // defaults as if they were the stored settings. Doing that made the page
+  // look like it had "lost" the admin's theme, and saving from that state
+  // would overwrite the real settings in the database with defaults.
+  const [loadFailed, setLoadFailed] = useState('');
+
   useEffect(() => {
     fetch(`${API_BASE}/theme`, { cache: 'no-store' })
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          throw new Error(e.message || `Could not load the theme (HTTP ${r.status}).`);
+        }
+        return r.json();
+      })
       .then((d) => d.data && setTheme({ ...DEFAULT_THEME, ...d.data }))
-      .catch(() => {})
+      .catch((err) =>
+        setLoadFailed(
+          `${err?.message || 'Could not reach the API.'} ` +
+            'The values below are the shipped defaults, NOT your saved settings — ' +
+            'saving now would overwrite them. Start the API, then reload this page.'
+        )
+      )
       .finally(() => setLoading(false));
   }, []);
 
@@ -97,6 +115,14 @@ export default function AdminAppearancePage() {
   };
 
   const save = async () => {
+    if (loadFailed) {
+      notify(
+        'error',
+        'Refusing to save: this page never loaded your saved theme, so saving ' +
+          'would replace it with the defaults. Reload once the API is running.'
+      );
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/theme`, {
@@ -173,6 +199,15 @@ export default function AdminAppearancePage() {
           </button>
         </div>
       </div>
+
+      {loadFailed && (
+        <div style={{
+          marginTop: '16px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px',
+          backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d',
+        }}>
+          <strong>Settings not loaded.</strong> {loadFailed}
+        </div>
+      )}
 
       {msg.text && (
         <div style={{

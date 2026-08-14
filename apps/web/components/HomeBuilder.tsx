@@ -734,6 +734,15 @@ function TypeEditor({
         </p>
       );
 
+    case 'bannerStrip':
+      return (
+        <p style={{ fontSize: '13px', color: '#666' }}>
+          The wording, image, colours, buttons and schedule for this banner are edited in{' '}
+          <strong>Admin → Banners</strong> (position “Call-to-action banner”). Use the arrows
+          here to move it anywhere on the page.
+        </p>
+      );
+
     default:
       return null;
   }

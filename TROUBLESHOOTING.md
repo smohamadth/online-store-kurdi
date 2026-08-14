@@ -1,5 +1,55 @@
 # Troubleshooting
 
+## "Appearance / admin settings don't save" (Windows)
+
+Symptom: you change a colour in **Admin → Appearance**, press *Save changes*,
+and the value snaps back to the old one. Or the storefront keeps showing the
+old theme no matter what you do.
+
+**Root cause (fixed in this release):** the API bound *only* the IPv4 loopback
+`127.0.0.1`, while the browser calls `http://localhost:3001`. On Windows,
+`localhost` resolves to the IPv6 address `::1` **before** `127.0.0.1`. The
+browser connected to `::1`, got *connection refused*, and every write silently
+failed — while reads appeared to work because the storefront was painting from
+the theme cached in `localStorage`.
+
+The server now listens on **both** `127.0.0.1` and `[::1]`. You should see two
+lines on startup:
+
+```
+✅ Server running on http://127.0.0.1:3001
+✅ Also listening on http://[::1]:3001 (IPv6 loopback)
+```
+
+If you only see the first line, IPv6 is disabled on your machine. That is fine,
+but you must then point the frontend at IPv4 explicitly. Create
+`apps/web/.env.local`:
+
+```
+NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api
+```
+
+### How to confirm this is your problem
+
+Open the browser devtools **Network** tab and press Save. A failed request
+shows as `(failed) net::ERR_CONNECTION_REFUSED` against `localhost:3001`.
+The Console will now also print an explicit `[theme] Could not reach …` error
+instead of failing silently.
+
+### Other causes of the same symptom
+
+1. **The database is out of date.** The API returns `MIGRATION_REQUIRED` and the
+   admin shows the real message. Fix:
+   ```
+   cd apps/api && npm run db:deploy
+   ```
+   then restart the API.
+2. **You are looking at a stale cache.** The theme is cached in `localStorage`
+   under `themeSettings` so the page can paint before the API answers. Hard
+   reload with `Ctrl+Shift+R`.
+3. **Two API processes.** If an old `tsx` process is still holding port 3001,
+   your edits go to whichever one answers. Kill them all and start one.
+
 ## `EACCES: permission denied 0.0.0.0:3000` (Windows)
 
 ```

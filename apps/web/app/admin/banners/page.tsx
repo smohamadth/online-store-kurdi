@@ -92,6 +92,7 @@ export default function AdminBannersPage() {
     { title: 'New Arrivals', subtitle: 'Just In', linkUrl: '/products?sort=newest', buttonText: 'Explore', overlayColor: 'linear-gradient(120deg,#312e81,#6366f1)', position: 'promo', sortOrder: 0 },
     { title: 'Best Sellers', subtitle: 'Top Rated', linkUrl: '/products?sort=popular', buttonText: 'See All', overlayColor: 'linear-gradient(120deg,#7c2d12,#ea580c)', position: 'promo', sortOrder: 1 },
     { title: 'Clearance', subtitle: 'Final Sale', linkUrl: '/deals', buttonText: 'Save Now', overlayColor: 'linear-gradient(120deg,#0c4a6e,#0ea5e9)', position: 'promo', sortOrder: 2 },
+    { title: 'Join thousands of happy customers', subtitle: 'Why shop with us', description: 'Fast local delivery, genuine products and support in your language. Create an account to track every order.', badge: 'New', linkUrl: '/register', buttonText: 'Create account', secondaryText: 'Browse products', secondaryUrl: '/products', overlayColor: 'linear-gradient(120deg,#0f172a 0%,#1e3a8a 60%,#0ea5e9 100%)', position: 'strip', sortOrder: 0 },
   ];
 
   const importDefaults = async () => {
@@ -294,6 +295,8 @@ export default function AdminBannersPage() {
           {banners.map((b) => (
             <div
               key={b.id}
+              data-banner-row={b.position}
+              data-banner-id={b.id}
               style={{
                 display: 'grid',
                 gridTemplateColumns: isMobile ? '1fr' : '180px 1fr auto',
@@ -371,7 +374,7 @@ export default function AdminBannersPage() {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
               <div>
                 <label style={label}>Title *</label>
-                <input style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <input aria-label="Banner title" style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div>
                 <label style={label}>Subtitle (small text above title)</label>
@@ -428,6 +431,7 @@ export default function AdminBannersPage() {
                 <select style={input} value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })}>
                   <option value="hero">Hero slider</option>
                   <option value="promo">Promo grid</option>
+                  <option value="strip">Call-to-action banner</option>
                 </select>
               </div>
               <div>

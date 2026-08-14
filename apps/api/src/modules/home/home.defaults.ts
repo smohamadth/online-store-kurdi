@@ -96,6 +96,15 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
     },
   },
   {
+    key: 'bannerStrip',
+    type: 'bannerStrip',
+    title: null,
+    subtitle: null,
+    isVisible: true,
+    sortOrder: 75,
+    config: {},
+  },
+  {
     key: 'trending',
     type: 'carouselTrending',
     title: 'Trending Now',

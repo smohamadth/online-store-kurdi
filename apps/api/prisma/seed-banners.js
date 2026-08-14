@@ -89,6 +89,23 @@ const BANNERS = [
     position: 'promo',
     sortOrder: 2,
   },
+  {
+    // Full-width call-to-action banner on the home page. Rendered by
+    // components/BannerStrip.tsx; move it with Admin -> Appearance -> Home page.
+    title: 'Join thousands of happy customers',
+    subtitle: 'Why shop with us',
+    description:
+      'Fast local delivery, genuine products and support in your language. Create an account to track every order.',
+    badge: 'New',
+    image: '',
+    linkUrl: '/register',
+    buttonText: 'Create account',
+    secondaryText: 'Browse products',
+    secondaryUrl: '/products',
+    overlayColor: 'linear-gradient(120deg,#0f172a 0%,#1e3a8a 60%,#0ea5e9 100%)',
+    position: 'strip',
+    sortOrder: 0,
+  },
 ];
 
 async function main() {
