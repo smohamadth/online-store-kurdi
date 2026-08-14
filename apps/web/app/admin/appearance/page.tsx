@@ -5,6 +5,7 @@ import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
 import { DEFAULT_THEME, FONT_STACKS, Theme } from '@/lib/theme';
 import { API_BASE } from '@/lib/http';
+import HomeBuilder from '@/components/HomeBuilder';
 
 const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'primaryColor', label: 'Primary / buttons', hint: 'Buttons, active states, brand accents' },
@@ -68,7 +69,7 @@ const SECTIONS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'showNewsletter', label: 'Newsletter signup', hint: '' },
 ];
 
-type Tab = 'colors' | 'typography' | 'layout' | 'sections' | 'announcement' | 'css';
+type Tab = 'colors' | 'typography' | 'layout' | 'home' | 'sections' | 'announcement' | 'css';
 
 export default function AdminAppearancePage() {
   const isMobile = useIsMobile();
@@ -189,6 +190,7 @@ export default function AdminAppearancePage() {
           ['colors', '🎨 Colours'],
           ['typography', '🔤 Typography'],
           ['layout', '📐 Layout'],
+          ['home', '🏠 Home page'],
           ['sections', '🧩 Sections'],
           ['announcement', '📣 Announcement'],
           ['css', '⚙️ Custom CSS'],
@@ -204,6 +206,13 @@ export default function AdminAppearancePage() {
         ))}
       </div>
 
+      {/* The home page builder needs the full width - its rows are wide and
+          the small colour preview on the right is irrelevant to it. */}
+      {tab === 'home' ? (
+        <div style={{ marginTop: '22px' }}>
+          <HomeBuilder />
+        </div>
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: '22px', marginTop: '22px', alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: '18px' }}>
           {tab === 'colors' && (
@@ -327,6 +336,11 @@ export default function AdminAppearancePage() {
               <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Home page sections</h3>
               <p style={{ fontSize: '13px', color: '#666', marginBottom: '14px' }}>
                 Turn parts of the storefront on or off. Changes apply immediately after saving.
+              </p>
+              <p style={{ fontSize: '13px', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 12px', borderRadius: '8px', marginBottom: '14px' }}>
+                These are the original master switches and they still win: a section switched off
+                here stays hidden even if it is marked visible under{' '}
+                <strong>🏠 Home page</strong>. Use the Home page tab to reorder and re-word blocks.
               </p>
               <div style={{ display: 'grid', gap: '10px' }}>
                 {SECTIONS.map((sct) => (
@@ -458,6 +472,7 @@ export default function AdminAppearancePage() {
           </p>
         </div>
       </div>
+      )}
     </div>
   );
 }

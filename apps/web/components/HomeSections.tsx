@@ -1,43 +1,191 @@
 'use client';
 
+/**
+ * Home page building blocks.
+ *
+ * Two things changed in the overhaul:
+ *
+ * 1. Every block now takes its copy from props (fed by the `HomeSection` rows
+ *    in the database) instead of hardcoding strings. Nothing here needs a code
+ *    change to re-word the home page.
+ * 2. Colours come from the theme CSS variables (`--card-bg`, `--body-text`,
+ *    `--muted`, `--border`, ...). Before this, sections hardcoded #fff / #111 /
+ *    #666, so picking the Midnight preset produced white cards with white text
+ *    on a dark page — the theme only reached part of the storefront.
+ */
+
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useIsMobile } from '@/lib/hooks';
+import type { TrustItem, TestimonialItem, StatItem } from '@/lib/homeSections';
 
 /* ------------------------------------------------------------------ */
-/* Trust bar - the strip of guarantees under the hero                  */
+/* Shared bits                                                         */
 /* ------------------------------------------------------------------ */
 
-export function TrustBar() {
+const CONTAINER = 'var(--container, 1200px)';
+
+export function SectionHeading({
+  title,
+  subtitle,
+  linkText,
+  linkHref,
+  center = false,
+}: {
+  title?: string | null;
+  subtitle?: string | null;
+  linkText?: string;
+  linkHref?: string;
+  center?: boolean;
+}) {
   const isMobile = useIsMobile();
-  const items = [
-    { icon: '🚚', title: 'Free shipping', text: 'On orders over 50' },
-    { icon: '↩️', title: '30-day returns', text: 'Hassle-free refunds' },
-    { icon: '🔒', title: 'Secure checkout', text: 'Encrypted payments' },
-    { icon: '💬', title: '24/7 support', text: 'We reply within hours' },
-  ];
+  if (!title && !subtitle) return null;
 
   return (
-    <section style={{ borderBottom: '1px solid #ededed', backgroundColor: '#fff' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: center ? 'center' : 'flex-end',
+        justifyContent: center ? 'center' : 'space-between',
+        flexDirection: center ? 'column' : 'row',
+        textAlign: center ? 'center' : 'left',
+        gap: '16px',
+      }}
+    >
+      <div style={center ? { maxWidth: '620px' } : undefined}>
+        {title && (
+          <h2
+            style={{
+              fontSize: isMobile ? '22px' : '30px',
+              fontWeight: 'var(--heading-weight, 800)' as any,
+              letterSpacing: '-0.01em',
+              color: 'var(--body-text, #111)',
+            }}
+          >
+            {title}
+          </h2>
+        )}
+        {subtitle && (
+          <p style={{ marginTop: '8px', color: 'var(--muted, #666)', fontSize: '15px' }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+
+      {linkText && linkHref && !center && (
+        <Link
+          href={linkHref}
+          style={{
+            fontSize: '14px',
+            fontWeight: 600,
+            color: 'var(--accent, #111)',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {linkText}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Trust bar                                                           */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_TRUST: TrustItem[] = [
+  { icon: '🚚', title: 'Free shipping', text: 'On orders over 50' },
+  { icon: '↩️', title: '30-day returns', text: 'Hassle-free refunds' },
+  { icon: '🔒', title: 'Secure checkout', text: 'Encrypted payments' },
+  { icon: '💬', title: '24/7 support', text: 'We reply within hours' },
+];
+
+export function TrustBar({ items }: { items?: TrustItem[] }) {
+  const isMobile = useIsMobile();
+  const list = items?.length ? items : DEFAULT_TRUST;
+
+  return (
+    <section
+      style={{
+        borderBottom: '1px solid var(--border, #ededed)',
+        backgroundColor: 'var(--card-bg, #fff)',
+      }}
+    >
       <div
         style={{
-          maxWidth: '1200px',
+          maxWidth: CONTAINER,
           margin: '0 auto',
           padding: isMobile ? '20px' : '26px 20px',
           display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${Math.min(list.length, 4)}, 1fr)`,
           gap: isMobile ? '18px' : '24px',
         }}
       >
-        {items.map((i) => (
-          <div key={i.title} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        {list.map((i, idx) => (
+          <div key={`${i.title}-${idx}`} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <span style={{ fontSize: '26px', lineHeight: 1 }} aria-hidden="true">
               {i.icon}
             </span>
             <div>
-              <p style={{ fontWeight: 700, fontSize: '14px' }}>{i.title}</p>
-              <p style={{ fontSize: '13px', color: '#777', marginTop: '2px' }}>{i.text}</p>
+              <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--body-text, #111)' }}>
+                {i.title}
+              </p>
+              <p style={{ fontSize: '13px', color: 'var(--muted, #777)', marginTop: '2px' }}>
+                {i.text}
+              </p>
             </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Feature icons (the circular icon row)                               */
+/* ------------------------------------------------------------------ */
+
+export function FeatureIcons({ items }: { items?: TrustItem[] }) {
+  const isMobile = useIsMobile();
+  const list = items?.length ? items : DEFAULT_TRUST;
+
+  return (
+    <section style={{ backgroundColor: 'var(--card-bg, #f9f9f9)', marginTop: '64px' }}>
+      <div
+        style={{
+          maxWidth: CONTAINER,
+          margin: '0 auto',
+          padding: '64px 20px',
+          display: 'grid',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${Math.min(list.length, 4)}, 1fr)`,
+          gap: '32px',
+        }}
+      >
+        {list.map((f, idx) => (
+          <div key={`${f.title}-${idx}`} style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                margin: '0 auto',
+                borderRadius: '50%',
+                backgroundColor: 'var(--body-bg, #f0f0f0)',
+                border: '1px solid var(--border, #eee)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+              }}
+              aria-hidden="true"
+            >
+              {f.icon}
+            </div>
+            <h3 style={{ marginTop: '16px', fontWeight: 600, color: 'var(--body-text, #111)' }}>
+              {f.title}
+            </h3>
+            <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>{f.text}</p>
           </div>
         ))}
       </div>
@@ -49,7 +197,23 @@ export function TrustBar() {
 /* Countdown deal banner                                               */
 /* ------------------------------------------------------------------ */
 
-export function DealCountdown() {
+export function DealCountdown({
+  title = 'Save big before midnight',
+  subtitle = 'Limited quantities on selected items. New deals drop every morning.',
+  badge = 'Deal of the day',
+  buttonText = 'Shop deals',
+  buttonHref = '/deals',
+  gradientFrom = '#111827',
+  gradientTo = '#374151',
+}: {
+  title?: string | null;
+  subtitle?: string | null;
+  badge?: string;
+  buttonText?: string;
+  buttonHref?: string;
+  gradientFrom?: string;
+  gradientTo?: string;
+}) {
   const isMobile = useIsMobile();
   // `left` stays null until after mount. Computing a clock value during the
   // initial render makes the server HTML differ from the client's first render,
@@ -72,16 +236,15 @@ export function DealCountdown() {
   const hours = Math.floor(clamped / 3_600_000);
   const mins = Math.floor((clamped % 3_600_000) / 60_000);
   const secs = Math.floor((clamped % 60_000) / 1000);
-  // Render an em dash pre-hydration so the markup is deterministic.
   const pad = (n: number) => (left === null ? '--' : String(n).padStart(2, '0'));
 
   return (
-    <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '56px 20px 0' }}>
+    <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '56px 20px 0' }}>
       <div
         style={{
-          borderRadius: '16px',
+          borderRadius: 'var(--radius, 16px)',
           padding: isMobile ? '28px 22px' : '40px',
-          background: 'linear-gradient(120deg, #111827 0%, #1f2937 55%, #374151 100%)',
+          background: `linear-gradient(120deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
           color: '#fff',
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
@@ -91,29 +254,49 @@ export function DealCountdown() {
         }}
       >
         <div>
-          <span
-            style={{
-              display: 'inline-block',
-              padding: '5px 12px',
-              borderRadius: '999px',
-              backgroundColor: 'rgba(239,68,68,0.9)',
-              fontSize: '11px',
-              fontWeight: 800,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Deal of the day
-          </span>
-          <h2 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 800, marginTop: '14px', letterSpacing: '-0.01em' }}>
-            Save big before midnight
-          </h2>
-          <p style={{ marginTop: '8px', color: '#d1d5db', fontSize: '15px', maxWidth: '460px' }}>
-            Limited quantities on selected items. New deals drop every morning.
-          </p>
+          {badge && (
+            <span
+              style={{
+                display: 'inline-block',
+                padding: '5px 12px',
+                borderRadius: '999px',
+                backgroundColor: 'var(--sale, rgba(239,68,68,0.9))',
+                fontSize: '11px',
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {badge}
+            </span>
+          )}
+          {title && (
+            <h2
+              style={{
+                fontSize: isMobile ? '24px' : '32px',
+                fontWeight: 800,
+                marginTop: '14px',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {subtitle && (
+            <p style={{ marginTop: '8px', color: '#d1d5db', fontSize: '15px', maxWidth: '460px' }}>
+              {subtitle}
+            </p>
+          )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '16px' : '24px', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: isMobile ? '16px' : '24px',
+            flexWrap: 'wrap',
+          }}
+        >
           <div style={{ display: 'flex', gap: '10px' }} aria-label="Time remaining">
             {[
               { v: pad(hours), l: 'Hours' },
@@ -131,26 +314,30 @@ export function DealCountdown() {
                   border: '1px solid rgba(255,255,255,0.18)',
                 }}
               >
-                <div style={{ fontSize: '24px', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{b.v}</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                  {b.v}
+                </div>
                 <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>{b.l}</div>
               </div>
             ))}
           </div>
-          <Link
-            href="/deals"
-            style={{
-              padding: '14px 26px',
-              backgroundColor: 'var(--card-bg, #fff)',
-              color: '#111',
-              borderRadius: '8px',
-              fontWeight: 700,
-              fontSize: '15px',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Shop deals
-          </Link>
+          {buttonText && (
+            <Link
+              href={buttonHref || '/deals'}
+              style={{
+                padding: '14px 26px',
+                backgroundColor: 'var(--brand, #fff)',
+                color: 'var(--brand-text, #111)',
+                borderRadius: 'var(--btn-radius, 8px)',
+                fontWeight: 700,
+                fontSize: '15px',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {buttonText}
+            </Link>
+          )}
         </div>
       </div>
     </section>
@@ -161,95 +348,97 @@ export function DealCountdown() {
 /* Testimonials                                                        */
 /* ------------------------------------------------------------------ */
 
-export function Testimonials() {
+export function Testimonials({
+  title = 'Loved by our customers',
+  subtitle = 'Real feedback from people who shop with us.',
+  items,
+}: {
+  title?: string | null;
+  subtitle?: string | null;
+  items?: TestimonialItem[];
+}) {
   const isMobile = useIsMobile();
-  const reviews = [
-    {
-      name: 'Sarah M.',
-      role: 'Verified buyer',
-      text: 'Ordered on a Monday and it arrived Wednesday. Packaging was spotless and the quality is better than I expected.',
-      rating: 5,
-    },
-    {
-      name: 'Daniel K.',
-      role: 'Verified buyer',
-      text: 'Had a sizing question and support answered within the hour. The return process was genuinely painless.',
-      rating: 5,
-    },
-    {
-      name: 'Ava R.',
-      role: 'Verified buyer',
-      text: 'Great prices without the sketchy feeling you get on marketplaces. This is my third order this year.',
-      rating: 4,
-    },
-  ];
+  const list = items?.length ? items : [];
+  if (!list.length) return null;
 
   return (
-    <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 20px 0' }}>
-      <div style={{ textAlign: 'center', maxWidth: '620px', margin: '0 auto' }}>
-        <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 800, letterSpacing: '-0.01em' }}>
-          Loved by our customers
-        </h2>
-        <p style={{ marginTop: '10px', color: '#666', fontSize: '15px' }}>
-          Real feedback from people who shop with us.
-        </p>
-      </div>
+    <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px 0' }}>
+      <SectionHeading title={title} subtitle={subtitle} center />
 
       <div
         style={{
           marginTop: '32px',
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+          gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(list.length, 3)}, 1fr)`,
           gap: '20px',
         }}
       >
-        {reviews.map((r) => (
-          <figure
-            key={r.name}
-            style={{
-              border: '1px solid #ededed',
-              borderRadius: '12px',
-              padding: '24px',
-              backgroundColor: 'var(--card-bg, #fff)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
-          >
-            <div style={{ color: '#f59e0b', letterSpacing: '2px', fontSize: '15px' }}>
-              {'★'.repeat(r.rating)}
-              <span style={{ color: '#e0e0e0' }}>{'★'.repeat(5 - r.rating)}</span>
-            </div>
-            <blockquote style={{ fontSize: '15px', lineHeight: 1.65, color: '#333', flex: 1 }}>
-              “{r.text}”
-            </blockquote>
-            <figcaption style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '50%',
-                  backgroundColor: '#111',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                }}
-                aria-hidden="true"
+        {list.map((r, idx) => {
+          const rating = Math.max(0, Math.min(5, Number(r.rating) || 0));
+          return (
+            <figure
+              key={`${r.name}-${idx}`}
+              style={{
+                border: '1px solid var(--border, #ededed)',
+                borderRadius: 'var(--radius, 12px)',
+                padding: '24px',
+                backgroundColor: 'var(--card-bg, #fff)',
+                boxShadow: 'var(--shadow, none)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
+            >
+              <div style={{ color: '#f59e0b', letterSpacing: '2px', fontSize: '15px' }}>
+                {'★'.repeat(rating)}
+                <span style={{ color: 'currentColor', opacity: 0.28 }}>{'★'.repeat(5 - rating)}</span>
+              </div>
+              <blockquote
+                style={{ fontSize: '15px', lineHeight: 1.65, color: 'var(--body-text, #333)', flex: 1 }}
               >
-                {r.name.charAt(0)}
-              </span>
-              <span>
-                <span style={{ display: 'block', fontWeight: 700, fontSize: '14px' }}>{r.name}</span>
-                <span style={{ display: 'block', fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>
-                  ✓ {r.role}
+                “{r.text}”
+              </blockquote>
+              <figcaption style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--brand, #111)',
+                    color: 'var(--brand-text, #fff)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                  }}
+                  aria-hidden="true"
+                >
+                  {r.name?.charAt(0) || '?'}
                 </span>
-              </span>
-            </figcaption>
-          </figure>
-        ))}
+                <span>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontWeight: 700,
+                      fontSize: '14px',
+                      color: 'var(--body-text, #111)',
+                    }}
+                  >
+                    {r.name}
+                  </span>
+                  {r.role && (
+                    <span
+                      style={{ display: 'block', fontSize: '12px', color: '#16a34a', fontWeight: 600 }}
+                    >
+                      ✓ {r.role}
+                    </span>
+                  )}
+                </span>
+              </figcaption>
+            </figure>
+          );
+        })}
       </div>
     </section>
   );
@@ -274,9 +463,9 @@ function useCountUp(target: number, run: boolean, ms = 1400) {
     const start = performance.now();
     const tick = (now: number) => {
       const p = Math.min(1, (now - start) / ms);
-      // ease-out so the number decelerates into place
-      setN(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      setN(target * (1 - Math.pow(1 - p, 3)));
       if (p < 1) raf = requestAnimationFrame(tick);
+      else setN(target);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -284,10 +473,44 @@ function useCountUp(target: number, run: boolean, ms = 1400) {
   return n;
 }
 
-export function StatsStrip() {
+function Stat({ item, run }: { item: StatItem; run: boolean }) {
+  const isMobile = useIsMobile();
+  const target = Number(item.value);
+  const numeric = Number.isFinite(target);
+  // Keep the admin's precision: "4.9" must not animate to "5".
+  const decimals = numeric && String(item.value).includes('.')
+    ? String(item.value).split('.')[1].length
+    : 0;
+  const n = useCountUp(numeric ? target : 0, run && numeric);
+
+  const shown = numeric
+    ? n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : item.value;
+
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: isMobile ? '26px' : '38px',
+          fontWeight: 800,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {shown}
+        {item.suffix || ''}
+      </div>
+      <div style={{ marginTop: '6px', fontSize: '13px', color: '#9ca3af', letterSpacing: '0.03em' }}>
+        {item.label}
+      </div>
+    </div>
+  );
+}
+
+export function StatsStrip({ items }: { items?: StatItem[] }) {
   const isMobile = useIsMobile();
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const list = items?.length ? items : [];
 
   useEffect(() => {
     const el = ref.current;
@@ -308,41 +531,169 @@ export function StatsStrip() {
     return () => io.disconnect();
   }, []);
 
-  const customers = useCountUp(12500, visible);
-  const orders = useCountUp(48000, visible);
-  const rating = useCountUp(49, visible);
-  const countries = useCountUp(32, visible);
-
-  const stats = [
-    { value: `${customers.toLocaleString()}+`, label: 'Happy customers' },
-    { value: `${orders.toLocaleString()}+`, label: 'Orders delivered' },
-    { value: `${(rating / 10).toFixed(1)}/5`, label: 'Average rating' },
-    { value: `${countries}`, label: 'Countries served' },
-  ];
+  if (!list.length) return null;
 
   return (
-    <section ref={ref} style={{ marginTop: '64px', backgroundColor: '#111', color: '#fff' }}>
+    <section
+      ref={ref}
+      style={{ marginTop: '64px', backgroundColor: 'var(--brand, #111)', color: 'var(--brand-text, #fff)' }}
+    >
       <div
         style={{
-          maxWidth: '1200px',
+          maxWidth: CONTAINER,
           margin: '0 auto',
           padding: isMobile ? '36px 20px' : '52px 20px',
           display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${Math.min(list.length, 4)}, 1fr)`,
           gap: isMobile ? '28px' : '24px',
           textAlign: 'center',
         }}
       >
-        {stats.map((s) => (
-          <div key={s.label}>
-            <div style={{ fontSize: isMobile ? '26px' : '38px', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-              {s.value}
-            </div>
-            <div style={{ marginTop: '6px', fontSize: '13px', color: '#9ca3af', letterSpacing: '0.03em' }}>
-              {s.label}
-            </div>
-          </div>
+        {list.map((s, i) => (
+          <Stat key={`${s.label}-${i}`} item={s} run={visible} />
         ))}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Rich text block - free-form admin content                           */
+/* ------------------------------------------------------------------ */
+
+export function RichTextBlock({
+  title,
+  subtitle,
+  html,
+  align = 'left',
+}: {
+  title?: string | null;
+  subtitle?: string | null;
+  html?: string;
+  align?: 'left' | 'center';
+}) {
+  if (!title && !subtitle && !html) return null;
+  return (
+    <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '56px 20px 0' }}>
+      <SectionHeading title={title} subtitle={subtitle} center={align === 'center'} />
+      {html && (
+        <div
+          style={{
+            marginTop: title || subtitle ? '20px' : 0,
+            color: 'var(--body-text, #333)',
+            lineHeight: 1.75,
+            fontSize: '15px',
+            textAlign: align,
+          }}
+          // Sanitised server-side before it is stored; see home.routes.ts and
+          // the shared sanitiser used by the rich text editor.
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Newsletter                                                          */
+/* ------------------------------------------------------------------ */
+
+export function Newsletter({
+  title = 'Subscribe to Our Newsletter',
+  subtitle = 'Get the latest updates on new products, sales, and exclusive offers.',
+  buttonText = 'Subscribe',
+  placeholder = 'Enter your email',
+  onSubmit,
+  status,
+  message,
+}: {
+  title?: string | null;
+  subtitle?: string | null;
+  buttonText?: string;
+  placeholder?: string;
+  onSubmit: (email: string) => void;
+  status: 'idle' | 'loading' | 'success' | 'error';
+  message: string;
+}) {
+  const isMobile = useIsMobile();
+  const [email, setEmail] = useState('');
+
+  return (
+    <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+      <div
+        style={{
+          borderRadius: 'var(--radius, 16px)',
+          backgroundColor: 'var(--brand, #000)',
+          color: 'var(--brand-text, #fff)',
+          padding: isMobile ? '32px 22px' : '48px',
+        }}
+      >
+        <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+          {title && (
+            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>{title}</h2>
+          )}
+          {subtitle && (
+            <p style={{ marginTop: '16px', fontSize: '18px', opacity: 0.9 }}>{subtitle}</p>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (email) onSubmit(email);
+            }}
+            style={{
+              marginTop: '32px',
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '16px',
+            }}
+          >
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={placeholder}
+              required
+              aria-label="Email address"
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                borderRadius: 'var(--btn-radius, 6px)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                color: 'var(--brand-text, #fff)',
+                fontSize: '16px',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={status === 'loading'}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: status === 'loading' ? '#9ca3af' : 'var(--brand-text, #fff)',
+                color: 'var(--brand, #000)',
+                border: 'none',
+                borderRadius: 'var(--btn-radius, 6px)',
+                fontSize: '16px',
+                fontWeight: 600,
+                cursor: status === 'loading' ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {status === 'loading' ? 'Subscribing...' : buttonText}
+            </button>
+          </form>
+          {message && (
+            <p
+              style={{
+                marginTop: '16px',
+                fontSize: '14px',
+                color: status === 'success' ? '#22c55e' : '#fca5a5',
+              }}
+            >
+              {status === 'success' ? '✓ ' : '✕ '}
+              {message}
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );

@@ -83,7 +83,7 @@ function CartIcon() {
     <Link href="/cart" style={{
       position: 'relative',
       textDecoration: 'none',
-      color: '#000',
+      color: 'var(--header-text, #000)',
       display: 'flex',
       alignItems: 'center',
     }}>
@@ -173,6 +173,9 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
             right: '16px',
             background: 'none',
             border: 'none',
+            // Buttons don't inherit colour; without this it is UA black and
+            // disappears against a dark drawer.
+            color: 'var(--body-text, #111)',
             fontSize: '24px',
             cursor: 'pointer',
             padding: '8px',
@@ -497,7 +500,7 @@ function Header() {
           {/* Logo */}
           <Link href="/" style={{
             textDecoration: 'none',
-            color: '#000',
+            color: 'var(--header-text, #000)',
             flexShrink: 0,
           }}>
             <span style={{ fontSize: '20px', fontWeight: 'bold' }}>{settings.storeName}</span>
@@ -524,7 +527,7 @@ function Header() {
                     target={item.target || '_self'}
                     style={{ 
                       textDecoration: 'none', 
-                      color: '#333',
+                      color: 'var(--header-text, #333)',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
@@ -560,7 +563,7 @@ function Header() {
                             display: 'block',
                             padding: '10px 16px',
                             fontSize: '14px',
-                            color: '#333',
+                            color: 'var(--header-text, #333)',
                             textDecoration: 'none',
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
@@ -623,10 +626,10 @@ function Header() {
                     </>
                   ) : (
                     <>
-                      <Link href="/account" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                      <Link href="/account" style={{ textDecoration: 'none', color: 'var(--header-text, #333)', fontSize: '14px' }}>
                         👤 My Account
                       </Link>
-                      <Link href="/account/orders" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                      <Link href="/account/orders" style={{ textDecoration: 'none', color: 'var(--header-text, #333)', fontSize: '14px' }}>
                         Orders
                       </Link>
                       <button
@@ -646,7 +649,7 @@ function Header() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Link href="/login" style={{ textDecoration: 'none', color: '#333', fontSize: '14px' }}>
+                  <Link href="/login" style={{ textDecoration: 'none', color: 'var(--header-text, #333)', fontSize: '14px' }}>
                     Sign In
                   </Link>
                   <Link href="/register" style={{

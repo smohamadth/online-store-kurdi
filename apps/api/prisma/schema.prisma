@@ -829,3 +829,30 @@ model ThemeSettings {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// Home page builder
+//
+// Each row is one block on the storefront home page. Order, visibility and the
+// copy inside the block are all admin-editable and stored here, so the home
+// page is data-driven instead of hardcoded in HomeView.tsx.
+//
+// `config` is a JSON string (SQLite has no JSON column) holding the block's
+// type-specific payload - e.g. the four trust-bar items, or the testimonial
+// list. Unknown/invalid JSON falls back to the shipped defaults rather than
+// breaking the page.
+// ---------------------------------------------------------------------------
+model HomeSection {
+  id        String   @id @default(uuid())
+  key       String   @unique          // stable identifier: trustBar, categories, ...
+  type      String                     // which renderer draws it
+  title     String?
+  subtitle  String?
+  isVisible Boolean  @default(true)
+  sortOrder Int      @default(0)
+  config    String?                    // JSON string, block-specific
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+}

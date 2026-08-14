@@ -64,14 +64,14 @@ export default function ProductCarousel({
           <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 800, letterSpacing: '-0.01em' }}>
             {title}
           </h2>
-          {subtitle && <p style={{ marginTop: '6px', color: '#666', fontSize: '15px' }}>{subtitle}</p>}
+          {subtitle && <p style={{ marginTop: '6px', color: 'var(--muted, #666)', fontSize: '15px' }}>{subtitle}</p>}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           {viewAllHref && (
             <Link
               href={viewAllHref}
-              style={{ fontSize: '14px', fontWeight: 600, color: '#111', textDecoration: 'none', whiteSpace: 'nowrap' }}
+              style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent, #111)', textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
               View all →
             </Link>
@@ -120,7 +120,7 @@ function navBtn(disabled: boolean): React.CSSProperties {
     borderRadius: '50%',
     border: '1px solid #e0e0e0',
     backgroundColor: 'var(--card-bg, #fff)',
-    color: disabled ? '#c4c4c4' : '#111',
+    color: disabled ? 'var(--muted, #c4c4c4)' : 'var(--body-text, #111)',
     fontSize: '20px',
     lineHeight: 1,
     cursor: disabled ? 'default' : 'pointer',

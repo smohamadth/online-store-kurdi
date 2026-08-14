@@ -34,7 +34,7 @@ export default function PromoGrid({ banners }: { banners: Banner[] }) {
                   : b.overlayColor && b.overlayColor.includes('gradient')
                   ? b.overlayColor
                   : 'linear-gradient(120deg,#111827,#374151)',
-                border: '1px solid #e5e5e5',
+                border: '1px solid var(--border, #e5e5e5)',
               }}
             >
               <div

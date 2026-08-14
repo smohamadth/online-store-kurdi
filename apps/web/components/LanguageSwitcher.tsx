@@ -19,7 +19,10 @@ export default function LanguageSwitcher() {
           gap: '6px',
           padding: '6px 10px',
           background: 'none',
-          border: '1px solid #e5e5e5',
+          // <button> does not inherit colour - without this it renders as the
+          // UA's black `buttontext`, which is invisible on a dark header.
+          color: 'var(--header-text, #111)',
+          border: '1px solid var(--border, #e5e5e5)',
           borderRadius: '6px',
           cursor: 'pointer',
           fontSize: '14px',
@@ -49,7 +52,7 @@ export default function LanguageSwitcher() {
             right: 0,
             marginTop: '4px',
             backgroundColor: 'var(--card-bg, white)',
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e5e5)',
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
             zIndex: 100,

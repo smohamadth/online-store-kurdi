@@ -66,7 +66,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
         border: '1px solid var(--border, #e8e8e8)',
         backgroundColor: 'var(--card-bg, white)',
         textDecoration: 'none',
-        color: '#111',
+        color: 'var(--body-text, #111)',
         transition: 'transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease',
         transform: hovered ? 'translateY(-4px)' : 'none',
         boxShadow: hovered ? 'var(--shadow-hover)' : 'var(--shadow)',
@@ -185,7 +185,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
 
       {/* Body */}
       <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-        <p style={{ fontSize: '12px', color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <p style={{ fontSize: '12px', color: 'var(--muted, #8a8a8a)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           {product.category?.name || 'Shop'}
         </p>
         <h3
@@ -206,9 +206,9 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ color: '#f59e0b', fontSize: '13px', letterSpacing: '1px' }}>
             {'★'.repeat(Math.round(rating))}
-            <span style={{ color: '#d4d4d4' }}>{'★'.repeat(5 - Math.round(rating))}</span>
+            <span style={{ color: 'currentColor', opacity: 0.28 }}>{'★'.repeat(5 - Math.round(rating))}</span>
           </span>
-          <span style={{ fontSize: '12px', color: '#8a8a8a' }}>
+          <span style={{ fontSize: '12px', color: 'var(--muted, #8a8a8a)' }}>
             {rating > 0 ? rating.toFixed(1) : 'New'}
             {product.reviewCount ? ` (${product.reviewCount})` : ''}
           </span>
@@ -272,7 +272,10 @@ export function PlaceholderTile({
         alignItems: 'center',
         justifyContent: 'center',
         gap: '8px',
-        background: `linear-gradient(135deg, hsl(${hash},62%,94%) 0%, hsl(${(hash + 40) % 360},58%,88%) 100%)`,
+        // Explicit light backgroundColor under the gradient: the tile draws its
+        // own surface, so its dark label stays readable under dark themes too.
+        backgroundColor: `hsl(${hash},62%,94%)`,
+        backgroundImage: `linear-gradient(135deg, hsl(${hash},62%,94%) 0%, hsl(${(hash + 40) % 360},58%,88%) 100%)`,
         color: `hsl(${hash},45%,32%)`,
       }}
     >

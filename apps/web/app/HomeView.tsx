@@ -1,482 +1,381 @@
 'use client';
 
+/**
+ * The storefront home page.
+ *
+ * Rewritten so the page is *data-driven*: the order, visibility and copy of
+ * every block come from the `HomeSection` rows in the database (admin →
+ * Appearance → Home page). Previously the layout was a fixed sequence of JSX
+ * and the only thing an admin could change was a handful of on/off toggles.
+ *
+ * Failure behaviour: if /api/home-sections cannot be reached we render the
+ * shipped default layout rather than a blank page — but we never pretend a
+ * save succeeded, and the admin builder surfaces real errors.
+ */
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
+import { api, Product, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
+import { useIsMobile } from '@/lib/hooks';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
 import PromoGrid from '@/components/PromoGrid';
 import ProductCard, { PlaceholderTile } from '@/components/ProductCard';
 import ProductCarousel from '@/components/ProductCarousel';
-import { TrustBar, DealCountdown, Testimonials, StatsStrip } from '@/components/HomeSections';
-import { formatPrice } from '@/lib/settings';
+import {
+  TrustBar,
+  FeatureIcons,
+  DealCountdown,
+  Testimonials,
+  StatsStrip,
+  Newsletter,
+  RichTextBlock,
+  SectionHeading,
+} from '@/components/HomeSections';
+import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { API_BASE } from '@/lib/http';
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-  return isMobile;
-}
+const CONTAINER = 'var(--container, 1200px)';
+
+/** Fallback layout used only when the API is unreachable. */
+const FALLBACK_SECTIONS: HomeSection[] = [
+  { id: 'f-hero', key: 'hero', type: 'hero', title: null, subtitle: null, isVisible: true, sortOrder: 10, config: {} },
+  { id: 'f-promo', key: 'promo', type: 'promo', title: null, subtitle: null, isVisible: true, sortOrder: 20, config: {} },
+  { id: 'f-cat', key: 'categories', type: 'categories', title: 'Shop by Category', subtitle: 'Browse our wide selection of products', isVisible: true, sortOrder: 30, config: { linkText: 'View All →', linkHref: '/products' } },
+  { id: 'f-feat', key: 'featured', type: 'featured', title: 'Featured Products', subtitle: 'Our most popular items', isVisible: true, sortOrder: 40, config: { linkText: 'View All Products →', linkHref: '/products' } },
+];
 
 export default function HomeView() {
   const isMobile = useIsMobile();
+  const { settings } = useStoreSettings();
+  const { theme } = useTheme();
+
+  const [sections, setSections] = useState<HomeSection[]>([]);
+  const [sectionsLoaded, setSectionsLoaded] = useState(false);
+
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<
     { name: string; slug: string; emoji: string; count: number; image?: string }[]
-  >([
-    { name: 'Electronics', slug: 'electronics', emoji: '💻', count: 0 },
-    { name: 'Clothing', slug: 'clothing', emoji: '👕', count: 0 },
-    { name: 'Books', slug: 'books', emoji: '📚', count: 0 },
-    { name: 'Digital Products', slug: 'digital-products', emoji: '📱', count: 0 },
-  ]);
-  const [loading, setLoading] = useState(true);
+  >([]);
   const [heroBanners, setHeroBanners] = useState<Banner[]>([]);
   const [promoBanners, setPromoBanners] = useState<Banner[]>([]);
   const [bannersLoaded, setBannersLoaded] = useState(false);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [trending, setTrending] = useState<Product[]>([]);
-  const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  const [newsletterStatus, setNewsletterStatus] =
+    useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
-  const { settings } = useStoreSettings();
-  const { theme } = useTheme();
+
+  /* --------------------------------------------------------------- load */
 
   useEffect(() => {
-    fetchFeaturedProducts();
-    fetchCategories();
-    fetchBanners();
-    fetchNewArrivals();
-    fetchTrending();
+    let alive = true;
+
+    fetchHomeSections()
+      .then((rows) => {
+        if (!alive) return;
+        setSections(rows);
+      })
+      .catch(() => {
+        if (!alive) return;
+        // The API is down. Show the shipped layout so the store is still
+        // usable — this is a read-only fallback, nothing is written anywhere.
+        console.warn('Home sections unavailable; rendering the default layout.');
+        setSections(FALLBACK_SECTIONS);
+      })
+      .finally(() => alive && setSectionsLoaded(true));
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const fetchBanners = async () => {
-    try {
-      // no-store: an admin edit must be visible on the next page load, not
-      // served from a stale cached response.
-      const res = await fetch(`${API_BASE}/banners`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        const all: Banner[] = data.data || [];
+  useEffect(() => {
+    api
+      .getFeaturedProducts(12)
+      .then((r) => setFeaturedProducts(r.data || []))
+      .catch(() => setFeaturedProducts([]))
+      .finally(() => setLoading(false));
+
+    api
+      .getCategories()
+      .then((r) => {
+        const emojis: Record<string, string> = {
+          electronics: '💻',
+          clothing: '👕',
+          books: '📚',
+          digital: '📱',
+          'digital-products': '📱',
+        };
+        const list = (r.data || []).map((c: any) => ({
+          name: c.name,
+          slug: c.slug,
+          emoji: emojis[c.slug] || emojis[c.name?.toLowerCase()] || '📦',
+          count: c._count?.products || 0,
+          image: c.image || '',
+        }));
+        setCategories(list);
+      })
+      .catch(() => setCategories([]));
+
+    api.getNewArrivals().then((r) => setNewArrivals(r.data || [])).catch(() => setNewArrivals([]));
+    api.getTrendingProducts().then((r) => setTrending(r.data || [])).catch(() => setTrending([]));
+
+    // no-store: an admin banner edit must show on the next load, not from cache.
+    fetch(`${API_BASE}/banners`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((d) => {
+        const all: Banner[] = d.data || [];
         setHeroBanners(all.filter((b) => (b.position || 'hero') === 'hero'));
         setPromoBanners(all.filter((b) => b.position === 'promo'));
-      }
-    } catch (err) {
-      console.log('Banners API unavailable');
-    } finally {
-      // Mark as loaded even on failure, so the gallery stops showing the
-      // pre-load placeholder and reflects what the database actually has.
-      setBannersLoaded(true);
-    }
-  };
+      })
+      .catch(() => {})
+      .finally(() => setBannersLoaded(true));
+  }, []);
 
-  const fetchNewArrivals = async () => {
-    try {
-      const res = await api.getNewArrivals();
-      setNewArrivals(res.data || []);
-    } catch {
-      setNewArrivals([]);
-    }
-  };
+  /* --------------------------------------------------------- newsletter */
 
-  const fetchTrending = async () => {
-    try {
-      const res = await api.getTrendingProducts();
-      setTrending(res.data || []);
-    } catch {
-      setTrending([]);
-    }
-  };
-
-  const fetchFeaturedProducts = async () => {
-    try {
-      const response = await api.getFeaturedProducts(8);
-      setFeaturedProducts(response.data || []);
-    } catch (err) {
-      console.error('Failed to fetch featured products:', err);
-      // Use empty array if API fails
-      setFeaturedProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const fetchCategories = async () => {
-    try {
-      const response = await api.getCategories();
-      if (response.data && Array.isArray(response.data)) {
-        // Map API categories to our display format
-        const categoryEmojis: Record<string, string> = {
-          'electronics': '💻',
-          'clothing': '👕',
-          'books': '📚',
-          'digital': '📱',
-          'digital products': '📱',
-        };
-        
-        const fetchedCategories = response.data.map((cat: any) => ({
-          name: cat.name,
-          slug: cat.slug,
-          emoji: categoryEmojis[cat.slug] || categoryEmojis[cat.name?.toLowerCase()] || '📦',
-          count: cat._count?.products || 0,
-          image: cat.image || '',
-        }));
-        
-        if (fetchedCategories.length > 0) {
-          setCategories(fetchedCategories);
-        }
-      }
-    } catch (err) {
-      console.log('Categories API not available, using defaults');
-    }
-  };
-  
-  const handleNewsletterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newsletterEmail) return;
-    
+  const subscribe = async (email: string) => {
     setNewsletterStatus('loading');
-    
     try {
-      const response = await fetch(`${API_BASE}/newsletter/subscribe`, {
+      const res = await fetch(`${API_BASE}/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newsletterEmail }),
+        body: JSON.stringify({ email }),
       });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
         setNewsletterStatus('success');
         setNewsletterMessage(data.message || 'Successfully subscribed!');
-        setNewsletterEmail('');
       } else {
         setNewsletterStatus('error');
-        setNewsletterMessage(data.message || 'Failed to subscribe');
+        setNewsletterMessage(data.message || `Could not subscribe (${res.status}).`);
       }
-    } catch (err) {
+    } catch {
       setNewsletterStatus('error');
       setNewsletterMessage('Network error. Please try again.');
     }
-    
     setTimeout(() => {
       setNewsletterStatus('idle');
       setNewsletterMessage('');
-    }, 5000);
+    }, 6000);
   };
 
-  return (
-    <>
-      {/* SEO metadata is exported from page.tsx (server component).
-          next/head is a no-op in App Router client components. */}
-      <div>
-      {/* Hero Gallery / Slider */}
-      <HeroGallery banners={heroBanners} loaded={bannersLoaded} />
+  /* ------------------------------------------------------------ render */
 
-      {/* Promo Banners */}
-      <PromoGrid banners={promoBanners} />
+  /**
+   * Legacy toggles still win.
+   *
+   * `theme.showTrustBar` etc. predate the section rows. If an admin turned a
+   * section off there, honour it — otherwise upgrading would silently switch
+   * hidden sections back on.
+   */
+  const legacyHidden = (key: string): boolean => {
+    const map: Record<string, boolean> = {
+      trustBar: theme.showTrustBar === false,
+      categories: theme.showCategories === false,
+      featured: theme.showFeatured === false,
+      newArrivals: theme.showNewArrivals === false,
+      dealCountdown: theme.showDealCountdown === false,
+      testimonials: theme.showTestimonials === false,
+      stats: theme.showStats === false,
+      newsletter: theme.showNewsletter === false,
+    };
+    return map[key] === true;
+  };
 
-      {/* Sections below are toggled from Admin -> Appearance */}
-      {theme.showTrustBar && <TrustBar />}
+  const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
 
+  const renderSection = (s: HomeSection) => {
+    const cfg = s.config || {};
 
-      {/* Categories Section */}
-      <section style={{
-        maxWidth: 'var(--container, 1200px)',
-        margin: '0 auto',
-        padding: '64px 20px',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>Shop by Category</h2>
-            <p style={{ marginTop: '8px', color: '#666' }}>
-              Browse our wide selection of products
-            </p>
-          </div>
-          <Link href="/products" style={{
-            fontSize: '14px',
-            fontWeight: 500,
-            color: '#000',
-            textDecoration: 'none',
-          }}>
-            View All →
-          </Link>
-        </div>
-        <div style={{
-          marginTop: '32px',
-          display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-          gap: '16px',
-        }}>
-          {categories.map((category) => (
-            <CategoryTile key={category.slug} category={category} />
-          ))}
-        </div>
-      </section>
+    switch (s.type) {
+      case 'hero':
+        return <HeroGallery key={s.id} banners={heroBanners} loaded={bannersLoaded} />;
 
-      {/* Featured Products Section */}
-      <section style={{
-        maxWidth: 'var(--container, 1200px)',
-        margin: '0 auto',
-        padding: '64px 20px',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>Featured Products</h2>
-            <p style={{ marginTop: '8px', color: '#666' }}>
-              Our most popular items
-            </p>
-          </div>
-          <Link href="/products" style={{
-            fontSize: '14px',
-            fontWeight: 500,
-            color: '#000',
-            textDecoration: 'none',
-          }}>
-            View All Products →
-          </Link>
-        </div>
+      case 'promo':
+        return <PromoGrid key={s.id} banners={promoBanners} />;
 
-        {/* Loading State */}
-        {loading && (
-          <div style={{ marginTop: '32px' }}>
-            <ProductGridSkeleton count={8} />
-          </div>
-        )}
+      case 'trustBar':
+        return <TrustBar key={s.id} items={cfg.items} />;
 
-        {/* Products Grid */}
-        {!loading && featuredProducts.length > 0 && (
-          <div style={{
-            marginTop: '32px',
-            display: 'grid',
-            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${theme.productsPerRow}, 1fr)`,
-            gap: '24px',
-          }}>
-            {featuredProducts
-              // Keep the grid flush: only render full rows of 4 (2 on mobile)
-              // so we never leave a single orphan card on the last row.
-              .slice(0, Math.max(isMobile ? 2 : theme.productsPerRow, Math.floor(featuredProducts.length / (isMobile ? 2 : theme.productsPerRow)) * (isMobile ? 2 : theme.productsPerRow)))
-              .map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  currencySymbol={settings.currencySymbol}
-                />
-              ))}
-          </div>
-        )}
+      case 'features':
+        return <FeatureIcons key={s.id} items={cfg.items} />;
 
-        {/* No Products */}
-        {!loading && featuredProducts.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '64px', color: '#666' }}>
-            <p>No featured products available</p>
-            <p style={{ fontSize: '14px', marginTop: '8px' }}>
-              Make sure the API server is running
-            </p>
-          </div>
-        )}
-      </section>
-
-      {/* New Arrivals */}
-      <ProductCarousel
-        title="New Arrivals"
-        subtitle="Fresh picks added this week"
-        products={newArrivals}
-        viewAllHref="/products?sort=newest"
-        currencySymbol={settings.currencySymbol}
-      />
-
-      {theme.showDealCountdown && <DealCountdown />}
-
-      {/* Trending - hidden automatically when the API returns nothing */}
-      <ProductCarousel
-        title="Trending Now"
-        subtitle="What other shoppers are buying"
-        products={trending}
-        viewAllHref="/products"
-        currencySymbol={settings.currencySymbol}
-      />
-
-      {theme.showTestimonials && <Testimonials />}
-
-      {theme.showStats && <StatsStrip />}
-
-      {/* Features Section */}
-      <section style={{ backgroundColor: '#f9f9f9' }}>
-        <div style={{
-          maxWidth: 'var(--container, 1200px)',
-          margin: '0 auto',
-          padding: '64px 20px',
-        }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-            gap: '32px',
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                margin: '0 auto',
-                borderRadius: '50%',
-                backgroundColor: '#f0f0f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-              }}>
-                🚚
-              </div>
-              <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Free Shipping</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>On orders over $100</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                margin: '0 auto',
-                borderRadius: '50%',
-                backgroundColor: '#f0f0f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-              }}>
-                🔒
-              </div>
-              <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Secure Payment</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>100% secure checkout</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                margin: '0 auto',
-                borderRadius: '50%',
-                backgroundColor: '#f0f0f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-              }}>
-                🌍
-              </div>
-              <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Worldwide Shipping</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>Deliver to your door</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                margin: '0 auto',
-                borderRadius: '50%',
-                backgroundColor: '#f0f0f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-              }}>
-                🔄
-              </div>
-              <h3 style={{ marginTop: '16px', fontWeight: 600 }}>Easy Returns</h3>
-              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>30 day return policy</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {theme.showNewsletter && (
-      <>
-      {/* Newsletter Section */}
-      <section style={{
-        maxWidth: 'var(--container, 1200px)',
-        margin: '0 auto',
-        padding: '64px 20px',
-      }}>
-        <div style={{
-          borderRadius: '16px',
-          backgroundColor: '#000',
-          color: 'white',
-          padding: '48px',
-        }}>
-          <div style={{
-            maxWidth: '600px',
-            margin: '0 auto',
-            textAlign: 'center',
-          }}>
-            <h2 style={{ fontSize: isMobile ? '22px' : '30px', fontWeight: 'bold' }}>Subscribe to Our Newsletter</h2>
-            <p style={{ marginTop: '16px', fontSize: '18px', opacity: 0.9 }}>
-              Get the latest updates on new products, sales, and exclusive offers.
-            </p>
-            <form onSubmit={handleNewsletterSubmit} style={{
-              marginTop: '32px',
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: '16px',
-            }}>
-              <input
-                type="email"
-                value={newsletterEmail}
-                onChange={(e) => setNewsletterEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
+      case 'categories':
+        return (
+          <section key={s.id} style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+            <SectionHeading
+              title={s.title}
+              subtitle={s.subtitle}
+              linkText={cfg.linkText || 'View All →'}
+              linkHref={cfg.linkHref || '/products'}
+            />
+            {categories.length === 0 ? (
+              <p style={{ marginTop: '24px', color: 'var(--muted,#666)' }}>
+                No categories yet. Add some in Admin → Categories.
+              </p>
+            ) : (
+              <div
                 style={{
-                  flex: 1,
-                  padding: '12px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  backgroundColor: 'transparent',
-                  color: 'white',
-                  fontSize: '16px',
-                }}
-              />
-              <button 
-                type="submit"
-                disabled={newsletterStatus === 'loading'}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: newsletterStatus === 'loading' ? '#ccc' : 'white',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  cursor: newsletterStatus === 'loading' ? 'not-allowed' : 'pointer',
+                  marginTop: '32px',
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${perRow}, 1fr)`,
+                  gap: '16px',
                 }}
               >
-                {newsletterStatus === 'loading' ? 'Subscribing...' : 'Subscribe'}
-              </button>
-            </form>
-            {newsletterMessage && (
-              <p style={{
-                marginTop: '16px',
-                fontSize: '14px',
-                color: newsletterStatus === 'success' ? '#22c55e' : '#ef4444',
-              }}>
-                {newsletterStatus === 'success' ? '✓ ' : '✕ '}{newsletterMessage}
-              </p>
+                {categories.slice(0, cfg.limit || 8).map((c) => (
+                  <CategoryTile key={c.slug} category={c} />
+                ))}
+              </div>
             )}
-          </div>
+          </section>
+        );
+
+      case 'featured': {
+        // Only render full rows so the grid never ends with an orphan card.
+        const cols = isMobile ? 2 : perRow;
+        const shown = featuredProducts.slice(
+          0,
+          Math.max(cols, Math.floor(featuredProducts.length / cols) * cols)
+        );
+        return (
+          <section key={s.id} style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+            <SectionHeading
+              title={s.title}
+              subtitle={s.subtitle}
+              linkText={cfg.linkText || 'View All Products →'}
+              linkHref={cfg.linkHref || '/products'}
+            />
+            {loading && (
+              <div style={{ marginTop: '32px' }}>
+                <ProductGridSkeleton count={perRow * 2} />
+              </div>
+            )}
+            {!loading && shown.length > 0 && (
+              <div
+                style={{
+                  marginTop: '32px',
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                  gap: '24px',
+                }}
+              >
+                {shown.map((p) => (
+                  <ProductCard key={p.id} product={p} currencySymbol={settings.currencySymbol} />
+                ))}
+              </div>
+            )}
+            {!loading && featuredProducts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted,#666)' }}>
+                <p>No featured products yet.</p>
+                <p style={{ fontSize: '14px', marginTop: '8px' }}>
+                  Mark products as “featured” in Admin → Products.
+                </p>
+              </div>
+            )}
+          </section>
+        );
+      }
+
+      case 'carouselNew':
+        return (
+          <ProductCarousel
+            key={s.id}
+            title={s.title || 'New Arrivals'}
+            subtitle={s.subtitle || undefined}
+            products={newArrivals}
+            viewAllHref={cfg.linkHref || '/products?sort=newest'}
+            currencySymbol={settings.currencySymbol}
+          />
+        );
+
+      case 'carouselTrending':
+        return (
+          <ProductCarousel
+            key={s.id}
+            title={s.title || 'Trending Now'}
+            subtitle={s.subtitle || undefined}
+            products={trending}
+            viewAllHref={cfg.linkHref || '/products'}
+            currencySymbol={settings.currencySymbol}
+          />
+        );
+
+      case 'dealCountdown':
+        return (
+          <DealCountdown
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            badge={cfg.badge}
+            buttonText={cfg.buttonText}
+            buttonHref={cfg.buttonHref}
+            gradientFrom={cfg.gradientFrom}
+            gradientTo={cfg.gradientTo}
+          />
+        );
+
+      case 'testimonials':
+        return (
+          <Testimonials key={s.id} title={s.title} subtitle={s.subtitle} items={cfg.items} />
+        );
+
+      case 'stats':
+        return <StatsStrip key={s.id} items={cfg.items} />;
+
+      case 'richText':
+        return (
+          <RichTextBlock
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            html={cfg.html}
+            align={cfg.align === 'center' ? 'center' : 'left'}
+          />
+        );
+
+      case 'newsletter':
+        return (
+          <Newsletter
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            buttonText={cfg.buttonText}
+            placeholder={cfg.placeholder}
+            onSubmit={subscribe}
+            status={newsletterStatus}
+            message={newsletterMessage}
+          />
+        );
+
+      default:
+        // Unknown type (e.g. a newer version wrote a block this build doesn't
+        // know). Render nothing rather than crashing the whole page.
+        return null;
+    }
+  };
+
+  const visible = sections
+    .filter((s) => s.isVisible && !legacyHidden(s.key))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return (
+    <div style={{ backgroundColor: 'var(--body-bg, #fff)', color: 'var(--body-text, #111)' }}>
+      {/* SEO metadata is exported from page.tsx (server component).
+          next/head is a no-op in App Router client components. */}
+      {!sectionsLoaded ? (
+        <div style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '40px 20px' }}>
+          <ProductGridSkeleton count={perRow * 2} />
         </div>
-      </section>
-      </>
+      ) : (
+        visible.map(renderSection)
       )}
     </div>
-    </>
   );
 }
 
@@ -499,24 +398,26 @@ function CategoryTile({
         display: 'block',
         position: 'relative',
         overflow: 'hidden',
-        borderRadius: '12px',
-        border: '1px solid #e8e8e8',
+        borderRadius: 'var(--radius, 12px)',
+        border: '1px solid var(--border, #e8e8e8)',
         backgroundColor: 'var(--card-bg, white)',
         textDecoration: 'none',
-        color: '#111',
+        color: 'var(--body-text, #111)',
         transition: 'transform 200ms ease, box-shadow 200ms ease',
         transform: hovered ? 'translateY(-4px)' : 'none',
-        boxShadow: hovered ? '0 12px 28px rgba(0,0,0,0.10)' : '0 1px 2px rgba(0,0,0,0.04)',
+        boxShadow: hovered ? 'var(--shadow-hover, 0 12px 28px rgba(0,0,0,0.10))' : 'var(--shadow, none)',
       }}
     >
-      <div style={{
-        aspectRatio: '1',
-        backgroundColor: '#f5f5f5',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-      }}>
+      <div
+        style={{
+          aspectRatio: '1',
+          backgroundColor: 'var(--body-bg, #f5f5f5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
         {showImage ? (
           <img
             src={getImageUrl(category.image!)}
@@ -537,7 +438,7 @@ function CategoryTile({
       </div>
       <div style={{ padding: '14px 16px' }}>
         <h3 style={{ fontWeight: 700, fontSize: '15px' }}>{category.name}</h3>
-        <p style={{ fontSize: '13px', color: '#777', marginTop: '3px' }}>
+        <p style={{ fontSize: '13px', color: 'var(--muted, #777)', marginTop: '3px' }}>
           {category.count} {category.count === 1 ? 'product' : 'products'}
         </p>
       </div>
