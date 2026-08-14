@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE } from '@/lib/http';
+import { authHttp, errorMessage } from '@/lib/http';
 
 interface InventoryItem {
   id: string;
@@ -30,28 +30,19 @@ export default function AdminInventoryPage() {
 
   const fetchInventory = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      const res = await authHttp.get<any[]>('/inventory');
+      const allProducts = res.data || [];
+      setProducts(allProducts);
+      setApiConnected(true);
 
-      const response = await fetch(`${API_BASE}/inventory`, {
-        headers: { Authorization: `Bearer ${token}` },
+      setStats({
+        total: allProducts.length,
+        lowStock: allProducts.filter((p: any) => p.quantity > 0 && p.quantity <= p.lowStockThreshold).length,
+        outOfStock: allProducts.filter((p: any) => p.quantity === 0).length,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(data.data || []);
-        setApiConnected(true);
-        
-        // Calculate stats
-        const allProducts = data.data || [];
-        setStats({
-          total: allProducts.length,
-          lowStock: allProducts.filter((p: any) => p.quantity > 0 && p.quantity <= p.lowStockThreshold).length,
-          outOfStock: allProducts.filter((p: any) => p.quantity === 0).length,
-        });
-      }
     } catch (err) {
-      console.log('API not available');
+      console.error('Failed to load inventory:', err);
+      setApiConnected(false);
     } finally {
       setLoading(false);
     }
@@ -61,30 +52,21 @@ export default function AdminInventoryPage() {
     if (!selectedProduct) return;
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE}/inventory/adjust`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          productId: selectedProduct.id,
-          quantityChange: adjustment.quantity,
-          reason: adjustment.reason,
-          notes: adjustment.notes,
-        }),
+      await authHttp.post('/inventory/adjust', {
+        productId: selectedProduct.id,
+        quantityChange: adjustment.quantity,
+        reason: adjustment.reason,
+        notes: adjustment.notes,
       });
 
-      if (response.ok) {
-        setShowAdjustModal(false);
-        setAdjustment({ quantity: 0, reason: 'adjustment', notes: '' });
-        fetchInventory();
-      }
+      setShowAdjustModal(false);
+      setAdjustment({ quantity: 0, reason: 'adjustment', notes: '' });
+      fetchInventory();
     } catch (err) {
+      // Previously a failed adjustment left the modal open with NO message:
+      // the admin could not tell whether the stock change had been saved.
       console.error('Failed to adjust stock:', err);
+      alert(errorMessage(err, 'Could not adjust stock. Nothing was saved.'));
     }
   };
 

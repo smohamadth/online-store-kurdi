@@ -5,7 +5,7 @@ import ImageUpload from '@/components/ImageUpload';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 interface Banner {
   id: string;
@@ -182,12 +182,14 @@ export default function AdminBannersPage() {
   };
 
   const toggleActive = async (b: Banner) => {
-    await fetch(`${API_BASE}/banners/${b.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ isActive: !b.isActive }),
-    });
-    fetchBanners();
+    try {
+      // The response was previously ignored, so a rejected toggle silently
+      // did nothing and the row flipped back on the next refresh.
+      await authHttp.put(`/banners/${b.id}`, { isActive: !b.isActive });
+      fetchBanners();
+    } catch (err) {
+      notify('error', errorMessage(err, 'Could not update the banner.'));
+    }
   };
 
   const move = async (b: Banner, dir: -1 | 1) => {
@@ -201,12 +203,12 @@ export default function AdminBannersPage() {
     const [moved] = reordered.splice(idx, 1);
     reordered.splice(target, 0, moved);
     const items = reordered.map((x, i) => ({ id: x.id, sortOrder: i }));
-    await fetch(`${API_BASE}/banners/bulk/reorder`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ items }),
-    });
-    fetchBanners();
+    try {
+      await authHttp.put('/banners/bulk/reorder', { items });
+      fetchBanners();
+    } catch (err) {
+      notify('error', errorMessage(err, 'Could not reorder the banners.'));
+    }
   };
 
   const input: React.CSSProperties = {

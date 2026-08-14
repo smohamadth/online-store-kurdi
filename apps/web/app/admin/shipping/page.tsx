@@ -3,7 +3,7 @@
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 import { useState, useEffect } from 'react';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 interface ShippingZone {
   id: string;
@@ -80,27 +80,16 @@ export default function AdminShippingPage() {
 
   const handleAddZone = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE}/shipping/zones`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...zoneForm,
-          countries: zoneForm.countries.split(',').map(c => c.trim()),
-        }),
+      await authHttp.post('/shipping/zones', {
+        ...zoneForm,
+        countries: zoneForm.countries.split(',').map(c => c.trim()),
       });
-
-      if (response.ok) {
-        setShowAddZone(false);
-        fetchZones();
-      }
+      setShowAddZone(false);
+      fetchZones();
     } catch (err) {
+      // A rejected create used to leave the modal open with no explanation.
       console.error('Failed to add zone:', err);
+      alert(errorMessage(err, 'Could not create the shipping zone.'));
     }
   };
 
@@ -108,27 +97,12 @@ export default function AdminShippingPage() {
     if (!selectedZone) return;
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE}/shipping/methods`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...methodForm,
-          zoneId: selectedZone,
-        }),
-      });
-
-      if (response.ok) {
-        setShowAddMethod(false);
-        fetchZones();
-      }
+      await authHttp.post('/shipping/methods', { ...methodForm, zoneId: selectedZone });
+      setShowAddMethod(false);
+      fetchZones();
     } catch (err) {
       console.error('Failed to add method:', err);
+      alert(errorMessage(err, 'Could not create the shipping method.'));
     }
   };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 interface TaxRate {
   id: string;
@@ -81,50 +81,29 @@ export default function AdminTaxPage() {
 
   const handleAddRate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE}/tax/rates`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...rateForm,
-          rate: rateForm.rate / 100, // Convert percentage to decimal
-        }),
+      await authHttp.post('/tax/rates', {
+        ...rateForm,
+        rate: rateForm.rate / 100, // API stores the rate as a decimal
       });
 
-      if (response.ok) {
+      {
         setShowAddRate(false);
         fetchTaxData();
       }
     } catch (err) {
       console.error('Failed to add tax rate:', err);
+      alert(errorMessage(err, 'Could not create the tax rate.'));
     }
   };
 
   const handleAddClass = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE}/tax/classes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(classForm),
-      });
-
-      if (response.ok) {
-        setShowAddClass(false);
-        fetchTaxData();
-      }
+      await authHttp.post('/tax/classes', classForm);
+      setShowAddClass(false);
+      fetchTaxData();
     } catch (err) {
       console.error('Failed to add tax class:', err);
+      alert(errorMessage(err, 'Could not create the tax class.'));
     }
   };
 

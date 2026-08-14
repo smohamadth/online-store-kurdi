@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { API_BASE } from '@/lib/http';
+import { http, authHttp, errorMessage } from '@/lib/http';
 
 interface Category {
   id: string;
@@ -37,23 +37,16 @@ export default function AdminCategoriesPage() {
     fetchCategories();
   }, []);
 
-  const getApiUrl = () => API_BASE;
-  const getToken = () => localStorage.getItem('token');
 
   const fetchCategories = async () => {
     try {
       // GET /api/categories is public, no auth needed for reading
-      const response = await fetch(`${getApiUrl()}/categories`);
-
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data.data || []);
-        setApiConnected(true);
-      } else {
-        console.error('Failed to fetch categories:', response.status);
-      }
+      const res = await http.get<any[]>('/categories');
+      setCategories(res.data || []);
+      setApiConnected(true);
     } catch (err) {
-      console.log('API not available');
+      console.error('Failed to fetch categories:', err);
+      setApiConnected(false);
     } finally {
       setLoading(false);
     }
@@ -64,9 +57,6 @@ export default function AdminCategoriesPage() {
     setMessage({ type: '', text: '' });
 
     try {
-      const token = getToken();
-      if (!token) return;
-
       const slug = formData.slug || formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       
       const body = {
@@ -78,31 +68,20 @@ export default function AdminCategoriesPage() {
         sortOrder: formData.sortOrder,
       };
 
-      const url = editingCategory 
-        ? `${getApiUrl()}/categories/${editingCategory.id}`
-        : `${getApiUrl()}/categories`;
-
-      const response = await fetch(url, {
-        method: editingCategory ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: `Category ${editingCategory ? 'updated' : 'created'} successfully!` });
-        setShowModal(false);
-        setEditingCategory(null);
-        resetForm();
-        fetchCategories();
+      if (editingCategory) {
+        await authHttp.put(`/categories/${editingCategory.id}`, body);
       } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.message || 'Failed to save category' });
+        await authHttp.post('/categories', body);
       }
+
+      setMessage({ type: 'success', text: `Category ${editingCategory ? 'updated' : 'created'} successfully!` });
+      setShowModal(false);
+      setEditingCategory(null);
+      resetForm();
+      fetchCategories();
     } catch (err) {
-      setMessage({ type: 'error', text: 'API not available' });
+      // Shows the server's real reason, e.g. "slug: already exists".
+      setMessage({ type: 'error', text: errorMessage(err, 'Failed to save category.') });
     }
   };
 
@@ -110,23 +89,12 @@ export default function AdminCategoriesPage() {
     if (!confirm('Are you sure you want to delete this category?')) return;
 
     try {
-      const token = getToken();
-      if (!token) return;
-
-      const response = await fetch(`${getApiUrl()}/categories/${categoryId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Category deleted successfully' });
-        fetchCategories();
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.message || 'Failed to delete category' });
-      }
+      await authHttp.delete(`/categories/${categoryId}`);
+      setMessage({ type: 'success', text: 'Category deleted successfully' });
+      fetchCategories();
     } catch (err) {
-      setMessage({ type: 'error', text: 'API not available' });
+      // e.g. "Cannot delete a category that still has products"
+      setMessage({ type: 'error', text: errorMessage(err, 'Failed to delete category.') });
     }
   };
 

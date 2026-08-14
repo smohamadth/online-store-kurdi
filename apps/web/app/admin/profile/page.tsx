@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 export default function AdminProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -92,23 +92,21 @@ export default function AdminProfilePage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token || !user) return;
+      if (!user) return;
 
-      await fetch(`${API_BASE}/users/${user.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ password: passwordForm.newPassword }),
-      });
+      // The response was never checked, and the CATCH block also reported
+      // success - so a rejected password change (weak password, expired
+      // session, server down) told the user their password had been changed
+      // when it had not. They would then be locked out on next login.
+      await authHttp.put(`/users/${user.id}`, { password: passwordForm.newPassword });
 
       setMessage({ type: 'success', text: 'Password changed successfully!' });
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
-      setMessage({ type: 'success', text: 'Password changed!' });
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setMessage({
+        type: 'error',
+        text: errorMessage(err, 'Could not change your password. It has NOT been changed.'),
+      });
     } finally {
       setSaving(false);
     }

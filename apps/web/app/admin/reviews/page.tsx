@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 interface Review {
   id: string;
@@ -113,18 +113,14 @@ export default function AdminReviewsPage() {
     if (!confirm('Are you sure you want to delete this review?')) return;
 
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        await fetch(`${API_BASE}/reviews/${reviewId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
-
-      // Remove locally
+      // Only drop the row once the server confirms. Previously the response
+      // was ignored, so a failed delete still removed the review from the
+      // table and it reappeared on the next refresh.
+      await authHttp.delete(`/reviews/${reviewId}`);
       setReviews(reviews.filter(r => r.id !== reviewId));
     } catch (err) {
       console.error('Failed to delete review:', err);
+      alert(errorMessage(err, 'Could not delete the review.'));
     }
   };
 
