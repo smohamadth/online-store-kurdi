@@ -143,6 +143,16 @@ npm run db:deploy     # apply any pending migrations
 npx prisma generate   # regenerate the client
 ```
 
+Or from the repository root:
+
+```bash
+npm run db:deploy
+```
+
+> Note: the root `npm run setup` expects Docker/PostgreSQL. With the default
+> SQLite setup use `cd apps/api && npm run setup` instead, which runs
+> migrate deploy + generate + seed.
+
 Then **restart the API**. `tsx` loads the code once at startup and does not
 watch, so a running server keeps using the old Prisma client.
 

@@ -32,7 +32,8 @@
     "lint:web": "cd apps/web && npm run lint",
     "test": "npm run test:api && npm run test:web",
     "test:api": "cd apps/api && npm run test",
-    "test:web": "cd apps/web && npm run test"
+    "test:web": "cd apps/web && npm run test",
+    "db:deploy": "cd apps/api && npm run db:deploy"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
