@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { API_BASE } from '@/lib/http';
 
 /**
  * Server-side wrapper for category pages.
@@ -12,13 +13,11 @@ import type { Metadata } from 'next';
  *     that as a "soft 404" and may index the empty page. Checking on the
  *     server lets Next return a genuine 404 status.
  */
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 async function getCategory(slug: string) {
   try {
-    const res = await fetch(`${API_URL}/categories/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/categories/${encodeURIComponent(slug)}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;
@@ -33,7 +32,7 @@ async function getCategory(slug: string) {
 
 async function getStoreName(): Promise<string> {
   try {
-    const res = await fetch(`${API_URL}/settings`, { next: { revalidate: 300 } });
+    const res = await fetch(`${API_BASE}/settings`, { next: { revalidate: 300 } });
     if (!res.ok) return 'Online Store';
     return (await res.json()).data?.storeName || 'Online Store';
   } catch {

@@ -4,6 +4,7 @@ import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 import { useState, useEffect } from 'react';
 import { getCoupons, createCoupon, updateCoupon, deleteCoupon, Coupon, formatDiscount } from '@/lib/coupons';
+import { errorMessage } from '@/lib/http';
 
 export default function AdminCouponsPage() {
   const { settings } = useStoreSettings();
@@ -31,32 +32,17 @@ export default function AdminCouponsPage() {
 
   const fetchCoupons = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      // Try API first
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/coupons`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.data && data.data.length > 0) {
-            setCoupons(data.data);
-            setApiStatus('connected');
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (e) {}
-
-      // Fallback to sample coupons
-      const data = await getCoupons(token);
+      // One call through the shared client. This previously did an inline
+      // fetch, then fell back to getCoupons(), which itself fell back to a
+      // hardcoded sample list - so the admin could be looking at coupons that
+      // do not exist in the database.
+      const data = await getCoupons();
       setCoupons(data);
-      setApiStatus('disconnected');
+      setApiStatus('connected');
     } catch (err) {
       console.error('Failed to fetch coupons:', err);
       setApiStatus('disconnected');
+      setCoupons([]);
     } finally {
       setLoading(false);
     }
@@ -92,8 +78,11 @@ export default function AdminCouponsPage() {
       resetForm();
       fetchCoupons();
     } catch (err) {
+      // errorMessage() unwraps ApiError, so the admin sees e.g.
+      // "code: A coupon with this code already exists" rather than
+      // a generic "Failed to save coupon".
       console.error('Failed to save coupon:', err);
-      alert('Failed to save coupon');
+      alert(errorMessage(err, 'Failed to save coupon.'));
     }
   };
 
@@ -108,6 +97,7 @@ export default function AdminCouponsPage() {
       fetchCoupons();
     } catch (err) {
       console.error('Failed to delete coupon:', err);
+      alert(errorMessage(err, 'Failed to delete coupon.'));
     }
   };
 

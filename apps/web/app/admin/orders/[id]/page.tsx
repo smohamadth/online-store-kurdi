@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 export default function AdminOrderDetailPage() {
   const params = useParams();
@@ -58,7 +59,7 @@ export default function AdminOrderDetailPage() {
 
       // Try API
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`,
+        `${API_BASE}/orders/${orderId}/status`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

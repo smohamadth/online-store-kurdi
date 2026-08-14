@@ -8,6 +8,7 @@ import { useStoreSettings } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
 import ProductCard from '@/components/ProductCard';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
+import { API_BASE } from '@/lib/http';
 
 // These values must match the API's sort enum exactly
 // (price_asc | price_desc | name_asc | name_desc | newest | popular),
@@ -59,12 +60,11 @@ export default function CategoryView({ slug }: { slug: string }) {
     const load = async () => {
       setLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
         // Existence is verified by the server component in page.tsx, which
         // returns a real HTTP 404 for unknown slugs. This fetch only needs the
         // display data.
-        const catRes = await fetch(`${API_URL}/categories/${encodeURIComponent(slug)}`);
+        const catRes = await fetch(`${API_BASE}/categories/${encodeURIComponent(slug)}`);
         const catJson = await catRes.json();
         if (!cancelled) setCategory(catJson.data);
 

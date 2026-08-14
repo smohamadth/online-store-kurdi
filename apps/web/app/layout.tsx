@@ -15,6 +15,7 @@ import MaintenanceGate from '@/components/MaintenanceGate';
 import { ThemeProvider } from '@/lib/theme';
 import AnnouncementBar from '@/components/AnnouncementBar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { API_BASE } from '@/lib/http';
 
 // Types
 interface MenuItemData {
@@ -57,8 +58,7 @@ function useMenu(location: string) {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-        const response = await fetch(`${API_URL}/menus/location/${location}`);
+        const response = await fetch(`${API_BASE}/menus/location/${location}`);
         if (response.ok) {
           const data = await response.json();
           if (data.data) {

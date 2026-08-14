@@ -3,6 +3,7 @@
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface ShippingZone {
   id: string;
@@ -59,7 +60,7 @@ export default function AdminShippingPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/shipping/zones`, {
+      const response = await fetch(`${API_BASE}/shipping/zones`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -82,7 +83,7 @@ export default function AdminShippingPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/shipping/zones`, {
+      const response = await fetch(`${API_BASE}/shipping/zones`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +111,7 @@ export default function AdminShippingPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/shipping/methods`, {
+      const response = await fetch(`${API_BASE}/shipping/methods`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

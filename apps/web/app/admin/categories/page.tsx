@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface Category {
   id: string;
@@ -36,7 +37,7 @@ export default function AdminCategoriesPage() {
     fetchCategories();
   }, []);
 
-  const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+  const getApiUrl = () => API_BASE;
   const getToken = () => localStorage.getItem('token');
 
   const fetchCategories = async () => {

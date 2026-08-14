@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import ImageGalleryUpload from '@/components/ImageGalleryUpload';
+import { API_BASE } from '@/lib/http';
 
 interface GalleryImage {
   id: string;
@@ -103,7 +104,7 @@ export default function AdminProductsPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}`, {
+      const res = await fetch(`${API_BASE}/products/${productId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -165,8 +166,8 @@ export default function AdminProductsPage() {
       const token = localStorage.getItem('token');
       if (token) {
         const url = editingProduct 
-          ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${editingProduct.id}`
-          : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products`;
+          ? `${API_BASE}/products/${editingProduct.id}`
+          : `${API_BASE}/products`;
 
         const response = await fetch(url, {
           method: editingProduct ? 'PUT' : 'POST',

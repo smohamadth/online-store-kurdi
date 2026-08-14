@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface InventoryItem {
   id: string;
@@ -32,7 +33,7 @@ export default function AdminInventoryPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/inventory`, {
+      const response = await fetch(`${API_BASE}/inventory`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -63,7 +64,7 @@ export default function AdminInventoryPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/inventory/adjust`, {
+      const response = await fetch(`${API_BASE}/inventory/adjust`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

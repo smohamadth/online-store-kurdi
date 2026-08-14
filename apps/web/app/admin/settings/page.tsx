@@ -24,13 +24,12 @@ const CURRENCIES = [
 ];
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
   const [storeSettings, setStoreSettings] = useState({
     storeName: 'Online Store',
@@ -60,7 +59,7 @@ export default function AdminSettingsPage() {
   const fetchSettings = async () => {
     try {
       // Try API first
-      const response = await fetch(`${API_URL}/settings`);
+      const response = await fetch(`${API_BASE}/settings`);
       if (response.ok) {
         const data = await response.json();
         if (data.data) {
@@ -96,7 +95,7 @@ export default function AdminSettingsPage() {
         return;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/settings`, {
+      const res = await fetch(`${API_BASE}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(storeSettings),

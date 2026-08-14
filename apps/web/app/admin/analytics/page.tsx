@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 export default function AdminAnalyticsPage() {
   const { settings } = useStoreSettings();
@@ -29,8 +30,7 @@ export default function AdminAnalyticsPage() {
       // Real figures from the database. This page used to fabricate per-product
       // "revenue" and "sold" counts with Math.random(), so the numbers changed
       // on every refresh and never matched actual sales.
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const res = await fetch(`${API_URL}/dashboard/stats`, {
+      const res = await fetch(`${API_BASE}/dashboard/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;

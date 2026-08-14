@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { getImageUrl } from '@/lib/api';
+import { API_BASE } from '@/lib/http';
 
 interface ImageVariants {
   thumbnail?: string;
@@ -79,8 +80,7 @@ export default function ImageUpload({
       formData.append('folder', folder);
 
       const token = localStorage.getItem('token');
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/upload/image`, {
+      const response = await fetch(`${API_BASE}/upload/image`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

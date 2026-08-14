@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 export default function AdminOrdersPage() {
   const { settings } = useStoreSettings();
@@ -46,7 +47,7 @@ export default function AdminOrdersPage() {
       if (!token) return;
 
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/orders/${orderId}/status`,
+        `${API_BASE}/orders/${orderId}/status`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

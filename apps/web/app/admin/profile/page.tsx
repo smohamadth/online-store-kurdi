@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 export default function AdminProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -44,7 +45,7 @@ export default function AdminProfilePage() {
       const token = localStorage.getItem('token');
       if (!token || !user) return;
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/${user.id}`, {
+      const res = await fetch(`${API_BASE}/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(profileForm),
@@ -94,7 +95,7 @@ export default function AdminProfilePage() {
       const token = localStorage.getItem('token');
       if (!token || !user) return;
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/${user.id}`, {
+      await fetch(`${API_BASE}/users/${user.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

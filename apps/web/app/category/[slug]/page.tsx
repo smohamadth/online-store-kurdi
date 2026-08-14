@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import CategoryView from './CategoryView';
+import { API_BASE } from '@/lib/http';
 
 /**
  * Server component for /category/<slug>.
@@ -14,13 +15,11 @@ import CategoryView from './CategoryView';
  * which is still a client component.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-
 async function categoryExists(slug: string): Promise<boolean | null> {
   try {
     // no-store: a cached 404 would keep a newly created category hidden, and
     // a cached hit would keep a deleted one reachable.
-    const res = await fetch(`${API_URL}/categories/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/categories/${encodeURIComponent(slug)}`, {
       cache: 'no-store',
     });
     if (res.status === 404) return false;

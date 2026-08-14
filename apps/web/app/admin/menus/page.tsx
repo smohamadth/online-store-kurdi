@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -43,8 +44,6 @@ export default function AdminMenusPage() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [message, setMessage] = useState({ type: '', text: '' });
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const getToken = () => localStorage.getItem('token');
 
   const [menuForm, setMenuForm] = useState({ name: '', location: 'header' });
@@ -67,7 +66,7 @@ export default function AdminMenusPage() {
       const token = getToken();
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/menus`, {
+      const response = await fetch(`${API_BASE}/menus`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -87,7 +86,7 @@ export default function AdminMenusPage() {
       const token = getToken();
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/menus/${menuId}`, {
+      const response = await fetch(`${API_BASE}/menus/${menuId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -106,7 +105,7 @@ export default function AdminMenusPage() {
       const token = getToken();
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/menus`, {
+      const response = await fetch(`${API_BASE}/menus`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +135,7 @@ export default function AdminMenusPage() {
       const token = getToken();
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/menus/${menuId}`, {
+      const response = await fetch(`${API_BASE}/menus/${menuId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -160,8 +159,8 @@ export default function AdminMenusPage() {
       if (!token) return;
 
       const url = editingItem
-        ? `${API_URL}/menus/items/${editingItem.id}`
-        : `${API_URL}/menus/${selectedMenu.id}/items`;
+        ? `${API_BASE}/menus/items/${editingItem.id}`
+        : `${API_BASE}/menus/${selectedMenu.id}/items`;
 
       const response = await fetch(url, {
         method: editingItem ? 'PUT' : 'POST',
@@ -198,7 +197,7 @@ export default function AdminMenusPage() {
       const token = getToken();
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/menus/items/${itemId}`, {
+      const response = await fetch(`${API_BASE}/menus/items/${itemId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

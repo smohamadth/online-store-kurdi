@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { API_BASE } from '@/lib/http';
 
 interface Review {
   id: string;
@@ -61,7 +62,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
     // Try to get reviews from database first
     let apiReviews: Review[] = [];
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`);
+      const response = await fetch(`${API_BASE}/products/${productId}/reviews`);
       if (response.ok) {
         const data = await response.json();
         if (data.data && data.data.length > 0) {
@@ -147,7 +148,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
       // Try to save to database via API
       let savedReview = null;
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products/${productId}/reviews`, {
+        const response = await fetch(`${API_BASE}/products/${productId}/reviews`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

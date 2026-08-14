@@ -5,6 +5,7 @@ import ImageUpload from '@/components/ImageUpload';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
+import { API_BASE } from '@/lib/http';
 
 interface Banner {
   id: string;
@@ -54,8 +55,6 @@ export default function AdminBannersPage() {
   const [form, setForm] = useState({ ...empty });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [importing, setImporting] = useState(false);
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
@@ -69,7 +68,7 @@ export default function AdminBannersPage() {
 
   const fetchBanners = async () => {
     try {
-      const res = await fetch(`${API_URL}/banners/all`, {
+      const res = await fetch(`${API_BASE}/banners/all`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) {
@@ -99,7 +98,7 @@ export default function AdminBannersPage() {
     setImporting(true);
     try {
       for (const d of DEFAULTS) {
-        const res = await fetch(`${API_URL}/banners`, {
+        const res = await fetch(`${API_BASE}/banners`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
           body: JSON.stringify({ ...d, image: '', isActive: true }),
@@ -150,7 +149,7 @@ export default function AdminBannersPage() {
     try {
       const payload: any = { ...form, image: form.image || '' };
       const res = await fetch(
-        editing ? `${API_URL}/banners/${editing.id}` : `${API_URL}/banners`,
+        editing ? `${API_BASE}/banners/${editing.id}` : `${API_BASE}/banners`,
         {
           method: editing ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
@@ -172,7 +171,7 @@ export default function AdminBannersPage() {
 
   const remove = async (id: string) => {
     if (!confirm('Delete this banner?')) return;
-    const res = await fetch(`${API_URL}/banners/${id}`, {
+    const res = await fetch(`${API_BASE}/banners/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${getToken()}` },
     });
@@ -183,7 +182,7 @@ export default function AdminBannersPage() {
   };
 
   const toggleActive = async (b: Banner) => {
-    await fetch(`${API_URL}/banners/${b.id}`, {
+    await fetch(`${API_BASE}/banners/${b.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ isActive: !b.isActive }),
@@ -202,7 +201,7 @@ export default function AdminBannersPage() {
     const [moved] = reordered.splice(idx, 1);
     reordered.splice(target, 0, moved);
     const items = reordered.map((x, i) => ({ id: x.id, sortOrder: i }));
-    await fetch(`${API_URL}/banners/bulk/reorder`, {
+    await fetch(`${API_BASE}/banners/bulk/reorder`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ items }),

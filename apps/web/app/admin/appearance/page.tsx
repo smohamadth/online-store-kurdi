@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
 import { DEFAULT_THEME, FONT_STACKS, Theme } from '@/lib/theme';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+import { API_BASE } from '@/lib/http';
 
 const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'primaryColor', label: 'Primary / buttons', hint: 'Buttons, active states, brand accents' },
@@ -82,7 +81,7 @@ export default function AdminAppearancePage() {
   const token = () => localStorage.getItem('token');
 
   useEffect(() => {
-    fetch(`${API_URL}/theme`, { cache: 'no-store' })
+    fetch(`${API_BASE}/theme`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => d.data && setTheme({ ...DEFAULT_THEME, ...d.data }))
       .catch(() => {})
@@ -99,7 +98,7 @@ export default function AdminAppearancePage() {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/theme`, {
+      const res = await fetch(`${API_BASE}/theme`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify(theme),
@@ -126,7 +125,7 @@ export default function AdminAppearancePage() {
     if (!confirm('Reset every appearance setting back to the defaults?')) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/theme/reset`, {
+      const res = await fetch(`${API_BASE}/theme/reset`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token()}` },
       });

@@ -8,6 +8,7 @@ import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
+import { API_BASE } from '@/lib/http';
 
 export default function ProductPage() {
   const params = useParams();
@@ -58,7 +59,7 @@ export default function ProductPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/check`, {
+      const response = await fetch(`${API_BASE}/wishlist/check`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ productId }),
@@ -139,13 +140,13 @@ export default function ProductPage() {
       if (!product?.id) return;
 
       if (inWishlist) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${product.id}`, {
+        await fetch(`${API_BASE}/wishlist/${product.id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
         setInWishlist(false);
       } else {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist`, {
+        await fetch(`${API_BASE}/wishlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ productId: product.id }),
@@ -167,7 +168,7 @@ export default function ProductPage() {
         return;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/stock-alerts`, {
+      const response = await fetch(`${API_BASE}/stock-alerts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

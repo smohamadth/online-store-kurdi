@@ -9,7 +9,8 @@ import type { Metadata } from 'next';
  * metadata for the entire catalogue. generateMetadata runs on the server and
  * puts the real tags in the initial HTML.
  */
-
+// Declared locally: this is a server component and lib/http.ts is
+// client-only ('use client'), so it cannot be imported here.
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 

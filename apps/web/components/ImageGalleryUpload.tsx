@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface ImageVariants {
   thumbnail?: string;
@@ -49,8 +50,7 @@ export default function ImageGalleryUpload({
     setError('');
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const API_BASE = API_URL.replace('/api', '');
+      const ORIGIN = API_BASE.replace('/api', '');
       const token = localStorage.getItem('token');
 
       for (const file of filesToUpload) {
@@ -71,7 +71,7 @@ export default function ImageGalleryUpload({
         formData.append('folder', 'products');
 
         try {
-          const response = await fetch(`${API_URL}/upload/image`, {
+          const response = await fetch(`${API_BASE}/upload/image`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: formData,
@@ -79,7 +79,7 @@ export default function ImageGalleryUpload({
 
           if (response.ok) {
             const data = await response.json();
-            const buildUrl = (path: string) => path?.startsWith('http') ? path : `${API_BASE}${path}`;
+            const buildUrl = (path: string) => path?.startsWith('http') ? path : `${ORIGIN}${path}`;
 
             const newImage: GalleryImage = {
               id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

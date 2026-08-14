@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 export default function AdminDashboard() {
   const { settings } = useStoreSettings();
@@ -34,8 +35,7 @@ export default function AdminDashboard() {
       // Previously this page pulled 100 products + the orders list and summed
       // them in the browser, hardcoded totalUsers to 2, and counted cancelled
       // orders as revenue.
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const res = await fetch(`${API_URL}/dashboard/stats`, {
+      const res = await fetch(`${API_BASE}/dashboard/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
       const { data } = await res.json();
       let categories: any[] = [];
       try {
-        const cRes = await fetch(`${API_URL}/categories`);
+        const cRes = await fetch(`${API_BASE}/categories`);
         if (cRes.ok) categories = (await cRes.json()).data || [];
       } catch {}
 

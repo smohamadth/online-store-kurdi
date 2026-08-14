@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/http';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -51,8 +52,7 @@ export default function AdminLayout({
 
       // Verify admin status with server
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-        const response = await fetch(`${API_URL}/auth/me`, {
+        const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         

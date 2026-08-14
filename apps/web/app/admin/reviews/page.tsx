@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/http';
 
 interface Review {
   id: string;
@@ -40,8 +41,7 @@ export default function AdminReviewsPage() {
       // One request for the whole moderation queue. This previously fetched all
       // products and then issued a request per product (N+1), which also missed
       // any product beyond the first page.
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/reviews?limit=200`, {
+      const response = await fetch(`${API_BASE}/reviews?limit=200`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -71,7 +71,7 @@ export default function AdminReviewsPage() {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
+        const res = await fetch(`${API_BASE}/reviews/${reviewId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ export default function AdminReviewsPage() {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
+        const res = await fetch(`${API_BASE}/reviews/${reviewId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -115,7 +115,7 @@ export default function AdminReviewsPage() {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
+        await fetch(`${API_BASE}/reviews/${reviewId}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 export default function TrackOrderPage() {
   const { settings } = useStoreSettings();
@@ -27,9 +28,7 @@ export default function TrackOrderPage() {
         setError('Please sign in to track your order.');
         return;
       }
-
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/orders`, {
+      const response = await fetch(`${API_BASE}/orders`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

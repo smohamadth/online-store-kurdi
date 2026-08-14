@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getCategoryEmoji } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -38,7 +39,7 @@ export default function WishlistPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist`, {
+      const response = await fetch(`${API_BASE}/wishlist`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -58,7 +59,7 @@ export default function WishlistPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/${productId}`, {
+      await fetch(`${API_BASE}/wishlist/${productId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -74,7 +75,7 @@ export default function WishlistPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/wishlist/move-to-cart`, {
+      const response = await fetch(`${API_BASE}/wishlist/move-to-cart`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

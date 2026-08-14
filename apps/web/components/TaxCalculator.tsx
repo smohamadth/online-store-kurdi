@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface TaxInfo {
   taxRate: number;
@@ -47,7 +48,7 @@ export default function TaxCalculator({
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/tax/calculate`, {
+      const response = await fetch(`${API_BASE}/tax/calculate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

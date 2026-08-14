@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface User {
   id: string;
@@ -29,7 +30,7 @@ export default function AdminUsersPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users`, {
+      const response = await fetch(`${API_BASE}/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

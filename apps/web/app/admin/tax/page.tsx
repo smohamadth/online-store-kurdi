@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 interface TaxRate {
   id: string;
@@ -54,10 +55,10 @@ export default function AdminTaxPage() {
       if (!token) return;
 
       const [ratesRes, classesRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/tax/rates`, {
+        fetch(`${API_BASE}/tax/rates`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/tax/classes`, {
+        fetch(`${API_BASE}/tax/classes`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -83,7 +84,7 @@ export default function AdminTaxPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/tax/rates`, {
+      const response = await fetch(`${API_BASE}/tax/rates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +110,7 @@ export default function AdminTaxPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/tax/classes`, {
+      const response = await fetch(`${API_BASE}/tax/classes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

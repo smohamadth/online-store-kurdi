@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useIsMobile } from '@/lib/hooks';
+import { API_BASE } from '@/lib/http';
 
 export default function ContactPage() {
   const isMobile = useIsMobile();
@@ -22,8 +23,7 @@ export default function ContactPage() {
     setError('');
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/contact`, {
+      const response = await fetch(`${API_BASE}/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

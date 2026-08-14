@@ -12,6 +12,7 @@ import ProductCard, { PlaceholderTile } from '@/components/ProductCard';
 import ProductCarousel from '@/components/ProductCarousel';
 import { TrustBar, DealCountdown, Testimonials, StatsStrip } from '@/components/HomeSections';
 import { formatPrice } from '@/lib/settings';
+import { API_BASE } from '@/lib/http';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -57,10 +58,9 @@ export default function HomeView() {
 
   const fetchBanners = async () => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       // no-store: an admin edit must be visible on the next page load, not
       // served from a stale cached response.
-      const res = await fetch(`${API_URL}/banners`, { cache: 'no-store' });
+      const res = await fetch(`${API_BASE}/banners`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const all: Banner[] = data.data || [];
@@ -144,8 +144,7 @@ export default function HomeView() {
     setNewsletterStatus('loading');
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_URL}/newsletter/subscribe`, {
+      const response = await fetch(`${API_BASE}/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: newsletterEmail }),

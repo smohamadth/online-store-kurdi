@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/lib/http';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -52,8 +53,6 @@ export default function AddressesPage() {
     isDefault: false,
   });
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-
   useEffect(() => {
     fetchAddresses();
   }, []);
@@ -63,7 +62,7 @@ export default function AddressesPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/addresses`, {
+      const response = await fetch(`${API_BASE}/addresses`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -87,8 +86,8 @@ export default function AddressesPage() {
       if (!token) return;
 
       const url = editingAddress
-        ? `${API_URL}/addresses/${editingAddress.id}`
-        : `${API_URL}/addresses`;
+        ? `${API_BASE}/addresses/${editingAddress.id}`
+        : `${API_BASE}/addresses`;
 
       const response = await fetch(url, {
         method: editingAddress ? 'PUT' : 'POST',
@@ -121,7 +120,7 @@ export default function AddressesPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/addresses/${id}`, {
+      const response = await fetch(`${API_BASE}/addresses/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -140,7 +139,7 @@ export default function AddressesPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/addresses/${id}/default`, {
+      const response = await fetch(`${API_BASE}/addresses/${id}/default`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
       });

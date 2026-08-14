@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/http';
 
 interface Review {
   id: string;
@@ -43,7 +44,7 @@ export default function MyReviewsPage() {
 
   const fetchReviews = async (token: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/me/reviews`, {
+      const response = await fetch(`${API_BASE}/users/me/reviews`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -65,7 +66,7 @@ export default function MyReviewsPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/reviews/${reviewId}`, {
+      await fetch(`${API_BASE}/reviews/${reviewId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
