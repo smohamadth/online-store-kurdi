@@ -5,6 +5,7 @@ Pattern that caused the worst bugs in this project: a POST/PUT/DELETE wrapped
 in try/catch where the catch only console.logs, or where a non-ok response is
 never checked. The admin sees no error and assumes the change was saved.
 """
+import sys
 import glob
 import re
 
@@ -46,3 +47,10 @@ for f, ln, snippet, surfaces, checks in problems:
     print(f"  {page}:{ln}")
     print(f"     {snippet}")
     print(f"     surfaces_error={surfaces} checks_response={checks}")
+
+# Fail the build when problems are found.
+#
+# This previously always exited 0, so a CI job running it would go green even
+# while reporting silent write failures - the exact bug class this script
+# exists to catch.
+sys.exit(1 if problems else 0)

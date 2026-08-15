@@ -121,3 +121,36 @@ All main routes now use `generateMetadata` (server-side):
 
 Each has its own canonical URL, Open Graph and Twitter tags, and exactly one
 `<title>`. Shared helpers live in `lib/seo.ts`.
+
+## Automated testing & CI (added)
+
+`.github/workflows/ci.yml` runs on every push and PR to `main`:
+
+| Job | Runs | Time |
+|---|---|---|
+| `api-checks` | `scripts/regression.sh` (32 API assertions), `scripts/audit-silent-writes.py` | ~2 min |
+| `ui-checks` | `regression-ui.py` (37 pages), `verify-home-builder.py`, `verify-banner.py`, `verify-gallery.py` | ~6 min |
+
+Both boot the stack from scratch: `npm ci` -> `prisma migrate deploy` ->
+`npm run db:seed` -> start API -> (UI job) `next build` -> start web.
+
+Two things had to be fixed before this was worth anything:
+
+1. **`regression.sh` and `audit-silent-writes.py` always exited 0**, even with
+   failures - the exit status of their final `echo`/`print`. CI would have
+   reported green on a broken build, which is worse than no CI because it
+   manufactures confidence. Both now exit 1. `regression-ui.py` had no exit
+   code at all and now fails on any broken page, missing add-to-cart button or
+   console error.
+2. **The main seed had no `strip` banner**, so `verify-banner.py` passed on a
+   developer machine (where one had been created by hand) and failed on a
+   fresh database. Found on the first from-scratch run. Fixed in
+   `prisma/seed.ts`.
+
+Verified by deliberately reintroducing a fixed bug (disabling the `customCss`
+XSS guard): the suite went red with `exit=1` and named the failing assertion.
+
+Still missing: unit tests (Vitest is configured but there are no test files),
+Sentry or any error tracking, and CD - nothing deploys automatically because
+there is no server yet.
+

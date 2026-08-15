@@ -66,3 +66,10 @@ chk "unknown slug 404"  "$(curl -s -o /dev/null -w '%{http_code}' $API/categorie
 
 echo
 echo "===== $pass passed, $fail failed ====="
+
+# Exit non-zero when anything failed.
+#
+# Without this the script always exited 0 - the exit status of the final
+# `echo` - so CI would report a green build while tests were failing. That is
+# strictly worse than having no CI at all, because it manufactures confidence.
+[ "$fail" -eq 0 ] || exit 1

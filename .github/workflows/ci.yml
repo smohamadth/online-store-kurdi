@@ -1,0 +1,175 @@
+name: CI
+
+# Runs the test suites on every push and pull request to main.
+#
+# Two jobs:
+#   api-checks  - fast (~2 min). API regression sweep + static audit. No browser.
+#   ui-checks   - slower (~6 min). Builds the frontend and drives a real browser.
+#
+# They run in parallel. If either goes red the commit is marked failed on
+# GitHub, so a regression is caught before it is pulled onto a dev machine.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Lets you re-run the suites by hand from the Actions tab.
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the previous run rather than
+# queueing behind it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned: `npx prisma` resolves to a newer major by default, which errors
+  # against the v5 client this project depends on.
+  PRISMA_VERSION: 5.22.0
+
+jobs:
+  api-checks:
+    name: API regression + static audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # postinstall runs `prisma generate`, so the generated client is always
+        # in step with the schema. A stale client is the bug that made every
+        # admin page 500 with "Cannot read properties of undefined".
+        run: npm ci
+
+      - name: Configure environment
+        run: cp apps/api/.env.ci apps/api/.env
+
+      - name: Apply migrations
+        working-directory: apps/api
+        run: npx prisma@${{ env.PRISMA_VERSION }} migrate deploy
+
+      - name: Seed database
+        working-directory: apps/api
+        run: npm run db:seed
+
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          nohup npx tsx src/server.ts > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/health)" = "200" ]; then
+              echo "API healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy within 60s"
+          cat /tmp/api.log
+          exit 1
+
+      - name: API regression suite
+        run: bash scripts/regression.sh
+
+      - name: Audit for silent admin write failures
+        run: python3 scripts/audit-silent-writes.py
+
+      - name: API log
+        # Runs even when a previous step failed, so a red build shows why.
+        if: always()
+        run: tail -100 /tmp/api.log || true
+
+  ui-checks:
+    name: Browser regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        # --with-deps pulls the system libraries headless Chromium needs
+        # (libnss3, libatk, libasound2 and friends).
+        run: |
+          pip install playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Configure environment
+        run: |
+          cp apps/api/.env.ci apps/api/.env
+          echo "NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api" > apps/web/.env.local
+
+      - name: Apply migrations
+        working-directory: apps/api
+        run: npx prisma@${{ env.PRISMA_VERSION }} migrate deploy
+
+      - name: Seed database
+        working-directory: apps/api
+        run: npm run db:seed
+
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          nohup npx tsx src/server.ts > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/health)" = "200" ]; then
+              echo "API healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy within 60s"
+          cat /tmp/api.log
+          exit 1
+
+      - name: Build frontend
+        working-directory: apps/web
+        run: npx next build
+
+      - name: Start frontend
+        working-directory: apps/web
+        run: |
+          nohup npx next start -H 127.0.0.1 -p 3000 > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000)" = "200" ]; then
+              echo "Web healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Frontend did not become healthy within 60s"
+          cat /tmp/web.log
+          exit 1
+
+      - name: Page sweep (public, admin, account)
+        run: python3 scripts/regression-ui.py
+
+      - name: Home page builder
+        run: python3 scripts/verify-home-builder.py
+
+      - name: Call-to-action banner
+        run: python3 scripts/verify-banner.py
+
+      - name: Home gallery
+        run: python3 scripts/verify-gallery.py
+
+      - name: Server logs
+        if: always()
+        run: |
+          echo "----- API -----"; tail -100 /tmp/api.log || true
+          echo "----- WEB -----"; tail -60 /tmp/web.log || true

@@ -4,10 +4,11 @@ Edits the banner through the real admin UI, then reloads the storefront in a
 SEPARATE browser context (no shared localStorage) and asserts the new copy is
 actually there - i.e. it came from the database, not from a cache.
 """
+import os
 import re, sys
 from playwright.sync_api import sync_playwright
 
-WEB = "http://127.0.0.1:3000"
+WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 results = []
 
 

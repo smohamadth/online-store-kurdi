@@ -491,6 +491,27 @@ async function seedBanners() {
       position: 'promo',
       sortOrder: 2,
     },
+    {
+      // Full-width call-to-action banner, rendered by the `bannerStrip` home
+      // section (components/BannerStrip.tsx). This was previously only in
+      // prisma/seed-banners.js, which no-ops when banners already exist - so
+      // a fresh `npm run db:seed` produced a store with no strip banner and
+      // the section rendered nothing. Caught by scripts/verify-banner.py
+      // running against a from-scratch database in CI.
+      title: 'Join thousands of happy customers',
+      subtitle: 'Why shop with us',
+      description:
+        'Fast local delivery, genuine products and support in your language. Create an account to track every order.',
+      badge: 'New',
+      image: '',
+      linkUrl: '/register',
+      buttonText: 'Create account',
+      secondaryText: 'Browse products',
+      secondaryUrl: '/products',
+      overlayColor: 'linear-gradient(120deg,#0f172a 0%,#1e3a8a 60%,#0ea5e9 100%)',
+      position: 'strip',
+      sortOrder: 0,
+    },
   ];
 
   for (const data of banners) {

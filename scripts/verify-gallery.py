@@ -1,7 +1,8 @@
 """Proves the home gallery is editable and persists to the database."""
+import os
 import re, sys
 from playwright.sync_api import sync_playwright
-WEB="http://127.0.0.1:3000"
+WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 res=[]
 def check(n,ok,d=""):
     res.append(ok); print(("PASS  " if ok else "FAIL  ")+n+(f"  -- {d}" if d else ""))

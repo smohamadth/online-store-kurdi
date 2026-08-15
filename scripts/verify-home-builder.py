@@ -3,10 +3,11 @@
 Drives a real browser: logs in as admin, reorders + renames a block, then
 reloads the storefront and asserts the change actually shows.
 """
+import os
 import re, sys
 from playwright.sync_api import sync_playwright
 
-WEB = "http://127.0.0.1:3000"
+WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 errors = []
 results = []
 
