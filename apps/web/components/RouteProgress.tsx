@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 /**
@@ -13,7 +13,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
  * Shows on EVERY navigation, fast or slow. A minimum visible duration keeps
  * quick transitions from flashing the bar in and straight back out.
  */
-export default function RouteProgress() {
+function RouteProgressInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [visible, setVisible] = useState(false);
@@ -147,5 +147,26 @@ export default function RouteProgress() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Self-contained export.
+ *
+ * The Suspense boundary lives HERE rather than in the layout on purpose.
+ * `useSearchParams()` forces a client-side bailout that must be wrapped in
+ * Suspense - but a Suspense boundary anywhere between the root layout and a
+ * page puts the whole response into streaming mode, and a streamed response
+ * has its HTTP status locked to 200 before `notFound()` ever runs. That is
+ * what made every unknown category and product URL a soft 404.
+ *
+ * Wrapping the boundary inside this component keeps it off the layout ->
+ * page path, so pages can still return a real 404.
+ */
+export default function RouteProgress() {
+  return (
+    <Suspense fallback={null}>
+      <RouteProgressInner />
+    </Suspense>
   );
 }

@@ -52,11 +52,32 @@ Both persist correctly; nothing consumes them yet.
 
 ---
 
-## 4. Admin Users page is read-only
+## 4. ~~Admin Users page is read-only~~ — FIXED
 
-`/admin/users` lists users but cannot change a role, deactivate an account, or
-delete a user. The `PUT /api/users/:id` endpoint exists and works — only the UI
-is missing.
+Admins can now edit a user's name, role and activation from **Admin → Users**,
+via a modal or a one-click Activate/Deactivate on each row.
+
+This file previously claimed *"`PUT /api/users/:id` works, only UI missing"*.
+That was **wrong**, and measuring it was the first thing that revealed it: the
+route destructured only `{ firstName, lastName, phone, avatar }`, so sending
+`role` or `isActive` returned **HTTP 200 with a success payload while silently
+discarding the change** — the fake-success bug class that has recurred
+throughout this project. The page could never have worked, however good the UI.
+
+The endpoint now validates with Zod against a schema chosen by the caller's
+privileges, and enforces:
+
+| Guard | Behaviour |
+|---|---|
+| Non-admin sends `role`/`isActive` | Stripped by the self schema — no escalation |
+| Customer edits another user | 403 |
+| Admin changes their own role | 400 |
+| Admin deactivates themselves | 400 |
+| Demoting/deactivating the last active admin | 400 |
+| Unknown role value | 400 |
+| Unauthenticated | 401 |
+
+Covered by `scripts/verify-users.py` (21 assertions, API + browser).
 
 ---
 
@@ -83,28 +104,45 @@ product initials, so nothing looks broken. Upload real images via
 
 ---
 
-## 7. Unknown pages return HTTP 200 instead of 404 (soft 404)
+## 7. ~~Unknown pages return HTTP 200 instead of 404 (soft 404)~~ — FIXED
 
-`/category/<unknown>` and `/products/<unknown>` render the correct
-"not found" page, but the HTTP status is **200**.
+`/category/<unknown>` and `/products/<unknown>` now return a real **HTTP 404**.
 
-Investigated thoroughly. `notFound()` **is** being called from a server
-component — confirmed by logging (`exists=false`) — and a minimal probe route
-proved `notFound()` returns a real 404 elsewhere in this app. The cause is
-`app/layout.tsx` being a **client component** (`'use client'`, 872 lines):
-the HTML shell is committed before page rendering completes, so `notFound()`
-can still render `not-found.tsx` but can no longer change the status code.
+The earlier diagnosis in this file was wrong. Converting the root layout from a
+client to a server component was necessary but **not sufficient** — a bare
+`notFound()` in a trivial server page still returned 200. Next's own docs state
+the actual rule:
 
-Unknown *routes* (e.g. `/no-such-page`) do correctly return 404, because Next
-resolves those before rendering.
+> "Next.js will return a `200` HTTP status code for streamed responses, and
+> `404` for non-streamed responses."
 
-Proper fix: convert the root layout to a server component, moving Header,
-DynamicFooter, CartProvider, ThemeProvider and the other hook-using pieces
-into client children. That is a large, high-risk refactor of the app shell and
-was deliberately not attempted alongside other changes.
+This app always streams: the root layout renders an interactive shell (cart,
+theme, toasts, header, footer) and several routes have `loading.tsx`. By the
+time `notFound()` runs the headers are already sent, so the status is locked.
+Removing `loading.tsx`, hoisting the Suspense boundary, and rewriting to a
+static route were each tried and each still produced 200.
 
-Impact: search engines may index the "not found" page rather than dropping it.
-Users see the correct page either way.
+**The fix is `apps/web/middleware.ts`**, which runs *before* rendering starts.
+It asks the API whether the slug exists and, only on a definitive 404, serves
+the real `/not-found` page's HTML with a 404 status. Fail-open by design: any
+other outcome (network error, 500, timeout, 3s abort) falls through to normal
+rendering, so a flaky API never 404s a valid category.
+
+Two related fixes came out of this:
+
+* `lib/apiBase.ts` — `API_BASE` lived in `lib/http.ts`, which is `'use client'`.
+  A server component importing it got a client-reference **Symbol**, and the
+  first interpolation threw `Cannot convert a Symbol value to a string`. The
+  category page's `catch` swallowed that and returned "unknown", disabling the
+  check entirely. `lib/http.ts` re-exports from the new module, so the ~37
+  client imports are unchanged.
+* The root layout is now a genuine server component (`app/layout.tsx`, 60 lines)
+  with the shell in `components/AppShell.tsx`. The two store-name meta tags are
+  produced by `generateMetadata` instead of a runtime hook, so crawlers see them
+  in the initial HTML.
+
+Covered by `scripts/verify-404.py` (19 real pages stay 200, 5 unknown URLs
+return 404, and the 404 page still renders the header, footer and theme).
 
 ---
 
@@ -129,7 +167,7 @@ Each has its own canonical URL, Open Graph and Twitter tags, and exactly one
 | Job | Runs | Time |
 |---|---|---|
 | `api-checks` | `scripts/regression.sh` (32 API assertions), `scripts/audit-silent-writes.py` | ~2 min |
-| `ui-checks` | `regression-ui.py` (37 pages), `verify-home-builder.py`, `verify-banner.py`, `verify-gallery.py` | ~6 min |
+| `ui-checks` | `regression-ui.py` (37 pages), `verify-home-builder.py`, `verify-banner.py`, `verify-gallery.py`, `verify-404.py`, `verify-users.py` | ~8 min |
 
 Both boot the stack from scratch: `npm ci` -> `prisma migrate deploy` ->
 `npm run db:seed` -> start API -> (UI job) `next build` -> start web.

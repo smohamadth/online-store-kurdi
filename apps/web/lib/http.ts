@@ -14,8 +14,12 @@
  * a fix applies everywhere at once.
  */
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+// Defined in a non-'use client' module so SERVER components can import it too.
+// Importing it from here (a client module) hands a server component a
+// client-reference Symbol, not a string - see lib/apiBase.ts for the bug that
+// caused. Re-exported so the ~37 existing client imports are unaffected.
+import { API_BASE } from './apiBase';
+export { API_BASE };
 
 /** Error carrying the server's real message plus status and field details. */
 export class ApiError extends Error {

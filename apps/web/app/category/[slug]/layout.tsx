@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { API_BASE } from '@/lib/http';
+import { API_BASE } from '@/lib/apiBase';
 
 /**
  * Server-side wrapper for category pages.

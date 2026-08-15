@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import CategoryView from './CategoryView';
-import { API_BASE } from '@/lib/http';
+import { API_BASE } from '@/lib/apiBase';
 
 /**
  * Server component for /category/<slug>.
@@ -25,7 +25,8 @@ async function categoryExists(slug: string): Promise<boolean | null> {
     if (res.status === 404) return false;
     if (!res.ok) return null; // API error — don't 404 a possibly valid page
     return true;
-  } catch {
+  } catch (e) {
+    console.log('[probe] threw:', (e as Error)?.message);
     // API unreachable: fall through and let the client view retry rather than
     // showing a 404 for a category that probably exists.
     return null;
@@ -34,6 +35,7 @@ async function categoryExists(slug: string): Promise<boolean | null> {
 
 export default async function CategoryPage({ params }: { params: { slug: string } }) {
   const exists = await categoryExists(params.slug);
+  console.log('[probe] cat', params.slug, 'base=', API_BASE, 'exists=', exists);
 
   if (exists === false) notFound();
 
