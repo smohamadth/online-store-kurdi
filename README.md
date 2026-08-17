@@ -104,6 +104,10 @@ cd ..
 
 # 3. Setup environment
 cp .env.example apps/api/.env
+# The template now defaults to SQLite (DATABASE_URL="file:./dev.db"), which
+# matches prisma/schema.prisma out of the box. If you see
+# "the URL must start with the protocol `file:`", your .env still has the old
+# PostgreSQL URL - see TROUBLESHOOTING.md.
 # Edit apps/api/.env with your settings
 
 # 4. Setup database

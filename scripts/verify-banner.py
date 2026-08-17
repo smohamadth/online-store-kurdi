@@ -5,7 +5,11 @@ SEPARATE browser context (no shared localStorage) and asserts the new copy is
 actually there - i.e. it came from the database, not from a cache.
 """
 import os
-import re, sys
+import json
+import re
+import sys
+import urllib.error
+import urllib.request
 from playwright.sync_api import sync_playwright
 
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
@@ -16,6 +20,56 @@ def check(name, ok, detail=""):
     results.append(ok)
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
 
+
+API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
+
+ORIGINAL_TITLE = "Join thousands of happy customers"
+
+# Baseline the strip banner before touching anything.
+#
+# This suite renames the banner as part of the test and previously left the new
+# name behind, so a SECOND run failed on its own leftovers - looking exactly
+# like a regression. Tests must be repeatable, so the fixture is reset here and
+# restored at the end.
+def _api(method, path, token=None, body=None):
+    req = urllib.request.Request(
+        f"{API}{path}",
+        method=method,
+        headers={
+            "Content-Type": "application/json",
+            **({"Authorization": f"Bearer {token}"} if token else {}),
+        },
+        data=json.dumps(body).encode() if body is not None else None,
+    )
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, json.loads(r.read() or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or "{}")
+        except Exception:
+            return e.code, {}
+
+
+def _admin_token():
+    _, d = _api("POST", "/auth/login",
+                body={"email": "admin@store.com", "password": "admin123"})
+    return d["data"]["accessToken"]
+
+
+def reset_strip_banner():
+    """Put the strip banner back to its seeded title."""
+    token = _admin_token()
+    _, data = _api("GET", "/banners")
+    strips = [x for x in data.get("data", []) if x.get("position") == "strip"]
+    if not strips:
+        return token, None
+    b = strips[0]
+    _api("PUT", f"/banners/{b['id']}", token, {**b, "title": ORIGINAL_TITLE})
+    return token, b["id"]
+
+
+_token, _banner_id = reset_strip_banner()
 
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -94,6 +148,14 @@ with sync_playwright() as p:
 
     check("no console errors", len(console) == 0, "; ".join(console[:2]))
     b.close()
+
+# Leave the fixture as we found it so the suite can run again immediately.
+if _banner_id:
+    _, data = _api("GET", "/banners")
+    cur = [x for x in data.get("data", []) if x["id"] == _banner_id]
+    if cur:
+        _api("PUT", f"/banners/{_banner_id}", _admin_token(),
+             {**cur[0], "title": ORIGINAL_TITLE, "isActive": True})
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

@@ -7,6 +7,11 @@ import {
   StalePrismaClientError,
   stalePrismaClientHelp,
 } from './config/verifyPrismaClient';
+import {
+  readSchemaProvider,
+  findDatabaseUrlMismatch,
+  databaseUrlHelp,
+} from './config/verifyDatabaseUrl';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
@@ -56,6 +61,17 @@ process.on('uncaughtException', (error) => {
 async function startServer() {
   try {
     logger.info('🚀 Starting Store API server...');
+
+    // Fail fast on a DATABASE_URL that contradicts the schema's provider.
+    //
+    // Prisma's own P1012 ("the URL must start with the protocol `file:`")
+    // names the symptom but neither the cause nor the fix. Checked before
+    // connectDatabase() so the user sees the instruction, not the raw error.
+    const mismatch = findDatabaseUrlMismatch(process.env.DATABASE_URL, readSchemaProvider());
+    if (mismatch) {
+      for (const line of databaseUrlHelp(mismatch)) logger.error(line);
+      process.exit(1);
+    }
 
     // Fail fast on a stale generated client.
     //

@@ -85,6 +85,10 @@ npm install
 
 # 3. Set up environment
 cp .env.example apps/api/.env
+# The template now defaults to SQLite (DATABASE_URL="file:./dev.db"), which
+# matches prisma/schema.prisma out of the box. If you see
+# "the URL must start with the protocol `file:`", your .env still has the old
+# PostgreSQL URL - see TROUBLESHOOTING.md.
 
 # 4. Set up database (SQLite)
 cd apps/api
@@ -139,6 +143,10 @@ added 829 packages, and audited 832 packages
 ```bash
 # Copy environment template
 cp .env.example apps/api/.env
+# The template now defaults to SQLite (DATABASE_URL="file:./dev.db"), which
+# matches prisma/schema.prisma out of the box. If you see
+# "the URL must start with the protocol `file:`", your .env still has the old
+# PostgreSQL URL - see TROUBLESHOOTING.md.
 ```
 
 **Edit `apps/api/.env` (optional):**

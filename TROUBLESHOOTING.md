@@ -1,5 +1,58 @@
 # Troubleshooting
 
+## "the URL must start with the protocol `file:`" (Prisma P1012)
+
+```
+❌ Database connection failed: error: Error validating datasource `db`:
+   the URL must start with the protocol `file:`
+```
+
+**Cause:** `DATABASE_URL` in `apps/api/.env` disagrees with `provider` in
+`apps/api/prisma/schema.prisma`. The schema ships as **sqlite**, which needs a
+`file:` URL, but your `.env` has a `postgresql://` one.
+
+**This was our fault.** Both `.env.example` files used to contain a PostgreSQL
+URL while every setup doc said `cp .env.example apps/api/.env` — so following
+the instructions produced a broken install. The templates are fixed, but an
+`.env` created earlier still has the old value.
+
+### Fix
+
+Edit `apps/api/.env` and set:
+
+```
+DATABASE_URL="file:./dev.db"
+```
+
+Then restart the API. Nothing else needs to change.
+
+### You should not see the raw Prisma error any more
+
+The API now checks this at startup and prints the fix instead:
+
+```
+❌ DATABASE_URL does not match your Prisma schema.
+
+   schema.prisma provider : sqlite
+   expected URL to start  : file:
+   your DATABASE_URL uses : postgresql://
+
+   Fix - edit apps/api/.env and set:
+
+     DATABASE_URL="file:./dev.db"
+```
+
+### Actually want PostgreSQL?
+
+1. set `provider = "postgresql"` in `apps/api/prisma/schema.prisma`
+2. put your `postgresql://...` URL in `apps/api/.env`
+3. re-run `cd apps/api && npx prisma migrate dev`
+
+The committed migrations were generated for SQLite, so step 3 is required —
+they will not apply cleanly to PostgreSQL as-is.
+
+Covered by `scripts/verify-env-config.py`.
+
 ## "Cannot read properties of undefined (reading 'findUnique')"
 
 Symptom: the admin shows **Settings not loaded — Cannot read properties of

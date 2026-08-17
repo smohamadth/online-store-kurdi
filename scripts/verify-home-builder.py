@@ -4,7 +4,11 @@ Drives a real browser: logs in as admin, reorders + renames a block, then
 reloads the storefront and asserts the change actually shows.
 """
 import os
-import re, sys
+import json
+import re
+import sys
+import urllib.error
+import urllib.request
 from playwright.sync_api import sync_playwright
 
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
@@ -16,6 +20,42 @@ def check(name, ok, detail=""):
     results.append((name, ok, detail))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
 
+
+API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
+
+
+def _api(method, path, token=None, body=None):
+    req = urllib.request.Request(
+        f"{API}{path}",
+        method=method,
+        headers={
+            "Content-Type": "application/json",
+            **({"Authorization": f"Bearer {token}"} if token else {}),
+        },
+        data=json.dumps(body).encode() if body is not None else None,
+    )
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, json.loads(r.read() or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or "{}")
+        except Exception:
+            return e.code, {}
+
+
+def _admin_token():
+    _, d = _api("POST", "/auth/login",
+                body={"email": "admin@store.com", "password": "admin123"})
+    return d["data"]["accessToken"]
+
+
+# Reset the home layout to the shipped defaults before testing.
+#
+# This suite renames the "Featured Products" heading and reorders blocks. It
+# previously left both changed, so a SECOND run failed on its own leftovers,
+# which reads as a regression. Tests must be repeatable.
+_api("POST", "/home-sections/reset", _admin_token(), {})
 
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -99,5 +139,8 @@ with sync_playwright() as p:
     b.close()
 
 failed = [r for r in results if not r[1]]
+# Leave the layout as we found it so the suite can run again immediately.
+_api("POST", "/home-sections/reset", _admin_token(), {})
+
 print(f"\n{len(results)-len(failed)}/{len(results)} passed")
 sys.exit(1 if failed else 0)

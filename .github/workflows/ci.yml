@@ -51,6 +51,11 @@ jobs:
       - name: Configure environment
         run: cp apps/api/.env.ci apps/api/.env
 
+      - name: Env templates match the schema provider
+        # Cheap and needs no server. Catches the shipped .env.example handing
+        # out a URL the schema cannot use.
+        run: python3 scripts/verify-env-config.py
+
       - name: Apply migrations
         working-directory: apps/api
         run: npx prisma@${{ env.PRISMA_VERSION }} migrate deploy
