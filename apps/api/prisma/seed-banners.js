@@ -1,3 +1,8 @@
+// Load apps/api/.env before PrismaClient is constructed - see the note in
+// seed.ts. Scripts run directly by node/tsx do not get the Prisma CLI's
+// automatic .env loading.
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 #!/usr/bin/env node
 /**
  * Seed the homepage gallery (hero slider + promo tiles).

@@ -1,3 +1,16 @@
+// Load apps/api/.env before anything touches PrismaClient.
+//
+// The Prisma CLI (`prisma migrate`, `prisma db seed`) reads .env automatically,
+// but a script run directly through tsx does NOT. Locally this happened to work
+// because @prisma/client v5 also probes for .env relative to the schema; on CI,
+// with npm-workspace-hoisted node_modules, that probe misses and seeding died
+// with "Environment variable not found: DATABASE_URL" - even though .env was
+// sitting right there. Loading it explicitly removes the guesswork.
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { seedEmailTemplates } from './seed-email-templates';
