@@ -53,7 +53,18 @@ curl -s -o /dev/null -X DELETE $API/products/$PID "${H[@]}"
 echo "== PAYMENTS (customer must not self-settle) =="
 curl -s -X POST $API/auth/register -H 'Content-Type: application/json' -d '{"email":"reg_probe@test.com","password":"Passw0rd!23","firstName":"R","lastName":"P"}' -o /dev/null
 CT=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"reg_probe@test.com","password":"Passw0rd!23"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
-PID2=$(curl -s "$API/products?limit=1" | python3 -c "import sys,json;print(json.load(sys.stdin)['data'][0]['id'])")
+# Pick a product that is actually IN STOCK.
+#
+# This used to take products?limit=1 - whatever happened to sort first. The
+# seed includes "Web Development Course" with quantity 0 (a digital product),
+# and when that landed first the order was rejected with "Insufficient stock",
+# failing two checks for reasons unrelated to what they test. It passed locally
+# and on one CI run, then failed on the next: ordering is not guaranteed.
+PID2=$(curl -s "$API/products?limit=50" | python3 -c "
+import sys, json
+items = json.load(sys.stdin)['data']
+stocked = [p for p in items if (p.get('quantity') or 0) > 0 and p.get('status') == 'active']
+print(stocked[0]['id'] if stocked else '')")
 OID=$(curl -s -X POST $API/orders -H "Authorization: Bearer $CT" -H 'Content-Type: application/json' -d "{\"items\":[{\"productId\":\"$PID2\",\"quantity\":1}],\"shippingAddress\":{\"firstName\":\"R\",\"lastName\":\"P\",\"address\":\"1 St\",\"city\":\"C\",\"state\":\"S\",\"zipCode\":\"1\",\"country\":\"US\",\"phone\":\"5\"},\"paymentMethod\":\"cod\"}" | python3 -c "import sys,json;print(json.load(sys.stdin).get('data',{}).get('id',''))")
 chk "customer order created" "$([ -n "$OID" ] && echo yes || echo no)" "yes"
 chk "customer self-pay blocked" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/payments/process -H "Authorization: Bearer $CT" -H 'Content-Type: application/json' -d "{\"orderId\":\"$OID\"}")" "501"
