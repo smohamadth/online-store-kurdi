@@ -92,7 +92,9 @@ jobs:
   ui-checks:
     name: Browser regression
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Six browser suites plus a Next.js production build. 25 was too tight once
+    # a slow step ate into it.
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v4
@@ -110,11 +112,16 @@ jobs:
         run: npm ci
 
       - name: Install Playwright
-        # --with-deps pulls the system libraries headless Chromium needs
-        # (libnss3, libatk, libasound2 and friends).
+        # `playwright install --with-deps` shells out to apt-get, which hung for
+        # 23 minutes on the runner and got killed by the job timeout - the pip
+        # install itself took 3 seconds. GitHub's ubuntu-latest image already
+        # ships the libraries headless Chromium needs, so we install the browser
+        # WITHOUT --with-deps and cap it so a hang fails fast and visibly
+        # instead of eating the whole job budget.
+        timeout-minutes: 8
         run: |
           pip install playwright
-          python3 -m playwright install --with-deps chromium
+          python3 -m playwright install chromium
 
       - name: Configure environment
         run: |
