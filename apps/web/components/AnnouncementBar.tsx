@@ -1,11 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTheme } from '@/lib/theme';
 
 /** Thin promotional strip above the header, controlled from Admin → Appearance. */
 export default function AnnouncementBar() {
+  const pathname = usePathname();
   const { theme } = useTheme();
+
+  // Storefront promo only. Inside the admin panel it pushed the 100vh shell
+  // down by its own height, producing a scrollbar and a strip of shop
+  // marketing above the dashboard.
+  if (pathname?.startsWith('/admin')) return null;
 
   if (!theme.showAnnouncement || !theme.announcementText?.trim()) return null;
 

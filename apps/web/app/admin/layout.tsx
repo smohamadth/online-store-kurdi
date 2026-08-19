@@ -118,32 +118,76 @@ export default function AdminLayout({
     return null;
   }
 
-  const menuItems = [
-    { path: '/admin', label: 'Dashboard', icon: '📊' },
-    { path: '/admin/products', label: 'Products', icon: '📦' },
-    { path: '/admin/categories', label: 'Categories', icon: '🏷️' },
-    { path: '/admin/orders', label: 'Orders', icon: '🛒' },
-    { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
-    { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
-    { path: '/admin/reviews', label: 'Reviews', icon: '⭐' },
-    { path: '/admin/users', label: 'Users', icon: '👥' },
-    { path: '/admin/menus', label: 'Menus', icon: '📑' },
-    { path: '/admin/banners', label: 'Gallery & Banners', icon: '🖼️' },
-    { path: '/admin/appearance', label: 'Appearance', icon: '🎨' },
-    { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
-    { path: '/admin/tax', label: 'Tax', icon: '💰' },
-    { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
-    { path: '/admin/settings', label: 'Store Settings', icon: '⚙️' },
-    { path: '/admin/profile', label: 'My Profile', icon: '👤' },
+  /**
+   * Sidebar navigation, grouped.
+   *
+   * This was a flat list of 16 links in no particular order - "Menus" sat
+   * between Users and Banners, Appearance between Banners and Shipping, and
+   * finding anything meant reading the whole column. Grouping by job (what you
+   * sell / what customers do / how the shop looks / configuration) makes the
+   * list scannable and gives the eye somewhere to rest.
+   *
+   * Order and labels are unchanged where they were already sensible; nothing
+   * has been removed, so no existing route becomes unreachable.
+   */
+  const menuGroups: { heading: string | null; items: { path: string; label: string; icon: string }[] }[] = [
+    {
+      heading: null,
+      items: [{ path: '/admin', label: 'Dashboard', icon: '📊' }],
+    },
+    {
+      heading: 'Catalogue',
+      items: [
+        { path: '/admin/products', label: 'Products', icon: '📦' },
+        { path: '/admin/categories', label: 'Categories', icon: '🏷️' },
+        { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
+      ],
+    },
+    {
+      heading: 'Selling',
+      items: [
+        { path: '/admin/orders', label: 'Orders', icon: '🛒' },
+        { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
+        { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
+        { path: '/admin/tax', label: 'Tax', icon: '💰' },
+      ],
+    },
+    {
+      heading: 'Customers',
+      items: [
+        { path: '/admin/users', label: 'Users', icon: '👥' },
+        { path: '/admin/reviews', label: 'Reviews', icon: '⭐' },
+      ],
+    },
+    {
+      heading: 'Storefront',
+      items: [
+        { path: '/admin/pages', label: 'Pages', icon: '📄' },
+        { path: '/admin/appearance', label: 'Appearance', icon: '🎨' },
+        { path: '/admin/banners', label: 'Gallery & Banners', icon: '🖼️' },
+        { path: '/admin/menus', label: 'Menus', icon: '📑' },
+      ],
+    },
+    {
+      heading: 'System',
+      items: [
+        { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
+        { path: '/admin/settings', label: 'Store Settings', icon: '⚙️' },
+        { path: '/admin/profile', label: 'My Profile', icon: '👤' },
+      ],
+    },
   ];
+
+  // Flat list kept for the top-bar title lookup, which searches by path.
+  const menuItems = menuGroups.flatMap((g) => g.items);
 
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div style={{ padding: '0 24px', marginBottom: '24px', marginTop: isMobile ? '16px' : '0' }}>
+      <div style={{ padding: '0 20px', marginBottom: '16px', marginTop: isMobile ? '16px' : '0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }} onClick={() => isMobile && setSidebarOpen(false)}>
-            <h1 style={{ fontSize: '20px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
           </Link>
           {isMobile && (
             <button
@@ -159,51 +203,125 @@ export default function AdminLayout({
         </p>
       </div>
 
-      {/* Navigation */}
-      <nav style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '2px', 
-        padding: '0 12px',
-        flex: 1,
-        overflowY: 'auto',
-      }}>
-        {menuItems.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            onClick={() => isMobile && setSidebarOpen(false)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 16px',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              color: isActive(item.path) ? 'white' : '#8888aa',
-              backgroundColor: isActive(item.path) ? '#2d2d4e' : 'transparent',
-              transition: 'all 0.2s',
-            }}
-          >
-            <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
-            <span style={{ fontSize: '14px', fontWeight: isActive(item.path) ? 600 : 400 }}>
-              {item.label}
-            </span>
-          </Link>
+      {/* Navigation
+          Scrolls independently when the list is taller than the viewport (17
+          items do not fit a 700px laptop screen). The mask fades the last few
+          pixels so it is obvious there is more below, rather than the list
+          appearing to simply stop. The user card below stays pinned. */}
+      <nav
+        data-admin-nav
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '0 12px 8px',
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#3d3d5e transparent',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, #000 0, #000 calc(100% - 18px), transparent 100%)',
+          maskImage:
+            'linear-gradient(to bottom, #000 0, #000 calc(100% - 18px), transparent 100%)',
+        }}
+      >
+        {menuGroups.map((group, gi) => (
+          <div key={group.heading ?? `group-${gi}`} style={{ marginBottom: '10px' }}>
+            {group.heading && (
+              <p
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#6b6b8f',
+                  padding: '0 16px',
+                  margin: '0 0 4px',
+                }}
+              >
+                {group.heading}
+              </p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {group.items.map((item) => {
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    data-nav-item={item.path}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => isMobile && setSidebarOpen(false)}
+                    style={{
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '7px 16px',
+                      borderRadius: '6px',
+                      textDecoration: 'none',
+                      color: active ? '#ffffff' : '#a0a0c0',
+                      backgroundColor: active ? '#2d2d4e' : 'transparent',
+                      transition: 'background-color 0.15s ease, color 0.15s ease',
+                    }}
+                  >
+                    {/* Accent bar: the active row was previously distinguished
+                        only by a dark fill, which is easy to miss at a glance. */}
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: '18%',
+                        bottom: '18%',
+                        width: '3px',
+                        borderRadius: '0 3px 3px 0',
+                        backgroundColor: active ? '#6366f1' : 'transparent',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: '16px',
+                        width: '22px',
+                        textAlign: 'center',
+                        flexShrink: 0,
+                        lineHeight: 1,
+                      }}
+                      aria-hidden="true"
+                    >
+                      {item.icon}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: active ? 600 : 400,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
 
       {/* User Info */}
       <div style={{
-        padding: '16px',
-        margin: '12px',
+        padding: '12px',
+        margin: '0 12px 12px',
         backgroundColor: '#2d2d4e',
         borderRadius: '6px',
+        flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
           <div style={{
-            width: '36px',
-            height: '36px',
+            width: '32px',
+            height: '32px',
             borderRadius: '50%',
             backgroundColor: '#4a4a6a',
             display: 'flex',
@@ -310,7 +428,7 @@ export default function AdminLayout({
             width: '260px',
             backgroundColor: '#1a1a2e',
             color: 'white',
-            padding: '24px 0',
+            padding: '18px 0 0',
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',

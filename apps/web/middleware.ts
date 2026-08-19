@@ -40,6 +40,13 @@ const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
     pattern: /^\/products\/([^/]+)\/?$/,
     endpoint: (slug) => `${API_BASE}/products/slug/${encodeURIComponent(slug)}`,
   },
+  {
+    // Admin-authored pages. The API 404s for unknown slugs AND for drafts, so
+    // an unpublished page is indistinguishable from a missing one - which is
+    // what we want publicly.
+    pattern: /^\/p\/([^/]+)\/?$/,
+    endpoint: (slug) => `${API_BASE}/pages/slug/${encodeURIComponent(slug)}`,
+  },
 ];
 
 /** Sub-paths under /products that are real pages, not product slugs. */
@@ -106,5 +113,5 @@ export const config = {
   // Only the two dynamic route families need checking. Everything else -
   // static assets, _next internals, the API proxy, images - is skipped so
   // middleware costs nothing on the rest of the site.
-  matcher: ['/category/:path*', '/products/:path*'],
+  matcher: ['/category/:path*', '/products/:path*', '/p/:path*'],
 };

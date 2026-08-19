@@ -696,8 +696,40 @@ function Header() {
 }
 
 function DynamicFooter() {
+  const pathname = usePathname();
   const { settings } = useStoreSettings();
   const footerMenu = useMenu('footer');
+
+  // Admin-authored pages flagged "show in footer".
+  const [footerPages, setFooterPages] = useState<{ slug: string; title: string }[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/pages`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((d) => {
+        if (!alive) return;
+        setFooterPages(
+          (d.data || [])
+            .filter((p: any) => p.showInFooter)
+            .map((p: any) => ({ slug: p.slug, title: p.title }))
+        );
+      })
+      .catch(() => {
+        // Footer links are decoration - a failure here must not break the page.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // The admin panel is a self-contained full-height shell with its own
+  // chrome. Rendering the storefront footer under it left a white gap and
+  // then a block of shop links that make no sense inside the dashboard.
+  // Header already bails out the same way.
+  if (pathname?.startsWith('/admin')) {
+    return null;
+  }
 
   // Default footer items
   const defaultFooterItems: MenuItemData[] = [
@@ -780,6 +812,16 @@ function DynamicFooter() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <Link href="/privacy" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Privacy Policy</Link>
             <Link href="/terms" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Terms of Service</Link>
+            {/* Custom pages the admin flagged for the footer. */}
+            {footerPages.map((p) => (
+              <Link
+                key={p.slug}
+                href={`/p/${p.slug}`}
+                style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}
+              >
+                {p.title}
+              </Link>
+            ))}
           </div>
         </div>
         <div>
@@ -831,6 +873,9 @@ function DynamicFooter() {
  * the markup below are unchanged from the original client root layout.
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isAdminPage = pathname?.startsWith('/admin');
+
   return (
     <ErrorBoundary>
       <ThemeProvider>
@@ -841,7 +886,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <Header />
 
           {/* Main Content */}
-          <main style={{ minHeight: 'calc(100vh - 64px - 200px)' }}>
+          {/* The storefront reserves room for the header and footer so short
+              pages still fill the window. The admin shell is already
+              100vh and renders neither, so that reservation became 264px of
+              dead space below it. */}
+          <main style={isAdminPage ? undefined : { minHeight: 'calc(100vh - 64px - 200px)' }}>
             <ErrorBoundary>
               <MaintenanceGate>{children}</MaintenanceGate>
             </ErrorBoundary>

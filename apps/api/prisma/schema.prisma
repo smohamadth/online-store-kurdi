@@ -856,3 +856,40 @@ model HomeSection {
 
   @@index([sortOrder])
 }
+
+// ---------------------------------------------------------------------------
+// Custom storefront pages (CMS)
+//
+// Pages like /privacy, /terms and /faq shipped as hardcoded .tsx files, so a
+// shop owner could not change a word without editing source and redeploying.
+// This model backs admin-authored pages served at /p/<slug>.
+//
+// `content` is sanitised HTML - see utils/sanitizeRichText.ts. It is rendered
+// with dangerouslySetInnerHTML, so it MUST be cleaned on write, never on read.
+// ---------------------------------------------------------------------------
+model Page {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  title           String
+  content         String   @default("")
+  excerpt         String?
+
+  // draft pages are reachable only by an admin preview; published pages are
+  // public and appear in the sitemap.
+  status          String   @default("draft")   // draft | published
+
+  // SEO. Empty values fall back to title/excerpt at render time.
+  metaTitle       String?
+  metaDescription String?
+
+  // Show this page in the footer "Legal"/"Support" style lists.
+  showInFooter    Boolean  @default(false)
+  sortOrder       Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  publishedAt     DateTime?
+
+  @@index([status])
+  @@index([slug])
+}

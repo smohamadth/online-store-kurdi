@@ -192,6 +192,9 @@ jobs:
       - name: Admin dashboard figures + empty states
         run: python3 scripts/verify-dashboard.py
 
+      - name: Custom pages, admin layout + sidebar
+        run: python3 scripts/verify-pages.py
+
       - name: Server logs
         if: always()
         run: |
