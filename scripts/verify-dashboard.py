@@ -36,6 +36,11 @@ API_DIR = os.path.join(ROOT, "apps", "api")
 results = []
 
 
+def _finish():
+    """Exit code for an early stop."""
+    return 0 if all(results) else 1
+
+
 def check(name, ok, detail=""):
     results.append(bool(ok))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
@@ -107,42 +112,76 @@ def node(script: str, required: bool = True):
 
 admin = login("admin@store.com", "admin123")
 
-# --- snapshot orders so this suite is repeatable ------------------------------
-SNAPSHOT = node("""
+# --- fixture ------------------------------------------------------------------
+#
+# This suite needs to observe the dashboard both WITH and WITHOUT sales. It used
+# to snapshot every existing order, delete them, then restore from JSON embedded
+# in a node -e command line. That was fragile and failed on CI in a way that was
+# very hard to diagnose remotely.
+#
+# Instead: create ONE order that belongs to this suite, identified by an
+# orderNumber prefix, and only ever delete rows carrying that prefix. Existing
+# data is never touched, so there is nothing to restore.
+PREFIX = "DASHTEST-"
+
+FIXTURE = node("""
 const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
 (async()=>{
-  const orders=await p.order.findMany({include:{items:true,payments:true}});
-  console.log(JSON.stringify(orders));
+  await p.orderItem.deleteMany({where:{order:{orderNumber:{startsWith:'DASHTEST-'}}}});
+  await p.payment.deleteMany({where:{order:{orderNumber:{startsWith:'DASHTEST-'}}}});
+  await p.order.deleteMany({where:{orderNumber:{startsWith:'DASHTEST-'}}});
+
+  const u = await p.user.findFirst({where:{role:'customer'}});
+  const prod = await p.product.findFirst({where:{status:'active'}});
+  const preExisting = await p.order.count();
+  console.log(JSON.stringify({userId:u.id, productId:prod.id,
+    productName:prod.name, price:prod.price, preExisting}));
   await p.$disconnect();
 })()""")
-print(f"(snapshotted {len(SNAPSHOT)} order(s) for restore)\n")
+
+PRE_EXISTING_ORDERS = FIXTURE["preExisting"]
 
 
-def restore_orders(required: bool = True):
-    node(
-        """
+def add_fixture_order(number, status, amount, with_item=True):
+    node("""
 const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
-const snap=%s;
 (async()=>{
-  await p.orderItem.deleteMany({}); await p.payment.deleteMany({}); await p.order.deleteMany({});
-  for (const o of snap) {
-    const {items, payments, ...order} = o;
-    await p.order.create({data:{...order,
-      items:{create:items.map(({orderId,...i})=>i)},
-      payments:{create:payments.map(({orderId,...x})=>x)}}});
+  const o = await p.order.create({data:{
+    orderNumber:%s, userId:%s, status:%s,
+    subtotal:%s, taxAmount:0, shippingAmount:0, discountAmount:0, totalAmount:%s,
+    paymentStatus:'pending', paymentMethod:'cod'}});
+  if (%s) {
+    await p.orderItem.create({data:{orderId:o.id, productId:%s,
+      quantity:1, unitPrice:%s, totalPrice:%s}});
   }
-  console.log(JSON.stringify({restored:snap.length}));
+  console.log(JSON.stringify({id:o.id}));
   await p.$disconnect();
-})()"""
-        % json.dumps(SNAPSHOT),
-        required=required,
-    )
+})()""" % (
+        json.dumps(number), json.dumps(FIXTURE["userId"]), json.dumps(status),
+        amount, amount,
+        "true" if with_item else "false",
+        json.dumps(FIXTURE["productId"]), amount, amount,
+    ))
+
+
+def remove_fixture_orders(required=True):
+    return node("""
+const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
+(async()=>{
+  await p.orderItem.deleteMany({where:{order:{orderNumber:{startsWith:'DASHTEST-'}}}});
+  await p.payment.deleteMany({where:{order:{orderNumber:{startsWith:'DASHTEST-'}}}});
+  const r = await p.order.deleteMany({where:{orderNumber:{startsWith:'DASHTEST-'}}});
+  console.log(JSON.stringify({removed:r.count}));
+  await p.$disconnect();
+})()""", required=required)
 
 
 try:
     # =========================================================================
     print("=== 1. store WITH sales: real best sellers ===")
     # =========================================================================
+    add_fixture_order(f"{PREFIX}SALE-1", "delivered", 100.0)
+
     st, payload = call("GET", "/dashboard/stats", admin)
     check("GET /dashboard/stats returns 200", st == 200, f"status={st}")
     d = payload.get("data", {})
@@ -174,47 +213,36 @@ const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
           abs((d.get("totalRevenue") or 0) - truth["revenue"]) < 0.01,
           f"api={d.get('totalRevenue')} db={truth['revenue']}")
 
-    if truth["orders"] > 0:
-        check("basis is 'sales' when orders exist",
-              d.get("topProductsBasis") == "sales", str(d.get("topProductsBasis")))
-        check("best sellers report real units sold",
-              all((p.get("sold") or 0) > 0 for p in d.get("topProducts", [])),
-              str([(p["name"], p["sold"]) for p in d.get("topProducts", [])]))
+    check("basis is 'sales' when orders exist",
+          d.get("topProductsBasis") == "sales", str(d.get("topProductsBasis")))
+    check("best sellers report real units sold",
+          all((p.get("sold") or 0) > 0 for p in d.get("topProducts", [])),
+          str([(p["name"], p["sold"]) for p in d.get("topProducts", [])]))
 
     # =========================================================================
     print()
     print("=== 2. cancelled orders must not count as revenue ===")
     # =========================================================================
     before = call("GET", "/dashboard/stats", admin)[1]["data"]["totalRevenue"]
-    node("""
-const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
-(async()=>{
-  const u=await p.user.findFirst({where:{role:'customer'}});
-  await p.order.create({data:{orderNumber:'DASH-CANCELLED-1',userId:u.id,status:'cancelled',
-    subtotal:500,taxAmount:0,shippingAmount:0,discountAmount:0,totalAmount:500,
-    paymentStatus:'pending',paymentMethod:'cod'}});
-  console.log(JSON.stringify({ok:true}));
-  await p.$disconnect();
-})()""")
+    add_fixture_order(f"{PREFIX}CANCELLED-1", "cancelled", 500.0, with_item=False)
     after = call("GET", "/dashboard/stats", admin)[1]["data"]["totalRevenue"]
     check("a cancelled 500 order does not change revenue",
           abs(after - before) < 0.01, f"before={before} after={after}")
 
     counted = call("GET", "/dashboard/stats", admin)[1]["data"]["totalOrders"]
     check("but it IS counted in totalOrders", counted == truth["orders"] + 1,
-          f"orders={counted}")
+          f"orders={counted} expected={truth['orders'] + 1}")
 
     # =========================================================================
     print()
     print("=== 3. THE REPORTED BUG: catalogue full, zero sales ===")
     # =========================================================================
-    node("""
-const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
-(async()=>{
-  await p.orderItem.deleteMany({}); await p.payment.deleteMany({}); await p.order.deleteMany({});
-  console.log(JSON.stringify({orders:await p.order.count(),products:await p.product.count()}));
-  await p.$disconnect();
-})()""")
+    remove_fixture_orders()
+
+    if PRE_EXISTING_ORDERS > 0:
+        print(f"  SKIP - the database already holds {PRE_EXISTING_ORDERS} real order(s);")
+        print("         this section needs a store with no sales at all.")
+        raise SystemExit(_finish())
 
     st, payload = call("GET", "/dashboard/stats", admin)
     d = payload["data"]
@@ -263,17 +291,13 @@ const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
         # ---- and with sales, the heading flips back ------------------------
         print()
         print("=== 5. UI switches back to best sellers once a sale exists ===")
-        restore_orders()
+        add_fixture_order(f"{PREFIX}SALE-2", "delivered", 100.0)
         page.reload(wait_until="networkidle")
         page.wait_for_timeout(2500)
         body2 = page.inner_text("body")
-        has_orders = len(SNAPSHOT) > 0
-        if has_orders:
-            check("heading becomes 'Best sellers'", "Best sellers" in body2)
-            check("subtitle becomes 'Ranked by revenue'", "Ranked by revenue" in body2)
-            check("shows 'sold' counts", "sold" in body2)
-        else:
-            print("  SKIP - no orders in the snapshot to restore")
+        check("heading becomes 'Best sellers'", "Best sellers" in body2)
+        check("subtitle becomes 'Ranked by revenue'", "Ranked by revenue" in body2)
+        check("shows 'sold' counts", "sold" in body2)
 
         b.close()
 
@@ -288,15 +312,9 @@ const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
     check("customer cannot read store KPIs (403)", st == 403, f"status={st}")
 
 finally:
-    # Always leave the database as we found it.
-    node("""
-const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
-(async()=>{
-  await p.order.deleteMany({where:{orderNumber:{startsWith:'DASH-'}}});
-  console.log(JSON.stringify({ok:true}));
-  await p.$disconnect();
-})()""", required=False)
-    restore_orders(required=False)
+    # Only ever removes rows this suite created.
+    removed = remove_fixture_orders(required=False)
+    print(f"\n(cleanup: removed {removed.get('removed', 0)} fixture order(s))")
 
 print()
 print(f"{sum(results)}/{len(results)} passed")
