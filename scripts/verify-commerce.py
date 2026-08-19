@@ -56,13 +56,37 @@ def login(email, password):
     return d["data"]["accessToken"], d["data"]["user"]["id"]
 
 
-def node(script):
-    proc = subprocess.run(["node", "-e", script], cwd=API_DIR,
-                          capture_output=True, text=True, timeout=120)
-    out = proc.stdout.strip().splitlines()
-    if not out:
-        raise SystemExit(f"node helper failed:\n{proc.stderr[:600]}")
-    return json.loads(out[-1])
+def node(script, required=True):
+    """Run a snippet against the API's Prisma client.
+
+    `required=False` is used by cleanup. Raising from inside a finally block
+    kills the interpreter with no traceback and no summary line - which is
+    exactly what happened on CI: all 28 assertions passed, then the job exited
+    1 with no output explaining why. Cleanup failures are now reported and
+    swallowed.
+    """
+    try:
+        proc = subprocess.run(["node", "-e", script], cwd=API_DIR,
+                              capture_output=True, text=True, timeout=120)
+    except Exception as e:  # noqa: BLE001
+        if required:
+            raise SystemExit(f"node helper could not run: {e}")
+        print(f"  (cleanup helper could not run: {e})")
+        return {}
+
+    for line in reversed(proc.stdout.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{") or line.startswith("["):
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+    msg = (proc.stderr or proc.stdout or "no output")[:400]
+    if required:
+        raise SystemExit(f"node helper failed:\n{msg}")
+    print(f"  (cleanup helper failed: {msg.splitlines()[0] if msg else 'unknown'})")
+    return {}
 
 
 def iso(days):
@@ -73,6 +97,7 @@ admin, admin_id = login("admin@store.com", "admin123")
 cust, cust_id = login("customer@example.com", "customer123")
 
 created_coupons = []
+created_orders = []
 
 
 def make_coupon(suffix, **fields):
@@ -184,6 +209,8 @@ try:
         check("customer can place an order", st in (200, 201), f"status={st}")
         order = d.get("data", {})
         oid = order.get("id")
+        if oid:
+            created_orders.append(oid)
 
         if oid:
             st, after = call("GET", f"/products/{prod['id']}")
@@ -231,34 +258,38 @@ try:
 
 finally:
     # Remove every fixture this suite created.
+    #
+    # Only touches rows this run is responsible for: coupons prefixed CMTEST,
+    # and the single order id we captured. The previous version guessed by
+    # timestamp ("orders created in the last 10 minutes"), which is both unsafe
+    # on a shared database and unnecessary.
     for cid in created_coupons:
         call("DELETE", f"/coupons/{cid}", admin)
+
     cleanup = node("""
 const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
+const ids=%s;
 (async()=>{
-  const orders=await p.order.findMany({
-    where:{items:{some:{}}, user:{email:'customer@example.com'}},
-    orderBy:{createdAt:'desc'}, take:5, include:{items:true}});
   let removed=0;
-  for (const o of orders) {
-    if (o.orderNumber && o.orderNumber.startsWith('CMTEST')) continue;
-    // Restore stock for the orders this run created, newest first.
-    if (new Date(o.createdAt).getTime() > Date.now()-10*60*1000) {
-      for (const it of o.items) {
-        await p.product.update({where:{id:it.productId},
-          data:{quantity:{increment:it.quantity}}}).catch(()=>{});
-      }
-      await p.orderItem.deleteMany({where:{orderId:o.id}});
-      await p.payment.deleteMany({where:{orderId:o.id}});
-      await p.order.delete({where:{id:o.id}}).catch(()=>{});
-      removed++;
+  for (const id of ids) {
+    const o=await p.order.findUnique({where:{id},include:{items:true}});
+    if (!o) continue;
+    for (const it of o.items) {
+      await p.product.update({where:{id:it.productId},
+        data:{quantity:{increment:it.quantity}}}).catch(()=>{});
     }
+    await p.orderItem.deleteMany({where:{orderId:id}});
+    await p.payment.deleteMany({where:{orderId:id}});
+    await p.order.delete({where:{id}}).catch(()=>{});
+    removed++;
   }
-  await p.coupon.deleteMany({where:{code:{startsWith:'CMTEST'}}});
-  console.log(JSON.stringify({removed}));
+  const c=await p.coupon.deleteMany({where:{code:{startsWith:'CMTEST'}}});
+  console.log(JSON.stringify({removed,coupons:c.count}));
   await p.$disconnect();
-})()""")
-    print(f"\n(cleanup: removed {cleanup['removed']} test order(s), restored stock)")
+})()""" % json.dumps(created_orders), required=False)
+
+    print(f"\n(cleanup: removed {cleanup.get('removed', 0)} order(s), "
+          f"{cleanup.get('coupons', 0)} coupon(s), restored stock)")
 
 print()
 print(f"{sum(results)}/{len(results)} passed")

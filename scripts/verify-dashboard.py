@@ -68,19 +68,41 @@ def login(email, password):
     return d["data"]["accessToken"]
 
 
-def node(script: str):
-    """Run a snippet against the API's Prisma client and return parsed JSON."""
-    proc = subprocess.run(
-        ["node", "-e", script],
-        cwd=API_DIR,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    out = proc.stdout.strip().splitlines()
-    if not out:
-        raise SystemExit(f"node helper produced nothing:\n{proc.stderr[:600]}")
-    return json.loads(out[-1])
+def node(script: str, required: bool = True):
+    """Run a snippet against the API's Prisma client and return parsed JSON.
+
+    `required=False` for cleanup: raising from inside a finally block kills the
+    interpreter with no traceback and no summary, which is how a run where all
+    assertions passed still exited 1 on CI with nothing explaining why.
+    """
+    try:
+        proc = subprocess.run(
+            ["node", "-e", script],
+            cwd=API_DIR,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception as e:  # noqa: BLE001
+        if required:
+            raise SystemExit(f"node helper could not run: {e}")
+        print(f"  (cleanup helper could not run: {e})")
+        return {}
+
+    # Take the last JSON-looking line: Prisma may print log lines to stdout.
+    for line in reversed(proc.stdout.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{") or line.startswith("["):
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+    msg = (proc.stderr or proc.stdout or "no output")[:400]
+    if required:
+        raise SystemExit(f"node helper produced no JSON:\n{msg}")
+    print(f"  (cleanup helper failed: {msg.splitlines()[0] if msg else 'unknown'})")
+    return {}
 
 
 admin = login("admin@store.com", "admin123")
@@ -96,7 +118,7 @@ const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
 print(f"(snapshotted {len(SNAPSHOT)} order(s) for restore)\n")
 
 
-def restore_orders():
+def restore_orders(required: bool = True):
     node(
         """
 const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
@@ -112,7 +134,8 @@ const snap=%s;
   console.log(JSON.stringify({restored:snap.length}));
   await p.$disconnect();
 })()"""
-        % json.dumps(SNAPSHOT)
+        % json.dumps(SNAPSHOT),
+        required=required,
     )
 
 
@@ -272,8 +295,8 @@ const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
   await p.order.deleteMany({where:{orderNumber:{startsWith:'DASH-'}}});
   console.log(JSON.stringify({ok:true}));
   await p.$disconnect();
-})()""")
-    restore_orders()
+})()""", required=False)
+    restore_orders(required=False)
 
 print()
 print(f"{sum(results)}/{len(results)} passed")
