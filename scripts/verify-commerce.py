@@ -59,6 +59,10 @@ def login(email, password):
 def node(script, required=True):
     """Run a snippet against the API's Prisma client.
 
+    Loaded with `-r dotenv/config` so DATABASE_URL is present: a bare `node -e`
+    does NOT read apps/api/.env, and Prisma then dies with "Environment variable
+    not found: DATABASE_URL".
+
     `required=False` is used by cleanup. Raising from inside a finally block
     kills the interpreter with no traceback and no summary line - which is
     exactly what happened on CI: all 28 assertions passed, then the job exited
@@ -66,8 +70,11 @@ def node(script, required=True):
     swallowed.
     """
     try:
-        proc = subprocess.run(["node", "-e", script], cwd=API_DIR,
-                              capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(
+            ["node", "-r", "dotenv/config", "-e", script],
+            cwd=API_DIR, capture_output=True, text=True, timeout=120,
+            env={**os.environ, "DOTENV_CONFIG_PATH": os.path.join(API_DIR, ".env")},
+        )
     except Exception as e:  # noqa: BLE001
         if required:
             raise SystemExit(f"node helper could not run: {e}")
