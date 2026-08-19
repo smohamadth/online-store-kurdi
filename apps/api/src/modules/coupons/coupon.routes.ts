@@ -134,6 +134,15 @@ router.post('/coupons/validate', async (req, res, next) => {
         break;
     }
 
+    // Never discount more than the order is worth.
+    //
+    // A fixed 50 coupon against a 10 subtotal returned a discount of 50, which
+    // produces a NEGATIVE order total - i.e. the store paying the customer.
+    // Percentage coupons were already bounded by the subtotal, but a fixed
+    // amount had no cap at all. Clamped here, at the single place the discount
+    // is computed.
+    discount = Math.max(0, Math.min(discount, orderAmount));
+
     res.json({
       status: 'success',
       data: {

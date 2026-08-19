@@ -18,6 +18,7 @@ export default function AdminDashboard() {
     totalRevenue: 0,
     recentOrders: [] as any[],
     topProducts: [] as any[],
+    topProductsBasis: 'sales' as 'sales' | 'newest',
   });
   const [loading, setLoading] = useState(true);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
@@ -59,6 +60,7 @@ export default function AdminDashboard() {
         totalRevenue: data.totalRevenue || 0,
         recentOrders: data.recentOrders || [],
         topProducts: data.topProducts || [],
+        topProductsBasis: data.topProductsBasis === 'newest' ? 'newest' : 'sales',
       });
       setApiStatus('connected');
     } catch (err) {
@@ -127,7 +129,26 @@ export default function AdminDashboard() {
           </div>
           <div>
             {stats.recentOrders.length === 0 ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>No orders yet</div>
+              <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>
+                <p style={{ fontWeight: 600, color: '#111' }}>No orders yet</p>
+                <p style={{ fontSize: '13px', marginTop: '6px' }}>
+                  {stats.totalProducts === 0
+                    ? 'Add a product first — customers cannot order from an empty catalogue.'
+                    : 'Orders will appear here as soon as a customer checks out.'}
+                </p>
+                {stats.totalProducts === 0 && (
+                  <Link
+                    href="/admin/products"
+                    style={{
+                      display: 'inline-block', marginTop: '14px', padding: '8px 16px',
+                      backgroundColor: '#111', color: '#fff', borderRadius: '6px',
+                      textDecoration: 'none', fontSize: '13px', fontWeight: 600,
+                    }}
+                  >
+                    Add your first product
+                  </Link>
+                )}
+              </div>
             ) : (
               stats.recentOrders.map((order: any, index: number) => (
                 <div key={order.id || index} style={{ padding: '16px 24px', borderBottom: index < stats.recentOrders.length - 1 ? '1px solid #e5e5e5' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -150,26 +171,59 @@ export default function AdminDashboard() {
         {/* Products */}
         <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflow: 'hidden' }}>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e5e5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Products</h3>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600 }}>
+                {stats.topProductsBasis === 'sales' ? 'Best sellers' : 'Latest products'}
+              </h3>
+              {/* Say WHICH list this is. Showing newest products under a
+                  "best sellers" heading with 0 sold would be misleading. */}
+              <p style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                {stats.topProductsBasis === 'sales'
+                  ? 'Ranked by revenue'
+                  : 'No sales yet — showing your newest products'}
+              </p>
+            </div>
             <Link href="/admin/products" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none' }}>View all</Link>
           </div>
           <div>
             {stats.topProducts.length === 0 ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>No products yet</div>
+              <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>
+                <p style={{ fontWeight: 600, color: '#111' }}>No products yet</p>
+                <p style={{ fontSize: '13px', marginTop: '6px' }}>
+                  Your catalogue is empty. Add a product to start selling.
+                </p>
+                <Link
+                  href="/admin/products"
+                  style={{
+                    display: 'inline-block', marginTop: '14px', padding: '8px 16px',
+                    backgroundColor: '#111', color: '#fff', borderRadius: '6px',
+                    textDecoration: 'none', fontSize: '13px', fontWeight: 600,
+                  }}
+                >
+                  Add your first product
+                </Link>
+              </div>
             ) : (
               stats.topProducts.map((product: any, index: number) => (
                 <div key={product.id || index} style={{ padding: '16px 24px', borderBottom: index < stats.topProducts.length - 1 ? '1px solid #e5e5e5' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <p style={{ fontWeight: 500 }}>{product.name}</p>
                     <p style={{ fontSize: '12px', color: '#666' }}>
-                      {product.sold || 0} sold · Stock: {product.stock ?? 0}
+                      {stats.topProductsBasis === 'sales'
+                        ? `${product.sold || 0} sold · Stock: ${product.stock ?? 0}`
+                        : `Stock: ${product.stock ?? 0}`}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <p style={{ fontWeight: 600 }}>
-                      {formatPrice(product.revenue || 0, settings.currencySymbol)}
+                      {formatPrice(
+                        stats.topProductsBasis === 'sales' ? product.revenue || 0 : product.price || 0,
+                        settings.currencySymbol
+                      )}
                     </p>
-                    <p style={{ fontSize: '12px', color: '#666' }}>revenue</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>
+                      {stats.topProductsBasis === 'sales' ? 'revenue' : 'price'}
+                    </p>
                   </div>
                 </div>
               ))

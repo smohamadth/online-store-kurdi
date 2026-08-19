@@ -89,7 +89,7 @@ router.get('/stats', authenticate, authorize('admin', 'manager'), async (req, re
         })
       : [];
 
-    const topProducts = grouped.map((g) => {
+    let topProducts = grouped.map((g) => {
       const p = products.find((x) => x.id === g.productId);
       return {
         id: g.productId,
@@ -102,6 +102,41 @@ router.get('/stats', authenticate, authorize('admin', 'manager'), async (req, re
         revenue: g._sum.totalPrice ?? 0,
       };
     });
+
+    // Best sellers come from OrderItem, so a store with no sales yet produced
+    // an EMPTY list - and the dashboard card rendered "No products yet" even
+    // when the catalogue was full. That reads as data loss to a shop owner who
+    // has just added ten products.
+    //
+    // With no sales, fall back to the newest products so the card shows the
+    // real catalogue. `basis` tells the UI which it is looking at, so it can
+    // label the card honestly instead of claiming zero-sold items are "top".
+    const topProductsBasis = topProducts.length > 0 ? 'sales' : 'newest';
+
+    if (topProducts.length === 0) {
+      const newest = await prisma.product.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          price: true,
+          quantity: true,
+          images: { take: 1, orderBy: { sortOrder: 'asc' }, select: { url: true } },
+        },
+      });
+      topProducts = newest.map((p) => ({
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        price: p.price,
+        stock: p.quantity ?? 0,
+        image: p.images?.[0]?.url ?? null,
+        sold: 0,
+        revenue: 0,
+      }));
+    }
 
     res.json({
       status: 'success',
@@ -118,6 +153,7 @@ router.get('/stats', authenticate, authorize('admin', 'manager'), async (req, re
         ordersByStatus,
         lowStockCount: lowStock,
         pendingReviews,
+        topProductsBasis,
         topProducts,
         recentOrders,
       },

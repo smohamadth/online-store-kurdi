@@ -322,10 +322,37 @@ router.post('/', authenticate, async (req, res, next) => {
 });
 
 // PUT /api/orders/:id/status - Update order status (admin only)
+/**
+ * Statuses an order may hold. Mirrors the comment on Order.status in
+ * schema.prisma, which is a plain String column - SQLite has no enum, so
+ * nothing at the database level rejects a bad value.
+ */
+const ORDER_STATUSES = [
+  'pending',
+  'processing',
+  'shipped',
+  'delivered',
+  'cancelled',
+  'refunded',
+] as const;
+
 router.put('/:id/status', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status, trackingNumber, adminNotes } = req.body;
+
+    // Validate before writing.
+    //
+    // This endpoint used to pass `status` straight through to prisma.update,
+    // so `{"status":"not-a-status"}` returned 200 and PERSISTED the garbage.
+    // Dashboard revenue keys off specific status strings, so a typo silently
+    // removed an order from the revenue figures with no error anywhere.
+    if (typeof status !== 'string' || !ORDER_STATUSES.includes(status as any)) {
+      throw new AppError(
+        `Invalid order status "${status}". Expected one of: ${ORDER_STATUSES.join(', ')}.`,
+        400
+      );
+    }
 
     const order = await prisma.order.findUnique({
       where: { id },

@@ -84,6 +84,9 @@ jobs:
       - name: Audit for silent admin write failures
         run: python3 scripts/audit-silent-writes.py
 
+      - name: Commerce rules (coupons, orders, stock)
+        run: python3 scripts/verify-commerce.py
+
       - name: API log
         # Runs even when a previous step failed, so a red build shows why.
         if: always()
@@ -185,6 +188,9 @@ jobs:
 
       - name: Admin users editing + privilege guards
         run: python3 scripts/verify-users.py
+
+      - name: Admin dashboard figures + empty states
+        run: python3 scripts/verify-dashboard.py
 
       - name: Server logs
         if: always()
