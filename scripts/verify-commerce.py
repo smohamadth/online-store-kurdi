@@ -82,7 +82,17 @@ def node(script, required=True):
             except json.JSONDecodeError:
                 continue
 
-    msg = (proc.stderr or proc.stdout or "no output")[:400]
+    # Prisma stack traces start with minified library source, which tells you
+    # nothing. Pull out the human-readable lines instead.
+    raw = (proc.stderr or proc.stdout or "no output")
+    useful = [
+        ln for ln in raw.splitlines()
+        if ln.strip()
+        and "runtime/library.js" not in ln
+        and not ln.lstrip().startswith(("at ", "`", "var ", "let "))
+        and len(ln) < 300
+    ]
+    msg = "\n".join(useful[:12]) or raw[:400]
     if required:
         raise SystemExit(f"node helper failed:\n{msg}")
     print(f"  (cleanup helper failed: {msg.splitlines()[0] if msg else 'unknown'})")

@@ -73,7 +73,7 @@ def login(email, password):
     return d["data"]["accessToken"]
 
 
-def node(script: str, required: bool = True):
+def node(script: str = "", required: bool = True, label: str = "helper"):
     """Run a snippet against the API's Prisma client and return parsed JSON.
 
     `required=False` for cleanup: raising from inside a finally block kills the
@@ -103,9 +103,19 @@ def node(script: str, required: bool = True):
             except json.JSONDecodeError:
                 continue
 
-    msg = (proc.stderr or proc.stdout or "no output")[:400]
+    # Prisma stack traces start with minified library source, which tells you
+    # nothing. Pull out the human-readable lines instead.
+    raw = (proc.stderr or proc.stdout or "no output")
+    useful = [
+        ln for ln in raw.splitlines()
+        if ln.strip()
+        and "runtime/library.js" not in ln
+        and not ln.lstrip().startswith(("at ", "`", "var ", "let "))
+        and len(ln) < 300
+    ]
+    msg = "\n".join(useful[:12]) or raw[:400]
     if required:
-        raise SystemExit(f"node helper produced no JSON:\n{msg}")
+        raise SystemExit(f"node {label} produced no JSON:\n{msg}\n---- script ----\n{script[:800]}")
     print(f"  (cleanup helper failed: {msg.splitlines()[0] if msg else 'unknown'})")
     return {}
 
@@ -124,7 +134,7 @@ admin = login("admin@store.com", "admin123")
 # data is never touched, so there is nothing to restore.
 PREFIX = "DASHTEST-"
 
-FIXTURE = node("""
+FIXTURE = node(label="fixture-setup", script="""
 const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();
 (async()=>{
   await p.orderItem.deleteMany({where:{order:{orderNumber:{startsWith:'DASHTEST-'}}}});
