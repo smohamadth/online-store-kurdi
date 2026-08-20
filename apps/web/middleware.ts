@@ -47,10 +47,22 @@ const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
     pattern: /^\/p\/([^/]+)\/?$/,
     endpoint: (slug) => `${API_BASE}/pages/slug/${encodeURIComponent(slug)}`,
   },
+  {
+    // Blog posts. Same rule: drafts and unknown slugs both 404.
+    pattern: /^\/blog\/([^/]+)\/?$/,
+    endpoint: (slug) => `${API_BASE}/blog/slug/${encodeURIComponent(slug)}`,
+  },
 ];
 
-/** Sub-paths under /products that are real pages, not product slugs. */
-const PRODUCT_RESERVED = new Set(['category']);
+/**
+ * Sub-paths that look like a slug but are real routes.
+ *
+ * Scoped per pattern: applying one shared set to every route family would mean
+ * a blog post legitimately called "category" got skipped.
+ */
+const RESERVED_BY_PREFIX: Record<string, Set<string>> = {
+  '/products': new Set(['category']),
+};
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -60,7 +72,8 @@ export async function middleware(req: NextRequest) {
     if (!m) continue;
 
     const slug = decodeURIComponent(m[1]);
-    if (PRODUCT_RESERVED.has(slug)) return NextResponse.next();
+    const prefix = '/' + pathname.split('/')[1];
+    if (RESERVED_BY_PREFIX[prefix]?.has(slug)) return NextResponse.next();
 
     try {
       // AbortController: middleware sits in the critical path of every
@@ -113,5 +126,5 @@ export const config = {
   // Only the two dynamic route families need checking. Everything else -
   // static assets, _next internals, the API proxy, images - is skipped so
   // middleware costs nothing on the rest of the site.
-  matcher: ['/category/:path*', '/products/:path*', '/p/:path*'],
+  matcher: ['/category/:path*', '/products/:path*', '/p/:path*', '/blog/:path*'],
 };

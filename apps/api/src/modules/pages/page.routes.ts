@@ -27,7 +27,7 @@ const RESERVED_SLUGS = new Set([
   'admin', 'account', 'api', 'cart', 'checkout', 'login', 'register',
   'products', 'category', 'search', 'deals', 'contact', 'faq', 'privacy',
   'terms', 'returns', 'track-order', 'forgot-password', 'reset-password',
-  'p', 'sitemap.xml', 'robots.txt', '_next',
+  'p', 'blog', 'sitemap.xml', 'robots.txt', '_next',
 ]);
 
 const slugField = z

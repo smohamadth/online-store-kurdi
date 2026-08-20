@@ -163,6 +163,7 @@ export default function AdminLayout({
       heading: 'Storefront',
       items: [
         { path: '/admin/pages', label: 'Pages', icon: '📄' },
+        { path: '/admin/blog', label: 'Blog', icon: '✍️' },
         { path: '/admin/appearance', label: 'Appearance', icon: '🎨' },
         { path: '/admin/banners', label: 'Gallery & Banners', icon: '🖼️' },
         { path: '/admin/menus', label: 'Menus', icon: '📑' },

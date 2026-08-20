@@ -1,5 +1,20 @@
 import { MetadataRoute } from 'next';
 
+/**
+ * Regenerate on request rather than freezing at build time.
+ *
+ * Next prerendered this route statically, so the sitemap only ever contained
+ * the products, categories, pages and posts that existed when the site was
+ * BUILT. Anything published afterwards was invisible to search engines - which
+ * defeats the point of a blog, where content is added continuously and the
+ * whole return on the effort is search traffic.
+ *
+ * force-dynamic keeps it correct at the cost of one API round trip per
+ * request; sitemaps are fetched rarely, by crawlers, so that is the right
+ * trade.
+ */
+export const dynamic = 'force-dynamic';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://yourstore.com';
 
@@ -100,5 +115,50 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // rather than failing the whole build.
   }
 
-  return [...staticPages, ...productPages, ...categoryPages];
+  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+  // Blog index + every published post. A blog exists to be found, so leaving
+  // it out of the sitemap would defeat the point.
+  let blogPages: MetadataRoute.Sitemap = [];
+  try {
+    const res = await fetch(`${API}/blog?limit=1000`);
+    if (res.ok) {
+      const posts = (await res.json()).data || [];
+      blogPages = [
+        {
+          url: `${baseUrl}/blog`,
+          lastModified: new Date(),
+          changeFrequency: 'weekly' as const,
+          priority: 0.7,
+        },
+        ...posts.map((p: any) => ({
+          url: `${baseUrl}/blog/${p.slug}`,
+          lastModified: new Date(p.updatedAt || p.publishedAt || p.createdAt),
+          changeFrequency: 'monthly' as const,
+          priority: 0.6,
+        })),
+      ];
+    }
+  } catch {
+    // API unavailable at build time - ship without rather than fail the build.
+  }
+
+  // Admin-authored pages. These were added in the CMS work but never reached
+  // the sitemap, so nothing was discovering them.
+  let customPages: MetadataRoute.Sitemap = [];
+  try {
+    const res = await fetch(`${API}/pages`);
+    if (res.ok) {
+      customPages = ((await res.json()).data || []).map((p: any) => ({
+        url: `${baseUrl}/p/${p.slug}`,
+        lastModified: new Date(p.updatedAt || Date.now()),
+        changeFrequency: 'monthly' as const,
+        priority: 0.5,
+      }));
+    }
+  } catch {
+    /* as above */
+  }
+
+  return [...staticPages, ...productPages, ...categoryPages, ...blogPages, ...customPages];
 }

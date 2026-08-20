@@ -143,7 +143,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
     { id: '1', label: 'Products', url: '/products', icon: '📦' },
     { id: '2', label: 'Electronics', url: '/category/electronics', icon: '💻' },
     { id: '3', label: 'Clothing', url: '/category/clothing', icon: '👕' },
-    { id: '4', label: 'Cart', url: '/cart', icon: '🛒' },
+    { id: '4', label: 'Blog', url: '/blog', icon: '✍️' },
+    { id: '5', label: 'Cart', url: '/cart', icon: '🛒' },
   ];
 
   const menuItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
@@ -423,6 +424,7 @@ function Header() {
     { id: '1', label: 'Products', url: '/products' },
     { id: '2', label: 'Electronics', url: '/category/electronics' },
     { id: '3', label: 'Clothing', url: '/category/clothing' },
+    { id: '4', label: 'Blog', url: '/blog' },
   ];
 
   const navItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
@@ -737,6 +739,7 @@ function DynamicFooter() {
     { id: 'f2', label: 'Electronics', url: '/category/electronics' },
     { id: 'f3', label: 'Clothing', url: '/category/clothing' },
     { id: 'f4', label: 'Books', url: '/category/books' },
+    { id: 'f5', label: 'Blog', url: '/blog' },
   ];
 
   const footerItems = footerMenu?.items?.length ? footerMenu.items : defaultFooterItems;

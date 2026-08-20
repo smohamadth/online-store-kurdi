@@ -893,3 +893,54 @@ model Page {
   @@index([status])
   @@index([slug])
 }
+
+// ---------------------------------------------------------------------------
+// Blog
+//
+// Deliberately a SEPARATE model from Page rather than a `type` column on it.
+// A post carries things a static page never does - cover image, author,
+// publish date, tags, reading time - and it is listed chronologically at
+// /blog while pages are standalone at /p/<slug>. Overloading one table would
+// mean half its columns are always null.
+//
+// `content` is sanitised HTML (utils/sanitizeRichText.ts). It is rendered with
+// dangerouslySetInnerHTML, so it MUST be cleaned on write, never on read.
+// ---------------------------------------------------------------------------
+model BlogPost {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  title           String
+  content         String   @default("")
+  excerpt         String?
+
+  coverImage      String?
+
+  // Free-text author name rather than a User relation: shops often publish
+  // under a shop name or a staff member who has no login.
+  author          String?
+
+  // JSON string array, e.g. ["shipping","guides"]. SQLite has no array type;
+  // parsed in one place (fromRow) so a corrupt value cannot break the page.
+  tags            String?
+
+  status          String   @default("draft")   // draft | published
+
+  // Pinned posts sort to the top of /blog regardless of date.
+  isFeatured      Boolean  @default(false)
+
+  // SEO. Empty values fall back to title/excerpt at render time.
+  metaTitle       String?
+  metaDescription String?
+
+  // Denormalised counter. Cheap to read on a list page; incrementing it is
+  // fire-and-forget so a failure never blocks rendering the post.
+  viewCount       Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  publishedAt     DateTime?
+
+  @@index([status])
+  @@index([slug])
+  @@index([publishedAt])
+}

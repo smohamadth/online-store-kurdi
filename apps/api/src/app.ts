@@ -43,6 +43,7 @@ import dashboardRoutes from './modules/analytics/dashboard.routes';
 import themeRoutes from './modules/theme/theme.routes';
 import homeSectionRoutes from './modules/home/home.routes';
 import pageRoutes from './modules/pages/page.routes';
+import blogRoutes from './modules/blog/blog.routes';
 
 // Create Express app
 const app = express();
@@ -197,6 +198,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/theme', themeRoutes);
 app.use('/api/home-sections', homeSectionRoutes);
 app.use('/api/pages', pageRoutes);
+app.use('/api/blog', blogRoutes);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
