@@ -451,7 +451,7 @@ export default function AdminLayout({
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1 }}>
+      <div style={{ display: 'flex', flex: 1, alignItems: 'stretch' }}>
         {/* Sidebar - always visible on desktop, slide-out on mobile */}
         {!isMobile ? (
           <div style={{
@@ -463,9 +463,6 @@ export default function AdminLayout({
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            position: 'sticky',
-            top: 0,
-            height: '100vh',
           }}>
             <SidebarContent />
           </div>
@@ -535,7 +532,7 @@ export default function AdminLayout({
           </div>
 
           {/* Page Content */}
-          <div style={{ padding: isMobile ? '16px' : '24px' }}>
+          <div style={{ padding: isMobile ? '16px 16px 0' : '24px 24px 0' }}>
             {children}
           </div>
         </div>

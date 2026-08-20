@@ -233,7 +233,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div style={{ marginTop: '32px' }}>
+      <div style={{ marginTop: '24px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Quick Actions</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
           {[
