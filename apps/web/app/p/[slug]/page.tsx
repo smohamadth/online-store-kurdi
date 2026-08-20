@@ -97,6 +97,7 @@ export default async function CustomPage({ params }: { params: { slug: string } 
       )}
 
       <div
+        data-page-content
         style={{
           marginTop: '28px',
           fontSize: '16px',

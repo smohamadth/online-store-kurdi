@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { API_BASE, getToken } from '@/lib/http';
 
 /**
  * Lightweight rich text editor built on contentEditable.
@@ -20,6 +21,10 @@ interface Props {
 const ALLOWED_TAGS = new Set([
   'P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE',
   'UL', 'OL', 'LI', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'A', 'SPAN', 'DIV',
+  // Images in the body. Mirrors the server allow-list in
+  // utils/sanitizeRichText.ts - the two must agree or the editor will show
+  // something the server then strips on save.
+  'IMG', 'FIGURE', 'FIGCAPTION',
 ]);
 
 /**
@@ -46,13 +51,20 @@ export function sanitizeHtml(html: string): string {
       for (const attr of Array.from(child.attributes)) {
         const name = attr.name.toLowerCase();
         const val = attr.value.trim().toLowerCase();
-        const isSafeHref =
-          name === 'href' &&
-          !val.startsWith('javascript:') &&
-          !val.startsWith('data:');
-        const isSafeLinkAttr = name === 'target' || name === 'rel';
+        const dangerousScheme =
+          val.startsWith('javascript:') ||
+          val.startsWith('data:') ||
+          val.startsWith('vbscript:');
 
-        if (!(isSafeHref || isSafeLinkAttr)) {
+        const isSafeHref = name === 'href' && !dangerousScheme;
+        const isSafeLinkAttr = name === 'target' || name === 'rel';
+        // src/alt on an image. data: is rejected because an SVG data URI can
+        // carry a script; images must point at an uploaded file.
+        const isSafeImgAttr =
+          child.tagName === 'IMG' &&
+          ((name === 'src' && !dangerousScheme) || name === 'alt');
+
+        if (!(isSafeHref || isSafeLinkAttr || isSafeImgAttr)) {
           child.removeAttribute(attr.name);
         }
       }
@@ -87,8 +99,12 @@ export default function RichTextEditor({
   minHeight = 220,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const savedRange = useRef<Range | null>(null);
   const [showSource, setShowSource] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   // Only write into the DOM when the incoming value differs, otherwise every
   // keystroke would reset the caret to the start of the field.
@@ -108,6 +124,99 @@ export default function RichTextEditor({
     // this without a dependency, and it is well supported in practice.
     document.execCommand(cmd, false, arg);
     emit();
+  };
+
+  /**
+   * Insert an uploaded image at the caret.
+   *
+   * Opening the file dialog moves focus out of the contentEditable and the
+   * browser drops the selection, so the caret position is captured BEFORE the
+   * dialog opens and restored afterwards. Without that the image always lands
+   * at the very start of the document.
+   */
+  const rememberCaret = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && ref.current?.contains(sel.anchorNode)) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
+    } else {
+      savedRange.current = null;
+    }
+  };
+
+  const restoreCaret = () => {
+    ref.current?.focus();
+    const sel = window.getSelection();
+    if (savedRange.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(savedRange.current);
+    }
+  };
+
+  const pickImage = () => {
+    rememberCaret();
+    setUploadError('');
+    fileRef.current?.click();
+  };
+
+  const onImageChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset immediately so choosing the same file twice still fires onChange.
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('That file is not an image.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Image is larger than 10MB.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('folder', 'content');
+
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/upload/image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        // Never silently do nothing - the admin must know the upload failed.
+        setUploadError(err.message || `Upload failed (${res.status}).`);
+        return;
+      }
+
+      const json = await res.json();
+      const url: string | undefined =
+        json?.data?.url || json?.data?.large || json?.data?.medium || json?.url;
+
+      if (!url) {
+        setUploadError('The server did not return an image URL.');
+        return;
+      }
+
+      restoreCaret();
+      // insertHTML keeps the image inside the editable region and inside the
+      // undo stack, unlike appending a node by hand.
+      document.execCommand(
+        'insertHTML',
+        false,
+        `<img src="${url}" alt="${file.name.replace(/[<>"]/g, '')}" />`
+      );
+      emit();
+    } catch {
+      setUploadError('Could not reach the server. The image was not uploaded.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const addLink = () => {
@@ -174,6 +283,8 @@ export default function RichTextEditor({
         <span style={{ width: '1px', background: '#e0e0e0', margin: '0 3px' }} />
         {btn('🔗', 'Insert link', addLink)}
         {btn('✕', 'Clear formatting', () => exec('removeFormat'))}
+        <span style={{ width: '1px', background: '#ddd', margin: '0 4px' }} />
+        {btn(uploading ? '⏳' : '🖼', uploading ? 'Uploading…' : 'Insert image', pickImage)}
         <span style={{ flex: 1 }} />
         <button
           type="button"
@@ -194,6 +305,30 @@ export default function RichTextEditor({
         </button>
       </div>
 
+      {/* Hidden picker driven by the toolbar button. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        aria-label="Upload image"
+        onChange={onImageChosen}
+        style={{ display: 'none' }}
+      />
+
+      {uploadError && (
+        <div
+          style={{
+            padding: '8px 12px',
+            fontSize: '13px',
+            backgroundColor: '#fee2e2',
+            color: '#991b1b',
+            borderBottom: '1px solid #fca5a5',
+          }}
+        >
+          {uploadError}
+        </div>
+      )}
+
       {showSource ? (
         <textarea
           value={value}
@@ -213,6 +348,7 @@ export default function RichTextEditor({
       ) : (
         <div
           ref={ref}
+          data-rich-text
           contentEditable
           suppressContentEditableWarning
           onInput={emit}

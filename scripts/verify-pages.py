@@ -171,6 +171,38 @@ try:
 
     # =====================================================================
     print()
+    print("=== 5b. images in page content ===")
+    # =====================================================================
+    # <img> is allowed so admins can illustrate a page, but the src rules must
+    # still hold: a data: URI can carry an SVG containing <script>.
+    st, d = make(
+        "withimage",
+        title="Page With Image",
+        content=(
+            '<p>Intro</p>'
+            '<img src="/uploads/content/photo.jpg" alt="A photo">'
+            '<img src="data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+">'
+            '<img src="x" onerror="alert(1)">'
+            '<figure><img src="/uploads/content/b.jpg" alt="b"><figcaption>Caption</figcaption></figure>'
+        ),
+        status="published",
+    )
+    check("page with images can be created", st == 201, f"status={st}")
+    content = d.get("data", {}).get("content", "")
+
+    check("a real uploaded image is KEPT", "/uploads/content/photo.jpg" in content)
+    check("alt text is kept", 'alt="A photo"' in content)
+    check("figure/figcaption kept", "<figcaption>" in content)
+    check("data: URI image is neutralised", "data:image" not in content)
+    check("onerror handler stripped", "onerror" not in content)
+
+    code, body = web_status(f"/p/{PREFIX}withimage")
+    check("page with an image renders", code == 200, f"status={code}")
+    check("the image reaches the storefront HTML",
+          "/uploads/content/photo.jpg" in body)
+
+    # =====================================================================
+    print()
     print("=== 6. authorisation ===")
     # =====================================================================
     st, _ = call("POST", "/pages", None, {"slug": f"{PREFIX}anon", "title": "X"})
@@ -242,6 +274,22 @@ try:
         }""")
         check("current page marked with aria-current", active == "page", str(active))
 
+        # The user card used to float with a strip of empty navy beneath it.
+        card = page_ui.evaluate("""() => {
+            const logout = [...document.querySelectorAll('button')]
+              .find(b => b.textContent.trim() === 'Logout');
+            const card = logout.closest('div').parentElement;
+            const rail = card.parentElement;
+            return {
+              gap: Math.round(rail.getBoundingClientRect().bottom
+                              - card.getBoundingClientRect().bottom),
+              railFillsViewport:
+                Math.round(rail.getBoundingClientRect().height) >= window.innerHeight - 1,
+            };
+        }""")
+        check("sidebar fills the viewport height", card["railFillsViewport"])
+        check("no empty strip below the user card", card["gap"] <= 1, f"gap={card['gap']}px")
+
         # --- announcement bar must be storefront-only -----------------------
         #
         # Enabling the bar in Admin -> Appearance made it render inside the
@@ -287,6 +335,13 @@ try:
         page_ui.wait_for_timeout(2000)
         check("Pages screen lists the page", f"{PREFIX}hello" in page_ui.inner_text("body"))
 
+        # THE DEFAULT WORKFLOW - no boxes ticked.
+        #
+        # This previously ticked "Published" before saving, which is why it
+        # never caught the real complaint: a page created the ordinary way
+        # (New page -> type a title -> Create) defaulted to DRAFT and then
+        # 404'd when the admin visited it. Testing my own assumption instead of
+        # the user's path made a broken flow look covered.
         page_ui.get_by_role("button", name="+ New page").click()
         page_ui.wait_for_timeout(800)
         page_ui.get_by_label("Title", exact=True).fill("UI Made Page")
@@ -296,18 +351,24 @@ try:
         check("slug auto-derives from the title", slug_val == "ui-made-page", slug_val)
 
         page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
-        page_ui.get_by_label("Published", exact=True).check()
+        # Deliberately NOT touching the Published checkbox.
         page_ui.get_by_role("button", name="Create page").click()
         page_ui.wait_for_timeout(2500)
+
+        check("save confirmation names the live address",
+              f"/p/{PREFIX}ui" in page_ui.inner_text("body"))
 
         st, all_pages = call("GET", "/pages/all", admin)
         made = [p for p in all_pages["data"] if p["slug"] == f"{PREFIX}ui"]
         check("page created through the UI reached the database", len(made) == 1)
         if made:
             created.append(made[0]["id"])
-            check("UI page was published", made[0]["status"] == "published")
-            code, _ = web_status(f"/p/{PREFIX}ui")
-            check("UI page is live on the storefront", code == 200, f"status={code}")
+            check("a page created the DEFAULT way is published",
+                  made[0]["status"] == "published", made[0]["status"])
+            code, body = web_status(f"/p/{PREFIX}ui")
+            check("visiting a newly created page returns 200, not 404",
+                  code == 200, f"status={code} — this was the reported bug")
+            check("the new page renders its title", "UI Made Page" in body)
 
         # a duplicate slug must surface the server error, not a fake success
         page_ui.get_by_role("button", name="+ New page").click()

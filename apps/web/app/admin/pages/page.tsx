@@ -38,7 +38,14 @@ const BLANK = {
   title: '',
   content: '',
   excerpt: '',
-  status: 'draft' as 'draft' | 'published',
+  // Published by default.
+  //
+  // This defaulted to 'draft', so the ordinary flow - New page, type a title,
+  // Create - produced a page that 404s when you visit it. Nothing was broken;
+  // the page simply was not live, and there was no obvious sign of that. An
+  // admin who wants to work in private can untick the box, which is the rarer
+  // case and now the deliberate one.
+  status: 'published' as 'draft' | 'published',
   metaTitle: '',
   metaDescription: '',
   showInFooter: false,
@@ -188,7 +195,14 @@ export default function AdminPagesPage() {
       } else {
         const res = await authHttp.post<Page>('/pages', body);
         setPages((list) => [res.data, ...list]);
-        notify('success', `“${res.data.title}” created.`);
+        // Say where it went. "Created." left the admin guessing whether the
+        // page was live and at what address.
+        notify(
+          'success',
+          res.data.status === 'published'
+            ? `“${res.data.title}” is live at /p/${res.data.slug}`
+            : `“${res.data.title}” saved as a DRAFT — it is not visible to customers yet. Press Publish when ready.`
+        );
       }
       close();
     } catch (err) {
@@ -614,6 +628,23 @@ export default function AdminPagesPage() {
                 />
               </div>
             </div>
+
+            {form.status === 'draft' && (
+              <div
+                style={{
+                  marginTop: '18px',
+                  padding: '11px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fcd34d',
+                  color: '#92400e',
+                }}
+              >
+                <strong>This page is a draft.</strong> Visiting <code>/p/{form.slug || '…'}</code>{' '}
+                will show “Page not found” until you tick Published below.
+              </div>
+            )}
 
             <div
               style={{

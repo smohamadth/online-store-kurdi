@@ -213,3 +213,36 @@ html {
   font-family: var(--font);
   font-size: var(--font-size);
 }
+
+
+/* ---------------------------------------------------------------------------
+   Rich-text image sizing
+
+   Admin-inserted images are stored as bare <img src="...">, with no width or
+   height. Uploads are commonly 2000px+ wide, which would burst out of the
+   article column and force horizontal scrolling on phones. Constrained here
+   rather than by writing inline styles into the stored HTML, so existing
+   content benefits too and the markup stays clean.
+   --------------------------------------------------------------------------- */
+[data-rich-text] img,
+article img,
+[data-page-content] img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 16px 0;
+  border-radius: 8px;
+}
+
+[data-rich-text] figure,
+article figure {
+  margin: 16px 0;
+}
+
+[data-rich-text] figcaption,
+article figcaption {
+  font-size: 13px;
+  color: var(--muted, #666);
+  margin-top: 6px;
+  text-align: center;
+}

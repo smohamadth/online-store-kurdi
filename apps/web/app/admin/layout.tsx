@@ -312,11 +312,14 @@ export default function AdminLayout({
       </nav>
 
       {/* User Info */}
+      {/* User card, anchored flush to the bottom of the sidebar.
+          It previously carried a 12px bottom margin on top of the sidebar's
+          own padding, leaving a visible strip of empty navy below it. */}
       <div style={{
-        padding: '12px',
-        margin: '0 12px 12px',
-        backgroundColor: '#2d2d4e',
-        borderRadius: '6px',
+        marginTop: 'auto',
+        padding: '14px 16px',
+        backgroundColor: '#232342',
+        borderTop: '1px solid #33335c',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
@@ -462,7 +465,7 @@ export default function AdminLayout({
             width: '260px',
             backgroundColor: '#1a1a2e',
             color: 'white',
-            padding: '24px 0',
+            padding: '18px 0 0',
             position: 'fixed',
             top: 0,
             left: 0,

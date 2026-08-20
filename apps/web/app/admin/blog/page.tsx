@@ -44,7 +44,9 @@ const BLANK = {
   coverImage: '',
   author: '',
   tags: '',
-  status: 'draft' as 'draft' | 'published',
+  // Published by default - see the note in admin/pages. A new post that
+  // silently 404s is the same trap.
+  status: 'published' as 'draft' | 'published',
   isFeatured: false,
   metaTitle: '',
   metaDescription: '',
@@ -202,7 +204,12 @@ export default function AdminBlogPage() {
       } else {
         const res = await authHttp.post<Post>('/blog', body);
         setPosts((list) => [res.data, ...list]);
-        notify('success', `“${res.data.title}” created.`);
+        notify(
+          'success',
+          res.data.status === 'published'
+            ? `“${res.data.title}” is live at /blog/${res.data.slug}`
+            : `“${res.data.title}” saved as a DRAFT — not visible to readers yet.`
+        );
       }
       close();
     } catch (err) {
