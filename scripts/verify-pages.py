@@ -290,6 +290,46 @@ try:
         check("sidebar fills the viewport height", card["railFillsViewport"])
         check("no empty strip below the user card", card["gap"] <= 1, f"gap={card['gap']}px")
 
+        # The gap that actually mattered.
+        #
+        # I "fixed the sidebar gap" twice before measuring the right thing. The
+        # first fix removed a 12px margin BELOW the card; the complaint was
+        # about ~77px of dead navy ABOVE it, between the last nav item and the
+        # card, caused by `flex: 1` on the nav claiming all spare height. Both
+        # edges are now asserted so neither can regress.
+        for vh in (1100, 950, 800):
+            page_ui.set_viewport_size({"width": 1500, "height": vh})
+            page_ui.reload(wait_until="networkidle")
+            page_ui.wait_for_timeout(1500)
+            m = page_ui.evaluate("""() => {
+                const nav = document.querySelector('[data-admin-nav]');
+                const items = [...document.querySelectorAll('[data-nav-item]')];
+                const last = items[items.length - 1];
+                const logout = [...document.querySelectorAll('button')]
+                  .find(b => b.textContent.trim() === 'Logout');
+                const card = logout.closest('div').parentElement;
+                const rail = card.parentElement;
+                const navBox = nav.getBoundingClientRect();
+                nav.scrollTop = nav.scrollHeight;
+                const reachable = last.getBoundingClientRect().bottom <= navBox.bottom + 2;
+                nav.scrollTop = 0;
+                return {
+                  above: Math.round(card.getBoundingClientRect().top
+                                    - last.getBoundingClientRect().bottom),
+                  below: Math.round(rail.getBoundingClientRect().bottom
+                                    - card.getBoundingClientRect().bottom),
+                  reachable,
+                };
+            }""")
+            # <= 24px is padding, not a gap. The bug measured 77px.
+            check(f"@{vh}px no dead space between the last item and the user card",
+                  m["above"] <= 24, f"above={m['above']}px")
+            check(f"@{vh}px user panel reaches the bottom of the rail",
+                  m["below"] <= 1, f"below={m['below']}px")
+            check(f"@{vh}px the last nav item is still reachable", m["reachable"])
+
+        page_ui.set_viewport_size({"width": 1500, "height": 950})
+
         # --- announcement bar must be storefront-only -----------------------
         #
         # Enabling the bar in Admin -> Appearance made it render inside the

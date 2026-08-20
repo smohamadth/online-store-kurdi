@@ -215,7 +215,17 @@ export default function AdminLayout({
           display: 'flex',
           flexDirection: 'column',
           padding: '0 12px 8px',
-          flex: 1,
+          // `flex: 1` (grow AND stretch) made the nav claim every spare pixel,
+          // so on a tall screen the list ended at "My Profile" and then ~77px
+          // of empty navy sat between it and the user card pinned below.
+          //
+          // `flex: 0 1 auto` lets the nav SHRINK and scroll when the list is
+          // taller than the rail, but take only the height it needs when it
+          // is not - so the card sits directly under the last item. The rail
+          // itself still fills the viewport, so the colour runs to the bottom;
+          // the difference is that the empty space is now below the card
+          // rather than inside the nav.
+          flex: '0 1 auto',
           minHeight: 0,
           overflowY: 'auto',
           scrollbarWidth: 'thin',
@@ -312,15 +322,24 @@ export default function AdminLayout({
       </nav>
 
       {/* User Info */}
-      {/* User card, anchored flush to the bottom of the sidebar.
-          It previously carried a 12px bottom margin on top of the sidebar's
-          own padding, leaving a visible strip of empty navy below it. */}
+      {/* User panel.
+          Sits DIRECTLY under the last nav item and grows to fill whatever rail
+          is left, so its background runs to the very bottom.
+
+          Two earlier attempts got this wrong. First the card carried a bottom
+          margin, leaving a strip of bare navy under it. Then the nav was left
+          as `flex: 1`, which made the LIST claim the spare height and put ~77px
+          of dead navy between "My Profile" and the card. Letting the panel take
+          the slack removes the empty region entirely rather than moving it. */}
       <div style={{
-        marginTop: 'auto',
+        flex: '1 1 auto',
+        minHeight: 0,
         padding: '14px 16px',
         backgroundColor: '#232342',
         borderTop: '1px solid #33335c',
-        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
           <div style={{
