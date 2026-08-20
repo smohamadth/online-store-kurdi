@@ -242,6 +242,36 @@ try:
         }""")
         check("current page marked with aria-current", active == "page", str(active))
 
+        # --- announcement bar must be storefront-only -----------------------
+        #
+        # Enabling the bar in Admin -> Appearance made it render inside the
+        # admin panel too, pushing the 100vh shell down and putting shop
+        # marketing above the dashboard. The guard existed in the component but
+        # NOTHING TESTED IT - no suite ever switched the bar on, so the fix was
+        # never actually exercised. It is turned on here deliberately.
+        BANNER = "PAGETEST ANNOUNCEMENT"
+        st, _ = call("PUT", "/theme", admin, {
+            "showAnnouncement": True,
+            "announcementText": BANNER,
+        })
+        check("announcement bar can be enabled", st == 200, f"status={st}")
+
+        for admin_path in ["/admin", "/admin/profile", "/admin/settings"]:
+            page_ui.goto(f"{WEB}{admin_path}", wait_until="networkidle")
+            page_ui.wait_for_timeout(1500)
+            check(
+                f"announcement bar hidden on {admin_path}",
+                BANNER not in page_ui.inner_text("body"),
+            )
+
+        # ...and the admin shell must start flush at the top, not be pushed
+        # down by a bar rendered above it.
+        top = page_ui.evaluate(
+            "() => Math.round(document.querySelector('[data-admin-shell]')"
+            ".getBoundingClientRect().top)"
+        )
+        check("admin shell still starts at the top of the page", top <= 1, f"top={top}px")
+
         # --- storefront must still have its chrome --------------------------
         page_ui.goto(WEB, wait_until="networkidle")
         page_ui.wait_for_timeout(1500)
@@ -249,6 +279,8 @@ try:
         check("storefront still renders its footer", sf["footer"] is True)
         check("footer lists the published page",
               "Hello World" in page_ui.inner_text("body"))
+        check("announcement bar DOES show on the storefront",
+              BANNER in page_ui.inner_text("body"))
 
         # --- create a page through the real UI ------------------------------
         page_ui.goto(f"{WEB}/admin/pages", wait_until="networkidle")
@@ -296,6 +328,10 @@ try:
         b.close()
 
 finally:
+    # Put the announcement bar back how we found it. A suite that leaves the
+    # storefront advertising "PAGETEST ANNOUNCEMENT" is worse than no suite.
+    call("PUT", "/theme", admin, {"showAnnouncement": False, "announcementText": ""})
+
     for pid_ in created:
         call("DELETE", f"/pages/{pid_}", admin)
     # Belt and braces: remove anything left carrying the prefix.
