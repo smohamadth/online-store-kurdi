@@ -28,14 +28,17 @@ const router = Router();
 /** A post must not shadow a real route under /blog. */
 const RESERVED_SLUGS = new Set(['all', 'tags', 'slug', 'new', 'edit', 'feed', 'rss']);
 
+// Unicode-aware - see the identical note in pages/page.routes.ts. A Latin-only
+// rule made Kurdish/Arabic titles slugify to nothing, so the post 404'd.
 const slugField = z
   .string()
   .min(1)
   .max(120)
   .regex(
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-    'Slug may contain lowercase letters, numbers and single hyphens only'
-  );
+    /^[\p{L}\p{N}\p{M}]+(?:-[\p{L}\p{N}\p{M}]+)*$/u,
+    'Slug may contain letters, numbers and single hyphens only'
+  )
+  .refine((s) => s === s.toLowerCase(), 'Slug must be lowercase');
 
 const tagsField = z.array(z.string().min(1).max(40)).max(12).optional().nullable();
 

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import CategoryView from './CategoryView';
 import { API_BASE } from '@/lib/apiBase';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * Server component for /category/<slug>.
@@ -19,7 +20,7 @@ async function categoryExists(slug: string): Promise<boolean | null> {
   try {
     // no-store: a cached 404 would keep a newly created category hidden, and
     // a cached hit would keep a deleted one reachable.
-    const res = await fetch(`${API_BASE}/categories/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (res.status === 404) return false;

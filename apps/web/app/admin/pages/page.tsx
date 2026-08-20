@@ -17,7 +17,7 @@ import { authHttp, http, errorMessage } from '@/lib/http';
 import { useIsMobile } from '@/lib/hooks';
 import { ButtonSpinner, LoadingState } from '@/components/Spinner';
 import RichTextEditor from '@/components/RichTextEditor';
-import { slugify } from '@/lib/slug';
+import { slugify, slugifyWithFallback } from '@/lib/slug';
 
 interface Page {
   id: string;
@@ -175,8 +175,12 @@ export default function AdminPagesPage() {
     setSaving(true);
     setFormError('');
 
+    // A title in a non-Latin script used to slugify to '', which saved a page
+    // the author could never reach. Guarantee a usable address.
+    const finalSlug = form.slug.trim() || slugifyWithFallback(form.title, 'page');
+
     const body = {
-      slug: form.slug,
+      slug: finalSlug,
       title: form.title,
       content: form.content,
       excerpt: form.excerpt || null,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { API_BASE } from '@/lib/apiBase';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * Returns a real HTTP 404 for unknown category and product URLs.
@@ -34,23 +35,23 @@ import { API_BASE } from '@/lib/apiBase';
 const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
   {
     pattern: /^\/category\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/categories/${encodeURIComponent(slug)}`,
+    endpoint: (slug) => `${API_BASE}/categories/${encodeRouteParam(slug)}`,
   },
   {
     pattern: /^\/products\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/products/slug/${encodeURIComponent(slug)}`,
+    endpoint: (slug) => `${API_BASE}/products/slug/${encodeRouteParam(slug)}`,
   },
   {
     // Admin-authored pages. The API 404s for unknown slugs AND for drafts, so
     // an unpublished page is indistinguishable from a missing one - which is
     // what we want publicly.
     pattern: /^\/p\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/pages/slug/${encodeURIComponent(slug)}`,
+    endpoint: (slug) => `${API_BASE}/pages/slug/${encodeRouteParam(slug)}`,
   },
   {
     // Blog posts. Same rule: drafts and unknown slugs both 404.
     pattern: /^\/blog\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/blog/slug/${encodeURIComponent(slug)}`,
+    endpoint: (slug) => `${API_BASE}/blog/slug/${encodeRouteParam(slug)}`,
   },
 ];
 

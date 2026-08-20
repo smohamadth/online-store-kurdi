@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * Server-side SEO for product pages.
@@ -26,7 +27,7 @@ function absolute(url?: string | null): string | undefined {
 
 async function getProduct(slug: string) {
   try {
-    const res = await fetch(`${API_URL}/products/slug/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_URL}/products/slug/${encodeRouteParam(slug)}`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;

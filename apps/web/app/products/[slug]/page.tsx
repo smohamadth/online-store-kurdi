@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import ProductView from './ProductView';
 import { API_BASE } from '@/lib/apiBase';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * Server component for /products/<slug>.
@@ -25,7 +26,7 @@ async function productExists(slug: string): Promise<boolean | null> {
   try {
     // no-store: a cached 404 would keep a newly published product hidden, and
     // a cached hit would keep a deleted one reachable.
-    const res = await fetch(`${API_BASE}/products/slug/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/products/slug/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (res.status === 404) return false;

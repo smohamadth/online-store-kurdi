@@ -323,3 +323,37 @@ response tells you exactly what happened:
 | **403** | The account is not an admin/manager. |
 | **400** | Validation failed; the message names the field (e.g. a bad hex colour). |
 | **500 / MIGRATION_REQUIRED** | Run the migration steps above. |
+
+## A page or blog post 404s (or shows "Page not found") after you create it
+
+Three separate causes have produced this exact symptom. Check in order.
+
+1. **The title is not in Latin script.** `slugify()` used to strip every
+   non-Latin character, so `کۆمپانیای ئێمە` became the empty string and the
+   page saved under an address you never saw. Fixed 2026-08-20: slugs now keep
+   letters from any script, and a title that still slugifies to nothing falls
+   back to `page-<id>`. If you created pages before that fix, open each one and
+   set a slug by hand.
+2. **HTTP 200 but the body says "Page not found".** Next.js hands
+   `params.slug` to a server component already percent-encoded, so the old
+   `encodeURIComponent(slug)` double-encoded it and the API lookup missed. Use
+   `encodeRouteParam` from `lib/routeParam.ts` for every dynamic segment.
+3. **The page is a draft.** Drafts 404 by design. New pages default to
+   Published; anything created before 2026-08-20 may still be a draft.
+
+Covered by `scripts/verify-page-slugs.py`.
+
+## An empty block of navy in the admin sidebar
+
+Two different layout bugs, both reported the same way:
+
+- Dead space **above** the user card - the `<nav>` had `flex: 1` and claimed
+  every spare pixel.
+- A large lighter block **below** the Logout button - the user panel had
+  `flex: 1 1 auto` and STRETCHED, up to ~510px on a 1300px-tall screen.
+
+The rail must be: nav `flex: 0 1 auto`, user panel `flex: 0 0 auto` with
+`marginTop: auto`. Any slack then sits above the card in the rail's own
+`#1a1a2e`, so it is invisible. Measure before changing anything -
+`scripts/verify-admin-rail.py` checks seven viewport heights and asserts the
+painted colour of the gap, not just its size.

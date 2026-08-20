@@ -5,6 +5,7 @@ import { API_BASE } from '@/lib/apiBase';
 import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * A single blog post at /blog/<slug>.
@@ -20,7 +21,7 @@ async function getPost(slug: string): Promise<BlogPost | null> {
   try {
     // no-store: an edit must show on the next load, and a post pulled back to
     // draft must stop being served immediately.
-    const res = await fetch(`${API_BASE}/blog/slug/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/blog/slug/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;

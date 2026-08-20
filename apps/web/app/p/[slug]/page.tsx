@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { API_BASE } from '@/lib/apiBase';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * Renders an admin-authored page at /p/<slug>.
@@ -31,7 +32,7 @@ async function getPage(slug: string): Promise<Page | null> {
   try {
     // no-store: an edit must be visible on the next load, and a page pulled
     // back to draft must stop being served immediately.
-    const res = await fetch(`${API_BASE}/pages/slug/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/pages/slug/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;

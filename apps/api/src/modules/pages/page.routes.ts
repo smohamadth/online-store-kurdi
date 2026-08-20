@@ -30,14 +30,26 @@ const RESERVED_SLUGS = new Set([
   'p', 'blog', 'sitemap.xml', 'robots.txt', '_next',
 ]);
 
+/**
+ * Unicode-aware slug rule.
+ *
+ * The old rule was /^[a-z0-9]+(?:-[a-z0-9]+)*$/, which rejects every
+ * non-Latin script. Combined with a front-end slugifier that stripped the
+ * same characters, a Kurdish/Arabic page title produced an empty slug and the
+ * resulting page was unreachable at the address the author expected - the
+ * "new pages 404" bug. Letters and digits from ANY script are now accepted;
+ * separators are still single hyphens and there is still no uppercase,
+ * whitespace or punctuation, so slugs stay canonical and collision-safe.
+ */
 const slugField = z
   .string()
   .min(1)
   .max(120)
   .regex(
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-    'Slug may contain lowercase letters, numbers and single hyphens only'
-  );
+    /^[\p{L}\p{N}\p{M}]+(?:-[\p{L}\p{N}\p{M}]+)*$/u,
+    'Slug may contain letters, numbers and single hyphens only'
+  )
+  .refine((s) => s === s.toLowerCase(), 'Slug must be lowercase');
 
 const baseSchema = {
   title: z.string().min(1, 'Title is required').max(200),

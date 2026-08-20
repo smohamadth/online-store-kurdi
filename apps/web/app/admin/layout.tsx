@@ -332,8 +332,15 @@ export default function AdminLayout({
           of dead navy between "My Profile" and the card. Letting the panel take
           the slack removes the empty region entirely rather than moving it. */}
       <div style={{
-        flex: '1 1 auto',
-        minHeight: 0,
+        // `flex: 1 1 auto` made this panel STRETCH: on a 1300px-tall screen it
+        // ran from y=790 to y=1300, i.e. ~510px of lighter navy (#232342)
+        // hanging below the Logout button. It reads as a large empty block,
+        // which is the gap users report. The panel must be content-height.
+        flex: '0 0 auto',
+        // Pinned to the bottom of the rail. The slack sits ABOVE the card and
+        // is the rail's own #1a1a2e, so it is invisible - unlike the stretched
+        // #232342 panel, which read as a large empty block.
+        marginTop: 'auto',
         padding: '14px 16px',
         backgroundColor: '#232342',
         borderTop: '1px solid #33335c',

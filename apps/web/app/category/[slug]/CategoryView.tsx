@@ -9,6 +9,7 @@ import { useIsMobile } from '@/lib/hooks';
 import ProductCard from '@/components/ProductCard';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import { API_BASE } from '@/lib/http';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 // These values must match the API's sort enum exactly
 // (price_asc | price_desc | name_asc | name_desc | newest | popular),
@@ -64,7 +65,7 @@ export default function CategoryView({ slug }: { slug: string }) {
         // Existence is verified by the server component in page.tsx, which
         // returns a real HTTP 404 for unknown slugs. This fetch only needs the
         // display data.
-        const catRes = await fetch(`${API_BASE}/categories/${encodeURIComponent(slug)}`);
+        const catRes = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`);
         const catJson = await catRes.json();
         if (!cancelled) setCategory(catJson.data);
 

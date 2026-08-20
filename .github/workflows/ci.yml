@@ -198,6 +198,19 @@ jobs:
       - name: Blog (API, SEO, storefront, admin)
         run: python3 scripts/verify-blog.py
 
+      # Sidebar rail geometry across seven viewport heights. Two separate
+      # regressions have shipped as "a gap in the sidebar"; both were only
+      # visible at particular heights, which is why single-height checks
+      # missed them.
+      - name: Admin sidebar rail geometry
+        run: python3 scripts/verify-admin-rail.py
+
+      # Kurdish/Arabic titles must produce reachable URLs. A Latin-only
+      # slugifier turned them into an empty slug, and double-encoded route
+      # params made the page render "not found" behind an HTTP 200.
+      - name: Unicode slugs for pages and blog posts
+        run: python3 scripts/verify-page-slugs.py
+
       - name: Server logs
         if: always()
         run: |

@@ -15,7 +15,7 @@ import { useIsMobile } from '@/lib/hooks';
 import { ButtonSpinner, LoadingState } from '@/components/Spinner';
 import RichTextEditor from '@/components/RichTextEditor';
 import ImageUpload from '@/components/ImageUpload';
-import { slugify } from '@/lib/slug';
+import { slugify, slugifyWithFallback } from '@/lib/slug';
 
 interface Post {
   id: string;
@@ -179,8 +179,12 @@ export default function AdminBlogPage() {
     setSaving(true);
     setFormError('');
 
+    // See admin/pages: a non-Latin title used to slugify to '' and the post
+    // became unreachable. Guarantee a usable address.
+    const finalSlug = form.slug.trim() || slugifyWithFallback(form.title, 'post');
+
     const body = {
-      slug: form.slug,
+      slug: finalSlug,
       title: form.title,
       content: form.content,
       excerpt: form.excerpt || null,

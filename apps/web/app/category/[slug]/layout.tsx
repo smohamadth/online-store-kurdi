@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { API_BASE } from '@/lib/apiBase';
+import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
  * Server-side wrapper for category pages.
@@ -17,7 +18,7 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 async function getCategory(slug: string) {
   try {
-    const res = await fetch(`${API_BASE}/categories/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;

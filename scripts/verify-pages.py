@@ -318,12 +318,20 @@ try:
                                     - last.getBoundingClientRect().bottom),
                   below: Math.round(rail.getBoundingClientRect().bottom
                                     - card.getBoundingClientRect().bottom),
+                  cardHeight: Math.round(card.getBoundingClientRect().height),
                   reachable,
                 };
             }""")
-            # <= 24px is padding, not a gap. The bug measured 77px.
-            check(f"@{vh}px no dead space between the last item and the user card",
-                  m["above"] <= 24, f"above={m['above']}px")
+            # The user card is pinned to the BOTTOM of the rail, so on a tall
+            # screen there is legitimately space between the last nav item and
+            # the card. That is fine while it paints in the rail's own navy -
+            # an unbroken column. What must never happen is the card itself
+            # stretching, because its lighter #232342 turns that space into a
+            # visible empty block. scripts/verify-admin-rail.py measures the
+            # painted colour across seven viewport heights; here we only assert
+            # the card keeps its content height.
+            check(f"@{vh}px user card is not stretched",
+                  m["cardHeight"] <= 140, f"cardH={m['cardHeight']}px")
             check(f"@{vh}px user panel reaches the bottom of the rail",
                   m["below"] <= 1, f"below={m['below']}px")
             check(f"@{vh}px the last nav item is still reachable", m["reachable"])
