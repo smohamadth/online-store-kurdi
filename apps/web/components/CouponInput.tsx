@@ -58,8 +58,8 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <span style={{ fontWeight: 600, color: '#22c55e' }}>✓ Coupon Applied</span>
-            <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+            <span style={{ fontWeight: 600, color: 'var(--success, #16a34a)' }}>✓ Coupon Applied</span>
+            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '4px' }}>
               <strong>{appliedCoupon.code}</strong> - {formatDiscount(appliedCoupon)}
             </p>
           </div>
@@ -68,7 +68,7 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
             style={{
               padding: '6px 12px',
               backgroundColor: 'transparent',
-              color: '#ef4444',
+              color: 'var(--danger, #dc2626)',
               border: '1px solid #ef4444',
               borderRadius: '4px',
               fontSize: '12px',
@@ -112,8 +112,8 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
           disabled={loading}
           style={{
             padding: '10px 20px',
-            backgroundColor: loading ? '#ccc' : '#000',
-            color: '#fff',
+            backgroundColor: loading ? 'var(--border, #ccc)' : 'var(--brand, #111)',
+            color: loading ? '#fff' : 'var(--brand-text, #fff)',
             border: 'none',
             borderRadius: '6px',
             fontSize: '14px',
@@ -126,9 +126,9 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
         </button>
       </div>
       {error && (
-        <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '6px' }}>{error}</p>
+        <p style={{ fontSize: '12px', color: 'var(--danger, #dc2626)', marginTop: '6px' }}>{error}</p>
       )}
-      <p style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
+      <p style={{ fontSize: '12px', color: 'var(--muted, #6b7280)', marginTop: '6px' }}>
         Try: WELCOME10, SAVE20, FREESHIP
       </p>
     </div>

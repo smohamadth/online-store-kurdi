@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next';
+import { serverFetch } from '@/lib/serverFetch';
 
 /**
  * Regenerate on request rather than freezing at build time.
@@ -80,7 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let productPages: MetadataRoute.Sitemap = [];
   
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products?limit=1000`);
+    const response = await serverFetch('/products?limit=1000');
     if (response.ok) {
       const data = await response.json();
       const products = data.data || [];
@@ -100,7 +101,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // categories the admin adds are included automatically.
   let categoryPages: MetadataRoute.Sitemap = [];
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/categories`);
+    const res = await serverFetch('/categories');
     if (res.ok) {
       const data = await res.json();
       categoryPages = (data.data || []).map((c: any) => ({
@@ -115,13 +116,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // rather than failing the whole build.
   }
 
-  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-
-  // Blog index + every published post. A blog exists to be found, so leaving
+    // Blog index + every published post. A blog exists to be found, so leaving
   // it out of the sitemap would defeat the point.
   let blogPages: MetadataRoute.Sitemap = [];
   try {
-    const res = await fetch(`${API}/blog?limit=1000`);
+    const res = await serverFetch('/blog?limit=1000');
     if (res.ok) {
       const posts = (await res.json()).data || [];
       blogPages = [
@@ -147,7 +146,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // the sitemap, so nothing was discovering them.
   let customPages: MetadataRoute.Sitemap = [];
   try {
-    const res = await fetch(`${API}/pages`);
+    const res = await serverFetch('/pages');
     if (res.ok) {
       customPages = ((await res.json()).data || []).map((p: any) => ({
         url: `${baseUrl}/p/${p.slug}`,

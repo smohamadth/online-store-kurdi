@@ -188,6 +188,12 @@ Two things had to be fixed before this was worth anything:
 Verified by deliberately reintroducing a fixed bug (disabling the `customCss`
 XSS guard): the suite went red with `exit=1` and named the failing assertion.
 
+Theming has its own suites since the THEME_PLAN.md round:
+`verify-theme.py` (browser: every preset reaches computed styles, dark-theme
+contrast guards, admin isolation) and `verify-theme-tokens.js` (no browser:
+token completeness + a hardcoded-colour ratchet on the swept storefront
+files). The browser suite needs the CI runner; the token suite runs anywhere.
+
 Still missing: unit tests (Vitest is configured but there are no test files),
 Sentry or any error tracking, and CD - nothing deploys automatically because
 there is no server yet.
@@ -207,6 +213,19 @@ against the real stack (Express API + Next storefront running together):
    publishes status-less creates; a draft is an explicit opt-in
    (`status: "draft"`), matching the checkbox in the admin UI. Covered by
    `verify-pages.py` § 3b.
+
+3. **The loopback split (the third report).** With the honest error view in
+   place, the report came back as the ⚠ view - proving the Next server
+   process could not reach `localhost:3001` even though the browser could.
+   Browsers try every address `localhost` resolves to; Node's fetch uses
+   the first (`::1` on most machines). If the API's IPv6 listener is absent
+   (explicit HOST, refused twin bind, old process), server-side fetches
+   die while the storefront looks healthy from the browser. All server-side
+   API calls now go through `lib/serverFetch.ts`, which retries across
+   loopback spellings (localhost / 127.0.0.1 / [::1]) on network-level
+   failures only, and logs which spelling worked. Reproduced and verified
+   end to end (IPv6-only hosts file + IPv4-only API: page renders via
+   fallback, with the warning naming the working address).
 
 2. **Any backend hiccup rendered "Page not found".** `/p/<slug>` and
    `/blog/<slug>` collapsed EVERY failed API lookup (connection refused, 500,

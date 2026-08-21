@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/apiBase';
+import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
 import BlogSearch from '@/components/BlogSearch';
@@ -14,7 +14,7 @@ import PostCard from '@/components/PostCard';
  * Filtering is driven by the query string (?page=&tag=&search=) so every view
  * is a real, shareable, crawlable URL.
  *
- * API_BASE comes from lib/apiBase, NOT lib/http — the latter is 'use client'.
+ * API calls go through lib/serverFetch (loopback-spelling fallbacks).
  */
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +34,7 @@ async function getPosts(sp: Search): Promise<{ posts: BlogPost[]; pagination: Bl
 
   const empty = { posts: [], pagination: { page: 1, limit: 9, total: 0, totalPages: 1 } };
   try {
-    const res = await fetch(`${API_BASE}/blog?${qs}`, { cache: 'no-store' });
+    const res = await serverFetch(`/blog?${qs}`, { cache: 'no-store' });
     if (!res.ok) return empty;
     const json = await res.json();
     return { posts: json.data || [], pagination: json.pagination || empty.pagination };
@@ -46,7 +46,7 @@ async function getPosts(sp: Search): Promise<{ posts: BlogPost[]; pagination: Bl
 
 async function getTags(): Promise<{ tag: string; count: number }[]> {
   try {
-    const res = await fetch(`${API_BASE}/blog/tags`, { cache: 'no-store' });
+    const res = await serverFetch(`/blog/tags`, { cache: 'no-store' });
     if (!res.ok) return [];
     return (await res.json()).data || [];
   } catch {

@@ -129,11 +129,11 @@ export default function SearchBar() {
           style={{
             width: '100%',
             padding: '10px 16px 10px 40px',
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--border, #e5e7eb)',
             borderRadius: '8px',
             fontSize: '14px',
             outline: 'none',
-            backgroundColor: '#f9f9f9',
+            backgroundColor: 'var(--surface-2, #f5f5f5)',
           }}
         />
         <button
@@ -147,7 +147,7 @@ export default function SearchBar() {
             border: 'none',
             cursor: 'pointer',
             fontSize: '18px',
-            color: '#666',
+            color: 'var(--muted, #6b7280)',
             padding: 0,
           }}
         >
@@ -163,7 +163,7 @@ export default function SearchBar() {
           left: 0,
           right: 0,
           backgroundColor: 'var(--card-bg, white)',
-          border: '1px solid #e5e5e5',
+          border: '1px solid var(--border, #e5e7eb)',
           borderRadius: '8px',
           marginTop: '4px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -173,7 +173,7 @@ export default function SearchBar() {
         }}>
           {/* Loading */}
           {loading && (
-            <div style={{ padding: '16px', textAlign: 'center', color: '#666' }}>
+            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>
               Searching...
             </div>
           )}
@@ -181,8 +181,8 @@ export default function SearchBar() {
           {/* Search Results */}
           {!loading && query.length >= 2 && results.length > 0 && (
             <div>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e5e5' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase' }}>
                   Products
                 </span>
               </div>
@@ -204,7 +204,7 @@ export default function SearchBar() {
                   <div style={{
                     width: '40px',
                     height: '40px',
-                    backgroundColor: '#f5f5f5',
+                    backgroundColor: 'var(--surface-2, #f5f5f5)',
                     borderRadius: '6px',
                     display: 'flex',
                     alignItems: 'center',
@@ -218,7 +218,7 @@ export default function SearchBar() {
                     <p style={{ fontWeight: 500, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {product.name}
                     </p>
-                    <p style={{ fontSize: '12px', color: '#666' }}>{product.category?.name}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--muted, #6b7280)' }}>{product.category?.name}</p>
                   </div>
                   <span style={{ fontWeight: 600, fontSize: '14px', flexShrink: 0 }}>
                     ${product.price}
@@ -234,11 +234,11 @@ export default function SearchBar() {
                   style={{
                     padding: '12px 16px',
                     textAlign: 'center',
-                    color: '#000',
+                    color: 'var(--body-text, #111)',
                     fontWeight: 500,
                     fontSize: '14px',
                     cursor: 'pointer',
-                    borderTop: '1px solid #e5e5e5',
+                    borderTop: '1px solid var(--border, #e5e7eb)',
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
@@ -251,7 +251,7 @@ export default function SearchBar() {
 
           {/* No Results */}
           {!loading && query.length >= 2 && results.length === 0 && (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: '#666' }}>
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>
               <p style={{ marginBottom: '8px' }}>No products found for "{query}"</p>
               <p style={{ fontSize: '14px' }}>Try a different search term</p>
             </div>
@@ -260,8 +260,8 @@ export default function SearchBar() {
           {/* Recent Searches */}
           {!loading && query.length < 2 && recentSearches.length > 0 && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e5e5' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase' }}>
                   Recent Searches
                 </span>
                 <button
@@ -269,7 +269,7 @@ export default function SearchBar() {
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#666',
+                    color: 'var(--muted, #6b7280)',
                     fontSize: '12px',
                     cursor: 'pointer',
                   }}
@@ -296,7 +296,7 @@ export default function SearchBar() {
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                 >
-                  <span style={{ color: '#666' }}>🕐</span>
+                  <span style={{ color: 'var(--muted, #6b7280)' }}>🕐</span>
                   {search}
                 </div>
               ))}
@@ -306,7 +306,7 @@ export default function SearchBar() {
           {/* Popular Searches (when no input) */}
           {!loading && query.length < 2 && recentSearches.length === 0 && (
             <div style={{ padding: '16px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
                 Popular Searches
               </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -320,7 +320,7 @@ export default function SearchBar() {
                     }}
                     style={{
                       padding: '6px 12px',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: 'var(--surface-2, #f5f5f5)',
                       border: 'none',
                       borderRadius: '50px',
                       fontSize: '13px',

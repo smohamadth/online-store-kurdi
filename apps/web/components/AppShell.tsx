@@ -114,8 +114,8 @@ function CartIcon() {
           height: '20px',
           width: '20px',
           borderRadius: '50%',
-          backgroundColor: '#000',
-          color: '#fff',
+          backgroundColor: 'var(--brand, #111)',
+          color: 'var(--brand-text, #fff)',
           fontSize: '11px',
           fontWeight: 'bold',
           display: 'flex',
@@ -204,13 +204,13 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
           <div style={{ 
             marginBottom: '24px', 
             paddingBottom: '24px', 
-            borderBottom: '1px solid #e5e5e5',
+            borderBottom: '1px solid var(--border, #e5e7eb)',
             marginTop: '32px'
           }}>
             <p style={{ fontWeight: 600, fontSize: '18px' }}>
               {user.firstName} {user.lastName}
             </p>
-            <p style={{ color: '#666', fontSize: '14px' }}>{user.email}</p>
+            <p style={{ color: 'var(--muted, #6b7280)', fontSize: '14px' }}>{user.email}</p>
           </div>
         )}
 
@@ -233,7 +233,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
               >
                 <span>{item.icon ? `${item.icon} ` : ''}{item.label}</span>
                 {item.children && item.children.length > 0 && (
-                  <span style={{ fontSize: '12px', color: '#999' }}>›</span>
+                  <span style={{ fontSize: '12px', color: 'var(--muted, #6b7280)' }}>›</span>
                 )}
               </Link>
               {/* Children */}
@@ -250,7 +250,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                         borderRadius: '6px',
                         fontSize: '14px',
                         display: 'block',
-                        color: '#666',
+                        color: 'var(--muted, #6b7280)',
                       }}
                     >
                       {child.icon ? `${child.icon} ` : ''}{child.label}
@@ -266,7 +266,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
         <div style={{ 
           marginTop: '24px', 
           paddingTop: '24px', 
-          borderTop: '1px solid #e5e5e5' 
+          borderTop: '1px solid var(--border, #e5e7eb)' 
         }}>
           {user ? (
             <>
@@ -279,8 +279,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                     style={{ 
                       display: 'block',
                       padding: '12px 16px', 
-                      backgroundColor: '#f59e0b',
-                      color: 'white',
+                      backgroundColor: 'var(--warning, #d97706)',
+                      color: '#fff',
                       borderRadius: '6px',
                       fontSize: '16px',
                       fontWeight: 600,
@@ -295,8 +295,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                     style={{
                       width: '100%',
                       padding: '12px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
+                      backgroundColor: 'var(--danger, #dc2626)',
+                      color: '#fff',
                       border: 'none',
                       borderRadius: '6px',
                       fontSize: '16px',
@@ -353,8 +353,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                     style={{
                       width: '100%',
                       padding: '12px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
+                      backgroundColor: 'var(--danger, #dc2626)',
+                      color: '#fff',
                       border: 'none',
                       borderRadius: '6px',
                       fontSize: '16px',
@@ -374,8 +374,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                 style={{ 
                   display: 'block',
                   padding: '12px 16px', 
-                  backgroundColor: '#000',
-                  color: 'white',
+                  backgroundColor: 'var(--brand, #111)',
+                  color: 'var(--brand-text, #fff)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   fontWeight: 600,
@@ -391,7 +391,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                 style={{ 
                   display: 'block',
                   padding: '12px 16px', 
-                  border: '2px solid #000',
+                  border: '2px solid var(--brand, #111)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   fontWeight: 600,
@@ -563,7 +563,7 @@ function Header() {
                       top: '100%',
                       left: '0',
                       backgroundColor: 'var(--card-bg, white)',
-                      border: '1px solid #e5e5e5',
+                      border: '1px solid var(--border, #e5e7eb)',
                       borderRadius: '8px',
                       boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                       minWidth: '180px',
@@ -621,7 +621,7 @@ function Header() {
                         color: '#fff', 
                         fontSize: '14px', 
                         fontWeight: 600,
-                        backgroundColor: '#f59e0b',
+                        backgroundColor: 'var(--warning, #d97706)',
                         padding: '6px 12px',
                         borderRadius: '4px',
                       }}>
@@ -632,7 +632,7 @@ function Header() {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#ef4444',
+                          color: 'var(--danger, #dc2626)',
                           cursor: 'pointer',
                           fontSize: '14px',
                         }}
@@ -653,7 +653,7 @@ function Header() {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#ef4444',
+                          color: 'var(--danger, #dc2626)',
                           cursor: 'pointer',
                           fontSize: '14px',
                         }}
@@ -670,8 +670,8 @@ function Header() {
                   </Link>
                   <Link href="/register" style={{
                     textDecoration: 'none',
-                    backgroundColor: '#000',
-                    color: '#fff',
+                    backgroundColor: 'var(--brand, #111)',
+                    color: 'var(--brand-text, #fff)',
                     padding: '8px 16px',
                     borderRadius: '6px',
                     fontSize: '14px',
@@ -761,16 +761,16 @@ function DynamicFooter() {
       }}>
         <div>
           <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>{settings.storeName}</h3>
-          <p style={{ fontSize: '14px', color: '#666' }}>
+          <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
             {settings.storeDescription}
           </p>
           {settings.storeEmail && (
-            <p style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '8px' }}>
               📧 {settings.storeEmail}
             </p>
           )}
           {settings.storePhone && (
-            <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '4px' }}>
               📞 {settings.storePhone}
             </p>
           )}
@@ -780,11 +780,11 @@ function DynamicFooter() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {footerItems.map((item) => (
               <div key={item.id}>
-                <Link href={item.url} style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+                <Link href={item.url} style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
                   {item.icon ? `${item.icon} ` : ''}{item.label}
                 </Link>
                 {item.children?.map((child) => (
-                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: '#888', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
+                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: 'var(--muted, #6b7280)', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
                     {child.icon ? `${child.icon} ` : ''}{child.label}
                   </Link>
                 ))}
@@ -795,32 +795,32 @@ function DynamicFooter() {
         <div>
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</Link>
-            <Link href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</Link>
-            <Link href="/account/addresses" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Addresses</Link>
-            <Link href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</Link>
+            <Link href="/account" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>My Account</Link>
+            <Link href="/account/orders" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Order History</Link>
+            <Link href="/account/addresses" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Addresses</Link>
+            <Link href="/cart" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Cart</Link>
           </div>
         </div>
         <div>
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
-            <Link href="/track-order" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Track Order</Link>
-            <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
-            <Link href="/returns" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Returns</Link>
+            <Link href="/contact" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Contact Us</Link>
+            <Link href="/track-order" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Track Order</Link>
+            <Link href="/faq" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>FAQ</Link>
+            <Link href="/returns" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Returns</Link>
           </div>
         </div>
         <div>
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Legal</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/privacy" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Privacy Policy</Link>
-            <Link href="/terms" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Terms of Service</Link>
+            <Link href="/privacy" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Privacy Policy</Link>
+            <Link href="/terms" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Terms of Service</Link>
             {/* Custom pages the admin flagged for the footer. */}
             {footerPages.map((p) => (
               <Link
                 key={p.slug}
                 href={`/p/${p.slug}`}
-                style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}
+                style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}
               >
                 {p.title}
               </Link>
@@ -831,37 +831,37 @@ function DynamicFooter() {
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Connect</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {settings.facebookUrl && (
-              <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+              <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
                 Facebook
               </a>
             )}
             {settings.instagramUrl && (
-              <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+              <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
                 Instagram
               </a>
             )}
             {settings.twitterUrl && (
-              <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+              <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
                 Twitter
               </a>
             )}
             {settings.youtubeUrl && (
-              <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
+              <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
                 YouTube
               </a>
             )}
             {!settings.facebookUrl && !settings.instagramUrl && !settings.twitterUrl && !settings.youtubeUrl && (
-              <p style={{ fontSize: '14px', color: '#666' }}>Coming soon</p>
+              <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>Coming soon</p>
             )}
           </div>
         </div>
       </div>
       <div style={{
-        borderTop: '1px solid #e5e5e5',
+        borderTop: '1px solid var(--border, #e5e7eb)',
         padding: '20px',
         textAlign: 'center',
       }}>
-        <p style={{ fontSize: '14px', color: '#666' }}>
+        <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
           © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
         </p>
       </div>

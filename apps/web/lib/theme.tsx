@@ -53,11 +53,13 @@ export const DEFAULT_THEME: Theme = {
   bodyBg: '#ffffff',
   cardBg: '#ffffff',
   bodyText: '#111111',
-  mutedText: '#666666',
-  borderColor: '#e5e5e5',
+  // Neutrals are the Tailwind gray ramp (one step bluer/cooler than the old
+  // pure greys) - see THEME_PLAN.md §4.
+  mutedText: '#6b7280',
+  borderColor: '#e5e7eb',
   headerBg: '#ffffff',
   headerText: '#111111',
-  footerBg: '#fafafa',
+  footerBg: '#f9fafb',
   footerText: '#111111',
   priceColor: '#111111',
   saleColor: '#dc2626',
@@ -132,6 +134,27 @@ export function themeToCssVars(t: Theme): string {
     --container: ${t.containerWidth}px;
     --shadow: ${SHADOWS[t.cardShadow] || SHADOWS.soft};
     --shadow-hover: ${SHADOW_HOVER[t.cardShadow] || SHADOW_HOVER.soft};
+
+    /* ------------------------------------------------------------------
+       Derived + status tokens (THEME_PLAN.md §4).
+
+       Derived tokens use color-mix() so they adapt to ANY preset at
+       runtime - including light brands on dark themes - without the admin
+       picking them by hand. Browsers without color-mix support (pre-2023)
+       fall back to the literals at each var() call site.
+
+       Status colours are deliberately NOT themeable: green/red/amber carry
+       meaning and must not drift with the brand palette.
+       ------------------------------------------------------------------ */
+    --brand-hover: color-mix(in srgb, ${t.primaryColor}, #000 12%);
+    --brand-active: color-mix(in srgb, ${t.primaryColor}, #000 20%);
+    --surface-2: color-mix(in srgb, ${t.bodyText} 4%, ${t.cardBg || t.bodyBg});
+    --success: #16a34a;
+    --danger: ${t.saleColor || '#dc2626'};
+    --warning: #d97706;
+    --link: ${t.accentColor};
+    --focus-ring: color-mix(in srgb, ${t.accentColor} 70%, transparent);
+    --transition: 0.18s ease;
   `;
 }
 

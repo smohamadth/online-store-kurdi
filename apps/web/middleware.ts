@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { API_BASE } from '@/lib/apiBase';
+import { serverFetch } from '@/lib/serverFetch';
 import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
@@ -35,23 +35,23 @@ import { encodeRouteParam } from '@/lib/routeParam';
 const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
   {
     pattern: /^\/category\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/categories/${encodeRouteParam(slug)}`,
+    endpoint: (slug) => `/categories/${encodeRouteParam(slug)}`,
   },
   {
     pattern: /^\/products\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/products/slug/${encodeRouteParam(slug)}`,
+    endpoint: (slug) => `/products/slug/${encodeRouteParam(slug)}`,
   },
   {
     // Admin-authored pages. The API 404s for unknown slugs AND for drafts, so
     // an unpublished page is indistinguishable from a missing one - which is
     // what we want publicly.
     pattern: /^\/p\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/pages/slug/${encodeRouteParam(slug)}`,
+    endpoint: (slug) => `/pages/slug/${encodeRouteParam(slug)}`,
   },
   {
     // Blog posts. Same rule: drafts and unknown slugs both 404.
     pattern: /^\/blog\/([^/]+)\/?$/,
-    endpoint: (slug) => `${API_BASE}/blog/slug/${encodeRouteParam(slug)}`,
+    endpoint: (slug) => `/blog/slug/${encodeRouteParam(slug)}`,
   },
 ];
 
@@ -82,7 +82,10 @@ export async function middleware(req: NextRequest) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 3000);
 
-      const res = await fetch(endpoint(slug), {
+      // serverFetch: falls back across loopback spellings (localhost /
+      // 127.0.0.1 / [::1]) when one family is dead - the split that made
+      // published pages render as not-found while the admin list loaded.
+      const res = await serverFetch(endpoint(slug), {
         cache: 'no-store',
         signal: controller.signal,
       });

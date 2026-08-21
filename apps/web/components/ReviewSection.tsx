@@ -218,7 +218,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
   }));
 
   if (loading) {
-    return <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>Loading reviews...</div>;
+    return <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>Loading reviews...</div>;
   }
 
   return (
@@ -232,7 +232,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
         gap: '32px',
         marginBottom: '32px',
         padding: '24px',
-        backgroundColor: '#f9f9f9',
+        backgroundColor: 'var(--surface-2, #f5f5f5)',
         borderRadius: '8px',
       }}>
         {/* Overall Rating */}
@@ -247,7 +247,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
               </span>
             ))}
           </div>
-          <p style={{ color: '#666', fontSize: '14px' }}>{reviews.length} reviews</p>
+          <p style={{ color: 'var(--muted, #6b7280)', fontSize: '14px' }}>{reviews.length} reviews</p>
         </div>
 
         {/* Rating Distribution */}
@@ -256,9 +256,9 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
             <div key={rating} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
               <span style={{ width: '20px', textAlign: 'right', fontSize: '14px' }}>{rating}★</span>
               <div style={{ flex: 1, height: '8px', backgroundColor: '#e5e5e5', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#f59e0b', borderRadius: '4px' }} />
+                <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: 'var(--warning, #d97706)', borderRadius: '4px' }} />
               </div>
-              <span style={{ width: '30px', fontSize: '14px', color: '#666' }}>{count}</span>
+              <span style={{ width: '30px', fontSize: '14px', color: 'var(--muted, #6b7280)' }}>{count}</span>
             </div>
           ))}
         </div>
@@ -270,8 +270,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
           onClick={() => setShowForm(true)}
           style={{
             padding: '12px 24px',
-            backgroundColor: '#000',
-            color: '#fff',
+            backgroundColor: 'var(--brand, #111)',
+            color: 'var(--brand-text, #fff)',
             border: 'none',
             borderRadius: '6px',
             fontSize: '14px',
@@ -285,8 +285,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
       )}
 
       {!user && (
-        <p style={{ color: '#666', marginBottom: '24px' }}>
-          <a href="/login" style={{ color: '#000', textDecoration: 'underline' }}>Login</a> to write a review
+        <p style={{ color: 'var(--muted, #6b7280)', marginBottom: '24px' }}>
+          <a href="/login" style={{ color: 'var(--body-text, #111)', textDecoration: 'underline' }}>Login</a> to write a review
         </p>
       )}
 
@@ -294,7 +294,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
       {showForm && (
         <div style={{
           padding: '24px',
-          border: '1px solid #e5e5e5',
+          border: '1px solid var(--border, #e5e7eb)',
           borderRadius: '8px',
           marginBottom: '32px',
           backgroundColor: 'var(--card-bg, white)',
@@ -355,7 +355,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e7eb)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -377,7 +377,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e5e5',
+                  border: '1px solid var(--border, #e5e7eb)',
                   borderRadius: '6px',
                   fontSize: '16px',
                   outline: 'none',
@@ -393,8 +393,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                 disabled={submitting}
                 style={{
                   padding: '12px 24px',
-                  backgroundColor: submitting ? '#ccc' : '#000',
-                  color: '#fff',
+                  backgroundColor: submitting ? 'var(--border, #ccc)' : 'var(--brand, #111)',
+                  color: submitting ? '#fff' : 'var(--brand-text, #fff)',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '14px',
@@ -409,7 +409,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                 onClick={() => setShowForm(false)}
                 style={{
                   padding: '12px 24px',
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: 'var(--surface-2, #f5f5f5)',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '14px',
@@ -425,7 +425,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
 
       {/* Reviews List */}
       {reviews.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px', color: '#666' }}>
+        <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted, #6b7280)' }}>
           <p style={{ fontSize: '18px', marginBottom: '8px' }}>No reviews yet</p>
           <p>Be the first to review this product!</p>
         </div>
@@ -434,7 +434,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
           {reviews.map((review) => (
             <div key={review.id} style={{
               padding: '24px',
-              border: '1px solid #e5e5e5',
+              border: '1px solid var(--border, #e5e7eb)',
               borderRadius: '8px',
               backgroundColor: 'var(--card-bg, white)',
             }}>
@@ -445,7 +445,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                     width: '40px',
                     height: '40px',
                     borderRadius: '50%',
-                    backgroundColor: '#f5f5f5',
+                    backgroundColor: 'var(--surface-2, #f5f5f5)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -458,11 +458,11 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                       {review.user?.firstName || 'Anonymous'} {review.user?.lastName?.charAt(0) || ''}.
                     </p>
                     {review.isVerified && (
-                      <span style={{ fontSize: '12px', color: '#22c55e' }}>✓ Verified Purchase</span>
+                      <span style={{ fontSize: '12px', color: 'var(--success, #16a34a)' }}>✓ Verified Purchase</span>
                     )}
                   </div>
                 </div>
-                <span style={{ fontSize: '14px', color: '#666' }}>
+                <span style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
                   {new Date(review.createdAt).toLocaleDateString()}
                 </span>
               </div>
@@ -479,7 +479,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
 
               {/* Comment */}
               {review.comment && (
-                <p style={{ color: '#333', lineHeight: 1.6 }}>{review.comment}</p>
+                <p style={{ color: 'var(--body-text, #111)', lineHeight: 1.6 }}>{review.comment}</p>
               )}
             </div>
           ))}
