@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import CategoryView from './CategoryView';
-import { API_BASE } from '@/lib/apiBase';
+import { serverFetch } from '@/lib/serverFetch';
 import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
@@ -20,14 +20,13 @@ async function categoryExists(slug: string): Promise<boolean | null> {
   try {
     // no-store: a cached 404 would keep a newly created category hidden, and
     // a cached hit would keep a deleted one reachable.
-    const res = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`, {
+    const res = await serverFetch(`/categories/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (res.status === 404) return false;
     if (!res.ok) return null; // API error — don't 404 a possibly valid page
     return true;
-  } catch (e) {
-    console.log('[probe] threw:', (e as Error)?.message);
+  } catch {
     // API unreachable: fall through and let the client view retry rather than
     // showing a 404 for a category that probably exists.
     return null;
@@ -36,7 +35,6 @@ async function categoryExists(slug: string): Promise<boolean | null> {
 
 export default async function CategoryPage({ params }: { params: { slug: string } }) {
   const exists = await categoryExists(params.slug);
-  console.log('[probe] cat', params.slug, 'base=', API_BASE, 'exists=', exists);
 
   if (exists === false) notFound();
 

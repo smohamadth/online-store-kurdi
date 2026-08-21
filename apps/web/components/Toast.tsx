@@ -100,7 +100,7 @@ export function ToastContainer() {
             height: '24px',
             borderRadius: '50%',
             backgroundColor: getBackgroundColor(toast.type),
-            color: 'white',
+            color: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -110,7 +110,7 @@ export function ToastContainer() {
           }}>
             {getIcon(toast.type)}
           </span>
-          <span style={{ fontSize: '14px', color: '#333', flex: 1 }}>
+          <span style={{ fontSize: '14px', color: 'var(--body-text, #111)', flex: 1 }}>
             {toast.message}
           </span>
           <button
@@ -118,7 +118,7 @@ export function ToastContainer() {
             style={{
               background: 'none',
               border: 'none',
-              color: '#999',
+              color: 'var(--muted, #6b7280)',
               cursor: 'pointer',
               fontSize: '16px',
               padding: '0 4px',

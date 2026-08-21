@@ -146,7 +146,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
             <span style={badge('var(--sale, #dc2626)')}>-{discountPct}%</span>
           )}
           {outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
-          {lowStock && <span style={badge('#f59e0b')}>Only {product.quantity} left</span>}
+          {lowStock && <span style={badge('var(--warning, #d97706)')}>Only {product.quantity} left</span>}
         </div>
 
         {/* Quick add */}
@@ -173,8 +173,14 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
               cursor: outOfStock ? 'not-allowed' : 'pointer',
               fontWeight: 700,
               fontSize: '14px',
-              backgroundColor: outOfStock ? '#d4d4d4' : added ? '#16a34a' : 'var(--brand, #111)',
-              color: 'var(--brand-text, #fff)',
+              backgroundColor: outOfStock
+                ? 'var(--border, #d4d4d4)'
+                : added
+                  ? 'var(--success, #16a34a)'
+                  : 'var(--brand, #111)',
+              // White on the status branches (brand-text can be dark on a
+              // light-brand theme); brand-text on the brand branch.
+              color: outOfStock || added ? '#fff' : 'var(--brand-text, #fff)',
               transition: 'background-color 200ms ease',
             }}
           >
@@ -204,7 +210,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
 
         {/* Rating */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ color: '#f59e0b', fontSize: '13px', letterSpacing: '1px' }}>
+          <span style={{ color: 'var(--warning, #d97706)', fontSize: '13px', letterSpacing: '1px' }}>
             {'★'.repeat(Math.round(rating))}
             <span style={{ color: 'currentColor', opacity: 0.28 }}>{'★'.repeat(5 - Math.round(rating))}</span>
           </span>
@@ -232,7 +238,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
 function badge(bg: string): React.CSSProperties {
   return {
     backgroundColor: bg,
-    color: '#fff',
+    color: 'var(--brand-text, #fff)',
     fontSize: '11px',
     fontWeight: 800,
     padding: '4px 9px',

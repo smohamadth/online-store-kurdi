@@ -245,6 +245,8 @@ export function DealCountdown({
           borderRadius: 'var(--radius, 16px)',
           padding: isMobile ? '28px 22px' : '40px',
           background: `linear-gradient(120deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
+          // The gradient is admin-chosen (dark by default) - literal white is
+          // the only pairing that is safe for ANY gradient and ANY preset.
           color: '#fff',
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
@@ -389,7 +391,7 @@ export function Testimonials({
                 gap: '14px',
               }}
             >
-              <div style={{ color: '#f59e0b', letterSpacing: '2px', fontSize: '15px' }}>
+              <div style={{ color: 'var(--warning, #d97706)', letterSpacing: '2px', fontSize: '15px' }}>
                 {'★'.repeat(rating)}
                 <span style={{ color: 'currentColor', opacity: 0.28 }}>{'★'.repeat(5 - rating)}</span>
               </div>
@@ -429,7 +431,7 @@ export function Testimonials({
                   </span>
                   {r.role && (
                     <span
-                      style={{ display: 'block', fontSize: '12px', color: '#16a34a', fontWeight: 600 }}
+                      style={{ display: 'block', fontSize: '12px', color: 'var(--success, #16a34a)', fontWeight: 600 }}
                     >
                       ✓ {r.role}
                     </span>

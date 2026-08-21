@@ -34,29 +34,34 @@ button {
   cursor: pointer;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — themed rather than hardcoded greys, so dark presets
+   don't get a light grey track. */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--surface-2, #f5f5f5);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--muted, #888);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--body-text, #555);
 }
 
-/* Focus styles for accessibility */
+/* Focus styles for accessibility.
+   The old black outline vanished on dark themes and on dark buttons; the
+   ring now follows the accent colour with alpha, on an offset that works
+   over both light and dark surfaces. */
 *:focus-visible {
-  outline: 2px solid #000;
+  outline: 2px solid var(--focus-ring, #2563eb);
   outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* Smooth scrolling */
@@ -68,6 +73,20 @@ html {
 ::selection {
   background: var(--brand, #000);
   color: var(--brand-text, #fff);
+}
+
+/* Inline links: one knob (--link), one transition, inherited colour by
+   default so nav links keep their context colour. */
+a {
+  transition: color var(--transition, 0.18s ease);
+}
+
+a[data-link] {
+  color: var(--link, #2563eb);
+}
+
+a[data-link]:hover {
+  color: var(--brand-hover, #000);
 }
 
 /* Mobile responsive utilities */
@@ -206,12 +225,158 @@ html {
   --container: 100%;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.1);
+  /* The derived + status tokens from THEME_PLAN.md §4, pinned to the
+     dashboard's fixed neutral palette so the admin opt-out keeps holding. */
+  --brand-hover: #000000;
+  --brand-active: #000000;
+  --surface-2: #f5f5f7;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --link: #2563eb;
+  --focus-ring: rgba(37, 99, 235, 0.7);
+  --transition: 0.18s ease;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-size: 16px;
   --heading-weight: 700;
   color: var(--body-text);
   font-family: var(--font);
   font-size: var(--font-size);
+}
+
+/* ----------------------------------------------------------------------
+   Token-built component classes (THEME_PLAN.md §5).
+
+   The app styles inline by convention; these classes are the shared
+   vocabulary for the recurring primitives so hover/focus/radius behaviour
+   lives in ONE place instead of being re-derived (and drifting) per
+   component. Built exclusively from theme tokens.
+   ---------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: var(--btn-radius, 8px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--transition, 0.18s ease),
+    border-color var(--transition, 0.18s ease),
+    color var(--transition, 0.18s ease),
+    transform var(--transition, 0.18s ease);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--brand, #111);
+  color: var(--brand-text, #fff);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover, #000);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--brand-active, #000);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--body-text, #111);
+  border-color: var(--border, #e5e7eb);
+}
+
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--brand, #111);
+  background: var(--surface-2, #f5f5f5);
+}
+
+.btn-danger {
+  background: var(--danger, #dc2626);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger, #dc2626), #000 12%);
+}
+
+.card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius, 8px);
+  box-shadow: var(--shadow, 0 1px 3px rgba(0, 0, 0, 0.06));
+  transition: border-color var(--transition, 0.18s ease),
+    box-shadow var(--transition, 0.18s ease),
+    transform var(--transition, 0.18s ease);
+}
+
+.card-hover:hover {
+  border-color: var(--brand, #111);
+  box-shadow: var(--shadow-hover, 0 12px 28px rgba(0, 0, 0, 0.1));
+}
+
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--body-text, #111);
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--btn-radius, 8px);
+  transition: border-color var(--transition, 0.18s ease),
+    box-shadow var(--transition, 0.18s ease);
+}
+
+.input::placeholder {
+  color: var(--muted, #6b7280);
+}
+
+.input:hover {
+  border-color: var(--muted, #6b7280);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--focus-ring, rgba(37, 99, 235, 0.7));
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: var(--surface-2, #f5f5f5);
+  color: var(--body-text, #111);
+}
+
+.badge-sale {
+  background: var(--sale, #dc2626);
+  color: #fff;
+}
+
+.section-title {
+  font-size: 22px;
+  font-weight: var(--heading-weight, 800);
+  letter-spacing: -0.02em;
+  color: var(--body-text, #111);
 }
 
 

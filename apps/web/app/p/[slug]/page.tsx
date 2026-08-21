@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { API_BASE } from '@/lib/apiBase';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
+import { serverFetch } from '@/lib/serverFetch';
 import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
@@ -13,9 +13,8 @@ import { encodeRouteParam } from '@/lib/routeParam';
  * middleware handles the storefront's dynamic routes, and this route is listed
  * there too.
  *
- * API_BASE comes from lib/apiBase, NOT lib/http: the latter is 'use client',
- * and importing a value from it into a server component yields a
- * client-reference Symbol rather than a string.
+ * Server-side API calls go through lib/serverFetch, which retries across
+ * loopback spellings when one address family is dead (see KNOWN_GAPS.md §9).
  */
 
 interface Page {
@@ -45,8 +44,9 @@ async function getPage(slug: string): Promise<Page | null> {
   let res: Response;
   try {
     // no-store: an edit must be visible on the next load, and a page pulled
-    // back to draft must stop being served immediately.
-    res = await fetch(`${API_BASE}/pages/slug/${encodeRouteParam(slug)}`, {
+    // back to draft must stop being served immediately. serverFetch falls
+    // back across loopback spellings when one address family is dead.
+    res = await serverFetch(`/pages/slug/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
   } catch (err) {
@@ -117,7 +117,7 @@ export default async function CustomPage({ params }: { params: { slug: string } 
   let page: Page | null;
   try {
     page = await getPage(params.slug);
-  } catch {
+  } catch (err) {
     return (
       <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
         <div style={{ fontSize: '44px' }}>⚠️</div>
@@ -142,6 +142,11 @@ export default async function CustomPage({ params }: { params: { slug: string } 
           The store server failed to answer, so the page cannot be shown right now. It may well
           exist — this is a temporary error, not a missing page. Please try again in a moment.
         </p>
+        {process.env.NODE_ENV !== 'production' && (
+          <p style={{ marginTop: '14px', fontSize: '13px', color: '#999' }}>
+            Technical detail: {err instanceof Error ? err.message : String(err)}
+          </p>
+        )}
       </div>
     );
   }

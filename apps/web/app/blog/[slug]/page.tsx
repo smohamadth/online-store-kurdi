@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/apiBase';
+import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
@@ -31,7 +32,7 @@ async function getPost(slug: string): Promise<BlogPost | null> {
   try {
     // no-store: an edit must show on the next load, and a post pulled back to
     // draft must stop being served immediately.
-    res = await fetch(`${API_BASE}/blog/slug/${encodeRouteParam(slug)}`, {
+    res = await serverFetch(`/blog/slug/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
   } catch (err) {
@@ -124,7 +125,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   let post: BlogPost | null;
   try {
     post = await getPost(params.slug);
-  } catch {
+  } catch (err) {
     return (
       <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
         <div style={{ fontSize: '44px' }}>⚠️</div>
@@ -149,6 +150,11 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
           The store server failed to answer, so the article cannot be shown right now. It may well
           exist — this is a temporary error. Please try again in a moment.
         </p>
+        {process.env.NODE_ENV !== 'production' && (
+          <p style={{ marginTop: '14px', fontSize: '13px', color: '#999' }}>
+            Technical detail: {err instanceof Error ? err.message : String(err)}
+          </p>
+        )}
       </div>
     );
   }

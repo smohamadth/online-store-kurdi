@@ -311,8 +311,8 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
                       href={slide.linkUrl}
                       style={{
                         padding: '14px 28px',
-                        backgroundColor: '#ffffff',
-                        color: '#111',
+                        backgroundColor: 'var(--card-bg, #fff)',
+                        color: 'var(--body-text, #111)',
                         borderRadius: '8px',
                         fontSize: '15px',
                         fontWeight: 700,
@@ -423,7 +423,7 @@ function arrowStyle(side: 'left' | 'right'): React.CSSProperties {
     borderRadius: '50%',
     border: '1px solid rgba(255,255,255,0.35)',
     backgroundColor: 'rgba(0,0,0,0.35)',
-    color: '#fff',
+    color: 'var(--brand-text, #fff)',
     fontSize: '26px',
     lineHeight: '1',
     cursor: 'pointer',

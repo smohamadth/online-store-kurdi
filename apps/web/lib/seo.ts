@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { serverFetch } from './serverFetch';
 
 /**
  * Shared helpers for server-side metadata.
@@ -8,7 +9,7 @@ import type { Metadata } from 'next';
  * the HTML. These helpers run on the server via generateMetadata.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+// getStoreInfo fetches via serverFetch (loopback fallbacks) - see lib/serverFetch.ts.
 export const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export interface StoreInfo {
@@ -24,7 +25,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
     storeDescription: 'Shop the latest products at great prices.',
   };
   try {
-    const res = await fetch(`${API_URL}/settings`, { next: { revalidate: 300 } });
+    const res = await serverFetch('/settings', { next: { revalidate: 300 } } as RequestInit);
     if (!res.ok) return fallback;
     const d = (await res.json()).data || {};
     return {

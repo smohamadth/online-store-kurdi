@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { API_BASE } from '@/lib/apiBase';
+import { serverFetch } from '@/lib/serverFetch';
 import { encodeRouteParam } from '@/lib/routeParam';
 
 /**
@@ -18,7 +18,7 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 async function getCategory(slug: string) {
   try {
-    const res = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`, {
+    const res = await serverFetch(`/categories/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;
@@ -33,7 +33,7 @@ async function getCategory(slug: string) {
 
 async function getStoreName(): Promise<string> {
   try {
-    const res = await fetch(`${API_BASE}/settings`, { next: { revalidate: 300 } });
+    const res = await serverFetch('/settings', { next: { revalidate: 300 } } as RequestInit);
     if (!res.ok) return 'Online Store';
     return (await res.json()).data?.storeName || 'Online Store';
   } catch {
