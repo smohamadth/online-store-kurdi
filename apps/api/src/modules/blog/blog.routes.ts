@@ -288,10 +288,16 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
     }
 
     const data = buildData(parsed);
+
+    // See the matching comment in page.routes.ts: the column default "draft"
+    // silently produced posts that 404'd at /blog/<slug> when the caller did
+    // not send a status. Publish-by-default on create; drafts are an explicit
+    // opt-in.
+    if (data.status === undefined) data.status = 'published';
     if (data.status === 'published') data.publishedAt = new Date();
 
     const post = await prisma.blogPost.create({ data: data as any });
-    logger.info(`Blog post created: ${post.slug}`);
+    logger.info(`Blog post created: ${post.slug} (${post.status})`);
     res.status(201).json({ status: 'success', data: fromRow(post) });
   } catch (err) {
     next(err);

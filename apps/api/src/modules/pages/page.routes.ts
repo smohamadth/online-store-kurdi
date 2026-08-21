@@ -167,10 +167,20 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
     }
 
     const data = buildData(parsed);
+
+    // A create that does not say which status it wants is published, NOT a
+    // draft. The Prisma column defaults to "draft", so an omitted status used
+    // to save a page that 404'd the moment the author visited it - reported
+    // three separate times as "my new page is not found". Any client that
+    // leaves the field out (a stale admin bundle, a script, a future UI
+    // regression) must never be able to recreate that failure. An author who
+    // wants privacy passes status: 'draft' explicitly - the same deliberate
+    // opt-in the admin UI's checkbox already encodes.
+    if (data.status === undefined) data.status = 'published';
     if (data.status === 'published') data.publishedAt = new Date();
 
     const page = await prisma.page.create({ data: data as any });
-    logger.info(`Page created: ${page.slug}`);
+    logger.info(`Page created: ${page.slug} (${page.status})`);
     res.status(201).json({ status: 'success', data: page });
   } catch (err) {
     next(err);
