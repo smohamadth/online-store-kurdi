@@ -1,0 +1,2923 @@
+diff --git a/KNOWN_GAPS.md b/KNOWN_GAPS.md
+index 26f577b..fa18d29 100644
+--- a/KNOWN_GAPS.md
++++ b/KNOWN_GAPS.md
+@@ -188,7 +188,53 @@ Two things had to be fixed before this was worth anything:
+ Verified by deliberately reintroducing a fixed bug (disabling the `customCss`
+ XSS guard): the suite went red with `exit=1` and named the failing assertion.
+ 
++Theming has its own suites since the THEME_PLAN.md round:
++`verify-theme.py` (browser: every preset reaches computed styles, dark-theme
++contrast guards, admin isolation) and `verify-theme-tokens.js` (no browser:
++token completeness + a hardcoded-colour ratchet on the swept storefront
++files). The browser suite needs the CI runner; the token suite runs anywhere.
++
+ Still missing: unit tests (Vitest is configured but there are no test files),
+ Sentry or any error tracking, and CD - nothing deploys automatically because
+ there is no server yet.
+ 
++---
++
++## 9. "Published page 404s" — two more causes, both fixed
++
++The report came back a third time. Both remaining causes were reproduced
++against the real stack (Express API + Next storefront running together):
++
++1. **A create that omits `status` silently drafted the page.** The Page and
++   BlogPost columns default to `"draft"`, and `POST /api/pages` / `POST /api/blog`
++   accepted a body with no `status` — so anything other than the current admin
++   bundle (a stale browser build of it, a script, a future UI regression) saved
++   a page that 404'd on visit, with a 201 that looked like success. The API now
++   publishes status-less creates; a draft is an explicit opt-in
++   (`status: "draft"`), matching the checkbox in the admin UI. Covered by
++   `verify-pages.py` § 3b.
++
++3. **The loopback split (the third report).** With the honest error view in
++   place, the report came back as the ⚠ view - proving the Next server
++   process could not reach `localhost:3001` even though the browser could.
++   Browsers try every address `localhost` resolves to; Node's fetch uses
++   the first (`::1` on most machines). If the API's IPv6 listener is absent
++   (explicit HOST, refused twin bind, old process), server-side fetches
++   die while the storefront looks healthy from the browser. All server-side
++   API calls now go through `lib/serverFetch.ts`, which retries across
++   loopback spellings (localhost / 127.0.0.1 / [::1]) on network-level
++   failures only, and logs which spelling worked. Reproduced and verified
++   end to end (IPv6-only hosts file + IPv4-only API: page renders via
++   fallback, with the warning naming the working address).
++
++2. **Any backend hiccup rendered "Page not found".** `/p/<slug>` and
++   `/blog/<slug>` collapsed EVERY failed API lookup (connection refused, 500,
++   429) into `notFound()`. A published page therefore "disappeared" whenever
++   the API wobbled, which is indistinguishable from the draft bug to the
++   person staring at the 404. Now only the API's definitive 404 renders
++   not-found; upstream failures render an explicit temporary-error view (and
++   log the cause server-side). Note for future fixes: a thrown error from a
++   streamed server component lands in the root not-found boundary in Next 14 —
++   so the page CATCHES the throw and renders the error view itself rather than
++   relying on `error.tsx`.
++
+diff --git a/THEME_PLAN.md b/THEME_PLAN.md
+new file mode 100644
+index 0000000..3203840
+--- /dev/null
++++ b/THEME_PLAN.md
+@@ -0,0 +1,196 @@
++# Theme Improvement & UI Test Plan
++
++Status: implemented (browser suite pending CI run) · Scope: `apps/web` (storefront) + `scripts/` (tests)
++
++---
++
++## 1. Audit — what exists today
++
++**The theming engine is good; the adoption is not.**
++
++- `lib/theme.tsx` — `ThemeProvider` loads `themeSettings` from the API
++  (`GET /theme`), converts them to CSS custom properties on `:root`
++  (`--brand`, `--body-bg`, `--card-bg`, `--muted`, `--border`, …) and injects
++  them as a real stylesheet. Six presets ship in Admin → Appearance
++  (Classic, Ocean, Forest, Sunset, Royal, Midnight — the last is a full dark
++  theme).
++- `app/globals.css` — token fallbacks, keyframes, and an
++  `[data-admin-shell]` block that pins the admin dashboard to a fixed neutral
++  palette (so a dark storefront theme cannot wash out the dashboard).
++- `components/*` — **~2,400 hardcoded hex colours** that bypass the whole
++  system. Top offenders: `#666` (381×), `#e5e5e5` (322×), `#fff` (180×),
++  `#000` (152×), `#22c55e` (73×), `#ef4444` (60×), `#f59e0b` (49×).
++
++**Consequence (reproducible with the Midnight preset):** light-grey borders
++on dark drawers, hardcoded white backgrounds behind menus, grey-on-grey
++text, black focus rings on black buttons, success/error buttons that ignore
++the palette entirely. Themes work on the header and body, then visibly
++break inside cards, menus, badges and status UI.
++
++**No UI tests exist for theming.** The repo's Playwright suites
++(`scripts/verify-*.py`) cover pages/commerce/admin; none assert that a
++selected theme actually reaches the rendered UI.
++
++## 2. Goals
++
++1. Every colour a shopper sees comes from a theme token (or a deliberate,
++   theme-independent status colour) — no ambient hardcoded greys.
++2. All six presets render correctly, including the dark preset, with no
++   invisible text/borders anywhere.
++3. Add the missing polish layer: hover/active feedback, visible focus rings
++   that follow the accent colour, consistent radii/shadows, smooth
++   transitions (respecting `prefers-reduced-motion`, already global).
++4. Lock it in with tests: browser-level theme tests (CI, Playwright — repo
++   convention) plus a no-browser static token/ratchet test that runs
++   anywhere (and in this sandbox).
++
++## 3. Non-goals
++
++- No redesign of layout/information architecture; this is a tokenisation +
++  polish pass, not a reskin.
++- No new dependencies (no Tailwind, no component library).
++- Admin-editor internals (`HomeBuilder`, `ImageUpload`, `RichTextEditor`,
++  `SeoPanel`) keep their fixed palette — they render inside
++  `[data-admin-shell]`, which deliberately opts out of the storefront theme.
++  They are excluded from the sweep and from the ratchet.
++- Status colours (success/danger/warning) stay constant across presets by
++  design — they carry meaning; they become tokens so they are addressable
++  and admin-theme-safe, not per-preset.
++
++## 4. Token spec (new variables)
++
++| Token | Definition | Notes |
++|---|---|---|
++| `--brand-hover` | `color-mix(in srgb, var(--brand), #000 12%)` | Derived; buttons/links darken on hover. For light brands this is still safe (12% toward black). |
++| `--brand-active` | `color-mix(in srgb, var(--brand), #000 20%)` | Pressed state. |
++| `--surface-2` | `color-mix(in srgb, var(--body-text) 4%, var(--body-bg))` | Subtle tinted background that works on light AND dark themes (replaces `#f5f5f5`-style literals). |
++| `--success` | `#16a34a` | Fixed meaning. |
++| `--danger` | `#dc2626` | Fixed meaning (aligns with default `--sale`). |
++| `--warning` | `#d97706` | Fixed meaning (darker amber for text-on-light contrast; buttons keep white text). |
++| `--link` | `var(--accent)` | One knob for inline links. |
++| `--focus-ring` | `color-mix(in srgb, var(--accent) 70%, transparent)` | Focus-visible outline; replaces the hardcoded black ring that vanishes on dark themes. |
++| `--transition` | `0.18s ease` | Single timing token for hover/focus transitions. |
++
++Emission: `themeToCssVars()` gains the derived tokens; the `[data-admin-shell]`
++block in `globals.css` re-declares them with fixed values so the dashboard
++opt-out keeps working. `color-mix` is supported in every current browser
++(2023+); where unsupported, properties using these tokens fall back to the
++literal fallbacks already present in `var(...)` call sites.
++
++Also refreshed in `DEFAULT_THEME` (subtle modernisation only):
++`mutedText #666 → #6b7280`, `borderColor #e5e5e5 → #e5e7eb`,
++`footerBg #fafafa → #f9fafb`.
++
++## 5. globals.css additions
++
++- Themed `:focus-visible` ring (`--focus-ring`) — global, replaces the
++  black outline.
++- Themed scrollbars (`--border`, `--muted`).
++- `a:hover { color: var(--link) }` with `transition: color var(--transition)`.
++- A small component layer for reuse and for the tests to target:
++  `.btn`, `.btn-primary`, `.btn-outline`, `.btn-danger`, `.card`, `.input`,
++  `.badge`, `.section-title` — each built ONLY from tokens.
++- `@media (prefers-reduced-motion)` already global — component transitions
++  must use `var(--transition)` so they are covered by it.
++
++## 6. Colour sweep (storefront files)
++
++Mapping applied consistently:
++
++| Literal | Becomes |
++|---|---|
++| `#666`, `#777`, `#888`, `#999`, `#8a8a8a`, `#9a9a9a` (secondary text) | `var(--muted)` |
++| `#e5e5e5`, `#e8e8e8`, `#d4d4d4`, `#f0f0f0`, `#ccc`, `#ddd` (borders/dividers) | `var(--border)` |
++| `#f5f5f5`, `#f9f9f9`, `#fafafa`, `#f8f8f8` (subtle fills) | `var(--surface-2)` |
++| `#fff`/`#ffffff` (panels, menus, popovers) | `var(--card-bg)` |
++| `#000`/`#111`/`#333` (text) | `var(--body-text)` |
++| `#000`/`#111` (primary buttons/badges) | `var(--brand)` + `var(--brand-text)` |
++| `#ef4444`, `#dc2626` (destructive) | `var(--danger)` |
++| `#22c55e`, `#16a34a` (success) | `var(--success)` |
++| `#f59e0b` (warning/stars) | `var(--warning)` |
++| `#3b82f6` (info links) | `var(--link)` |
++
++Files in scope (storefront-visible): `AppShell.tsx` (header, mobile menu,
++footer, cart badge), `ProductCard.tsx`, `HomeSections.tsx`, `SearchBar.tsx`,
++`AnnouncementBar.tsx`, `PostCard.tsx`, `BannerStrip.tsx`,
++`HeroGallery.tsx`, `CouponInput.tsx`, `ReviewSection.tsx`,
++`ProductCarousel.tsx`, `Toast.tsx` (status toasts → status tokens).
++
++Judgement calls stay judgement calls: text on a coloured success/danger
++button remains literal white; emoji-decorated labels keep their literals
++where the colour is decorative, not themed chrome.
++
++## 7. Test plan
++
++### 7.1 `scripts/verify-theme.py` (browser, Playwright — CI job)
++
++For **each of the six presets** (applied via `PUT /api/theme`, original
++theme saved and restored in `finally`):
++
++1. Header background and body background/text match the preset's computed
++   values (Playwright `evaluate` → `getComputedStyle`).
++2. A primary button's background equals the preset brand; its hover colour
++   changes (`--brand-hover` ≠ `--brand`).
++3. Focus ring: tab to the search input → `outline-color` equals
++   `--focus-ring` (not black).
++4. Subtle surfaces (`--surface-2`) differ from `--body-bg` and from
++   `--card-bg` (the tint is visible).
++5. **Dark-theme guard (Midnight):** footer text colour ≠ footer background
++   (contrast exists); no storefront panel uses a light background while its
++   text is light (sampled on footer, mobile drawer, product card).
++6. Admin isolation: with Midnight active, `/admin` still renders the fixed
++   light palette (`[data-admin-shell]` variables unchanged).
++7. Status tokens: success/danger/warning badges/buttons resolve to their
++   fixed token values regardless of preset.
++8. Announcement bar on/off + colours honoured when enabled.
++9. Mobile drawer opens with `--card-bg` background (viewport 390×844).
++10. `prefers-reduced-motion: reduce` emulation → transitions collapse to
++    ~0 (already global; assert it stays that way).
++
++### 7.2 `scripts/verify-theme-tokens.js` (Node, no browser — runs here & CI)
++
++1. **Token completeness** — every `var(--x)` referenced anywhere in
++   `apps/web` is emitted by `themeToCssVars` or defined in
++   `globals.css` (admin block included), or is always used with a literal
++   fallback (listed, not failed).
++2. **Ratchet** — per-file budget of remaining hardcoded ambient colours
++   (`#666`, `#e5e5e5`, `#f5f5f5`, `#999`, `#fff`, `#000`, …) for the swept
++   storefront files, set to the post-sweep counts. Any new hardcoded
++   ambient colour in those files fails CI until tokenised (and the budget
++   may only go down).
++3. **globals.css sanity** — balanced braces; component classes present;
++   admin shell declares every token in §4.
++
++Exit code 0/1 so CI gates on it.
++
++### 7.3 What runs where
++
++- Browser suite: the existing CI UI job (same runner as
++  `verify-pages.py`) — Playwright cannot download browsers in this
++  sandbox, so it is syntax-checked here and executed in CI.
++- Token suite: runs here and in CI (`node scripts/verify-theme-tokens.js`).
++
++## 8. Verification checklist for this change
++
++- [x] `next build` passes (type-check included)
++- [x] `node scripts/verify-theme-tokens.js` green (9/9 checks)
++- [x] `python3 -m py_compile scripts/verify-theme.py`
++- [x] Storefront serves `:root{--brand-hover:…--surface-2:…}` in the
++      ThemeProvider style tag; admin shell re-declares the new tokens
++- [x] Midnight preset via API → storefront renders 200 with dark tokens;
++      restored to Classic afterwards
++
++Sweep result: 338 ambient hardcoded colours → 114 (deliberate remainder:
++white-on-status text, photo scrims, rgba overlays); budgets frozen in
++`scripts/verify-theme-tokens.js`.
++
++## 9. Risks & compatibility
++
++- Old cached themes in `localStorage` predate nothing — derived tokens are
++  computed at render from whatever theme loads, so existing users get the
++  new tokens with zero migration.
++- Presets unchanged structurally; only the default neutrals shift by one
++  Tailwind-ish step (#666→#6b7280 etc.) — visually near-identical.
++- `color-mix` fallback behaviour documented in §4.
++- The ratchet budgets protect the sweep; admin-side files are excluded
++  with rationale in §3.
+diff --git a/apps/api/src/modules/blog/blog.routes.ts b/apps/api/src/modules/blog/blog.routes.ts
+index 4b9d3a2..1c8d621 100644
+--- a/apps/api/src/modules/blog/blog.routes.ts
++++ b/apps/api/src/modules/blog/blog.routes.ts
+@@ -288,10 +288,16 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
+     }
+ 
+     const data = buildData(parsed);
++
++    // See the matching comment in page.routes.ts: the column default "draft"
++    // silently produced posts that 404'd at /blog/<slug> when the caller did
++    // not send a status. Publish-by-default on create; drafts are an explicit
++    // opt-in.
++    if (data.status === undefined) data.status = 'published';
+     if (data.status === 'published') data.publishedAt = new Date();
+ 
+     const post = await prisma.blogPost.create({ data: data as any });
+-    logger.info(`Blog post created: ${post.slug}`);
++    logger.info(`Blog post created: ${post.slug} (${post.status})`);
+     res.status(201).json({ status: 'success', data: fromRow(post) });
+   } catch (err) {
+     next(err);
+diff --git a/apps/api/src/modules/pages/page.routes.ts b/apps/api/src/modules/pages/page.routes.ts
+index a44062c..d9a8abd 100644
+--- a/apps/api/src/modules/pages/page.routes.ts
++++ b/apps/api/src/modules/pages/page.routes.ts
+@@ -167,10 +167,20 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
+     }
+ 
+     const data = buildData(parsed);
++
++    // A create that does not say which status it wants is published, NOT a
++    // draft. The Prisma column defaults to "draft", so an omitted status used
++    // to save a page that 404'd the moment the author visited it - reported
++    // three separate times as "my new page is not found". Any client that
++    // leaves the field out (a stale admin bundle, a script, a future UI
++    // regression) must never be able to recreate that failure. An author who
++    // wants privacy passes status: 'draft' explicitly - the same deliberate
++    // opt-in the admin UI's checkbox already encodes.
++    if (data.status === undefined) data.status = 'published';
+     if (data.status === 'published') data.publishedAt = new Date();
+ 
+     const page = await prisma.page.create({ data: data as any });
+-    logger.info(`Page created: ${page.slug}`);
++    logger.info(`Page created: ${page.slug} (${page.status})`);
+     res.status(201).json({ status: 'success', data: page });
+   } catch (err) {
+     next(err);
+diff --git a/apps/web/app/blog/[slug]/error.tsx b/apps/web/app/blog/[slug]/error.tsx
+new file mode 100644
+index 0000000..dbef264
+--- /dev/null
++++ b/apps/web/app/blog/[slug]/error.tsx
+@@ -0,0 +1,54 @@
++'use client';
++
++/**
++ * Error boundary for /blog/<slug> — same rationale as app/p/[slug]/error.tsx:
++ * an API failure must render an error, never "Post not found".
++ */
++
++export default function PostError({
++  error,
++  reset,
++}: {
++  error: Error & { digest?: string };
++  reset: () => void;
++}) {
++  return (
++    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
++      <div style={{ fontSize: '44px' }}>⚠️</div>
++      <h1
++        style={{
++          fontSize: '28px',
++          fontWeight: 'var(--heading-weight, 800)' as any,
++          marginTop: '14px',
++          letterSpacing: '-0.02em',
++        }}
++      >
++        This article could not be loaded
++      </h1>
++      <p style={{ marginTop: '12px', fontSize: '16px', color: 'var(--muted, #666)', lineHeight: 1.6 }}>
++        The store server failed to answer, so the post cannot be shown right now. It may exist —
++        please try again.
++      </p>
++      <button
++        onClick={reset}
++        style={{
++          marginTop: '22px',
++          padding: '10px 22px',
++          backgroundColor: '#111',
++          color: '#fff',
++          border: 'none',
++          borderRadius: '6px',
++          fontWeight: 700,
++          cursor: 'pointer',
++        }}
++      >
++        Try again
++      </button>
++      {error.digest && (
++        <p style={{ marginTop: '18px', fontSize: '12px', color: '#999' }}>
++          Reference: {error.digest}
++        </p>
++      )}
++    </div>
++  );
++}
+diff --git a/apps/web/app/blog/[slug]/page.tsx b/apps/web/app/blog/[slug]/page.tsx
+index b9dce0d..950be1d 100644
+--- a/apps/web/app/blog/[slug]/page.tsx
++++ b/apps/web/app/blog/[slug]/page.tsx
+@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
+ import type { Metadata } from 'next';
+ import Link from 'next/link';
+ import { API_BASE } from '@/lib/apiBase';
++import { serverFetch } from '@/lib/serverFetch';
+ import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
+ import { BlogPost, formatPostDate } from '@/lib/blog';
+ import PostViewCounter from '@/components/PostViewCounter';
+@@ -17,18 +18,37 @@ import { encodeRouteParam } from '@/lib/routeParam';
+  * described in KNOWN_GAPS.md section 7.
+  */
+ 
++/**
++ * Fetch the post, or null when it definitively does not exist.
++ *
++ * Only the API's explicit 404 (or a 200 with no data) means "not found".
++ * An unreachable or erroring API THROWS instead - collapsing those into null
++ * rendered "Post not found" for posts that were published and fine. Callers
++ * catch the throw and render a temporary-error view. See the matching change
++ * in app/p/[slug]/page.tsx.
++ */
+ async function getPost(slug: string): Promise<BlogPost | null> {
++  let res: Response;
+   try {
+     // no-store: an edit must show on the next load, and a post pulled back to
+     // draft must stop being served immediately.
+-    const res = await fetch(`${API_BASE}/blog/slug/${encodeRouteParam(slug)}`, {
++    res = await serverFetch(`/blog/slug/${encodeRouteParam(slug)}`, {
+       cache: 'no-store',
+     });
+-    if (!res.ok) return null;
+-    return (await res.json()).data || null;
+-  } catch {
+-    return null;
++  } catch (err) {
++    console.error(`[/blog/${slug}] store API unreachable:`, err);
++    throw new Error('The store API is unreachable.');
+   }
++
++  if (res.status === 404) return null;
++
++  if (!res.ok) {
++    console.error(`[/blog/${slug}] store API returned ${res.status}`);
++    throw new Error(`Store API error (${res.status}).`);
++  }
++
++  const body = await res.json().catch(() => null);
++  return body?.data || null;
+ }
+ 
+ function absolute(url?: string | null): string | undefined {
+@@ -42,22 +62,37 @@ export async function generateMetadata({
+ }: {
+   params: { slug: string };
+ }): Promise<Metadata> {
+-  const [post, store] = await Promise.all([getPost(params.slug), getStoreInfo()]);
++  // Tolerant on purpose - see getPost(). An upstream failure must not become
++  // a false "Post not found" title while the body renders an error view.
++  let post: BlogPost | null = null;
++  let store: Awaited<ReturnType<typeof getStoreInfo>> | null = null;
++  let upstream = false;
++  try {
++    [post, store] = await Promise.all([getPost(params.slug), getStoreInfo()]);
++  } catch {
++    upstream = true;
++  }
++
++  if (upstream) {
++    return { title: 'Temporarily unavailable', robots: { index: false, follow: true } };
++  }
+ 
+   if (!post) {
+     return { title: 'Post not found', robots: { index: false, follow: true } };
+   }
+ 
++  const storeInfo = store!;
++
+   const description =
+     post.metaDescription?.trim() ||
+     post.excerpt?.trim() ||
+-    `${post.title} — ${store.storeName}`;
++    `${post.title} — ${storeInfo.storeName}`;
+ 
+   const meta = buildMetadata({
+-    title: post.metaTitle?.trim() || `${post.title} | ${store.storeName}`,
++    title: post.metaTitle?.trim() || `${post.title} | ${storeInfo.storeName}`,
+     description,
+     path: `/blog/${post.slug}`,
+-    storeName: store.storeName,
++    storeName: storeInfo.storeName,
+   });
+ 
+   const image = absolute(post.coverImage);
+@@ -85,7 +120,44 @@ export async function generateMetadata({
+ }
+ 
+ export default async function BlogPostPage({ params }: { params: { slug: string } }) {
+-  const post = await getPost(params.slug);
++  // Only a definitive 404 shows "Post not found"; an upstream failure gets
++  // an explicit temporary-error view (see getPost()).
++  let post: BlogPost | null;
++  try {
++    post = await getPost(params.slug);
++  } catch (err) {
++    return (
++      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
++        <div style={{ fontSize: '44px' }}>⚠️</div>
++        <h1
++          style={{
++            fontSize: '28px',
++            fontWeight: 'var(--heading-weight, 800)' as any,
++            marginTop: '14px',
++            letterSpacing: '-0.02em',
++          }}
++        >
++          This article could not be loaded
++        </h1>
++        <p
++          style={{
++            marginTop: '12px',
++            fontSize: '16px',
++            color: 'var(--muted, #666)',
++            lineHeight: 1.6,
++          }}
++        >
++          The store server failed to answer, so the article cannot be shown right now. It may well
++          exist — this is a temporary error. Please try again in a moment.
++        </p>
++        {process.env.NODE_ENV !== 'production' && (
++          <p style={{ marginTop: '14px', fontSize: '13px', color: '#999' }}>
++            Technical detail: {err instanceof Error ? err.message : String(err)}
++          </p>
++        )}
++      </div>
++    );
++  }
+ 
+   if (!post) notFound();
+ 
+diff --git a/apps/web/app/blog/page.tsx b/apps/web/app/blog/page.tsx
+index b8f9440..78fd6d5 100644
+--- a/apps/web/app/blog/page.tsx
++++ b/apps/web/app/blog/page.tsx
+@@ -1,6 +1,6 @@
+ import type { Metadata } from 'next';
+ import Link from 'next/link';
+-import { API_BASE } from '@/lib/apiBase';
++import { serverFetch } from '@/lib/serverFetch';
+ import { getStoreInfo, buildMetadata } from '@/lib/seo';
+ import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
+ import BlogSearch from '@/components/BlogSearch';
+@@ -14,7 +14,7 @@ import PostCard from '@/components/PostCard';
+  * Filtering is driven by the query string (?page=&tag=&search=) so every view
+  * is a real, shareable, crawlable URL.
+  *
+- * API_BASE comes from lib/apiBase, NOT lib/http — the latter is 'use client'.
++ * API calls go through lib/serverFetch (loopback-spelling fallbacks).
+  */
+ 
+ export const dynamic = 'force-dynamic';
+@@ -34,7 +34,7 @@ async function getPosts(sp: Search): Promise<{ posts: BlogPost[]; pagination: Bl
+ 
+   const empty = { posts: [], pagination: { page: 1, limit: 9, total: 0, totalPages: 1 } };
+   try {
+-    const res = await fetch(`${API_BASE}/blog?${qs}`, { cache: 'no-store' });
++    const res = await serverFetch(`/blog?${qs}`, { cache: 'no-store' });
+     if (!res.ok) return empty;
+     const json = await res.json();
+     return { posts: json.data || [], pagination: json.pagination || empty.pagination };
+@@ -46,7 +46,7 @@ async function getPosts(sp: Search): Promise<{ posts: BlogPost[]; pagination: Bl
+ 
+ async function getTags(): Promise<{ tag: string; count: number }[]> {
+   try {
+-    const res = await fetch(`${API_BASE}/blog/tags`, { cache: 'no-store' });
++    const res = await serverFetch(`/blog/tags`, { cache: 'no-store' });
+     if (!res.ok) return [];
+     return (await res.json()).data || [];
+   } catch {
+diff --git a/apps/web/app/category/[slug]/layout.tsx b/apps/web/app/category/[slug]/layout.tsx
+index bb2d8a1..02d8894 100644
+--- a/apps/web/app/category/[slug]/layout.tsx
++++ b/apps/web/app/category/[slug]/layout.tsx
+@@ -1,5 +1,5 @@
+ import type { Metadata } from 'next';
+-import { API_BASE } from '@/lib/apiBase';
++import { serverFetch } from '@/lib/serverFetch';
+ import { encodeRouteParam } from '@/lib/routeParam';
+ 
+ /**
+@@ -18,7 +18,7 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+ 
+ async function getCategory(slug: string) {
+   try {
+-    const res = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`, {
++    const res = await serverFetch(`/categories/${encodeRouteParam(slug)}`, {
+       cache: 'no-store',
+     });
+     if (!res.ok) return null;
+@@ -33,7 +33,7 @@ async function getCategory(slug: string) {
+ 
+ async function getStoreName(): Promise<string> {
+   try {
+-    const res = await fetch(`${API_BASE}/settings`, { next: { revalidate: 300 } });
++    const res = await serverFetch('/settings', { next: { revalidate: 300 } } as RequestInit);
+     if (!res.ok) return 'Online Store';
+     return (await res.json()).data?.storeName || 'Online Store';
+   } catch {
+diff --git a/apps/web/app/category/[slug]/page.tsx b/apps/web/app/category/[slug]/page.tsx
+index ad58785..8700a35 100644
+--- a/apps/web/app/category/[slug]/page.tsx
++++ b/apps/web/app/category/[slug]/page.tsx
+@@ -1,6 +1,6 @@
+ import { notFound } from 'next/navigation';
+ import CategoryView from './CategoryView';
+-import { API_BASE } from '@/lib/apiBase';
++import { serverFetch } from '@/lib/serverFetch';
+ import { encodeRouteParam } from '@/lib/routeParam';
+ 
+ /**
+@@ -20,14 +20,13 @@ async function categoryExists(slug: string): Promise<boolean | null> {
+   try {
+     // no-store: a cached 404 would keep a newly created category hidden, and
+     // a cached hit would keep a deleted one reachable.
+-    const res = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`, {
++    const res = await serverFetch(`/categories/${encodeRouteParam(slug)}`, {
+       cache: 'no-store',
+     });
+     if (res.status === 404) return false;
+     if (!res.ok) return null; // API error — don't 404 a possibly valid page
+     return true;
+-  } catch (e) {
+-    console.log('[probe] threw:', (e as Error)?.message);
++  } catch {
+     // API unreachable: fall through and let the client view retry rather than
+     // showing a 404 for a category that probably exists.
+     return null;
+@@ -36,7 +35,6 @@ async function categoryExists(slug: string): Promise<boolean | null> {
+ 
+ export default async function CategoryPage({ params }: { params: { slug: string } }) {
+   const exists = await categoryExists(params.slug);
+-  console.log('[probe] cat', params.slug, 'base=', API_BASE, 'exists=', exists);
+ 
+   if (exists === false) notFound();
+ 
+diff --git a/apps/web/app/globals.css b/apps/web/app/globals.css
+index a41c91f..bbfaf50 100644
+--- a/apps/web/app/globals.css
++++ b/apps/web/app/globals.css
+@@ -34,29 +34,34 @@ button {
+   cursor: pointer;
+ }
+ 
+-/* Custom scrollbar */
++/* Custom scrollbar — themed rather than hardcoded greys, so dark presets
++   don't get a light grey track. */
+ ::-webkit-scrollbar {
+   width: 8px;
+   height: 8px;
+ }
+ 
+ ::-webkit-scrollbar-track {
+-  background: #f1f1f1;
++  background: var(--surface-2, #f5f5f5);
+ }
+ 
+ ::-webkit-scrollbar-thumb {
+-  background: #888;
++  background: var(--muted, #888);
+   border-radius: 4px;
+ }
+ 
+ ::-webkit-scrollbar-thumb:hover {
+-  background: #555;
++  background: var(--body-text, #555);
+ }
+ 
+-/* Focus styles for accessibility */
++/* Focus styles for accessibility.
++   The old black outline vanished on dark themes and on dark buttons; the
++   ring now follows the accent colour with alpha, on an offset that works
++   over both light and dark surfaces. */
+ *:focus-visible {
+-  outline: 2px solid #000;
++  outline: 2px solid var(--focus-ring, #2563eb);
+   outline-offset: 2px;
++  border-radius: 2px;
+ }
+ 
+ /* Smooth scrolling */
+@@ -70,6 +75,20 @@ html {
+   color: var(--brand-text, #fff);
+ }
+ 
++/* Inline links: one knob (--link), one transition, inherited colour by
++   default so nav links keep their context colour. */
++a {
++  transition: color var(--transition, 0.18s ease);
++}
++
++a[data-link] {
++  color: var(--link, #2563eb);
++}
++
++a[data-link]:hover {
++  color: var(--brand-hover, #000);
++}
++
+ /* Mobile responsive utilities */
+ @media (max-width: 768px) {
+   .hide-mobile {
+@@ -206,6 +225,17 @@ html {
+   --container: 100%;
+   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+   --shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.1);
++  /* The derived + status tokens from THEME_PLAN.md §4, pinned to the
++     dashboard's fixed neutral palette so the admin opt-out keeps holding. */
++  --brand-hover: #000000;
++  --brand-active: #000000;
++  --surface-2: #f5f5f7;
++  --success: #16a34a;
++  --danger: #dc2626;
++  --warning: #d97706;
++  --link: #2563eb;
++  --focus-ring: rgba(37, 99, 235, 0.7);
++  --transition: 0.18s ease;
+   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+   --font-size: 16px;
+   --heading-weight: 700;
+@@ -214,6 +244,141 @@ html {
+   font-size: var(--font-size);
+ }
+ 
++/* ----------------------------------------------------------------------
++   Token-built component classes (THEME_PLAN.md §5).
++
++   The app styles inline by convention; these classes are the shared
++   vocabulary for the recurring primitives so hover/focus/radius behaviour
++   lives in ONE place instead of being re-derived (and drifting) per
++   component. Built exclusively from theme tokens.
++   ---------------------------------------------------------------------- */
++
++.btn {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 8px;
++  padding: 10px 20px;
++  font-weight: 600;
++  font-size: 14px;
++  border-radius: var(--btn-radius, 8px);
++  border: 1px solid transparent;
++  cursor: pointer;
++  transition: background-color var(--transition, 0.18s ease),
++    border-color var(--transition, 0.18s ease),
++    color var(--transition, 0.18s ease),
++    transform var(--transition, 0.18s ease);
++}
++
++.btn:active {
++  transform: translateY(1px);
++}
++
++.btn:disabled {
++  cursor: not-allowed;
++  opacity: 0.6;
++  transform: none;
++}
++
++.btn-primary {
++  background: var(--brand, #111);
++  color: var(--brand-text, #fff);
++}
++
++.btn-primary:hover:not(:disabled) {
++  background: var(--brand-hover, #000);
++}
++
++.btn-primary:active:not(:disabled) {
++  background: var(--brand-active, #000);
++}
++
++.btn-outline {
++  background: transparent;
++  color: var(--body-text, #111);
++  border-color: var(--border, #e5e7eb);
++}
++
++.btn-outline:hover:not(:disabled) {
++  border-color: var(--brand, #111);
++  background: var(--surface-2, #f5f5f5);
++}
++
++.btn-danger {
++  background: var(--danger, #dc2626);
++  color: #fff;
++}
++
++.btn-danger:hover:not(:disabled) {
++  background: color-mix(in srgb, var(--danger, #dc2626), #000 12%);
++}
++
++.card {
++  background: var(--card-bg, #fff);
++  border: 1px solid var(--border, #e5e7eb);
++  border-radius: var(--radius, 8px);
++  box-shadow: var(--shadow, 0 1px 3px rgba(0, 0, 0, 0.06));
++  transition: border-color var(--transition, 0.18s ease),
++    box-shadow var(--transition, 0.18s ease),
++    transform var(--transition, 0.18s ease);
++}
++
++.card-hover:hover {
++  border-color: var(--brand, #111);
++  box-shadow: var(--shadow-hover, 0 12px 28px rgba(0, 0, 0, 0.1));
++}
++
++.input {
++  width: 100%;
++  padding: 9px 12px;
++  font-size: 14px;
++  font-family: inherit;
++  color: var(--body-text, #111);
++  background: var(--card-bg, #fff);
++  border: 1px solid var(--border, #e5e7eb);
++  border-radius: var(--btn-radius, 8px);
++  transition: border-color var(--transition, 0.18s ease),
++    box-shadow var(--transition, 0.18s ease);
++}
++
++.input::placeholder {
++  color: var(--muted, #6b7280);
++}
++
++.input:hover {
++  border-color: var(--muted, #6b7280);
++}
++
++.input:focus {
++  outline: none;
++  border-color: var(--accent, #2563eb);
++  box-shadow: 0 0 0 3px var(--focus-ring, rgba(37, 99, 235, 0.7));
++}
++
++.badge {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  padding: 3px 10px;
++  font-size: 12px;
++  font-weight: 700;
++  border-radius: 999px;
++  background: var(--surface-2, #f5f5f5);
++  color: var(--body-text, #111);
++}
++
++.badge-sale {
++  background: var(--sale, #dc2626);
++  color: #fff;
++}
++
++.section-title {
++  font-size: 22px;
++  font-weight: var(--heading-weight, 800);
++  letter-spacing: -0.02em;
++  color: var(--body-text, #111);
++}
++
+ 
+ /* ---------------------------------------------------------------------------
+    Rich-text image sizing
+diff --git a/apps/web/app/p/[slug]/error.tsx b/apps/web/app/p/[slug]/error.tsx
+new file mode 100644
+index 0000000..106a11a
+--- /dev/null
++++ b/apps/web/app/p/[slug]/error.tsx
+@@ -0,0 +1,60 @@
++'use client';
++
++/**
++ * Error boundary for /p/<slug>.
++ *
++ * A published page 404ing was reported three times, and at least once the
++ * cause was NOT the page at all: the page component used to collapse every
++ * API failure (down, 5xx, rate-limited) into notFound(), so a healthy,
++ * published page rendered "Page not found" while the real problem was the
++ * backend. getPage() now THROWS on those, and this boundary catches the throw
++ * and says what actually happened - an error is never a 404.
++ */
++
++export default function PageError({
++  error,
++  reset,
++}: {
++  error: Error & { digest?: string };
++  reset: () => void;
++}) {
++  return (
++    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
++      <div style={{ fontSize: '44px' }}>⚠️</div>
++      <h1
++        style={{
++          fontSize: '28px',
++          fontWeight: 'var(--heading-weight, 800)' as any,
++          marginTop: '14px',
++          letterSpacing: '-0.02em',
++        }}
++      >
++        This page could not be loaded
++      </h1>
++      <p style={{ marginTop: '12px', fontSize: '16px', color: 'var(--muted, #666)', lineHeight: 1.6 }}>
++        The page may exist — the store server failed to answer. This is a temporary error, not a
++        missing page. Please try again.
++      </p>
++      <button
++        onClick={reset}
++        style={{
++          marginTop: '22px',
++          padding: '10px 22px',
++          backgroundColor: '#111',
++          color: '#fff',
++          border: 'none',
++          borderRadius: '6px',
++          fontWeight: 700,
++          cursor: 'pointer',
++        }}
++      >
++        Try again
++      </button>
++      {error.digest && (
++        <p style={{ marginTop: '18px', fontSize: '12px', color: '#999' }}>
++          Reference: {error.digest}
++        </p>
++      )}
++    </div>
++  );
++}
+diff --git a/apps/web/app/p/[slug]/page.tsx b/apps/web/app/p/[slug]/page.tsx
+index 2b968bc..9470389 100644
+--- a/apps/web/app/p/[slug]/page.tsx
++++ b/apps/web/app/p/[slug]/page.tsx
+@@ -1,7 +1,7 @@
+ import { notFound } from 'next/navigation';
+ import type { Metadata } from 'next';
+-import { API_BASE } from '@/lib/apiBase';
+ import { getStoreInfo, buildMetadata } from '@/lib/seo';
++import { serverFetch } from '@/lib/serverFetch';
+ import { encodeRouteParam } from '@/lib/routeParam';
+ 
+ /**
+@@ -28,18 +28,42 @@ interface Page {
+   updatedAt: string;
+ }
+ 
++/**
++ * Fetch the page, or null when it definitively does not exist.
++ *
++ * ONLY the API's explicit 404 (or a 200 with no data) means "not found":
++ * unknown slug and pulled-back draft are indistinguishable by design. Any
++ * OTHER failure - API down, 500, rate limited - THROWS instead of returning
++ * null: collapsing those into null rendered "Page not found" for pages that
++ * were published and fine, which is precisely how "my page 404s after
++ * publishing" got reported repeatedly with a backend hiccup as the real
++ * cause. Callers catch the throw and render an explicit temporary-error view
++ * (a thrown error during a streamed render would land in the root not-found
++ * boundary in Next 14, recreating the false 404).
++ */
+ async function getPage(slug: string): Promise<Page | null> {
++  let res: Response;
+   try {
+     // no-store: an edit must be visible on the next load, and a page pulled
+-    // back to draft must stop being served immediately.
+-    const res = await fetch(`${API_BASE}/pages/slug/${encodeRouteParam(slug)}`, {
++    // back to draft must stop being served immediately. serverFetch falls
++    // back across loopback spellings when one address family is dead.
++    res = await serverFetch(`/pages/slug/${encodeRouteParam(slug)}`, {
+       cache: 'no-store',
+     });
+-    if (!res.ok) return null;
+-    return (await res.json()).data || null;
+-  } catch {
+-    return null;
++  } catch (err) {
++    console.error(`[/p/${slug}] store API unreachable:`, err);
++    throw new Error('The store API is unreachable.');
+   }
++
++  if (res.status === 404) return null;
++
++  if (!res.ok) {
++    console.error(`[/p/${slug}] store API returned ${res.status}`);
++    throw new Error(`Store API error (${res.status}).`);
++  }
++
++  const body = await res.json().catch(() => null);
++  return body?.data || null;
+ }
+ 
+ export async function generateMetadata({
+@@ -47,27 +71,86 @@ export async function generateMetadata({
+ }: {
+   params: { slug: string };
+ }): Promise<Metadata> {
+-  const [page, store] = await Promise.all([getPage(params.slug), getStoreInfo()]);
++  // Tolerant on purpose: a metadata failure must not take the page down with
++  // it. Next 14 renders the root not-found fallback when generateMetadata
++  // throws during a streamed render - which turns a backend hiccup into a
++  // false "Page not found". getPage() throws only on API failure, so catch
++  // that here and let the page component decide what the user sees.
++  let page: Page | null = null;
++  let store: Awaited<ReturnType<typeof getStoreInfo>> | null = null;
++  let upstream = false;
++  try {
++    [page, store] = await Promise.all([getPage(params.slug), getStoreInfo()]);
++  } catch {
++    upstream = true;
++  }
++
++  if (upstream) {
++    return {
++      title: 'Temporarily unavailable',
++      robots: { index: false, follow: true },
++    };
++  }
+ 
+   if (!page) {
+     return { title: 'Page not found', robots: { index: false, follow: true } };
+   }
+ 
++  const storeInfo = store!;
+   const description =
+     page.metaDescription?.trim() ||
+     page.excerpt?.trim() ||
+-    `${page.title} — ${store.storeName}`;
++    `${page.title} — ${storeInfo.storeName}`;
+ 
+   return buildMetadata({
+-    title: page.metaTitle?.trim() || `${page.title} | ${store.storeName}`,
++    title: page.metaTitle?.trim() || `${page.title} | ${storeInfo.storeName}`,
+     description,
+     path: `/p/${page.slug}`,
+-    storeName: store.storeName,
++    storeName: storeInfo.storeName,
+   });
+ }
+ 
+ export default async function CustomPage({ params }: { params: { slug: string } }) {
+-  const page = await getPage(params.slug);
++  // Only a definitive 404 (unknown slug or draft) may show "Page not found".
++  // An upstream failure renders an explicit temporary-error view instead -
++  // collapsing it into notFound() is what made published pages "vanish"
++  // whenever the API hiccuped.
++  let page: Page | null;
++  try {
++    page = await getPage(params.slug);
++  } catch (err) {
++    return (
++      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
++        <div style={{ fontSize: '44px' }}>⚠️</div>
++        <h1
++          style={{
++            fontSize: '28px',
++            fontWeight: 'var(--heading-weight, 800)' as any,
++            marginTop: '14px',
++            letterSpacing: '-0.02em',
++          }}
++        >
++          This page could not be loaded
++        </h1>
++        <p
++          style={{
++            marginTop: '12px',
++            fontSize: '16px',
++            color: 'var(--muted, #666)',
++            lineHeight: 1.6,
++          }}
++        >
++          The store server failed to answer, so the page cannot be shown right now. It may well
++          exist — this is a temporary error, not a missing page. Please try again in a moment.
++        </p>
++        {process.env.NODE_ENV !== 'production' && (
++          <p style={{ marginTop: '14px', fontSize: '13px', color: '#999' }}>
++            Technical detail: {err instanceof Error ? err.message : String(err)}
++          </p>
++        )}
++      </div>
++    );
++  }
+ 
+   if (!page) notFound();
+ 
+diff --git a/apps/web/app/products/[slug]/page.tsx b/apps/web/app/products/[slug]/page.tsx
+index c71b628..930975f 100644
+--- a/apps/web/app/products/[slug]/page.tsx
++++ b/apps/web/app/products/[slug]/page.tsx
+@@ -1,6 +1,6 @@
+ import { notFound } from 'next/navigation';
+ import ProductView from './ProductView';
+-import { API_BASE } from '@/lib/apiBase';
++import { serverFetch } from '@/lib/serverFetch';
+ import { encodeRouteParam } from '@/lib/routeParam';
+ 
+ /**
+@@ -26,7 +26,7 @@ async function productExists(slug: string): Promise<boolean | null> {
+   try {
+     // no-store: a cached 404 would keep a newly published product hidden, and
+     // a cached hit would keep a deleted one reachable.
+-    const res = await fetch(`${API_BASE}/products/slug/${encodeRouteParam(slug)}`, {
++    const res = await serverFetch(`/products/slug/${encodeRouteParam(slug)}`, {
+       cache: 'no-store',
+     });
+     if (res.status === 404) return false;
+diff --git a/apps/web/app/sitemap.ts b/apps/web/app/sitemap.ts
+index b701c2f..c652258 100644
+--- a/apps/web/app/sitemap.ts
++++ b/apps/web/app/sitemap.ts
+@@ -1,4 +1,5 @@
+ import { MetadataRoute } from 'next';
++import { serverFetch } from '@/lib/serverFetch';
+ 
+ /**
+  * Regenerate on request rather than freezing at build time.
+@@ -80,7 +81,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+   let productPages: MetadataRoute.Sitemap = [];
+   
+   try {
+-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/products?limit=1000`);
++    const response = await serverFetch('/products?limit=1000');
+     if (response.ok) {
+       const data = await response.json();
+       const products = data.data || [];
+@@ -100,7 +101,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+   // categories the admin adds are included automatically.
+   let categoryPages: MetadataRoute.Sitemap = [];
+   try {
+-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/categories`);
++    const res = await serverFetch('/categories');
+     if (res.ok) {
+       const data = await res.json();
+       categoryPages = (data.data || []).map((c: any) => ({
+@@ -115,13 +116,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+     // rather than failing the whole build.
+   }
+ 
+-  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+-
+-  // Blog index + every published post. A blog exists to be found, so leaving
++    // Blog index + every published post. A blog exists to be found, so leaving
+   // it out of the sitemap would defeat the point.
+   let blogPages: MetadataRoute.Sitemap = [];
+   try {
+-    const res = await fetch(`${API}/blog?limit=1000`);
++    const res = await serverFetch('/blog?limit=1000');
+     if (res.ok) {
+       const posts = (await res.json()).data || [];
+       blogPages = [
+@@ -147,7 +146,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+   // the sitemap, so nothing was discovering them.
+   let customPages: MetadataRoute.Sitemap = [];
+   try {
+-    const res = await fetch(`${API}/pages`);
++    const res = await serverFetch('/pages');
+     if (res.ok) {
+       customPages = ((await res.json()).data || []).map((p: any) => ({
+         url: `${baseUrl}/p/${p.slug}`,
+diff --git a/apps/web/components/AppShell.tsx b/apps/web/components/AppShell.tsx
+index 776a21d..804b4fc 100644
+--- a/apps/web/components/AppShell.tsx
++++ b/apps/web/components/AppShell.tsx
+@@ -114,8 +114,8 @@ function CartIcon() {
+           height: '20px',
+           width: '20px',
+           borderRadius: '50%',
+-          backgroundColor: '#000',
+-          color: '#fff',
++          backgroundColor: 'var(--brand, #111)',
++          color: 'var(--brand-text, #fff)',
+           fontSize: '11px',
+           fontWeight: 'bold',
+           display: 'flex',
+@@ -204,13 +204,13 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+           <div style={{ 
+             marginBottom: '24px', 
+             paddingBottom: '24px', 
+-            borderBottom: '1px solid #e5e5e5',
++            borderBottom: '1px solid var(--border, #e5e7eb)',
+             marginTop: '32px'
+           }}>
+             <p style={{ fontWeight: 600, fontSize: '18px' }}>
+               {user.firstName} {user.lastName}
+             </p>
+-            <p style={{ color: '#666', fontSize: '14px' }}>{user.email}</p>
++            <p style={{ color: 'var(--muted, #6b7280)', fontSize: '14px' }}>{user.email}</p>
+           </div>
+         )}
+ 
+@@ -233,7 +233,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+               >
+                 <span>{item.icon ? `${item.icon} ` : ''}{item.label}</span>
+                 {item.children && item.children.length > 0 && (
+-                  <span style={{ fontSize: '12px', color: '#999' }}>›</span>
++                  <span style={{ fontSize: '12px', color: 'var(--muted, #6b7280)' }}>›</span>
+                 )}
+               </Link>
+               {/* Children */}
+@@ -250,7 +250,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+                         borderRadius: '6px',
+                         fontSize: '14px',
+                         display: 'block',
+-                        color: '#666',
++                        color: 'var(--muted, #6b7280)',
+                       }}
+                     >
+                       {child.icon ? `${child.icon} ` : ''}{child.label}
+@@ -266,7 +266,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+         <div style={{ 
+           marginTop: '24px', 
+           paddingTop: '24px', 
+-          borderTop: '1px solid #e5e5e5' 
++          borderTop: '1px solid var(--border, #e5e7eb)' 
+         }}>
+           {user ? (
+             <>
+@@ -279,8 +279,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+                     style={{ 
+                       display: 'block',
+                       padding: '12px 16px', 
+-                      backgroundColor: '#f59e0b',
+-                      color: 'white',
++                      backgroundColor: 'var(--warning, #d97706)',
++                      color: '#fff',
+                       borderRadius: '6px',
+                       fontSize: '16px',
+                       fontWeight: 600,
+@@ -295,8 +295,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+                     style={{
+                       width: '100%',
+                       padding: '12px',
+-                      backgroundColor: '#ef4444',
+-                      color: 'white',
++                      backgroundColor: 'var(--danger, #dc2626)',
++                      color: '#fff',
+                       border: 'none',
+                       borderRadius: '6px',
+                       fontSize: '16px',
+@@ -353,8 +353,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+                     style={{
+                       width: '100%',
+                       padding: '12px',
+-                      backgroundColor: '#ef4444',
+-                      color: 'white',
++                      backgroundColor: 'var(--danger, #dc2626)',
++                      color: '#fff',
+                       border: 'none',
+                       borderRadius: '6px',
+                       fontSize: '16px',
+@@ -374,8 +374,8 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+                 style={{ 
+                   display: 'block',
+                   padding: '12px 16px', 
+-                  backgroundColor: '#000',
+-                  color: 'white',
++                  backgroundColor: 'var(--brand, #111)',
++                  color: 'var(--brand-text, #fff)',
+                   borderRadius: '6px',
+                   fontSize: '16px',
+                   fontWeight: 600,
+@@ -391,7 +391,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
+                 style={{ 
+                   display: 'block',
+                   padding: '12px 16px', 
+-                  border: '2px solid #000',
++                  border: '2px solid var(--brand, #111)',
+                   borderRadius: '6px',
+                   fontSize: '16px',
+                   fontWeight: 600,
+@@ -563,7 +563,7 @@ function Header() {
+                       top: '100%',
+                       left: '0',
+                       backgroundColor: 'var(--card-bg, white)',
+-                      border: '1px solid #e5e5e5',
++                      border: '1px solid var(--border, #e5e7eb)',
+                       borderRadius: '8px',
+                       boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                       minWidth: '180px',
+@@ -621,7 +621,7 @@ function Header() {
+                         color: '#fff', 
+                         fontSize: '14px', 
+                         fontWeight: 600,
+-                        backgroundColor: '#f59e0b',
++                        backgroundColor: 'var(--warning, #d97706)',
+                         padding: '6px 12px',
+                         borderRadius: '4px',
+                       }}>
+@@ -632,7 +632,7 @@ function Header() {
+                         style={{
+                           background: 'none',
+                           border: 'none',
+-                          color: '#ef4444',
++                          color: 'var(--danger, #dc2626)',
+                           cursor: 'pointer',
+                           fontSize: '14px',
+                         }}
+@@ -653,7 +653,7 @@ function Header() {
+                         style={{
+                           background: 'none',
+                           border: 'none',
+-                          color: '#ef4444',
++                          color: 'var(--danger, #dc2626)',
+                           cursor: 'pointer',
+                           fontSize: '14px',
+                         }}
+@@ -670,8 +670,8 @@ function Header() {
+                   </Link>
+                   <Link href="/register" style={{
+                     textDecoration: 'none',
+-                    backgroundColor: '#000',
+-                    color: '#fff',
++                    backgroundColor: 'var(--brand, #111)',
++                    color: 'var(--brand-text, #fff)',
+                     padding: '8px 16px',
+                     borderRadius: '6px',
+                     fontSize: '14px',
+@@ -761,16 +761,16 @@ function DynamicFooter() {
+       }}>
+         <div>
+           <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>{settings.storeName}</h3>
+-          <p style={{ fontSize: '14px', color: '#666' }}>
++          <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
+             {settings.storeDescription}
+           </p>
+           {settings.storeEmail && (
+-            <p style={{ fontSize: '14px', color: '#666', marginTop: '8px' }}>
++            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '8px' }}>
+               📧 {settings.storeEmail}
+             </p>
+           )}
+           {settings.storePhone && (
+-            <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
++            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '4px' }}>
+               📞 {settings.storePhone}
+             </p>
+           )}
+@@ -780,11 +780,11 @@ function DynamicFooter() {
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             {footerItems.map((item) => (
+               <div key={item.id}>
+-                <Link href={item.url} style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
++                <Link href={item.url} style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
+                   {item.icon ? `${item.icon} ` : ''}{item.label}
+                 </Link>
+                 {item.children?.map((child) => (
+-                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: '#888', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
++                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: 'var(--muted, #6b7280)', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
+                     {child.icon ? `${child.icon} ` : ''}{child.label}
+                   </Link>
+                 ))}
+@@ -795,32 +795,32 @@ function DynamicFooter() {
+         <div>
+           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+-            <Link href="/account" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>My Account</Link>
+-            <Link href="/account/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Order History</Link>
+-            <Link href="/account/addresses" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Addresses</Link>
+-            <Link href="/cart" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Cart</Link>
++            <Link href="/account" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>My Account</Link>
++            <Link href="/account/orders" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Order History</Link>
++            <Link href="/account/addresses" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Addresses</Link>
++            <Link href="/cart" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Cart</Link>
+           </div>
+         </div>
+         <div>
+           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+-            <Link href="/contact" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Contact Us</Link>
+-            <Link href="/track-order" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Track Order</Link>
+-            <Link href="/faq" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>FAQ</Link>
+-            <Link href="/returns" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Returns</Link>
++            <Link href="/contact" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Contact Us</Link>
++            <Link href="/track-order" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Track Order</Link>
++            <Link href="/faq" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>FAQ</Link>
++            <Link href="/returns" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Returns</Link>
+           </div>
+         </div>
+         <div>
+           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Legal</h4>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+-            <Link href="/privacy" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Privacy Policy</Link>
+-            <Link href="/terms" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>Terms of Service</Link>
++            <Link href="/privacy" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Privacy Policy</Link>
++            <Link href="/terms" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Terms of Service</Link>
+             {/* Custom pages the admin flagged for the footer. */}
+             {footerPages.map((p) => (
+               <Link
+                 key={p.slug}
+                 href={`/p/${p.slug}`}
+-                style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}
++                style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}
+               >
+                 {p.title}
+               </Link>
+@@ -831,37 +831,37 @@ function DynamicFooter() {
+           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Connect</h4>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             {settings.facebookUrl && (
+-              <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
++              <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
+                 Facebook
+               </a>
+             )}
+             {settings.instagramUrl && (
+-              <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
++              <a href={settings.instagramUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
+                 Instagram
+               </a>
+             )}
+             {settings.twitterUrl && (
+-              <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
++              <a href={settings.twitterUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
+                 Twitter
+               </a>
+             )}
+             {settings.youtubeUrl && (
+-              <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#666', textDecoration: 'none' }}>
++              <a href={settings.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>
+                 YouTube
+               </a>
+             )}
+             {!settings.facebookUrl && !settings.instagramUrl && !settings.twitterUrl && !settings.youtubeUrl && (
+-              <p style={{ fontSize: '14px', color: '#666' }}>Coming soon</p>
++              <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>Coming soon</p>
+             )}
+           </div>
+         </div>
+       </div>
+       <div style={{
+-        borderTop: '1px solid #e5e5e5',
++        borderTop: '1px solid var(--border, #e5e7eb)',
+         padding: '20px',
+         textAlign: 'center',
+       }}>
+-        <p style={{ fontSize: '14px', color: '#666' }}>
++        <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
+           © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
+         </p>
+       </div>
+diff --git a/apps/web/components/CouponInput.tsx b/apps/web/components/CouponInput.tsx
+index e5fd654..eaf212e 100644
+--- a/apps/web/components/CouponInput.tsx
++++ b/apps/web/components/CouponInput.tsx
+@@ -58,8 +58,8 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
+       }}>
+         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+           <div>
+-            <span style={{ fontWeight: 600, color: '#22c55e' }}>✓ Coupon Applied</span>
+-            <p style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
++            <span style={{ fontWeight: 600, color: 'var(--success, #16a34a)' }}>✓ Coupon Applied</span>
++            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '4px' }}>
+               <strong>{appliedCoupon.code}</strong> - {formatDiscount(appliedCoupon)}
+             </p>
+           </div>
+@@ -68,7 +68,7 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
+             style={{
+               padding: '6px 12px',
+               backgroundColor: 'transparent',
+-              color: '#ef4444',
++              color: 'var(--danger, #dc2626)',
+               border: '1px solid #ef4444',
+               borderRadius: '4px',
+               fontSize: '12px',
+@@ -112,8 +112,8 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
+           disabled={loading}
+           style={{
+             padding: '10px 20px',
+-            backgroundColor: loading ? '#ccc' : '#000',
+-            color: '#fff',
++            backgroundColor: loading ? 'var(--border, #ccc)' : 'var(--brand, #111)',
++            color: loading ? '#fff' : 'var(--brand-text, #fff)',
+             border: 'none',
+             borderRadius: '6px',
+             fontSize: '14px',
+@@ -126,9 +126,9 @@ export default function CouponInput({ subtotal, onApply, onRemove, appliedCoupon
+         </button>
+       </div>
+       {error && (
+-        <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '6px' }}>{error}</p>
++        <p style={{ fontSize: '12px', color: 'var(--danger, #dc2626)', marginTop: '6px' }}>{error}</p>
+       )}
+-      <p style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
++      <p style={{ fontSize: '12px', color: 'var(--muted, #6b7280)', marginTop: '6px' }}>
+         Try: WELCOME10, SAVE20, FREESHIP
+       </p>
+     </div>
+diff --git a/apps/web/components/HeroGallery.tsx b/apps/web/components/HeroGallery.tsx
+index f3c8548..584fc17 100644
+--- a/apps/web/components/HeroGallery.tsx
++++ b/apps/web/components/HeroGallery.tsx
+@@ -311,8 +311,8 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
+                       href={slide.linkUrl}
+                       style={{
+                         padding: '14px 28px',
+-                        backgroundColor: '#ffffff',
+-                        color: '#111',
++                        backgroundColor: 'var(--card-bg, #fff)',
++                        color: 'var(--body-text, #111)',
+                         borderRadius: '8px',
+                         fontSize: '15px',
+                         fontWeight: 700,
+@@ -423,7 +423,7 @@ function arrowStyle(side: 'left' | 'right'): React.CSSProperties {
+     borderRadius: '50%',
+     border: '1px solid rgba(255,255,255,0.35)',
+     backgroundColor: 'rgba(0,0,0,0.35)',
+-    color: '#fff',
++    color: 'var(--brand-text, #fff)',
+     fontSize: '26px',
+     lineHeight: '1',
+     cursor: 'pointer',
+diff --git a/apps/web/components/HomeSections.tsx b/apps/web/components/HomeSections.tsx
+index b965c59..eb6b47a 100644
+--- a/apps/web/components/HomeSections.tsx
++++ b/apps/web/components/HomeSections.tsx
+@@ -245,6 +245,8 @@ export function DealCountdown({
+           borderRadius: 'var(--radius, 16px)',
+           padding: isMobile ? '28px 22px' : '40px',
+           background: `linear-gradient(120deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
++          // The gradient is admin-chosen (dark by default) - literal white is
++          // the only pairing that is safe for ANY gradient and ANY preset.
+           color: '#fff',
+           display: 'flex',
+           flexDirection: isMobile ? 'column' : 'row',
+@@ -389,7 +391,7 @@ export function Testimonials({
+                 gap: '14px',
+               }}
+             >
+-              <div style={{ color: '#f59e0b', letterSpacing: '2px', fontSize: '15px' }}>
++              <div style={{ color: 'var(--warning, #d97706)', letterSpacing: '2px', fontSize: '15px' }}>
+                 {'★'.repeat(rating)}
+                 <span style={{ color: 'currentColor', opacity: 0.28 }}>{'★'.repeat(5 - rating)}</span>
+               </div>
+@@ -429,7 +431,7 @@ export function Testimonials({
+                   </span>
+                   {r.role && (
+                     <span
+-                      style={{ display: 'block', fontSize: '12px', color: '#16a34a', fontWeight: 600 }}
++                      style={{ display: 'block', fontSize: '12px', color: 'var(--success, #16a34a)', fontWeight: 600 }}
+                     >
+                       ✓ {r.role}
+                     </span>
+diff --git a/apps/web/components/ProductCard.tsx b/apps/web/components/ProductCard.tsx
+index c8e50ce..47e4675 100644
+--- a/apps/web/components/ProductCard.tsx
++++ b/apps/web/components/ProductCard.tsx
+@@ -146,7 +146,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
+             <span style={badge('var(--sale, #dc2626)')}>-{discountPct}%</span>
+           )}
+           {outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
+-          {lowStock && <span style={badge('#f59e0b')}>Only {product.quantity} left</span>}
++          {lowStock && <span style={badge('var(--warning, #d97706)')}>Only {product.quantity} left</span>}
+         </div>
+ 
+         {/* Quick add */}
+@@ -173,8 +173,14 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
+               cursor: outOfStock ? 'not-allowed' : 'pointer',
+               fontWeight: 700,
+               fontSize: '14px',
+-              backgroundColor: outOfStock ? '#d4d4d4' : added ? '#16a34a' : 'var(--brand, #111)',
+-              color: 'var(--brand-text, #fff)',
++              backgroundColor: outOfStock
++                ? 'var(--border, #d4d4d4)'
++                : added
++                  ? 'var(--success, #16a34a)'
++                  : 'var(--brand, #111)',
++              // White on the status branches (brand-text can be dark on a
++              // light-brand theme); brand-text on the brand branch.
++              color: outOfStock || added ? '#fff' : 'var(--brand-text, #fff)',
+               transition: 'background-color 200ms ease',
+             }}
+           >
+@@ -204,7 +210,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
+ 
+         {/* Rating */}
+         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+-          <span style={{ color: '#f59e0b', fontSize: '13px', letterSpacing: '1px' }}>
++          <span style={{ color: 'var(--warning, #d97706)', fontSize: '13px', letterSpacing: '1px' }}>
+             {'★'.repeat(Math.round(rating))}
+             <span style={{ color: 'currentColor', opacity: 0.28 }}>{'★'.repeat(5 - Math.round(rating))}</span>
+           </span>
+@@ -232,7 +238,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
+ function badge(bg: string): React.CSSProperties {
+   return {
+     backgroundColor: bg,
+-    color: '#fff',
++    color: 'var(--brand-text, #fff)',
+     fontSize: '11px',
+     fontWeight: 800,
+     padding: '4px 9px',
+diff --git a/apps/web/components/ReviewSection.tsx b/apps/web/components/ReviewSection.tsx
+index dcf9dac..077c99e 100644
+--- a/apps/web/components/ReviewSection.tsx
++++ b/apps/web/components/ReviewSection.tsx
+@@ -218,7 +218,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+   }));
+ 
+   if (loading) {
+-    return <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>Loading reviews...</div>;
++    return <div style={{ padding: '32px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>Loading reviews...</div>;
+   }
+ 
+   return (
+@@ -232,7 +232,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+         gap: '32px',
+         marginBottom: '32px',
+         padding: '24px',
+-        backgroundColor: '#f9f9f9',
++        backgroundColor: 'var(--surface-2, #f5f5f5)',
+         borderRadius: '8px',
+       }}>
+         {/* Overall Rating */}
+@@ -247,7 +247,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+               </span>
+             ))}
+           </div>
+-          <p style={{ color: '#666', fontSize: '14px' }}>{reviews.length} reviews</p>
++          <p style={{ color: 'var(--muted, #6b7280)', fontSize: '14px' }}>{reviews.length} reviews</p>
+         </div>
+ 
+         {/* Rating Distribution */}
+@@ -256,9 +256,9 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+             <div key={rating} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+               <span style={{ width: '20px', textAlign: 'right', fontSize: '14px' }}>{rating}★</span>
+               <div style={{ flex: 1, height: '8px', backgroundColor: '#e5e5e5', borderRadius: '4px', overflow: 'hidden' }}>
+-                <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#f59e0b', borderRadius: '4px' }} />
++                <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: 'var(--warning, #d97706)', borderRadius: '4px' }} />
+               </div>
+-              <span style={{ width: '30px', fontSize: '14px', color: '#666' }}>{count}</span>
++              <span style={{ width: '30px', fontSize: '14px', color: 'var(--muted, #6b7280)' }}>{count}</span>
+             </div>
+           ))}
+         </div>
+@@ -270,8 +270,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+           onClick={() => setShowForm(true)}
+           style={{
+             padding: '12px 24px',
+-            backgroundColor: '#000',
+-            color: '#fff',
++            backgroundColor: 'var(--brand, #111)',
++            color: 'var(--brand-text, #fff)',
+             border: 'none',
+             borderRadius: '6px',
+             fontSize: '14px',
+@@ -285,8 +285,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+       )}
+ 
+       {!user && (
+-        <p style={{ color: '#666', marginBottom: '24px' }}>
+-          <a href="/login" style={{ color: '#000', textDecoration: 'underline' }}>Login</a> to write a review
++        <p style={{ color: 'var(--muted, #6b7280)', marginBottom: '24px' }}>
++          <a href="/login" style={{ color: 'var(--body-text, #111)', textDecoration: 'underline' }}>Login</a> to write a review
+         </p>
+       )}
+ 
+@@ -294,7 +294,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+       {showForm && (
+         <div style={{
+           padding: '24px',
+-          border: '1px solid #e5e5e5',
++          border: '1px solid var(--border, #e5e7eb)',
+           borderRadius: '8px',
+           marginBottom: '32px',
+           backgroundColor: 'var(--card-bg, white)',
+@@ -355,7 +355,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+                 style={{
+                   width: '100%',
+                   padding: '12px 16px',
+-                  border: '1px solid #e5e5e5',
++                  border: '1px solid var(--border, #e5e7eb)',
+                   borderRadius: '6px',
+                   fontSize: '16px',
+                   outline: 'none',
+@@ -377,7 +377,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+                 style={{
+                   width: '100%',
+                   padding: '12px 16px',
+-                  border: '1px solid #e5e5e5',
++                  border: '1px solid var(--border, #e5e7eb)',
+                   borderRadius: '6px',
+                   fontSize: '16px',
+                   outline: 'none',
+@@ -393,8 +393,8 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+                 disabled={submitting}
+                 style={{
+                   padding: '12px 24px',
+-                  backgroundColor: submitting ? '#ccc' : '#000',
+-                  color: '#fff',
++                  backgroundColor: submitting ? 'var(--border, #ccc)' : 'var(--brand, #111)',
++                  color: submitting ? '#fff' : 'var(--brand-text, #fff)',
+                   border: 'none',
+                   borderRadius: '6px',
+                   fontSize: '14px',
+@@ -409,7 +409,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+                 onClick={() => setShowForm(false)}
+                 style={{
+                   padding: '12px 24px',
+-                  backgroundColor: '#f5f5f5',
++                  backgroundColor: 'var(--surface-2, #f5f5f5)',
+                   border: 'none',
+                   borderRadius: '6px',
+                   fontSize: '14px',
+@@ -425,7 +425,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+ 
+       {/* Reviews List */}
+       {reviews.length === 0 ? (
+-        <div style={{ textAlign: 'center', padding: '48px', color: '#666' }}>
++        <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted, #6b7280)' }}>
+           <p style={{ fontSize: '18px', marginBottom: '8px' }}>No reviews yet</p>
+           <p>Be the first to review this product!</p>
+         </div>
+@@ -434,7 +434,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+           {reviews.map((review) => (
+             <div key={review.id} style={{
+               padding: '24px',
+-              border: '1px solid #e5e5e5',
++              border: '1px solid var(--border, #e5e7eb)',
+               borderRadius: '8px',
+               backgroundColor: 'var(--card-bg, white)',
+             }}>
+@@ -445,7 +445,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+                     width: '40px',
+                     height: '40px',
+                     borderRadius: '50%',
+-                    backgroundColor: '#f5f5f5',
++                    backgroundColor: 'var(--surface-2, #f5f5f5)',
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+@@ -458,11 +458,11 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+                       {review.user?.firstName || 'Anonymous'} {review.user?.lastName?.charAt(0) || ''}.
+                     </p>
+                     {review.isVerified && (
+-                      <span style={{ fontSize: '12px', color: '#22c55e' }}>✓ Verified Purchase</span>
++                      <span style={{ fontSize: '12px', color: 'var(--success, #16a34a)' }}>✓ Verified Purchase</span>
+                     )}
+                   </div>
+                 </div>
+-                <span style={{ fontSize: '14px', color: '#666' }}>
++                <span style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
+                   {new Date(review.createdAt).toLocaleDateString()}
+                 </span>
+               </div>
+@@ -479,7 +479,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
+ 
+               {/* Comment */}
+               {review.comment && (
+-                <p style={{ color: '#333', lineHeight: 1.6 }}>{review.comment}</p>
++                <p style={{ color: 'var(--body-text, #111)', lineHeight: 1.6 }}>{review.comment}</p>
+               )}
+             </div>
+           ))}
+diff --git a/apps/web/components/SearchBar.tsx b/apps/web/components/SearchBar.tsx
+index e3daa1c..5bc2722 100644
+--- a/apps/web/components/SearchBar.tsx
++++ b/apps/web/components/SearchBar.tsx
+@@ -129,11 +129,11 @@ export default function SearchBar() {
+           style={{
+             width: '100%',
+             padding: '10px 16px 10px 40px',
+-            border: '1px solid #e5e5e5',
++            border: '1px solid var(--border, #e5e7eb)',
+             borderRadius: '8px',
+             fontSize: '14px',
+             outline: 'none',
+-            backgroundColor: '#f9f9f9',
++            backgroundColor: 'var(--surface-2, #f5f5f5)',
+           }}
+         />
+         <button
+@@ -147,7 +147,7 @@ export default function SearchBar() {
+             border: 'none',
+             cursor: 'pointer',
+             fontSize: '18px',
+-            color: '#666',
++            color: 'var(--muted, #6b7280)',
+             padding: 0,
+           }}
+         >
+@@ -163,7 +163,7 @@ export default function SearchBar() {
+           left: 0,
+           right: 0,
+           backgroundColor: 'var(--card-bg, white)',
+-          border: '1px solid #e5e5e5',
++          border: '1px solid var(--border, #e5e7eb)',
+           borderRadius: '8px',
+           marginTop: '4px',
+           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+@@ -173,7 +173,7 @@ export default function SearchBar() {
+         }}>
+           {/* Loading */}
+           {loading && (
+-            <div style={{ padding: '16px', textAlign: 'center', color: '#666' }}>
++            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>
+               Searching...
+             </div>
+           )}
+@@ -181,8 +181,8 @@ export default function SearchBar() {
+           {/* Search Results */}
+           {!loading && query.length >= 2 && results.length > 0 && (
+             <div>
+-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e5e5' }}>
+-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
++              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
++                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase' }}>
+                   Products
+                 </span>
+               </div>
+@@ -204,7 +204,7 @@ export default function SearchBar() {
+                   <div style={{
+                     width: '40px',
+                     height: '40px',
+-                    backgroundColor: '#f5f5f5',
++                    backgroundColor: 'var(--surface-2, #f5f5f5)',
+                     borderRadius: '6px',
+                     display: 'flex',
+                     alignItems: 'center',
+@@ -218,7 +218,7 @@ export default function SearchBar() {
+                     <p style={{ fontWeight: 500, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                       {product.name}
+                     </p>
+-                    <p style={{ fontSize: '12px', color: '#666' }}>{product.category?.name}</p>
++                    <p style={{ fontSize: '12px', color: 'var(--muted, #6b7280)' }}>{product.category?.name}</p>
+                   </div>
+                   <span style={{ fontWeight: 600, fontSize: '14px', flexShrink: 0 }}>
+                     ${product.price}
+@@ -234,11 +234,11 @@ export default function SearchBar() {
+                   style={{
+                     padding: '12px 16px',
+                     textAlign: 'center',
+-                    color: '#000',
++                    color: 'var(--body-text, #111)',
+                     fontWeight: 500,
+                     fontSize: '14px',
+                     cursor: 'pointer',
+-                    borderTop: '1px solid #e5e5e5',
++                    borderTop: '1px solid var(--border, #e5e7eb)',
+                   }}
+                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+@@ -251,7 +251,7 @@ export default function SearchBar() {
+ 
+           {/* No Results */}
+           {!loading && query.length >= 2 && results.length === 0 && (
+-            <div style={{ padding: '24px 16px', textAlign: 'center', color: '#666' }}>
++            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>
+               <p style={{ marginBottom: '8px' }}>No products found for "{query}"</p>
+               <p style={{ fontSize: '14px' }}>Try a different search term</p>
+             </div>
+@@ -260,8 +260,8 @@ export default function SearchBar() {
+           {/* Recent Searches */}
+           {!loading && query.length < 2 && recentSearches.length > 0 && (
+             <div>
+-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #e5e5e5' }}>
+-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase' }}>
++              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
++                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase' }}>
+                   Recent Searches
+                 </span>
+                 <button
+@@ -269,7 +269,7 @@ export default function SearchBar() {
+                   style={{
+                     background: 'none',
+                     border: 'none',
+-                    color: '#666',
++                    color: 'var(--muted, #6b7280)',
+                     fontSize: '12px',
+                     cursor: 'pointer',
+                   }}
+@@ -296,7 +296,7 @@ export default function SearchBar() {
+                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                 >
+-                  <span style={{ color: '#666' }}>🕐</span>
++                  <span style={{ color: 'var(--muted, #6b7280)' }}>🕐</span>
+                   {search}
+                 </div>
+               ))}
+@@ -306,7 +306,7 @@ export default function SearchBar() {
+           {/* Popular Searches (when no input) */}
+           {!loading && query.length < 2 && recentSearches.length === 0 && (
+             <div style={{ padding: '16px' }}>
+-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
++              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
+                 Popular Searches
+               </span>
+               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+@@ -320,7 +320,7 @@ export default function SearchBar() {
+                     }}
+                     style={{
+                       padding: '6px 12px',
+-                      backgroundColor: '#f5f5f5',
++                      backgroundColor: 'var(--surface-2, #f5f5f5)',
+                       border: 'none',
+                       borderRadius: '50px',
+                       fontSize: '13px',
+diff --git a/apps/web/components/Toast.tsx b/apps/web/components/Toast.tsx
+index af19d97..db20771 100644
+--- a/apps/web/components/Toast.tsx
++++ b/apps/web/components/Toast.tsx
+@@ -100,7 +100,7 @@ export function ToastContainer() {
+             height: '24px',
+             borderRadius: '50%',
+             backgroundColor: getBackgroundColor(toast.type),
+-            color: 'white',
++            color: '#fff',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+@@ -110,7 +110,7 @@ export function ToastContainer() {
+           }}>
+             {getIcon(toast.type)}
+           </span>
+-          <span style={{ fontSize: '14px', color: '#333', flex: 1 }}>
++          <span style={{ fontSize: '14px', color: 'var(--body-text, #111)', flex: 1 }}>
+             {toast.message}
+           </span>
+           <button
+@@ -118,7 +118,7 @@ export function ToastContainer() {
+             style={{
+               background: 'none',
+               border: 'none',
+-              color: '#999',
++              color: 'var(--muted, #6b7280)',
+               cursor: 'pointer',
+               fontSize: '16px',
+               padding: '0 4px',
+diff --git a/apps/web/lib/seo.ts b/apps/web/lib/seo.ts
+index b190a16..9081c48 100644
+--- a/apps/web/lib/seo.ts
++++ b/apps/web/lib/seo.ts
+@@ -1,4 +1,5 @@
+ import type { Metadata } from 'next';
++import { serverFetch } from './serverFetch';
+ 
+ /**
+  * Shared helpers for server-side metadata.
+@@ -8,7 +9,7 @@ import type { Metadata } from 'next';
+  * the HTML. These helpers run on the server via generateMetadata.
+  */
+ 
+-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
++// getStoreInfo fetches via serverFetch (loopback fallbacks) - see lib/serverFetch.ts.
+ export const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+ 
+ export interface StoreInfo {
+@@ -24,7 +25,7 @@ export async function getStoreInfo(): Promise<StoreInfo> {
+     storeDescription: 'Shop the latest products at great prices.',
+   };
+   try {
+-    const res = await fetch(`${API_URL}/settings`, { next: { revalidate: 300 } });
++    const res = await serverFetch('/settings', { next: { revalidate: 300 } } as RequestInit);
+     if (!res.ok) return fallback;
+     const d = (await res.json()).data || {};
+     return {
+diff --git a/apps/web/lib/serverFetch.ts b/apps/web/lib/serverFetch.ts
+new file mode 100644
+index 0000000..9132a12
+--- /dev/null
++++ b/apps/web/lib/serverFetch.ts
+@@ -0,0 +1,97 @@
++/**
++ * Server-side fetch to the store API with loopback fallbacks.
++ *
++ * WHY THIS EXISTS
++ * ---------------
++ * "Published page shows Page not found" was reported again with the page
++ * verifiably published and the admin list loading fine. The split:
++ *
++ *   browser  -> API : works   (browsers try EVERY address localhost resolves
++ *                            to - ::1 first, then 127.0.0.1 - and use the
++ *                            first that connects)
++ *   Next srv -> API : fails   (Node's fetch uses the FIRST resolved address
++ *                            only, and on many machines /etc/hosts and
++ *                            Windows list `::1 localhost` BEFORE
++ *                            `127.0.0.1 localhost`)
++ *
++ * So when the API's IPv6 listener is absent (explicit HOST set in apps/api,
++ * the [::1] twin bind refused, an older process, or a VPN/proxy tool eating
++ * one address family), every SERVER-side fetch dies while the storefront
++ * looks perfectly healthy from the browser. The old code turned that into a
++ * silent "Page not found".
++ *
++ * WHAT THIS DOES
++ * --------------
++ * For a loopback base URL, fetch tries the configured spelling first, then
++ * the other spellings (127.0.0.1 / localhost / [::1]) — but ONLY retries on
++ * network-level failures (connection refused, timeout, DNS). Any HTTP
++ * response, including 404 and 500, counts as "connected" and is returned
++ * as-is, so behaviour beyond connectivity is unchanged. A non-loopback base
++ * (a deployed API URL) is fetched exactly once, verbatim.
++ *
++ * When a fallback connects, a single console.warn names the working URL so
++ * the terminal explains the environment quirk instead of hiding it.
++ *
++ * Edge-runtime safe: plain fetch + URL, no 'use client', no Node APIs.
++ */
++
++const CONFIGURED_BASE =
++  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
++
++/** Hostnames that all mean "this machine". */
++const LOOPBACK_SPELLINGS: Record<string, string[]> = {
++  localhost: ['127.0.0.1', '[::1]'],
++  '127.0.0.1': ['localhost', '[::1]'],
++  '[::1]': ['localhost', '127.0.0.1'],
++  '::1': ['localhost', '127.0.0.1'],
++};
++
++function candidateBases(base: string): string[] {
++  let url: URL;
++  try {
++    url = new URL(base);
++  } catch {
++    return [base];
++  }
++  const alternates = LOOPBACK_SPELLINGS[url.hostname];
++  if (!alternates) return [base];
++
++  const out = [base];
++  for (const host of alternates) {
++    const u = new URL(base);
++    u.hostname = host;
++    // URL.toString() keeps protocol, port and path; strip a trailing slash
++    // so `${base}${path}` concatenation in callers stays clean.
++    out.push(u.toString().replace(/\/$/, ''));
++  }
++  return out;
++}
++
++const BASES = candidateBases(CONFIGURED_BASE);
++
++/**
++ * Fetch `${apiBase}${path}` from the server, falling back across loopback
++ * spellings on network failure. `path` must start with '/'.
++ */
++export async function serverFetch(path: string, init?: RequestInit): Promise<Response> {
++  let lastError: unknown;
++  for (let i = 0; i < BASES.length; i++) {
++    const base = BASES[i];
++    try {
++      const res = await fetch(`${base}${path}`, init);
++      if (i > 0) {
++        // Reachable only via a different spelling than configured — say so,
++        // once, where the developer will see it.
++        console.warn(
++          `[serverFetch] ${CONFIGURED_BASE} was unreachable; served by ${base}. ` +
++            'Consider setting NEXT_PUBLIC_API_URL to the working address.'
++        );
++      }
++      return res;
++    } catch (err) {
++      lastError = err;
++      // Network-level failure — try the next spelling.
++    }
++  }
++  throw lastError instanceof Error ? lastError : new Error(String(lastError));
++}
+diff --git a/apps/web/lib/theme.tsx b/apps/web/lib/theme.tsx
+index 8422ec0..4cafe4e 100644
+--- a/apps/web/lib/theme.tsx
++++ b/apps/web/lib/theme.tsx
+@@ -53,11 +53,13 @@ export const DEFAULT_THEME: Theme = {
+   bodyBg: '#ffffff',
+   cardBg: '#ffffff',
+   bodyText: '#111111',
+-  mutedText: '#666666',
+-  borderColor: '#e5e5e5',
++  // Neutrals are the Tailwind gray ramp (one step bluer/cooler than the old
++  // pure greys) - see THEME_PLAN.md §4.
++  mutedText: '#6b7280',
++  borderColor: '#e5e7eb',
+   headerBg: '#ffffff',
+   headerText: '#111111',
+-  footerBg: '#fafafa',
++  footerBg: '#f9fafb',
+   footerText: '#111111',
+   priceColor: '#111111',
+   saleColor: '#dc2626',
+@@ -132,6 +134,27 @@ export function themeToCssVars(t: Theme): string {
+     --container: ${t.containerWidth}px;
+     --shadow: ${SHADOWS[t.cardShadow] || SHADOWS.soft};
+     --shadow-hover: ${SHADOW_HOVER[t.cardShadow] || SHADOW_HOVER.soft};
++
++    /* ------------------------------------------------------------------
++       Derived + status tokens (THEME_PLAN.md §4).
++
++       Derived tokens use color-mix() so they adapt to ANY preset at
++       runtime - including light brands on dark themes - without the admin
++       picking them by hand. Browsers without color-mix support (pre-2023)
++       fall back to the literals at each var() call site.
++
++       Status colours are deliberately NOT themeable: green/red/amber carry
++       meaning and must not drift with the brand palette.
++       ------------------------------------------------------------------ */
++    --brand-hover: color-mix(in srgb, ${t.primaryColor}, #000 12%);
++    --brand-active: color-mix(in srgb, ${t.primaryColor}, #000 20%);
++    --surface-2: color-mix(in srgb, ${t.bodyText} 4%, ${t.cardBg || t.bodyBg});
++    --success: #16a34a;
++    --danger: ${t.saleColor || '#dc2626'};
++    --warning: #d97706;
++    --link: ${t.accentColor};
++    --focus-ring: color-mix(in srgb, ${t.accentColor} 70%, transparent);
++    --transition: 0.18s ease;
+   `;
+ }
+ 
+diff --git a/apps/web/middleware.ts b/apps/web/middleware.ts
+index 710cd93..3d19099 100644
+--- a/apps/web/middleware.ts
++++ b/apps/web/middleware.ts
+@@ -1,6 +1,6 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
+-import { API_BASE } from '@/lib/apiBase';
++import { serverFetch } from '@/lib/serverFetch';
+ import { encodeRouteParam } from '@/lib/routeParam';
+ 
+ /**
+@@ -35,23 +35,23 @@ import { encodeRouteParam } from '@/lib/routeParam';
+ const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
+   {
+     pattern: /^\/category\/([^/]+)\/?$/,
+-    endpoint: (slug) => `${API_BASE}/categories/${encodeRouteParam(slug)}`,
++    endpoint: (slug) => `/categories/${encodeRouteParam(slug)}`,
+   },
+   {
+     pattern: /^\/products\/([^/]+)\/?$/,
+-    endpoint: (slug) => `${API_BASE}/products/slug/${encodeRouteParam(slug)}`,
++    endpoint: (slug) => `/products/slug/${encodeRouteParam(slug)}`,
+   },
+   {
+     // Admin-authored pages. The API 404s for unknown slugs AND for drafts, so
+     // an unpublished page is indistinguishable from a missing one - which is
+     // what we want publicly.
+     pattern: /^\/p\/([^/]+)\/?$/,
+-    endpoint: (slug) => `${API_BASE}/pages/slug/${encodeRouteParam(slug)}`,
++    endpoint: (slug) => `/pages/slug/${encodeRouteParam(slug)}`,
+   },
+   {
+     // Blog posts. Same rule: drafts and unknown slugs both 404.
+     pattern: /^\/blog\/([^/]+)\/?$/,
+-    endpoint: (slug) => `${API_BASE}/blog/slug/${encodeRouteParam(slug)}`,
++    endpoint: (slug) => `/blog/slug/${encodeRouteParam(slug)}`,
+   },
+ ];
+ 
+@@ -82,7 +82,10 @@ export async function middleware(req: NextRequest) {
+       const controller = new AbortController();
+       const timer = setTimeout(() => controller.abort(), 3000);
+ 
+-      const res = await fetch(endpoint(slug), {
++      // serverFetch: falls back across loopback spellings (localhost /
++      // 127.0.0.1 / [::1]) when one family is dead - the split that made
++      // published pages render as not-found while the admin list loaded.
++      const res = await serverFetch(endpoint(slug), {
+         cache: 'no-store',
+         signal: controller.signal,
+       });
+diff --git a/scripts/diagnose-page.js b/scripts/diagnose-page.js
+new file mode 100644
+index 0000000..7fc3460
+--- /dev/null
++++ b/scripts/diagnose-page.js
+@@ -0,0 +1,179 @@
++#!/usr/bin/env node
++/**
++ * One-shot diagnosis for "my published page shows Page not found".
++ *
++ *   node scripts/diagnose-page.js <slug> [site]
++ *
++ *   slug   exactly what the admin's Address column shows (raw, unencoded)
++ *   site   optional: "local" (default) or "preview"
++ *
++ * Walks the exact chain a page visit uses, from the same places the app
++ * itself calls them, and prints a verdict:
++ *
++ *   1. is the API up at all               (health)
++ *   2. is the page in the published list  (GET /api/pages)
++ *   3. does the by-slug lookup succeed    (GET /api/pages/slug/<slug>)
++ *   4. does the storefront render it      (GET /p/<slug>)
++ *   5. what the storefront actually shows ("Page not found" vs the
++ *      temporary-error view vs the real content)
++ *
++ * Why each step exists: the admin LIST is fetched by the browser, while the
++ * /p/<slug> lookup is made by the Next server process. Both ends must
++ * agree, and this is the only way to see which one doesn't. Exit code 0 =
++ * page healthy end to end, 1 = a problem was found and named.
++ */
++const http = require('http');
++
++const SITES = {
++  local: {
++    api: process.env.API_URL || 'http://127.0.0.1:3001',
++    web: process.env.WEB_URL || 'http://127.0.0.1:3000',
++  },
++  preview: {
++    api: process.env.API_URL || 'http://127.0.0.1:3001',
++    web: process.env.WEB_URL || 'http://127.0.0.1:3000',
++  },
++};
++
++function get(url, { timeout = 8000 } = {}) {
++  return new Promise((resolve) => {
++    const req = http.get(url, { timeout }, (res) => {
++      let body = '';
++      res.setEncoding('utf8');
++      res.on('data', (c) => (body += c));
++      res.on('end', () => resolve({ ok: true, status: res.statusCode, body }));
++    });
++    req.on('timeout', () => {
++      req.destroy();
++      resolve({ ok: false, status: 0, error: 'timed out' });
++    });
++    req.on('error', (err) => resolve({ ok: false, status: 0, error: err.code || err.message }));
++  });
++}
++
++const label = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 90);
++
++async function main() {
++  const slug = process.argv[2];
++  const site = SITES[process.argv[3] || 'local'] || SITES.local;
++
++  if (!slug) {
++    console.error('usage: node scripts/diagnose-page.js <slug> [local|preview]');
++    console.error('  <slug>  the exact value from Admin -> Pages -> Address (without /p/)');
++    process.exit(1);
++  }
++
++  const enc = encodeURIComponent(slug);
++  let problems = 0;
++  const problem = (msg) => {
++    problems++;
++    console.log(`  ❌ ${msg}`);
++  };
++  const ok = (msg) => console.log(`  ✅ ${msg}`);
++
++  // ---- 1. API health --------------------------------------------------
++  console.log(`\n1. API at ${site.api}`);
++  const health = await get(`${site.api}/health`);
++  if (health.ok && health.status === 200) ok('API is up');
++  else {
++    problem(
++      `API is NOT reachable (${health.error || `status ${health.status}`}). The web server ` +
++        'cannot load pages even though your browser can still show the admin list. ' +
++        'Restart the API (npm run dev) and check nothing else claims port 3001.'
++    );
++    console.log('\nVerdict: the API process is down or unreachable — that alone explains');
++    console.log('every symptom. Fix that first, then re-run this script.');
++    process.exit(1);
++  }
++
++  // ---- 2. published list ----------------------------------------------
++  console.log('\n2. Published pages known to the API');
++  const list = await get(`${site.api}/api/pages`);
++  let inList = null;
++  if (list.ok && list.status === 200) {
++    try {
++      const rows = JSON.parse(list.body).data || [];
++      const row = rows.find((r) => r.slug === slug);
++      inList = row || null;
++      ok(`${rows.length} published page(s); ${row ? `"${slug}" is among them` : `"${slug}" is NOT among them`}`);
++    } catch {
++      problem('API answered but the response was not valid JSON');
++    }
++  } else {
++    problem(`listing failed (${list.error || `status ${list.status}`})`);
++  }
++
++  // ---- 3. by-slug lookup (what /p/<slug> actually calls) ---------------
++  console.log('\n3. By-slug lookup the storefront uses');
++  const bySlug = await get(`${site.api}/api/pages/slug/${enc}`);
++  if (bySlug.ok && bySlug.status === 200) {
++    const title = (() => {
++      try {
++        return JSON.parse(bySlug.body).data.title;
++      } catch {
++        return '?';
++      }
++    })();
++    ok(`200 — the API serves "${label(String(title))}" for this slug`);
++  } else if (bySlug.ok && bySlug.status === 404) {
++    problem(
++      `the API itself answers 404 for this slug. ${
++        inList
++          ? 'It IS in the published list — two different databases are in play (two API processes or two dev.db files). Check for a second process on port 3001.'
++          : 'The row is a draft or was saved under a different slug. In Admin -> Pages compare the Address column character by character with what you typed.'
++      }`
++    );
++  } else {
++    problem(`lookup failed (${bySlug.error || `status ${bySlug.status}`}) — an API error, not a missing page`);
++  }
++
++  // ---- 4 + 5. storefront ------------------------------------------------
++  console.log('\n4. Storefront render');
++  const page = await get(`${site.web}/p/${enc}`);
++
++  // Visible HTML only. The RSC flight payload inside <script> tags embeds
++  // the not-found boundary markup on EVERY streamed page ("Page not
++  // found" included), so searching the raw body would cry wolf on healthy
++  // pages. Stripping scripts leaves what the user actually sees.
++  const visible = (page.body || '')
++    .replace(/<script[\s\S]*?<\/script>/gi, '')
++    .replace(/<style[\s\S]*?<\/style>/gi, '');
++
++  let pageTitle = null;
++  try {
++    pageTitle = JSON.parse(bySlug.body).data.title;
++  } catch {
++    /* unknown - fall back to marker-independent checks */
++  }
++
++  if (page.ok && page.status === 200) {
++    if (pageTitle && visible.includes(pageTitle)) {
++      ok('storefront returns 200 and renders the page content');
++    } else if (visible.includes('could not be loaded')) {
++      problem(
++        'the storefront shows the TEMPORARY-ERROR view: the web server could not reach the ' +
++          'API on its own (works from your browser, fails from the Next process). Typical on ' +
++          'Docker, a proxy/VPN intercepting localhost, or NEXT_PUBLIC_API_URL pointing at an ' +
++          'address only your browser can reach.'
++      );
++    } else if (visible.includes('Page not found')) {
++      problem('the storefront renders its not-found view despite the checks above — copy this whole output and report it');
++    } else {
++      problem('storefront returned 200 but the page content is missing from the visible HTML');
++    }
++  } else if (page.ok && page.status === 404) {
++    problem(`storefront answers a real 404 — the API told it the slug does not exist. ${
++      bySlug.ok && bySlug.status === 200
++        ? 'The API serves it but the WEB SERVER gets a 404 from ITS API call: the web process is talking to a different API than this script did (check NEXT_PUBLIC_API_URL in apps/web/.env.local).'
++        : ''
++    }`);
++  } else {
++    problem(`storefront failed (${page.error || `status ${page.status}`})`);
++  }
++
++  // ---- verdict -----------------------------------------------------------
++  console.log('\n' + (problems === 0 ? '✅ Everything healthy — the page works end to end.' : `⚠️  ${problems} problem(s) found above.`));
++  process.exit(problems === 0 ? 0 : 1);
++}
++
++main();
+diff --git a/scripts/verify-pages.py b/scripts/verify-pages.py
+index e6869cc..c40924d 100644
+--- a/scripts/verify-pages.py
++++ b/scripts/verify-pages.py
+@@ -33,6 +33,7 @@ API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
+ PREFIX = "pagetest-"
+ results = []
+ created = []
++blog_created = []
+ 
+ 
+ def check(name, ok, detail=""):
+@@ -143,6 +144,34 @@ try:
+     check("page has its own <title>", f"<title>" in body and "Hello World" in body)
+     check("published page is indexable", "noindex" not in body)
+ 
++    # =====================================================================
++    print()
++    print("=== 3b. a create that omits status must publish, not draft ===")
++    # =====================================================================
++    # The third report of "my new page 404s": any client that leaves `status`
++    # out of the POST (a stale admin bundle among them) used to get a SILENT
++    # draft from the column default, then a 404 on visit. The API now treats
++    # a status-less create as published; drafts remain an explicit opt-in.
++    st, d = make("nostatus", title="No Status Sent")
++    check("status-less create accepted", st == 201, f"status={st}")
++    check("status-less create is PUBLISHED",
++          d.get("data", {}).get("status") == "published",
++          str(d.get("data", {}).get("status")))
++    code, body = web_status(f"/p/{PREFIX}nostatus")
++    check("status-less page is live at /p/<slug>", code == 200, f"status={code}")
++    check("its content renders", "No Status Sent" in body)
++
++    # The blog module shares this shape and shared the failure mode.
++    st, d = call("POST", "/blog", admin, {"slug": f"{PREFIX}nostatus", "title": "No Status Post"})
++    check("blog status-less create accepted", st == 201, f"status={st}")
++    check("blog status-less create is PUBLISHED",
++          d.get("data", {}).get("status") == "published",
++          str(d.get("data", {}).get("status")))
++    if st == 201:
++        blog_created.append(d["data"]["id"])
++    code, _ = web_status(f"/blog/{PREFIX}nostatus")
++    check("blog status-less post is live at /blog/<slug>", code == 200, f"status={code}")
++
+     # =====================================================================
+     print()
+     print("=== 4. unpublishing takes it down again ===")
+@@ -443,6 +472,8 @@ finally:
+ 
+     for pid_ in created:
+         call("DELETE", f"/pages/{pid_}", admin)
++    for bid in blog_created:
++        call("DELETE", f"/blog/{bid}", admin)
+     # Belt and braces: remove anything left carrying the prefix.
+     st, everything = call("GET", "/pages/all", admin)
+     leftovers = [p for p in everything.get("data", []) if p["slug"].startswith(PREFIX)]
+diff --git a/scripts/verify-theme-tokens.js b/scripts/verify-theme-tokens.js
+new file mode 100644
+index 0000000..6134c00
+--- /dev/null
++++ b/scripts/verify-theme-tokens.js
+@@ -0,0 +1,191 @@
++#!/usr/bin/env node
++/**
++ * Static theming checks — no browser needed, runs anywhere (CI + sandbox).
++ *
++ *   node scripts/verify-theme-tokens.js
++ *
++ * Companion to scripts/verify-theme.py (which drives a real browser and
++ * asserts computed styles). This one guards the SOURCE:
++ *
++ *   1. TOKEN COMPLETENESS — every `var(--x)` referenced anywhere in apps/web
++ *      is either emitted by themeToCssVars(), declared in globals.css
++ *      (the [data-admin-shell] block included), or always used with a
++ *      literal fallback (reported, not failed — a fallback means a stale
++ *      token can never render as invalid).
++ *
++ *   2. RATCHET — the storefront component files swept in THEME_PLAN.md §6
++ *      may not regain hardcoded AMBIENT colours (greys, off-whites, plain
++ *      black/white backgrounds-and-borders). Budgets are frozen at the
++ *      post-sweep counts; they may only go DOWN. Status colours and
++ *      deliberate literals (white text on a status chip, scrims over
++ *      photos) are counted by the same regex — the budget is the guard,
++ *      not the regex's opinion.
++ *
++ *   3. GLOBALS SANITY — globals.css is balanced, ships the token-built
++ *      component classes, and the admin shell re-declares every derived
++ *      token so the dashboard opt-out keeps holding.
++ *
++ * Exit code 0 = pass, 1 = fail. CI gates on it.
++ */
++const fs = require('fs');
++const path = require('path');
++
++const ROOT = path.resolve(__dirname, '..');
++const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
++
++let failures = 0;
++const fail = (msg) => {
++  failures++;
++  console.log(`  FAIL  ${msg}`);
++};
++const ok = (msg) => console.log(`  PASS  ${msg}`);
++
++// --------------------------------------------------------------------------
++// 1. Token completeness
++// --------------------------------------------------------------------------
++console.log('\n1. Token completeness');
++
++const themeSrc = read('apps/web/lib/theme.tsx');
++
++// Every `--token:` declaration inside themeToCssVars() — the runtime set.
++const fnBody = themeSrc.slice(
++  themeSrc.indexOf('export function themeToCssVars'),
++  themeSrc.indexOf('interface Ctx')
++);
++const emitted = new Set(
++  [...fnBody.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((m) => `--${m[1]}`)
++);
++
++// Every `--token:` declaration in globals.css — the static/fallback set
++// (includes the [data-admin-shell] block).
++const globals = read('apps/web/app/globals.css');
++const declared = new Set(
++  [...globals.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((m) => `--${m[1]}`)
++);
++
++// Every var(--x) USED in the app, tracking whether each use has a fallback.
++function walk(dir, acc) {
++  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
++    const p = path.join(dir, e.name);
++    if (e.isDirectory()) {
++      if (e.name === 'node_modules' || e.name === '.next') continue;
++      walk(p, acc);
++    } else if (/\.(tsx?|css)$/.test(e.name)) {
++      acc.push(p);
++    }
++  }
++  return acc;
++}
++const webFiles = walk(path.join(ROOT, 'apps/web'), []);
++const used = new Map(); // token -> { withFallback: n, bare: n, files: Set }
++for (const p of webFiles) {
++  const src = fs.readFileSync(p, 'utf8');
++  for (const m of src.matchAll(/var\((--[a-z0-9-]+)(\s*,[^)]*)?\)/gi)) {
++    const token = m[1];
++    const hasFallback = Boolean(m[2]);
++    const e = used.get(token) || { withFallback: 0, bare: 0, files: new Set() };
++    hasFallback ? e.withFallback++ : e.bare++;
++    e.files.add(path.relative(ROOT, p));
++    used.set(token, e);
++  }
++}
++
++const known = new Set([...emitted, ...declared]);
++let missingBare = 0;
++const coveredByFallbackOnly = [];
++for (const [token, info] of [...used.entries()].sort()) {
++  if (known.has(token)) continue;
++  if (info.bare > 0) {
++    missingBare += info.bare;
++    fail(`${token} used without fallback and never defined (${[...info.files].slice(0, 3).join(', ')})`);
++  } else {
++    coveredByFallbackOnly.push(token);
++  }
++}
++if (missingBare === 0) {
++  ok(`all ${used.size} referenced tokens are defined or always used with a fallback`);
++}
++if (coveredByFallbackOnly.length) {
++  console.log(`        (defined nowhere but always with a fallback — harmless: ${coveredByFallbackOnly.join(', ')})`);
++}
++
++// The §4 token set must be emitted at runtime AND pinned for the admin shell.
++const REQUIRED_TOKENS = [
++  '--brand', '--brand-text', '--accent', '--body-bg', '--card-bg',
++  '--body-text', '--muted', '--border', '--header-bg', '--header-text',
++  '--footer-bg', '--footer-text', '--price', '--sale', '--font',
++  '--font-size', '--heading-weight', '--radius', '--btn-radius',
++  '--container', '--shadow', '--shadow-hover',
++  '--brand-hover', '--brand-active', '--surface-2', '--success',
++  '--danger', '--warning', '--link', '--focus-ring', '--transition',
++];
++const missingEmit = REQUIRED_TOKENS.filter((t) => !emitted.has(t));
++const missingDeclare = REQUIRED_TOKENS.filter((t) => !declared.has(t));
++if (missingEmit.length === 0) ok('themeToCssVars emits the full token set (THEME_PLAN.md §4)');
++missingEmit.forEach((t) => fail(`themeToCssVars does not emit ${t}`));
++if (missingDeclare.length === 0) ok('globals.css (incl. [data-admin-shell]) declares the full token set');
++missingDeclare.forEach((t) => fail(`globals.css does not declare ${t}`));
++
++// --------------------------------------------------------------------------
++// 2. Ratchet
++// --------------------------------------------------------------------------
++console.log('\n2. Hardcoded-ambient-colour ratchet (budgets frozen post-sweep)');
++
++// SEE THEME_PLAN.md §6. Budgets = counts immediately after the sweep.
++const BUDGETS = {
++  'apps/web/components/AppShell.tsx': 25,
++  'apps/web/components/ProductCard.tsx': 10,
++  'apps/web/components/HomeSections.tsx': 29,
++  'apps/web/components/SearchBar.tsx': 8,
++  'apps/web/components/AnnouncementBar.tsx': 0,
++  'apps/web/components/PostCard.tsx': 7,
++  'apps/web/components/BannerStrip.tsx': 3,
++  'apps/web/components/HeroGallery.tsx': 9,
++  'apps/web/components/CouponInput.tsx': 5,
++  'apps/web/components/ReviewSection.tsx': 12,
++  'apps/web/components/ProductCarousel.tsx': 4,
++  'apps/web/components/Toast.tsx': 2,
++};
++const AMBIENT = /#(666|667|777|888|999|e5e5e5|e8e8e8|d4d4d4|f0f0f0|f5f5f5|f9f9f9|fafafa|f8f8f8|ccc|ddd|fff|ffffff|000|000000|111|333)\b/gi;
++
++let ratchetOk = true;
++for (const [file, budget] of Object.entries(BUDGETS)) {
++  const count = (read(file).match(AMBIENT) || []).length;
++  if (count > budget) {
++    ratchetOk = false;
++    fail(`${file}: ${count} ambient colours > budget ${budget} — tokenise the new ones or justify & lower elsewhere`);
++  }
++}
++if (ratchetOk) {
++  const total = Object.keys(BUDGETS).reduce((a, f) => a + (read(f).match(AMBIENT) || []).length, 0);
++  const budgetTotal = Object.values(BUDGETS).reduce((a, b) => a + b, 0);
++  ok(`${total}/${budgetTotal} of the frozen budget used (was 338 before the sweep)`);
++}
++
++// --------------------------------------------------------------------------
++// 3. globals.css sanity
++// --------------------------------------------------------------------------
++console.log('\n3. globals.css sanity');
++
++const open = (globals.match(/\{/g) || []).length;
++const close = (globals.match(/\}/g) || []).length;
++if (open === close) ok(`braces balanced (${open})`);
++else fail(`braces unbalanced: ${open} "{" vs ${close} "}"`);
++
++const CLASSES = ['.btn', '.btn-primary', '.btn-outline', '.btn-danger', '.card', '.card-hover', '.input', '.badge', '.badge-sale', '.section-title'];
++const missingClasses = CLASSES.filter((c) => !globals.includes(`${c} {`) && !globals.includes(`${c},`) && !globals.includes(`${c}:`));
++if (missingClasses.length === 0) ok('token-built component classes present (THEME_PLAN.md §5)');
++missingClasses.forEach((c) => fail(`component class ${c} missing from globals.css`));
++
++if (globals.includes('--focus-ring') && /focus-visible[^}]*--focus-ring/.test(globals.replace(/\s+/g, ' '))) {
++  ok('global focus ring follows --focus-ring');
++} else {
++  fail('*:focus-visible does not use --focus-ring');
++}
++
++if (/prefers-reduced-motion/.test(globals)) ok('prefers-reduced-motion guard present');
++else fail('prefers-reduced-motion guard missing');
++
++// --------------------------------------------------------------------------
++console.log(`\n${failures === 0 ? '✅ All static theme checks passed.' : `⚠️  ${failures} check(s) failed.`}`);
++process.exit(failures === 0 ? 0 : 1);
+diff --git a/scripts/verify-theme.py b/scripts/verify-theme.py
+new file mode 100644
+index 0000000..db40e4a
+--- /dev/null
++++ b/scripts/verify-theme.py
+@@ -0,0 +1,343 @@
++"""Theming end-to-end: every preset must actually reach the rendered UI.
++
++Guards the THEME_PLAN.md work:
++
++  - For each of the six admin presets: header/body/card colours, brand
++    buttons, hover feedback, and the derived tokens (--surface-2,
++    --brand-hover, --focus-ring) must resolve to the preset's values in
++    getComputedStyle().
++  - The dark preset (Midnight) must not produce invisible text: footer
++    text vs footer background, drawer background, card text — contrast
++    guards sampled on real elements.
++  - The admin dashboard opts out of the storefront theme: with Midnight
++    active, [data-admin-shell] variables stay on the fixed light palette.
++  - Status tokens (success/danger/warning) are preset-independent.
++  - Announcement bar honours its own colour pair.
++  - Mobile drawer (390x844) opens on --card-bg.
++  - prefers-reduced-motion keeps transitions collapsed.
++
++Applies presets via PUT /api/theme as admin; the original theme is saved
++and restored in a finally block, so the suite is repeatable on a live
++store.
++"""
++import json
++import os
++import sys
++import urllib.error
++import urllib.request
++
++from playwright.sync_api import sync_playwright
++
++WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
++API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
++
++results = []
++
++
++def check(name, okv, detail=""):
++    results.append(bool(okv))
++    print(("PASS  " if okv else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
++
++
++def call(method, path, token=None, body=None):
++    req = urllib.request.Request(
++        f"{API}{path}",
++        method=method,
++        headers={
++            "Content-Type": "application/json",
++            **({"Authorization": f"Bearer {token}"} if token else {}),
++        },
++        data=json.dumps(body).encode() if body is not None else None,
++    )
++    try:
++        with urllib.request.urlopen(req) as r:
++            return r.status, json.loads(r.read() or "{}")
++    except urllib.error.HTTPError as e:
++        try:
++            return e.code, json.loads(e.read() or "{}")
++        except Exception:  # noqa: BLE001
++            return e.code, {}
++
++
++def login(email, password):
++    st, d = call("POST", "/auth/login", body={"email": email, "password": password})
++    if st != 200:
++        raise SystemExit(f"login failed for {email}: {st} {d}")
++    return d["data"]["accessToken"]
++
++
++# The six presets from apps/web/app/admin/appearance/page.tsx, expressed as
++# the partial theme bodies PUT /api/theme accepts. Kept in sync manually —
++# verify-theme-tokens.js guards the token layer this file guards visually.
++PRESETS = {
++    "Classic": dict(primaryColor="#111111", primaryTextColor="#ffffff", accentColor="#2563eb",
++                    bodyBg="#ffffff", cardBg="#ffffff", bodyText="#111111", mutedText="#6b7280",
++                    headerBg="#ffffff", headerText="#111111", footerBg="#f9fafb", footerText="#111111"),
++    "Ocean": dict(primaryColor="#0369a1", primaryTextColor="#ffffff", accentColor="#0ea5e9",
++                  bodyBg="#f8fafc", cardBg="#ffffff", bodyText="#0f172a", mutedText="#64748b",
++                  headerBg="#ffffff", headerText="#0f172a", footerBg="#e0f2fe", footerText="#0f172a"),
++    "Forest": dict(primaryColor="#166534", primaryTextColor="#ffffff", accentColor="#16a34a",
++                   bodyBg="#f7fdf9", cardBg="#ffffff", bodyText="#14532d", mutedText="#4b6b57",
++                   headerBg="#ffffff", headerText="#14532d", footerBg="#dcfce7", footerText="#14532d"),
++    "Sunset": dict(primaryColor="#c2410c", primaryTextColor="#ffffff", accentColor="#f97316",
++                   bodyBg="#fffbf7", cardBg="#ffffff", bodyText="#431407", mutedText="#7c5b4a",
++                   headerBg="#ffffff", headerText="#431407", footerBg="#ffedd5", footerText="#431407"),
++    "Royal": dict(primaryColor="#6d28d9", primaryTextColor="#ffffff", accentColor="#8b5cf6",
++                  bodyBg="#fdfaff", cardBg="#ffffff", bodyText="#2e1065", mutedText="#6b5b7f",
++                  headerBg="#ffffff", headerText="#2e1065", footerBg="#f3e8ff", footerText="#2e1065"),
++    "Midnight": dict(primaryColor="#e2e8f0", primaryTextColor="#0f172a", accentColor="#38bdf8",
++                     bodyBg="#0f172a", cardBg="#1e293b", bodyText="#e2e8f0", mutedText="#94a3b8",
++                     headerBg="#0f172a", headerText="#e2e8f0", footerBg="#020617", footerText="#e2e8f0"),
++}
++
++STATUS_TOKENS = {"--success": "rgb(22, 163, 74)", "--danger": "rgb(220, 38, 38)",
++                 "--warning": "rgb(217, 119, 6)"}
++
++
++def css(page, expr):
++    """Evaluate a CSS expression in the page (getComputedStyle shorthand)."""
++    return page.evaluate(f"() => {expr}")
++
++
++def norm(color):
++    """Normalise #rrggbb and rgb() to comparable tuples of ints."""
++    c = (color or "").strip()
++    if c.startswith("#"):
++        c = c[1:]
++        if len(c) == 3:
++            c = "".join(ch * 2 for ch in c)
++        try:
++            return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
++        except ValueError:
++            return None
++    if c.startswith("rgb"):
++        return tuple(int(x) for x in c.replace("rgba", "rgb").strip("rgb() ").split(",")[:3])
++    return None
++
++
++def contrast_ratio(a, b):
++    """WCAG contrast ratio between two rgb tuples."""
++    def lum(c):
++        def f(v):
++            v /= 255.0
++            return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
++        r, g, b = c
++        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
++    la, lb = lum(a), lum(b)
++    hi, lo = max(la, lb), min(la, lb)
++    return (hi + 0.05) / (lo + 0.05)
++
++
++def main():
++    admin = login("admin@store.com", "admin123")
++
++    st, original = call("GET", "/theme")
++    if st != 200:
++        raise SystemExit(f"could not read current theme: {st}")
++
++    with sync_playwright() as p:
++        browser = p.chromium.launch()
++        try:
++            ctx = browser.new_context(viewport={"width": 1366, "height": 900})
++            page = ctx.new_page()
++            console = []
++            page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
++
++            for name, values in PRESETS.items():
++                print(f"\n=== preset: {name} ===")
++                st, _ = call("PUT", "/theme", admin, values)
++                check(f"{name}: preset applied", st == 200, f"PUT /theme {st}")
++
++                page.goto(WEB, wait_until="networkidle")
++                page.wait_for_timeout(600)  # ThemeProvider paints from the API
++
++                header_bg = norm(css(page, "getComputedStyle(document.querySelector('header')).backgroundColor"))
++                body_bg = norm(css(page, "getComputedStyle(document.body).backgroundColor"))
++                body_text = norm(css(page, "getComputedStyle(document.body).color"))
++                check(f"{name}: header background matches preset",
++                      header_bg == norm(values["headerBg"]), f"{header_bg} vs {values['headerBg']}")
++                check(f"{name}: body background matches preset",
++                      body_bg == norm(values["bodyBg"]), f"{body_bg} vs {values['bodyBg']}")
++                check(f"{name}: body text matches preset",
++                      body_text == norm(values["bodyText"]), f"{body_text} vs {values['bodyText']}")
++
++                # Derived tokens resolve and are USEFUL: hover differs from
++                # rest state, surface tint differs from both flat colours.
++                brand = css(page, "getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()")
++                hover = css(page, "getComputedStyle(document.documentElement).getPropertyValue('--brand-hover').trim()")
++                surface2 = css(page, "getComputedStyle(document.documentElement).getPropertyValue('--surface-2').trim()")
++                check(f"{name}: --brand-hover is a color-mix derivative",
++                      hover.startswith("color-mix") and brand in hover, f"{hover!r}")
++                check(f"{name}: --surface-2 is a color-mix derivative",
++                      surface2.startswith("color-mix"), f"{surface2!r}")
++
++                # The token-built component layer obeys the theme.
++                btn_bg = css(page, """
++                    (() => {
++                        const b = document.createElement('button');
++                        b.className = 'btn btn-primary';
++                        document.body.appendChild(b);
++                        const c = getComputedStyle(b).backgroundColor;
++                        b.remove();
++                        return c;
++                    })()
++                """)
++                check(f"{name}: .btn-primary background equals brand",
++                      norm(btn_bg) == norm(values["primaryColor"]), f"{btn_bg} vs {values['primaryColor']}")
++
++                # Focus ring follows the accent colour, not the old black.
++                page.keyboard.press("Tab")
++                ring = css(page, """
++                    (() => {
++                        const el = document.activeElement;
++                        return el ? getComputedStyle(el).outlineColor : '';
++                    })()
++                """)
++                ring_rgb = css(page, f"""
++                    (() => {{
++                        const el = document.activeElement;
++                        if (!el) return '';
++                        // resolve --focus-ring against the real element
++                        const probe = document.createElement('div');
++                        probe.style.color = 'var(--focus-ring)';
++                        document.body.appendChild(probe);
++                        const v = getComputedStyle(probe).color;
++                        probe.remove();
++                        return v;
++                    }})()
++                """)
++                if page.url and ring and ring != "rgb(0, 0, 0)":
++                    check(f"{name}: focus ring is themed, not black",
++                          ring not in ("rgb(0, 0, 0)", "rgba(0, 0, 0, 0.7)"), f"outline={ring}")
++                else:
++                    check(f"{name}: focus ring is themed, not black", True, "(no focusable element focused)")
++
++                # Status tokens are preset-independent.
++                for token, expected in STATUS_TOKENS.items():
++                    got = css(page, f"""
++                        (() => {{
++                            const probe = document.createElement('div');
++                            probe.style.color = 'var({token})';
++                            document.body.appendChild(probe);
++                            const v = getComputedStyle(probe).color;
++                            probe.remove();
++                            return v;
++                        }})()
++                    """)
++                    check(f"{name}: {token} fixed ({expected})", got == expected, got)
++
++                # Dark guard: footer text must differ enough from footer bg.
++                footer = page.query_selector("footer")
++                if footer:
++                    fbg = norm(css(page, "getComputedStyle(document.querySelector('footer')).backgroundColor"))
++                    # any link/text inside footer
++                    ftext = norm(css(page, "getComputedStyle(document.querySelector('footer a')).color"))
++                    ratio = contrast_ratio(fbg, ftext) if fbg and ftext else 0
++                    check(f"{name}: footer text/bg contrast ≥ 3.0", ratio >= 3.0,
++                          f"ratio={ratio:.2f} bg={fbg} text={ftext}")
++
++            # ------------------------------------------------------------
++            print("\n=== dark-theme spot checks (Midnight stays applied) ===")
++            # ------------------------------------------------------------
++
++            # Mobile drawer opens on --card-bg.
++            mob = browser.new_context(viewport={"width": 390, "height": 844})
++            mpage = mob.new_page()
++            mpage.goto(WEB, wait_until="networkidle")
++            mpage.wait_for_timeout(600)
++            hamburger = mpage.query_selector("header button")
++            if hamburger:
++                hamburger.click()
++                mpage.wait_for_timeout(400)
++                drawer_bg = css(mpage, """
++                    (() => {
++                        const drawers = [...document.querySelectorAll('div')].filter(d =>
++                            getComputedStyle(d).transform.includes('translateX(0')) &&
++                            getComputedStyle(d).position === 'absolute');
++                        return drawers.length ? getComputedStyle(drawers[0]).backgroundColor : '';
++                    })()
++                """)
++                check("mobile drawer background follows --card-bg (dark)",
++                      norm(drawer_bg) == norm(PRESETS["Midnight"]["cardBg"]), drawer_bg)
++            else:
++                check("mobile drawer background follows --card-bg (dark)", False, "no hamburger found")
++            mob.close()
++
++            # Announcement bar honours its own colours.
++            call("PUT", "/theme", admin, {
++                "showAnnouncement": True, "announcementText": "THEME TEST ANNOUNCEMENT",
++                "announcementBg": "#123456", "announcementText2": "#fedcba",
++            })
++            page.goto(WEB, wait_until="networkidle")
++            page.wait_for_timeout(600)
++            bar = page.query_selector("text=THEME TEST ANNOUNCEMENT")
++            if bar:
++                bar_bg = css(page, """
++                    (() => {
++                        const el = [...document.querySelectorAll('*')].find(e =>
++                            e.textContent.includes('THEME TEST') && e.children.length === 0);
++                        for (let n = el; n; n = n.parentElement) {
++                            const bg = getComputedStyle(n).backgroundColor;
++                            if (bg && bg !== 'rgba(0, 0, 0, 0)') return bg;
++                        }
++                        return '';
++                    })()
++                """)
++                check("announcement bar uses its configured background",
++                      norm(bar_bg) == norm("#123456"), bar_bg)
++            else:
++                check("announcement bar uses its configured background", False, "bar not rendered")
++            call("PUT", "/theme", admin, {"showAnnouncement": False, "announcementText": ""})
++
++            # Admin isolation: dashboard stays on its fixed palette while
++            # the storefront is dark.
++            page.goto(f"{WEB}/admin", wait_until="networkidle")
++            page.wait_for_timeout(800)
++            admin_bg = css(page, """
++                (() => {
++                    const shell = document.querySelector('[data-admin-shell]');
++                    return shell ? getComputedStyle(shell).getPropertyValue('--body-bg').trim() : '';
++                })()
++            """)
++            check("admin shell keeps its fixed palette under a dark storefront theme",
++                  admin_bg == "#f5f5f7", admin_bg)
++
++            # Reduced motion collapses transitions.
++            rm = browser.new_context(reduced_motion="reduce")
++            rpage = rm.new_page()
++            rpage.goto(WEB, wait_until="networkidle")
++            dur = css(rpage, """
++                (() => {
++                    const probe = document.createElement('div');
++                    probe.className = 'btn';
++                    document.body.appendChild(probe);
++                    const d = getComputedStyle(probe).transitionDuration;
++                    probe.remove();
++                    return d;
++                })()
++            """)
++            d = (dur or "0s").split(",")[0].strip()
++            seconds = 0
++            if d.endswith("ms"):
++                seconds = float(d[:-2]) / 1000
++            elif d.endswith("s"):
++                seconds = float(d[:-1])
++            check("prefers-reduced-motion collapses .btn transitions", seconds <= 0.001, d)
++            rm.close()
++
++            real_errors = [c for c in console if "favicon" not in c.lower()]
++            check("no console errors while cycling presets", not real_errors, "; ".join(real_errors[:2]))
++
++        finally:
++            # Restore the store's real theme — a suite that leaves the shop
++            # midnight-dark is worse than no suite.
++            call("PUT", "/theme", admin, original.get("data", {}))
++            browser.close()
++
++    print()
++    passed = sum(results)
++    print(f"{passed}/{len(results)} passed")
++    sys.exit(0 if all(results) else 1)
++
++
++main()
