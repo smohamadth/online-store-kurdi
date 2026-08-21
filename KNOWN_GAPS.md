@@ -192,3 +192,30 @@ Still missing: unit tests (Vitest is configured but there are no test files),
 Sentry or any error tracking, and CD - nothing deploys automatically because
 there is no server yet.
 
+---
+
+## 9. "Published page 404s" — two more causes, both fixed
+
+The report came back a third time. Both remaining causes were reproduced
+against the real stack (Express API + Next storefront running together):
+
+1. **A create that omits `status` silently drafted the page.** The Page and
+   BlogPost columns default to `"draft"`, and `POST /api/pages` / `POST /api/blog`
+   accepted a body with no `status` — so anything other than the current admin
+   bundle (a stale browser build of it, a script, a future UI regression) saved
+   a page that 404'd on visit, with a 201 that looked like success. The API now
+   publishes status-less creates; a draft is an explicit opt-in
+   (`status: "draft"`), matching the checkbox in the admin UI. Covered by
+   `verify-pages.py` § 3b.
+
+2. **Any backend hiccup rendered "Page not found".** `/p/<slug>` and
+   `/blog/<slug>` collapsed EVERY failed API lookup (connection refused, 500,
+   429) into `notFound()`. A published page therefore "disappeared" whenever
+   the API wobbled, which is indistinguishable from the draft bug to the
+   person staring at the 404. Now only the API's definitive 404 renders
+   not-found; upstream failures render an explicit temporary-error view (and
+   log the cause server-side). Note for future fixes: a thrown error from a
+   streamed server component lands in the root not-found boundary in Next 14 —
+   so the page CATCHES the throw and renders the error view itself rather than
+   relying on `error.tsx`.
+

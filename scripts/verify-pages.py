@@ -33,6 +33,7 @@ API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
 PREFIX = "pagetest-"
 results = []
 created = []
+blog_created = []
 
 
 def check(name, ok, detail=""):
@@ -142,6 +143,34 @@ try:
     check("page title renders", "Hello World" in body)
     check("page has its own <title>", f"<title>" in body and "Hello World" in body)
     check("published page is indexable", "noindex" not in body)
+
+    # =====================================================================
+    print()
+    print("=== 3b. a create that omits status must publish, not draft ===")
+    # =====================================================================
+    # The third report of "my new page 404s": any client that leaves `status`
+    # out of the POST (a stale admin bundle among them) used to get a SILENT
+    # draft from the column default, then a 404 on visit. The API now treats
+    # a status-less create as published; drafts remain an explicit opt-in.
+    st, d = make("nostatus", title="No Status Sent")
+    check("status-less create accepted", st == 201, f"status={st}")
+    check("status-less create is PUBLISHED",
+          d.get("data", {}).get("status") == "published",
+          str(d.get("data", {}).get("status")))
+    code, body = web_status(f"/p/{PREFIX}nostatus")
+    check("status-less page is live at /p/<slug>", code == 200, f"status={code}")
+    check("its content renders", "No Status Sent" in body)
+
+    # The blog module shares this shape and shared the failure mode.
+    st, d = call("POST", "/blog", admin, {"slug": f"{PREFIX}nostatus", "title": "No Status Post"})
+    check("blog status-less create accepted", st == 201, f"status={st}")
+    check("blog status-less create is PUBLISHED",
+          d.get("data", {}).get("status") == "published",
+          str(d.get("data", {}).get("status")))
+    if st == 201:
+        blog_created.append(d["data"]["id"])
+    code, _ = web_status(f"/blog/{PREFIX}nostatus")
+    check("blog status-less post is live at /blog/<slug>", code == 200, f"status={code}")
 
     # =====================================================================
     print()
@@ -443,6 +472,8 @@ finally:
 
     for pid_ in created:
         call("DELETE", f"/pages/{pid_}", admin)
+    for bid in blog_created:
+        call("DELETE", f"/blog/{bid}", admin)
     # Belt and braces: remove anything left carrying the prefix.
     st, everything = call("GET", "/pages/all", admin)
     leftovers = [p for p in everything.get("data", []) if p["slug"].startswith(PREFIX)]

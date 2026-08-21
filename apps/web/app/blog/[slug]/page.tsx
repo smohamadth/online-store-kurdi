@@ -17,18 +17,37 @@ import { encodeRouteParam } from '@/lib/routeParam';
  * described in KNOWN_GAPS.md section 7.
  */
 
+/**
+ * Fetch the post, or null when it definitively does not exist.
+ *
+ * Only the API's explicit 404 (or a 200 with no data) means "not found".
+ * An unreachable or erroring API THROWS instead - collapsing those into null
+ * rendered "Post not found" for posts that were published and fine. Callers
+ * catch the throw and render a temporary-error view. See the matching change
+ * in app/p/[slug]/page.tsx.
+ */
 async function getPost(slug: string): Promise<BlogPost | null> {
+  let res: Response;
   try {
     // no-store: an edit must show on the next load, and a post pulled back to
     // draft must stop being served immediately.
-    const res = await fetch(`${API_BASE}/blog/slug/${encodeRouteParam(slug)}`, {
+    res = await fetch(`${API_BASE}/blog/slug/${encodeRouteParam(slug)}`, {
       cache: 'no-store',
     });
-    if (!res.ok) return null;
-    return (await res.json()).data || null;
-  } catch {
-    return null;
+  } catch (err) {
+    console.error(`[/blog/${slug}] store API unreachable:`, err);
+    throw new Error('The store API is unreachable.');
   }
+
+  if (res.status === 404) return null;
+
+  if (!res.ok) {
+    console.error(`[/blog/${slug}] store API returned ${res.status}`);
+    throw new Error(`Store API error (${res.status}).`);
+  }
+
+  const body = await res.json().catch(() => null);
+  return body?.data || null;
 }
 
 function absolute(url?: string | null): string | undefined {
@@ -42,22 +61,37 @@ export async function generateMetadata({
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
-  const [post, store] = await Promise.all([getPost(params.slug), getStoreInfo()]);
+  // Tolerant on purpose - see getPost(). An upstream failure must not become
+  // a false "Post not found" title while the body renders an error view.
+  let post: BlogPost | null = null;
+  let store: Awaited<ReturnType<typeof getStoreInfo>> | null = null;
+  let upstream = false;
+  try {
+    [post, store] = await Promise.all([getPost(params.slug), getStoreInfo()]);
+  } catch {
+    upstream = true;
+  }
+
+  if (upstream) {
+    return { title: 'Temporarily unavailable', robots: { index: false, follow: true } };
+  }
 
   if (!post) {
     return { title: 'Post not found', robots: { index: false, follow: true } };
   }
 
+  const storeInfo = store!;
+
   const description =
     post.metaDescription?.trim() ||
     post.excerpt?.trim() ||
-    `${post.title} — ${store.storeName}`;
+    `${post.title} — ${storeInfo.storeName}`;
 
   const meta = buildMetadata({
-    title: post.metaTitle?.trim() || `${post.title} | ${store.storeName}`,
+    title: post.metaTitle?.trim() || `${post.title} | ${storeInfo.storeName}`,
     description,
     path: `/blog/${post.slug}`,
-    storeName: store.storeName,
+    storeName: storeInfo.storeName,
   });
 
   const image = absolute(post.coverImage);
@@ -85,7 +119,39 @@ export async function generateMetadata({
 }
 
 export default async function BlogPostPage({ params }: { params: { slug: string } }) {
-  const post = await getPost(params.slug);
+  // Only a definitive 404 shows "Post not found"; an upstream failure gets
+  // an explicit temporary-error view (see getPost()).
+  let post: BlogPost | null;
+  try {
+    post = await getPost(params.slug);
+  } catch {
+    return (
+      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '72px 20px', textAlign: 'center' }}>
+        <div style={{ fontSize: '44px' }}>⚠️</div>
+        <h1
+          style={{
+            fontSize: '28px',
+            fontWeight: 'var(--heading-weight, 800)' as any,
+            marginTop: '14px',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          This article could not be loaded
+        </h1>
+        <p
+          style={{
+            marginTop: '12px',
+            fontSize: '16px',
+            color: 'var(--muted, #666)',
+            lineHeight: 1.6,
+          }}
+        >
+          The store server failed to answer, so the article cannot be shown right now. It may well
+          exist — this is a temporary error. Please try again in a moment.
+        </p>
+      </div>
+    );
+  }
 
   if (!post) notFound();
 
