@@ -123,9 +123,25 @@ const limiter = rateLimit({
 // Apply rate limiting to API routes
 app.use('/api/', limiter);
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing middleware. The 3PL webhook handler needs the raw body
+// for HMAC verification, so we register a verify hook that stashes it
+// on req.rawBody before express.json parses the JSON.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
+// Plain-text body parser for the CSV bulk-import endpoint. Without
+// this, supertest's `.set('Content-Type', 'text/csv').send(string)`
+// leaves req.body empty (express.json refuses non-JSON content).
+app.use(express.text({
+  type: ['text/csv', 'text/plain'],
+  limit: '10mb',
+}));
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb',
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
 
 // Compression middleware
 app.use(compression());

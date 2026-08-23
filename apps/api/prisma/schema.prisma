@@ -42,7 +42,9 @@ model User {
   sessions      Session[]
   passwordResets PasswordReset[]
   inventoryLogs InventoryLog[]
-  
+  stockTakes      StockTake[]
+  reorderDrafts   ReorderDraft[]
+
   @@index([email])
   @@index([role])
   @@index([isActive])
@@ -150,6 +152,15 @@ model Product {
   trackInventory Boolean   @default(true)
   quantity       Int       @default(0)
   lowStockThreshold Int    @default(10)
+  // When true, the storefront lets a customer add to cart and check out
+  // an out-of-stock product; the order ships when stock returns. The
+  // checkout can still cap backorderable quantity if `backorderLimit` is set.
+  allowBackorder Boolean   @default(false)
+  backorderLimit Int?      // null = unlimited backorders when allowBackorder is true
+  // "stock at zero" still allows search and PDP render, but hides
+  // the "Add to cart" button unless allowBackorder is true.
+  // Estimated restock date is shown on the PDP when set.
+  expectedRestockAt DateTime?
   
   // Digital product fields
   downloadUrl   String?
@@ -179,6 +190,13 @@ model Product {
   orderItems    OrderItem[]
   inventoryLogs InventoryLog[]
   stockAlerts   StockAlert[]
+  warehouseStocks WarehouseStock[]
+  channelStocks ChannelStock[]
+  reorderRules   ReorderRule[]
+  reorderDrafts   ReorderDraft[]
+  stockTakeItems  StockTakeItem[]
+  warehouseTransfers WarehouseTransfer[]
+  threePLSyncEvents ThreePLSyncEvent[]
   
   // ML/Analytics relations
   events        UserEvent[]
@@ -235,7 +253,9 @@ model ProductVariant {
   orderItems    OrderItem[]
   cartItems     CartItem[]
   inventoryLogs InventoryLog[]
-  
+  warehouseStocks WarehouseStock[]
+  stockReservations StockReservation[]
+
   @@index([productId])
   @@index([sku])
 }
@@ -282,15 +302,24 @@ model CartItem {
   productId     String
   variantId     String?
   quantity      Int       @default(1)
+  // When set, the stock for this line is *reserved* (not yet decremented)
+  // until `reservedUntil`. A cron-style endpoint releases expired
+  // reservations back to available stock. NULL means the cart row is
+  // not actively holding stock.
+  reservedUntil DateTime?
+  // Snapshot of the variant's attributes at add-to-cart time.
+  variantSnapshot String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id])
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
-  
+  reservation   StockReservation?
+
   @@unique([userId, productId, variantId])
   @@index([userId])
+  @@index([reservedUntil])
 }
 
 // Order model
@@ -336,6 +365,8 @@ model Order {
   items             OrderItem[]
   payments          Payment[]
   inventoryLogs     InventoryLog[]
+  stockReservations StockReservation[]
+  reorderDrafts     ReorderDraft[]
   
   @@index([userId])
   @@index([orderNumber])
@@ -359,6 +390,11 @@ model OrderItem {
   downloadCount Int       @default(0)
   downloadLimit Int?
   downloadExpiry DateTime?
+
+  // Flag set at order-placement when the order line was created
+  // against zero stock and the product allows backorders. Used by
+  // warehouse reports to split backorders from normal sales.
+  isBackorder   Boolean   @default(false)
   
   order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product       Product   @relation(fields: [productId], references: [id])
@@ -617,6 +653,291 @@ model StockAlert {
   updatedAt             DateTime  @updatedAt
 
   product               Product   @relation(fields: [productId], references: [id])
+}
+
+// ============================================
+// INVENTORY EXTENSIONS
+// ============================================
+//
+// Everything below extends the original InventoryLog / StockAlert pair
+// to cover: per-warehouse stock, stock reservations (cart-time holds),
+// cycle counts, auto-reorder rules, multi-channel stock, and the 3PL
+// sync log. Each model is small and focused; the orchestrating logic
+// lives in apps/api/src/modules/inventory/inventory.service.ts.
+
+// A physical location where stock is held. A brand with one warehouse
+// just has one row; multi-location retailers have many. Stock moves
+// between warehouses via the `WarehouseTransfer` model.
+model Warehouse {
+  id            String    @id @default(uuid())
+  name          String
+  code          String    @unique     // e.g. "DAL-01", "BER-EU"
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  region        String?   // state / province
+  country       String?   // ISO-2 ("US", "DE")
+  postalCode    String?
+  isActive      Boolean   @default(true)
+  isDefault     Boolean   @default(false)  // exactly one should be true; helper enforces
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stocks        WarehouseStock[]
+  transfersFrom WarehouseTransfer[] @relation("TransferFrom")
+  transfersTo   WarehouseTransfer[] @relation("TransferTo")
+  takeItems     StockTakeItem[]
+  reorderRules  ReorderRule[]
+  reorderDrafts ReorderDraft[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// Per-warehouse stock for a product or variant. The parent product's
+// `quantity` is denormalised: a writer to WarehouseStock is responsible
+// for updating the parent too (the inventory service does this in
+// `applyDelta`).
+model WarehouseStock {
+  id            String    @id @default(uuid())
+  warehouseId   String
+  productId     String
+  variantId     String?
+  quantity      Int       @default(0)
+  // Soft-reserved count (held by active carts or backorders) inside
+  // this warehouse. Available = quantity - reserved.
+  reserved      Int       @default(0)
+  // Reorder point: when `quantity - reserved <= reorderPoint`, the
+  // auto-reorder job (if configured) creates a draft PO.
+  reorderPoint  Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([warehouseId, productId, variantId])
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// Movement of stock between warehouses. status="in_transit" is a
+// soft hold on the source; "completed" credits the destination and
+// debits the source; "cancelled" releases the hold.
+model WarehouseTransfer {
+  id            String    @id @default(uuid())
+  fromWarehouseId String
+  toWarehouseId   String
+  productId     String
+  variantId     String?
+  quantity      Int
+  status        String    @default("in_transit")  // in_transit | completed | cancelled
+  notes         String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+
+  fromWarehouse Warehouse @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
+}
+
+// A reservation tied to a CartItem (or an Order, in the case of a
+// backorder). `releasedAt` is set when the reservation expires or the
+// cart is abandoned. The inventory service reads `reservedUntil` to
+// decide if a hold is still active.
+model StockReservation {
+  id            String    @id @default(uuid())
+  cartItemId    String?   @unique
+  productId     String
+  variantId     String?
+  warehouseId   String?   // null = any warehouse (default pool)
+  quantity      Int
+  // When the reservation lapses if not consumed.
+  reservedUntil DateTime
+  releasedAt    DateTime?
+  // Why the reservation exists.
+  reason        String    @default("cart_hold")  // cart_hold | backorder | manual
+  // Origin id, polymorphic. For cart_hold: cartItemId. For backorder: orderId.
+  originType    String?   // cart | order | manual
+  originId      String?
+  createdAt     DateTime  @default(now())
+
+  cartItem      CartItem? @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([reservedUntil])
+  @@index([releasedAt])
+}
+
+// A cycle count (a.k.a. stock-take) session. Many StockTakeItems
+// are counted under one session, then applied atomically.
+model StockTake {
+  id            String    @id @default(uuid())
+  warehouseId   String
+  name          String
+  status        String    @default("in_progress")  // in_progress | applied | cancelled
+  notes         String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  appliedAt     DateTime?
+  cancelledAt   DateTime?
+
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  items         StockTakeItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model StockTakeItem {
+  id            String    @id @default(uuid())
+  stockTakeId   String
+  productId     String
+  variantId     String?
+  warehouseId   String
+  expected      Int       // book quantity when the take started
+  counted       Int       // what the staffer counted
+  variance      Int       // counted - expected
+  notes         String?
+
+  stockTake     StockTake @relation(fields: [stockTakeId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([stockTakeId])
+}
+
+// Auto-reorder rules. When a product's effective stock drops below
+// `threshold`, the auto-reorder job (cron) creates a ReorderDraft
+// (a stub PO). The draft must be approved by a manager before any
+// real action is taken.
+model ReorderRule {
+  id            String    @id @default(uuid())
+  productId     String
+  variantId     String?
+  warehouseId   String?
+  threshold     Int       @default(10)
+  reorderQty    Int       @default(50)
+  supplierName  String?   // free-text for now; would be a Supplier model in v2
+  supplierEmail String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  warehouse     Warehouse? @relation(fields: [warehouseId], references: [id])
+  drafts        ReorderDraft[]
+
+  @@index([productId])
+  @@index([isActive])
+}
+
+model ReorderDraft {
+  id            String    @id @default(uuid())
+  ruleId        String?
+  productId     String
+  variantId     String?
+  warehouseId   String?
+  quantity      Int
+  status        String    @default("draft")  // draft | sent | cancelled | received
+  supplierName  String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  sentAt        DateTime?
+  cancelledAt   DateTime?
+  receivedAt    DateTime?
+
+  rule          ReorderRule? @relation(fields: [ruleId], references: [id])
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  warehouse     Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([status])
+  @@index([productId])
+}
+
+// Sales channel (e.g. own-store, Amazon, eBay). Each product can have
+// per-channel stock: the same SKU can be "5 on website, 0 on Amazon".
+model Channel {
+  id            String    @id @default(uuid())
+  name          String    @unique       // "own_store", "amazon_us", ...
+  displayName   String
+  type          String    @default("online")  // online | marketplace | retail
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stocks        ChannelStock[]
+  syncEvents    ThreePLSyncEvent[]
+
+  @@index([isActive])
+}
+
+model ChannelStock {
+  id            String    @id @default(uuid())
+  channelId     String
+  productId     String
+  variantId     String?
+  quantity      Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([channelId, productId, variantId])
+  @@index([channelId])
+  @@index([productId])
+}
+
+// Audit log of every stock-changing event from a 3PL or marketplace
+// sync. Useful for reconciling external orders against the local
+// order list.
+model ThreePLSyncEvent {
+  id            String    @id @default(uuid())
+  channelId     String
+  provider      String    // "amazon", "ebay", "shipbob", ...
+  externalSku   String
+  internalProductId String?
+  internalVariantId String?
+  delta         Int       // signed
+  reason        String?   // "order", "return", "manual_adjust", ...
+  externalRef   String?   // e.g. the channel-side order id
+  raw           String?   // JSON string of the incoming webhook
+  receivedAt    DateTime  @default(now())
+
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([provider])
+  @@index([receivedAt])
+}
+
+// Webhook signature secret for a provider. Stored as a free-text
+// value; rotated by writing a new row and marking the old inactive.
+model WebhookSecret {
+  id            String    @id @default(uuid())
+  provider      String    @unique
+  secret        String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  rotatedAt     DateTime?
+
+  @@index([provider])
 }
 
 // ============================================

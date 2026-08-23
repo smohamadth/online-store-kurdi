@@ -3,6 +3,23 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { AppError } from '../../middleware/errorHandler';
+import { parseInventoryCsv } from './inventory.helpers';
+import {
+  decrementStock,
+  incrementStock,
+  createReservation,
+  consumeReservation,
+  releaseExpiredReservations,
+  availableQuantity,
+  createStockTake,
+  applyStockTake,
+  getOrCreateDefaultWarehouse,
+  runAutoReorder,
+  apply3PLStockDelta,
+  verifyWebhookSignature,
+  type StockTakeItemInput,
+} from './inventory.service';
 
 const router = Router();
 
@@ -407,5 +424,648 @@ router.get('/out-of-stock', authenticate, authorize('admin', 'manager'), async (
     next(err);
   }
 });
+
+
+// ============================================
+//  WAREHOUSES
+// ============================================
+
+// GET /api/inventory/warehouses - list all warehouses
+router.get('/warehouses', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const where: any = {};
+    if (req.query.isActive === 'true') where.isActive = true;
+    if (req.query.isActive === 'false') where.isActive = false;
+    const warehouses = await prisma.warehouse.findMany({
+      where,
+      orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    res.json({ status: 'success', data: warehouses });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/warehouses - create a warehouse
+const warehouseSchema = z.object({
+  name: z.string().min(1).max(120),
+  code: z.string().min(1).max(40).regex(/^[A-Z0-9_-]+$/i, 'code must be alphanumeric'),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  region: z.string().optional(),
+  country: z.string().length(2).optional(),
+  postalCode: z.string().optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+router.post('/warehouses', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const data = warehouseSchema.parse(req.body);
+    // Ensure code is unique.
+    const existing = await prisma.warehouse.findUnique({ where: { code: data.code } });
+    if (existing) throw new AppError(`Warehouse with code "${data.code}" already exists`, 409);
+    const created = await prisma.warehouse.create({ data });
+    res.status(201).json({ status: 'success', data: created });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/warehouses/:id - get one warehouse
+router.get('/warehouses/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const w = await prisma.warehouse.findUnique({ where: { id: req.params.id } });
+    if (!w) throw new AppError('Warehouse not found', 404);
+    res.json({ status: 'success', data: w });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/inventory/warehouses/:id - update
+router.patch('/warehouses/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const data = warehouseSchema.partial().parse(req.body);
+    const updated = await prisma.warehouse.update({ where: { id: req.params.id }, data });
+    res.json({ status: 'success', data: updated });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/inventory/warehouses/:id - delete
+// Refuses to delete the default warehouse or one with stock-take history.
+router.delete('/warehouses/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const w = await prisma.warehouse.findUnique({ where: { id: req.params.id } });
+    if (!w) throw new AppError('Warehouse not found', 404);
+    if (w.isDefault) throw new AppError('Cannot delete the default warehouse. Mark another warehouse as default first.', 400);
+    const usage = await prisma.stockTake.count({ where: { warehouseId: w.id } });
+    if (usage > 0) throw new AppError('Warehouse has stock-take history; archive it instead by setting isActive=false', 400);
+    await prisma.warehouse.delete({ where: { id: w.id } });
+    res.json({ status: 'success', message: 'Warehouse deleted' });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  WAREHOUSE TRANSFERS
+// ============================================
+
+// POST /api/inventory/warehouse-transfers - initiate
+const transferSchema = z.object({
+  fromWarehouseId: z.string().uuid(),
+  toWarehouseId: z.string().uuid(),
+  productId: z.string().uuid(),
+  variantId: z.string().uuid().optional(),
+  quantity: z.number().int().min(1),
+  notes: z.string().optional(),
+});
+router.post('/warehouse-transfers', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = transferSchema.parse(req.body);
+    if (data.fromWarehouseId === data.toWarehouseId) {
+      throw new AppError('Cannot transfer to the same warehouse', 400);
+    }
+    // Soft-hold the source.
+    const t = await prisma.warehouseTransfer.create({
+      data: {
+        fromWarehouseId: data.fromWarehouseId,
+        toWarehouseId: data.toWarehouseId,
+        productId: data.productId,
+        variantId: data.variantId ?? null,
+        quantity: data.quantity,
+        status: 'in_transit',
+        notes: data.notes ?? null,
+        createdBy: req.user!.id,
+      },
+    });
+    res.status(201).json({ status: 'success', data: t });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/warehouse-transfers - list
+router.get('/warehouse-transfers', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const where: any = {};
+    if (req.query.status) where.status = req.query.status;
+    if (req.query.fromWarehouseId) where.fromWarehouseId = req.query.fromWarehouseId;
+    if (req.query.toWarehouseId) where.toWarehouseId = req.query.toWarehouseId;
+    const list = await prisma.warehouseTransfer.findMany({
+      where,
+      include: { product: { select: { name: true, sku: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ status: 'success', data: list });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/warehouse-transfers/:id/complete - finish
+router.post('/warehouse-transfers/:id/complete', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const result = await prisma.$transaction(async (tx: any) => {
+      const t = await tx.warehouseTransfer.findUnique({ where: { id: req.params.id } });
+      if (!t) throw new AppError('Transfer not found', 404);
+      if (t.status !== 'in_transit') throw new AppError(`Transfer is ${t.status}, can only complete in_transit`, 400);
+      // Decrement source
+      const sourceWhere = { warehouseId: t.fromWarehouseId, productId: t.productId, variantId: t.variantId };
+      const source = await tx.warehouseStock.findFirst({ where: sourceWhere });
+      if (source) {
+        await tx.warehouseStock.update({
+          where: { id: source.id },
+          data: { quantity: Math.max(0, source.quantity - t.quantity) },
+        });
+      } else {
+        await tx.warehouseStock.create({ data: { ...sourceWhere, quantity: 0 } });
+      }
+      // Increment destination
+      const destWhere = { warehouseId: t.toWarehouseId, productId: t.productId, variantId: t.variantId };
+      const dest = await tx.warehouseStock.findFirst({ where: destWhere });
+      if (dest) {
+        await tx.warehouseStock.update({
+          where: { id: dest.id },
+          data: { quantity: dest.quantity + t.quantity },
+        });
+      } else {
+        await tx.warehouseStock.create({ data: { ...destWhere, quantity: t.quantity } });
+      }
+      return tx.warehouseTransfer.update({
+        where: { id: t.id },
+        data: { status: 'completed', completedAt: new Date() },
+      });
+    });
+    res.json({ status: 'success', data: result });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/warehouse-transfers/:id/cancel
+router.post('/warehouse-transfers/:id/cancel', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const t = await prisma.warehouseTransfer.findUnique({ where: { id: req.params.id } });
+    if (!t) throw new AppError('Transfer not found', 404);
+    if (t.status !== 'in_transit') throw new AppError(`Transfer is ${t.status}, can only cancel in_transit`, 400);
+    const updated = await prisma.warehouseTransfer.update({
+      where: { id: t.id },
+      data: { status: 'cancelled', cancelledAt: new Date() },
+    });
+    res.json({ status: 'success', data: updated });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/warehouses/:id/default - mark as the default
+router.post('/warehouses/:id/default', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    await prisma.$transaction(async (tx: any) => {
+      await tx.warehouse.updateMany({ where: { isDefault: true }, data: { isDefault: false } });
+      await tx.warehouse.update({ where: { id: req.params.id }, data: { isDefault: true } });
+    });
+    res.json({ status: 'success', message: 'Default warehouse updated' });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  STOCK TAKES (cycle counts)
+// ============================================
+
+// POST /api/inventory/stock-takes - create a new take
+const stockTakeCreateSchema = z.object({
+  warehouseId: z.string().uuid().optional(),  // defaults to default warehouse
+  name: z.string().min(1).max(120),
+  notes: z.string().max(500).optional(),
+  items: z.array(z.object({
+    productId: z.string().uuid(),
+    variantId: z.string().uuid().optional(),
+    expected: z.number().int().min(0),
+    counted: z.number().int().min(0),
+    notes: z.string().max(200).optional(),
+  })).min(1),
+});
+router.post('/stock-takes', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = stockTakeCreateSchema.parse(req.body);
+    const warehouseId = data.warehouseId || (await getOrCreateDefaultWarehouse()).id;
+    const items: StockTakeItemInput[] = data.items.map((it) => ({
+      productId: it.productId,
+      variantId: it.variantId,
+      expected: it.expected,
+      counted: it.counted,
+      notes: it.notes,
+    }));
+    const take = await createStockTake({
+      warehouseId,
+      name: data.name,
+      notes: data.notes,
+      createdBy: req.user!.id,
+      items,
+    });
+    const full = await prisma.stockTake.findUnique({ where: { id: take.id }, include: { items: true } });
+    res.status(201).json({ status: 'success', data: full });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/stock-takes - list
+router.get('/stock-takes', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const where: any = {};
+    if (req.query.warehouseId) where.warehouseId = req.query.warehouseId;
+    if (req.query.status) where.status = req.query.status;
+    const takes = await prisma.stockTake.findMany({
+      where,
+      include: { items: true, warehouse: { select: { id: true, code: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ status: 'success', data: takes });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/stock-takes/:id
+router.get('/stock-takes/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const t = await prisma.stockTake.findUnique({ where: { id: req.params.id }, include: { items: true, warehouse: true } });
+    if (!t) throw new AppError('Stock take not found', 404);
+    res.json({ status: 'success', data: t });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/stock-takes/:id/apply - commit
+router.post('/stock-takes/:id/apply', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const result = await applyStockTake(req.params.id, { userId: req.user!.id });
+    res.json({ status: 'success', data: result });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/stock-takes/:id/cancel
+router.post('/stock-takes/:id/cancel', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const result = await applyStockTake(req.params.id, { cancel: true, userId: req.user!.id });
+    res.json({ status: 'success', data: result });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  REORDER RULES
+// ============================================
+
+const reorderRuleSchema = z.object({
+  productId: z.string().uuid(),
+  variantId: z.string().uuid().optional(),
+  warehouseId: z.string().uuid().optional(),
+  threshold: z.number().int().min(0),
+  reorderQty: z.number().int().min(1),
+  supplierName: z.string().optional(),
+  supplierEmail: z.string().email().optional(),
+  isActive: z.boolean().optional(),
+});
+router.post('/reorder-rules', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = reorderRuleSchema.parse(req.body);
+    const created = await prisma.reorderRule.create({ data });
+    res.status(201).json({ status: 'success', data: created });
+  } catch (err) { next(err); }
+});
+router.get('/reorder-rules', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const where: any = {};
+    if (req.query.productId) where.productId = req.query.productId;
+    if (req.query.isActive) where.isActive = req.query.isActive === 'true';
+    const rules = await prisma.reorderRule.findMany({ where });
+    res.json({ status: 'success', data: rules });
+  } catch (err) { next(err); }
+});
+router.patch('/reorder-rules/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = reorderRuleSchema.partial().parse(req.body);
+    const updated = await prisma.reorderRule.update({ where: { id: req.params.id }, data });
+    res.json({ status: 'success', data: updated });
+  } catch (err) { next(err); }
+});
+router.delete('/reorder-rules/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    await prisma.reorderRule.delete({ where: { id: req.params.id } });
+    res.json({ status: 'success', message: 'Rule deleted' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/reorder-rules/run - run the auto-reorder job now
+const reorderRunSchema = z.object({ dryRun: z.boolean().optional() });
+router.post('/reorder-rules/run', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const data = reorderRunSchema.parse(req.body || {});
+    const result = await runAutoReorder({ dryRun: data.dryRun });
+    res.json({ status: 'success', data: result });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/reorder-drafts - list draft POs
+router.get('/reorder-drafts', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const where: any = {};
+    if (req.query.status) where.status = req.query.status;
+    const drafts = await prisma.reorderDraft.findMany({
+      where,
+      include: { product: { select: { id: true, name: true, sku: true } }, warehouse: { select: { id: true, code: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ status: 'success', data: drafts });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/inventory/reorder-drafts/:id - update status (approve, send, cancel)
+const reorderDraftUpdateSchema = z.object({
+  status: z.enum(['draft', 'sent', 'cancelled', 'received']).optional(),
+  notes: z.string().max(500).optional(),
+});
+router.patch('/reorder-drafts/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const body = reorderDraftUpdateSchema.parse(req.body);
+    const data: any = {};
+    if (body.status === 'sent') data.sentAt = new Date();
+    if (body.status === 'cancelled') data.cancelledAt = new Date();
+    if (body.status === 'received') data.receivedAt = new Date();
+    if (body.notes !== undefined) data.notes = body.notes;
+    if (body.status) data.status = body.status;
+    const updated = await prisma.reorderDraft.update({ where: { id: req.params.id }, data });
+    res.json({ status: 'success', data: updated });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  CHANNELS
+// ============================================
+
+const channelSchema = z.object({
+  name: z.string().min(1).max(60).regex(/^[a-z0-9_]+$/, 'lowercase, digits, underscore only'),
+  displayName: z.string().min(1).max(120),
+  type: z.enum(['online', 'marketplace', 'retail']).optional(),
+  isActive: z.boolean().optional(),
+});
+router.post('/channels', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const data = channelSchema.parse(req.body);
+    const created = await prisma.channel.create({ data });
+    res.status(201).json({ status: 'success', data: created });
+  } catch (err) { next(err); }
+});
+router.get('/channels', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const channels = await prisma.channel.findMany({ orderBy: { displayName: 'asc' } });
+    res.json({ status: 'success', data: channels });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/channels/:id/stock - per-product stock across channels
+router.get('/channels/:id/stock', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const stocks = await prisma.channelStock.findMany({
+      where: { channelId: req.params.id },
+      include: { product: { select: { id: true, name: true, sku: true } } },
+      orderBy: { product: { name: 'asc' } },
+    });
+    res.json({ status: 'success', data: stocks });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/channels/:id/sync - apply a manual 3PL/marketplace delta
+const syncSchema = z.object({
+  provider: z.string().min(1),
+  externalSku: z.string().min(1),
+  productId: z.string().uuid(),
+  variantId: z.string().uuid().optional(),
+  delta: z.number().int(),
+  reason: z.string().optional(),
+  externalRef: z.string().optional(),
+});
+router.post('/channels/:id/sync', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = syncSchema.parse(req.body);
+    const result = await apply3PLStockDelta({ channelId: req.params.id, ...data });
+    res.json({ status: 'success', data: result });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  RESERVATIONS
+// ============================================
+
+// POST /api/inventory/reservations - create a reservation
+const reservationCreateSchema = z.object({
+  productId: z.string().uuid(),
+  variantId: z.string().uuid().optional(),
+  quantity: z.number().int().min(1),
+  cartItemId: z.string().uuid().optional(),
+  reason: z.enum(['cart_hold', 'backorder', 'manual']).optional(),
+  ttlMinutes: z.number().int().min(1).max(60 * 24).optional(),
+});
+router.post('/reservations', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = reservationCreateSchema.parse(req.body);
+    const reservation = await createReservation(data);
+    res.status(201).json({ status: 'success', data: reservation });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/reservations - list active reservations
+router.get('/reservations', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const where: any = { releasedAt: null };
+    if (req.query.productId) where.productId = req.query.productId;
+    if (req.query.activeOnly === 'true') where.reservedUntil = { gt: new Date() };
+    const list = await prisma.stockReservation.findMany({
+      where,
+      orderBy: { reservedUntil: 'asc' },
+    });
+    res.json({ status: 'success', data: list });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/reservations/release-expired - cron-style
+// Returns the count released.
+router.post('/reservations/release-expired', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const released = await releaseExpiredReservations();
+    res.json({ status: 'success', data: { released } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/inventory/available?productId=X&variantId=Y
+router.get('/available', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const productId = String(req.query.productId || '');
+    const variantId = req.query.variantId ? String(req.query.variantId) : undefined;
+    if (!productId) throw new AppError('productId is required', 400);
+    const available = await availableQuantity(productId, variantId);
+    res.json({ status: 'success', data: { productId, variantId, available } });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  CSV BULK IMPORT
+// ============================================
+
+// Accepts text/csv body or JSON {csv: "..."}. Each line:
+//   sku,quantity[,variantSku]
+// where quantity may be -N to subtract. The endpoint validates every
+// row before applying, so a bad line aborts the whole import.
+router.post('/import-csv', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const raw = (typeof req.body === 'string' ? req.body : req.body?.csv) as string;
+    if (!raw) throw new AppError('No CSV body', 400);
+    const { valid, invalid } = parseInventoryCsv(raw);
+    if (invalid.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'CSV contains invalid rows',
+        data: invalid,
+      });
+    }
+    const results: { sku: string; variantSku?: string; quantity: number; ok: boolean; error?: string }[] = [];
+    // Second pass: apply.
+    for (const row of valid) {
+      try {
+        if (row.quantity >= 0) {
+          // Positive: set absolute
+          if (row.variantSku) {
+            const v = await prisma.productVariant.findFirst({ where: { sku: row.variantSku } });
+            if (!v) throw new Error(`variant not found: ${row.variantSku}`);
+            const previous = v.quantity;
+            await prisma.productVariant.update({ where: { id: v.id }, data: { quantity: row.quantity } });
+            await prisma.inventoryLog.create({
+              data: { productId: v.productId, variantId: v.id, quantityChange: row.quantity - previous, previousQuantity: previous, newQuantity: row.quantity, reason: 'restock', notes: 'csv import' },
+            });
+          } else {
+            const p = await prisma.product.findUnique({ where: { sku: row.sku } });
+            if (!p) throw new Error(`product not found: ${row.sku}`);
+            const previous = p.quantity;
+            await prisma.product.update({ where: { id: p.id }, data: { quantity: row.quantity } });
+            await prisma.inventoryLog.create({
+              data: { productId: p.id, variantId: null, quantityChange: row.quantity - previous, previousQuantity: previous, newQuantity: row.quantity, reason: 'restock', notes: 'csv import' },
+            });
+          }
+        } else {
+          // Negative: delta
+          const abs = -row.quantity;
+          if (row.variantSku) {
+            const v = await prisma.productVariant.findFirst({ where: { sku: row.variantSku } });
+            if (!v) throw new Error(`variant not found: ${row.variantSku}`);
+            await decrementStock({ productId: v.productId, variantId: v.id, quantity: abs, userId: req.user!.id });
+          } else {
+            const p = await prisma.product.findUnique({ where: { sku: row.sku } });
+            if (!p) throw new Error(`product not found: ${row.sku}`);
+            await decrementStock({ productId: p.id, quantity: abs, userId: req.user!.id });
+          }
+        }
+        results.push({ sku: row.sku, variantSku: row.variantSku, quantity: row.quantity, ok: true });
+      } catch (err: any) {
+        results.push({ sku: row.sku, variantSku: row.variantSku, quantity: row.quantity, ok: false, error: err?.message ?? 'unknown' });
+      }
+    }
+    res.json({ status: 'success', data: { applied: results.filter((r) => r.ok).length, results } });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  RETURNS / RESTOCK
+// ============================================
+
+// POST /api/inventory/restock - increment stock from a return
+const restockSchema = z.object({
+  productId: z.string().uuid(),
+  variantId: z.string().uuid().optional(),
+  quantity: z.number().int().min(1),
+  notes: z.string().max(200).optional(),
+  orderId: z.string().uuid().optional(),
+});
+router.post('/restock', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const data = restockSchema.parse(req.body);
+    const result = await incrementStock({
+      productId: data.productId,
+      variantId: data.variantId,
+      quantity: data.quantity,
+      reason: 'return',
+      notes: data.notes,
+      orderId: data.orderId,
+      userId: req.user!.id,
+    });
+    res.json({ status: 'success', data: result });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  3PL WEBHOOK
+// ============================================
+
+// Public (no auth) but signature-verified. The secret is looked up by
+// `provider`; a missing or rotated secret rejects with 401.
+router.post('/webhooks/3pl', async (req, res, next) => {
+  try {
+    const provider = String(req.header('X-Provider') || '');
+    const signature = String(req.header('X-Signature') || '');
+    if (!provider) throw new AppError('Missing X-Provider header', 400);
+    if (!signature) throw new AppError('Missing X-Signature header', 400);
+    const secretRow = await prisma.webhookSecret.findFirst({ where: { provider, isActive: true } });
+    if (!secretRow) throw new AppError('Unknown or rotated provider', 401);
+    const body = (req as any).rawBody || JSON.stringify(req.body);
+    if (!verifyWebhookSignature(secretRow.secret, body, signature, { mockAccept: process.env.NODE_ENV !== 'production' })) {
+      throw new AppError('Invalid signature', 401);
+    }
+    // Body schema: { events: [{ type, sku, quantity, variantSku, externalRef, reason }] }
+    const events = (req.body?.events as any[]) || [];
+    const results: any[] = [];
+    for (const ev of events) {
+      try {
+        const channel = await prisma.channel.findUnique({ where: { name: ev.channel || provider } });
+        if (!channel) {
+          results.push({ sku: ev.sku, ok: false, error: `unknown channel: ${ev.channel || provider}` });
+          continue;
+        }
+        // Find product by SKU
+        const product = await prisma.product.findUnique({ where: { sku: ev.sku } });
+        if (!product) {
+          results.push({ sku: ev.sku, ok: false, error: 'unknown sku' });
+          continue;
+        }
+        const result = await apply3PLStockDelta({
+          channelId: channel.id,
+          provider,
+          externalSku: ev.sku,
+          productId: product.id,
+          variantId: ev.variantId,
+          delta: Number(ev.quantity) || 0,
+          reason: ev.type,
+          externalRef: ev.externalRef,
+          raw: JSON.stringify(ev),
+        });
+        results.push({ sku: ev.sku, ok: true, ...result });
+      } catch (err: any) {
+        results.push({ sku: ev.sku, ok: false, error: err?.message });
+      }
+    }
+    res.json({ status: 'success', data: results });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/webhook-secrets - rotate a secret
+const webhookSecretSchema = z.object({
+  provider: z.string().min(1),
+  secret: z.string().min(8),
+});
+router.post('/webhook-secrets', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const data = webhookSecretSchema.parse(req.body);
+    const existing = await prisma.webhookSecret.findUnique({ where: { provider: data.provider } });
+    const result = existing
+      ? await prisma.webhookSecret.update({ where: { provider: data.provider }, data: { secret: data.secret, isActive: true, rotatedAt: new Date() } })
+      : await prisma.webhookSecret.create({ data: { provider: data.provider, secret: data.secret } });
+    res.json({ status: 'success', data: { provider: result.provider, rotatedAt: result.rotatedAt } });
+  } catch (err) { next(err); }
+});
+
+// ============================================
+//  JOB RUNNER (admin-triggerable cron stub)
+// ============================================
+
+// POST /api/inventory/jobs/run - run all scheduled jobs on demand
+router.post('/jobs/run', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const released = await releaseExpiredReservations();
+    const reorder = await runAutoReorder({ dryRun: false });
+    res.json({ status: 'success', data: { releasedReservations: released, ...reorder } });
+  } catch (err) { next(err); }
+});
+
 
 export default router;

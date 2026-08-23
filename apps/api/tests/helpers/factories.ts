@@ -67,6 +67,9 @@ export async function createProduct(overrides: Partial<{
   lowStockThreshold: number;
   trackInventory: boolean;
   categoryId: string;
+  allowBackorder: boolean;
+  backorderLimit: number | null;
+  expectedRestockAt: Date | null;
 }> = {}) {
   const p = await prisma();
   const slug = overrides.slug ?? uniq('p');
@@ -87,6 +90,9 @@ export async function createProduct(overrides: Partial<{
       lowStockThreshold: overrides.lowStockThreshold ?? 10,
       weightUnit: 'kg',
       categoryId: overrides.categoryId,
+      allowBackorder: overrides.allowBackorder ?? false,
+      backorderLimit: overrides.backorderLimit ?? null,
+      expectedRestockAt: overrides.expectedRestockAt ?? null,
     },
   });
 }
@@ -295,6 +301,132 @@ export async function createOrderItem(orderId: string, productId: string, overri
       quantity: overrides.quantity ?? 1,
       unitPrice: overrides.unitPrice ?? 10,
       totalPrice: overrides.totalPrice ?? 10,
+    },
+  });
+}
+
+/* ------------------------------------------------------------------
+ * Factories for the inventory extensions
+ * ----------------------------------------------------------------- */
+
+export async function createWarehouse(overrides: Partial<{
+  name: string; code: string; addressLine1: string; city: string; country: string;
+  isActive: boolean; isDefault: boolean;
+}> = {}) {
+  const p = await prisma();
+  const code = overrides.code ?? uniq('WH');
+  return p.warehouse.create({
+    data: {
+      name: overrides.name ?? code,
+      code,
+      addressLine1: overrides.addressLine1 ?? null,
+      city: overrides.city ?? null,
+      country: overrides.country ?? null,
+      isActive: overrides.isActive ?? true,
+      isDefault: overrides.isDefault ?? false,
+    },
+  });
+}
+
+export async function createReorderRule(overrides: Partial<{
+  productId: string; variantId: string; warehouseId: string;
+  threshold: number; reorderQty: number; supplierName: string; supplierEmail: string;
+  isActive: boolean;
+}> = {}) {
+  const p = await prisma();
+  return p.reorderRule.create({
+    data: {
+      productId: overrides.productId,
+      variantId: overrides.variantId ?? null,
+      warehouseId: overrides.warehouseId ?? null,
+      threshold: overrides.threshold ?? 10,
+      reorderQty: overrides.reorderQty ?? 50,
+      supplierName: overrides.supplierName ?? null,
+      supplierEmail: overrides.supplierEmail ?? null,
+      isActive: overrides.isActive ?? true,
+    },
+  });
+}
+
+export async function createReorderDraft(overrides: Partial<{
+  ruleId: string; productId: string; variantId: string; warehouseId: string;
+  quantity: number; status: 'draft' | 'sent' | 'cancelled' | 'received';
+  supplierName: string;
+}> = {}) {
+  const p = await prisma();
+  return p.reorderDraft.create({
+    data: {
+      ruleId: overrides.ruleId ?? null,
+      productId: overrides.productId,
+      variantId: overrides.variantId ?? null,
+      warehouseId: overrides.warehouseId ?? null,
+      quantity: overrides.quantity ?? 10,
+      status: overrides.status ?? 'draft',
+      supplierName: overrides.supplierName ?? null,
+    },
+  });
+}
+
+export async function createStockReservation(overrides: Partial<{
+  productId: string; variantId: string; warehouseId: string;
+  quantity: number; reservedUntil: Date; releasedAt: Date;
+  reason: string; cartItemId: string;
+}> = {}) {
+  const p = await prisma();
+  return p.stockReservation.create({
+    data: {
+      productId: overrides.productId,
+      variantId: overrides.variantId ?? null,
+      warehouseId: overrides.warehouseId ?? null,
+      quantity: overrides.quantity ?? 1,
+      reservedUntil: overrides.reservedUntil ?? new Date(Date.now() + 60_000),
+      releasedAt: overrides.releasedAt ?? null,
+      reason: overrides.reason ?? 'cart_hold',
+      cartItemId: overrides.cartItemId ?? null,
+    },
+  });
+}
+
+export async function createChannel(overrides: Partial<{
+  name: string; displayName: string; type: 'online' | 'marketplace' | 'retail';
+  isActive: boolean;
+}> = {}) {
+  const p = await prisma();
+  return p.channel.create({
+    data: {
+      name: overrides.name ?? uniq('ch'),
+      displayName: overrides.displayName ?? 'Test Channel',
+      type: overrides.type ?? 'online',
+      isActive: overrides.isActive ?? true,
+    },
+  });
+}
+
+export async function createWebhookSecret(overrides: Partial<{
+  provider: string; secret: string; isActive: boolean;
+}> = {}) {
+  const p = await prisma();
+  return p.webhookSecret.create({
+    data: {
+      provider: overrides.provider ?? uniq('prov'),
+      secret: overrides.secret ?? uniq('secret'),
+      isActive: overrides.isActive ?? true,
+    },
+  });
+}
+
+export async function createStockTake(overrides: Partial<{
+  warehouseId: string; name: string; notes: string; status: string;
+  createdBy: string;
+}> = {}) {
+  const p = await prisma();
+  return p.stockTake.create({
+    data: {
+      warehouseId: overrides.warehouseId,
+      name: overrides.name ?? uniq('take'),
+      notes: overrides.notes ?? null,
+      createdBy: overrides.createdBy ?? null,
+      status: overrides.status ?? 'in_progress',
     },
   });
 }

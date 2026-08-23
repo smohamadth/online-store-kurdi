@@ -117,6 +117,38 @@ const RELATION_TO_MODEL: Record<string, string> = {
   postTags: 'PostTag',
   blogPost: 'BlogPost',
   blogPosts: 'BlogPost',
+  // Inventory extensions
+  warehouse: 'Warehouse',
+  warehouses: 'Warehouse',
+  stocks: 'WarehouseStock',
+  warehouseStock: 'WarehouseStock',
+  warehouseStocks: 'WarehouseStock',
+  transfersFrom: 'WarehouseTransfer',
+  transfersTo: 'WarehouseTransfer',
+  warehouseTransfer: 'WarehouseTransfer',
+  warehouseTransfers: 'WarehouseTransfer',
+  stockReservation: 'StockReservation',
+  stockReservations: 'StockReservation',
+  reservation: 'StockReservation',
+  stockTake: 'StockTake',
+  stockTakes: 'StockTake',
+  stockTakeItem: 'StockTakeItem',
+  stockTakeItems: 'StockTakeItem',
+  takeItems: 'StockTakeItem',
+  reorderRule: 'ReorderRule',
+  reorderRules: 'ReorderRule',
+  reorderDraft: 'ReorderDraft',
+  reorderDrafts: 'ReorderDraft',
+  drafts: 'ReorderDraft',
+  rule: 'ReorderRule',
+  channel: 'Channel',
+  channels: 'Channel',
+  channelStock: 'ChannelStock',
+  channelStocks: 'ChannelStock',
+  threePLSyncEvent: 'ThreePLSyncEvent',
+  threePLSyncEvents: 'ThreePLSyncEvent',
+  syncEvents: 'ThreePLSyncEvent',
+  webhookSecret: 'WebhookSecret',
 };
 
 /**
@@ -574,6 +606,10 @@ function makeDelegate(model: string) {
       for (const k of Object.keys(row)) if (row[k] === undefined) delete row[k];
       if (singular === 'User' && row.isActive === undefined) row.isActive = true;
       if (singular === 'Product' && row.trackInventory === undefined) row.trackInventory = true;
+      // The ReorderRule schema has `isActive Boolean @default(true)`,
+      // but the route POST doesn't always send it. Default it to true
+      // so `runAutoReorder({where: {isActive: true}})` finds it.
+      if (singular === 'ReorderRule' && row.isActive === undefined) row.isActive = true;
       if (singular === 'Coupon' && row.usedCount === undefined) row.usedCount = 0;
       if (singular === 'Coupon' && row.isActive === undefined) row.isActive = true;
       if (singular === 'Coupon' && row.code === row.code) row.code = (row.code || '').toUpperCase();
@@ -581,12 +617,20 @@ function makeDelegate(model: string) {
       for (const [rel, items] of Object.entries(nested)) {
         const childModel = rel.charAt(0).toUpperCase() + rel.slice(1);
         const childStore = storeFor(childModel);
-        const fkCandidates = [`${singular}Id`, `${singular.toLowerCase()}Id`];
+        // Schema uses camelCase FKs: `orderId`, `productId`, `userId`,
+        // `cartItemId`, `categoryId`. Pick the first one that the
+        // child row already has, otherwise default to camelCase.
+        const fkCandidates = [
+          `${singular.charAt(0).toLowerCase() + singular.slice(1)}Id`, // e.g. orderId
+          `${singular.toLowerCase()}Id`,
+          `${singular}Id`,
+        ];
         for (const item of items) {
           const cid = item.id || nowId(childModel);
           const child: Row = { ...item, id: cid, createdAt: new Date(), updatedAt: new Date() };
           for (const k of Object.keys(child)) if (child[k] === undefined) delete child[k];
-          if (!fkCandidates.some((f) => f in child)) child[fkCandidates[0]] = id;
+          const fkToUse = fkCandidates.find((f) => f in child) ?? fkCandidates[0];
+          if (!fkCandidates.some((f) => f in child)) child[fkToUse] = id;
           childStore.set(cid, child);
         }
       }
@@ -690,6 +734,10 @@ const KNOWN_MODELS = [
   'shippingMethod', 'shippingZone', 'taxClass', 'taxRate', 'storeSettings',
   'themeSettings', 'homeSection', 'menu', 'menuItem', 'banner', 'page',
   'post', 'postTag', 'blogPost', 'stockAlert',
+  // Inventory extensions
+  'warehouse', 'warehouseStock', 'warehouseTransfer', 'stockReservation',
+  'stockTake', 'stockTakeItem', 'reorderRule', 'reorderDraft',
+  'channel', 'channelStock', 'threePLSyncEvent', 'webhookSecret',
 ];
 
 const prisma: any = {};
