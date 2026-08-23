@@ -349,9 +349,18 @@ export default function ProductView() {
                 </>
               )}
             </div>
-            <p style={{ marginTop: '8px', fontSize: '14px', color: product.quantity > 0 ? '#22c55e' : '#ef4444' }}>
-              {product.quantity > 0 ? `✓ In stock (${product.quantity} available)` : '✗ Out of stock'}
+            <p style={{ marginTop: '8px', fontSize: '14px', color: product.quantity > 0 ? '#22c55e' : ((product as any).allowBackorder ? '#f59e0b' : '#ef4444') }}>
+              {product.quantity > 0
+                ? `✓ In stock (${product.quantity} available)`
+                : (product as any).allowBackorder
+                  ? '⏳ Preorder available (ships when restocked)'
+                  : '✗ Out of stock'}
             </p>
+            {(product as any).expectedRestockAt && (product as any).allowBackorder && (
+              <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                Expected restock: {new Date((product as any).expectedRestockAt).toLocaleDateString()}
+              </p>
+            )}
             
             {/* Stock Alert for out of stock */}
             {product.quantity <= 0 && (
@@ -480,20 +489,22 @@ export default function ProductView() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 onClick={handleAddToCart}
-                disabled={product.quantity <= 0}
+                disabled={product.quantity <= 0 && !(product as any).allowBackorder}
                 style={{
                   flex: 1,
                   padding: '14px 24px',
-                  backgroundColor: product.quantity <= 0 ? '#ccc' : (addedToCart ? '#22c55e' : '#000'),
+                  backgroundColor: (product.quantity <= 0 && !(product as any).allowBackorder) ? '#ccc' : (addedToCart ? '#22c55e' : '#000'),
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '16px',
                   fontWeight: 600,
-                  cursor: product.quantity <= 0 ? 'not-allowed' : 'pointer',
+                  cursor: (product.quantity <= 0 && !(product as any).allowBackorder) ? 'not-allowed' : 'pointer',
                 }}
               >
-                {product.quantity <= 0 ? 'Out of Stock' : (addedToCart ? '✓ Added!' : 'Add to Cart')}
+                {product.quantity <= 0
+                  ? ((product as any).allowBackorder ? '⏳ Preorder' : 'Out of Stock')
+                  : (addedToCart ? '✓ Added!' : 'Add to Cart')}
               </button>
               <button
                 onClick={handleWishlist}

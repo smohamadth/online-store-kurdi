@@ -135,4 +135,20 @@ describe('http client', () => {
     const env = await http.post<undefined>('/x');
     expect(env).toBeUndefined();
   });
+
+  it('sends raw body as-is (no JSON encoding) when rawBody: true', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 'success', data: null }),
+    }));
+    vi.stubGlobal('fetch', fetchMock as any);
+    await authHttp.post('/x', 'a,b,c\n1,2,3', {
+      headers: { 'Content-Type': 'text/csv' },
+      rawBody: true,
+    });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.body).toBe('a,b,c\n1,2,3');
+    expect(init.headers['Content-Type']).toBe('text/csv');
+  });
 });
