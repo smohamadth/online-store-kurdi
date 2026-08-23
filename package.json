@@ -37,12 +37,14 @@
     "test:web": "cd apps/web && npm run test:all",
     "test:web:lib": "cd apps/web && npm run test",
     "test:web:components": "cd apps/web && npm run test:components",
+    "docs:build": "node docs/build-pdf.cjs",
     "db:deploy": "cd apps/api && npm run db:deploy",
     "postinstall": "cd apps/api && npx prisma generate"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "happy-dom": "^20.11.6",
+    "pdfkit": "^0.19.1",
     "typescript": "^5.3.3",
     "vitest": "^1.6.1"
   },
