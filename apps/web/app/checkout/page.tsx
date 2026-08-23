@@ -32,6 +32,7 @@ export default function CheckoutPage() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
+  const [orderId, setOrderId] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [discount, setDiscount] = useState(0);
 
@@ -133,12 +134,14 @@ export default function CheckoutPage() {
       // store never received the order and the cart was already emptied.
       const response = await api.createOrder(token, orderData);
       const confirmed = response?.data?.orderNumber;
+      const confirmedId = response?.data?.id;
 
       if (!confirmed) {
         throw new Error('The server did not confirm the order. Please try again.');
       }
 
       setOrderNumber(confirmed);
+      if (confirmedId) setOrderId(confirmedId);
       setOrderPlaced(true);
       clearCart();
       localStorage.removeItem('appliedCoupon');
@@ -167,6 +170,47 @@ export default function CheckoutPage() {
           <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px' }}>
             Order #{orderNumber}
           </p>
+          {/* Receipt downloads - the orderId is the receipt route param.
+              We fall back to /account/orders if the orderId somehow
+              wasn't captured. */}
+          {orderId && (
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '24px' }} data-testid="receipt-actions">
+              <a
+                href={`/api/orders/${orderId}/receipt`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#000',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                }}
+              >
+                📄 View receipt
+              </a>
+              <a
+                href={`/api/orders/${orderId}/receipt.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f5f5f5',
+                  color: '#000',
+                  border: '1px solid #e5e5e5',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                }}
+              >
+                ⬇ Download PDF
+              </a>
+            </div>
+          )}
 
           {/* Order Summary */}
           <div style={{ padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginBottom: '24px', textAlign: 'left' }}>

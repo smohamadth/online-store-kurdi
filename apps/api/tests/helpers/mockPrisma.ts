@@ -53,6 +53,10 @@ const RELATION_TO_MODEL: Record<string, string> = {
   users: 'User',
   address: 'Address',
   addresses: 'Address',
+  shippingAddress: 'Address',
+  billingAddress: 'Address',
+  'order.shippingaddress': 'Address',
+  'order.billingaddress': 'Address',
   order: 'Order',
   orders: 'Order',
   orderItem: 'OrderItem',
@@ -169,11 +173,20 @@ function storeFor(model: string, parentModel: string = ''): Store {
   // This must take priority over the unparented fallback so that the same
   // include name (`items`) on different parents routes to different stores.
   if (parentModel) {
-    const contextual = `${parentModel}.${model.toLowerCase()}`;
-    const mapped = RELATION_TO_MODEL[contextual];
-    if (mapped) {
-      if (!stores[mapped]) stores[mapped] = new Map();
-      return stores[mapped];
+    // Try both `Order.shippingAddress` and `order.shippingaddress` forms.
+    // The caller produces `${parentModel}.${model.toLowerCase()}`, but
+    // some entries were registered with the camelCase form.
+    const candidates = [
+      `${parentModel}.${model.toLowerCase()}`,
+      `${parentModel.toLowerCase()}.${model.toLowerCase()}`,
+      `${parentModel}.${model}`,
+    ];
+    for (const contextual of candidates) {
+      const mapped = RELATION_TO_MODEL[contextual];
+      if (mapped) {
+        if (!stores[mapped]) stores[mapped] = new Map();
+        return stores[mapped];
+      }
     }
   }
   if (RELATION_TO_MODEL[model]) {

@@ -42,6 +42,7 @@
     "postinstall": "cd apps/api && npx prisma generate"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
     "concurrently": "^8.2.2",
     "happy-dom": "^20.11.6",
     "pdfkit": "^0.19.1",
