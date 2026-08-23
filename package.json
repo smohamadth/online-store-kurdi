@@ -31,14 +31,20 @@
     "lint:api": "cd apps/api && npm run lint",
     "lint:web": "cd apps/web && npm run lint",
     "test": "npm run test:api && npm run test:web",
-    "test:api": "cd apps/api && npm run test",
-    "test:web": "cd apps/web && npm run test",
+    "test:api": "cd apps/api && npm run test:unit && npm run test:integration",
+    "test:api:unit": "cd apps/api && npm run test:unit",
+    "test:api:integration": "cd apps/api && npm run test:integration",
+    "test:web": "cd apps/web && npm run test:all",
+    "test:web:lib": "cd apps/web && npm run test",
+    "test:web:components": "cd apps/web && npm run test:components",
     "db:deploy": "cd apps/api && npm run db:deploy",
     "postinstall": "cd apps/api && npx prisma generate"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "typescript": "^5.3.3"
+    "happy-dom": "^20.11.6",
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.1"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -55,5 +61,10 @@
     "ml-ready"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@prisma/engines": "^5.22.0",
+    "prisma": "^5.22.0"
+  }
 }
