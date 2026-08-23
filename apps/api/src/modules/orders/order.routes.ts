@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
-import { decrementStock } from '../inventory/inventory.service';
+import { decrementStock, consumeReservationsForCartItemIds } from '../inventory/inventory.service';
 import { logger } from '../../utils/logger';
 import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
 
@@ -292,6 +292,20 @@ router.post('/', authenticate, async (req, res, next) => {
           });
         }
       }
+    }
+
+    // Consume any active stock reservations the cart held. Without
+    // this step, the order placement is correct (decrementStock
+    // already ran above) but the reservation rows stay around with
+    // no releasedAt timestamp, which means the post-order
+    // `availableQuantity` for that product stays artificially low
+    // until the original TTL expires.
+    const cartItemRows = await prisma.cartItem.findMany({
+      where: { userId: req.user!.id },
+      select: { id: true },
+    });
+    if (cartItemRows.length > 0) {
+      await consumeReservationsForCartItemIds(cartItemRows.map((c: { id: string }) => c.id));
     }
 
     // Clear user's cart

@@ -224,25 +224,52 @@ router.post('/', authenticate, async (req, res, next) => {
     const RESERVATION_TTL_MIN = 15;
     const reservedUntil = new Date(Date.now() + RESERVATION_TTL_MIN * 60 * 1000);
     if (existingItem) {
-      // Extend the existing reservation's reservedUntil; the
-      // quantity is already accounted for by the existing hold.
-      await prisma.stockReservation.updateMany({
+      // The cartItem already has an active reservation tied to it.
+      // Bumping the cart quantity bumps the reservation quantity
+      // too; otherwise the reserved pool would not match the held
+      // pool and the second cart would over-sell.
+      const existingReservation = await prisma.stockReservation.findFirst({
         where: { cartItemId: existingItem.id, releasedAt: null },
-        data: { reservedUntil },
+      });
+      if (existingReservation) {
+        await prisma.stockReservation.update({
+          where: { id: existingReservation.id },
+          data: {
+            quantity: existingItem.quantity + quantity, // the cartItem has already been updated above
+            reservedUntil,
+          },
+        });
+      } else {
+        // Existing cartItem with no active reservation (e.g. the
+        // reservation expired and the user re-added). Create a
+        // fresh one.
+        await prisma.stockReservation.create({
+          data: {
+            productId,
+            variantId: variantId ?? null,
+            quantity: existingItem.quantity + quantity,
+            reservedUntil,
+            reason: 'cart_hold',
+            cartItemId: cartItem.id,
+            originType: 'cart',
+            originId: cartItem.id,
+          },
+        });
+      }
+    } else {
+      await prisma.stockReservation.create({
+        data: {
+          productId,
+          variantId: variantId ?? null,
+          quantity,
+          reservedUntil,
+          reason: 'cart_hold',
+          cartItemId: cartItem.id,
+          originType: 'cart',
+          originId: cartItem.id,
+        },
       });
     }
-    await prisma.stockReservation.create({
-      data: {
-        productId,
-        variantId: variantId ?? null,
-        quantity,
-        reservedUntil,
-        reason: 'cart_hold',
-        cartItemId: cartItem.id,
-        originType: 'cart',
-        originId: cartItem.id,
-      },
-    });
     await prisma.cartItem.update({
       where: { id: cartItem.id },
       data: { reservedUntil },

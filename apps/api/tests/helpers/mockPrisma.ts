@@ -610,13 +610,23 @@ function makeDelegate(model: string) {
       // but the route POST doesn't always send it. Default it to true
       // so `runAutoReorder({where: {isActive: true}})` finds it.
       if (singular === 'ReorderRule' && row.isActive === undefined) row.isActive = true;
+      // Match the schema default so reads return `false` rather than
+      // `undefined` for orders that didn't go through the backorder
+      // path. Production prisma resolves @default(false) at insert
+      // time; the mock prisma drops undefined values during create,
+      // so without this guard tests would see the wrong value.
+      if (singular === 'OrderItem' && row.isBackorder === undefined) row.isBackorder = false;
       if (singular === 'Coupon' && row.usedCount === undefined) row.usedCount = 0;
       if (singular === 'Coupon' && row.isActive === undefined) row.isActive = true;
       if (singular === 'Coupon' && row.code === row.code) row.code = (row.code || '').toUpperCase();
       store.set(id, row);
       for (const [rel, items] of Object.entries(nested)) {
-        const childModel = rel.charAt(0).toUpperCase() + rel.slice(1);
-        const childStore = storeFor(childModel);
+        // Resolve `rel` through the relation map so contextual names
+        // like `Order.items` end up in the OrderItem store, not the
+        // (non-existent) Items store. Fall back to uppercasing the
+        // first letter for models that have no explicit entry.
+        const childModel = RELATION_TO_MODEL[`${singular}.${rel}`] || RELATION_TO_MODEL[rel] || (rel.charAt(0).toUpperCase() + rel.slice(1));
+        const childStore = storeFor(childModel, singular);
         // Schema uses camelCase FKs: `orderId`, `productId`, `userId`,
         // `cartItemId`, `categoryId`. Pick the first one that the
         // child row already has, otherwise default to camelCase.
@@ -628,6 +638,9 @@ function makeDelegate(model: string) {
         for (const item of items) {
           const cid = item.id || nowId(childModel);
           const child: Row = { ...item, id: cid, createdAt: new Date(), updatedAt: new Date() };
+          // Apply per-model defaults BEFORE the `delete undefined` pass,
+          // otherwise the key gets stripped before we can set it.
+          if (childModel === 'OrderItem' && child.isBackorder === undefined) child.isBackorder = false;
           for (const k of Object.keys(child)) if (child[k] === undefined) delete child[k];
           const fkToUse = fkCandidates.find((f) => f in child) ?? fkCandidates[0];
           if (!fkCandidates.some((f) => f in child)) child[fkToUse] = id;

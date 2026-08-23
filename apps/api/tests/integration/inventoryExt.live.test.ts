@@ -159,19 +159,45 @@ describe('Live: inventory subsystem contract', () => {
     const p1Csv = await mockPrisma.product.findUnique({ where: { id: p1.id } });
     expect(p1Csv!.quantity).toBe(99);
 
-    // -- Job runner (admin-triggered cron) --------------------------------
+    // -- Job runner (admin-triggerable cron) --------------------------------
     const jobs = await request(app).post('/api/inventory/jobs/run')
       .set('Authorization', `Bearer ${adminAuth}`);
     expect(jobs.status).toBe(200);
     expect(jobs.body.data).toHaveProperty('releasedReservations');
     expect(jobs.body.data).toHaveProperty('draftsCreated');
 
+    // -- Reservation lifecycle: extend + manual release -------------------
+    // Create a fresh reservation, PATCH its TTL, then DELETE it.
+    const freshRes = await request(app).post('/api/inventory/reservations')
+      .set('Authorization', `Bearer ${adminAuth}`)
+      .send({ productId: p2.id, quantity: 1, ttlMinutes: 1 });
+    expect(freshRes.status).toBe(201);
+    const patch = await request(app).patch(`/api/inventory/reservations/${freshRes.body.data.id}`)
+      .set('Authorization', `Bearer ${adminAuth}`)
+      .send({ ttlMinutes: 30 });
+    expect(patch.status).toBe(200);
+    const del = await request(app).delete(`/api/inventory/reservations/${freshRes.body.data.id}`)
+      .set('Authorization', `Bearer ${adminAuth}`);
+    expect(del.status).toBe(200);
+    // Idempotent: second DELETE returns 200, not 404.
+    const del2 = await request(app).delete(`/api/inventory/reservations/${freshRes.body.data.id}`)
+      .set('Authorization', `Bearer ${adminAuth}`);
+    expect(del2.status).toBe(200);
+
+    // -- Backorder limit: the hoodie now has backorderLimit=2 ------------
+    // We seeded it without a limit; setting one now means future
+    // orders over the cap should reject. Confirm via the inventory
+    // service round-trip rather than a fresh factory call.
+    // (Skipped here to keep the live test focused on the contract
+    // surface; see inventoryExt.edge.test.ts for the backorderLimit
+    // coverage.)
+
     // -- Summary ----------------------------------------------------------
     const summary = {
       warehouses: 2,
       reorderDrafts: 1,
       channels: 1,
-      reservations: 1,
+      reservations: 1, // the post-order one; the freshRes was deleted
       orderItems: 1,
       inventoryLogs: logs.length + 1, // +1 for the CSV restock
       threePLEvents: 1,

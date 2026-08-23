@@ -78,6 +78,19 @@ export async function decrementStock(req: DecrementRequest): Promise<DecrementRe
       if (newQty < 0 && !product.allowBackorder) {
         throw new AppError(`Insufficient stock for variant ${variant.sku} (have ${previous}, need ${quantity})`, 400);
       }
+      // Backorder limit: the schema allows a per-product cap on how
+      // far into the negative an order can drive stock. If the cap is
+      // set and the resulting quantity would underflow it, reject the
+      // line. `backorderLimit` is measured on the parent product
+      // because it is what the storefront displays; for variants we
+      // apply it to the variant quantity (which is what the order
+      // actually consumes).
+      if (newQty < 0 && product.backorderLimit != null && -newQty > product.backorderLimit) {
+        throw new AppError(
+          `Backorder limit exceeded for ${product.name}: cap is ${product.backorderLimit}, this order would put stock at ${newQty}`,
+          400
+        );
+      }
       const wasBackorder = newQty < 0;
       await tx.productVariant.update({ where: { id: variantId }, data: { quantity: newQty } });
       // Decrement parent product's denormalised quantity too.
@@ -105,6 +118,12 @@ export async function decrementStock(req: DecrementRequest): Promise<DecrementRe
     const newQty = previous - quantity;
     if (newQty < 0 && !product.allowBackorder) {
       throw new AppError(`Insufficient stock for ${product.name} (have ${previous}, need ${quantity})`, 400);
+    }
+    if (newQty < 0 && product.backorderLimit != null && -newQty > product.backorderLimit) {
+      throw new AppError(
+        `Backorder limit exceeded for ${product.name}: cap is ${product.backorderLimit}, this order would put stock at ${newQty}`,
+        400
+      );
     }
     const wasBackorder = newQty < 0;
     await tx.product.update({ where: { id: productId }, data: { quantity: newQty } });
@@ -233,6 +252,70 @@ export async function consumeReservation(reservationId: string) {
     where: { id: reservationId },
     data: { releasedAt: new Date() },
   });
+}
+
+/**
+ * Manually release a single reservation (admin action: a customer
+ * cancelled their cart, an integration needed to free the stock).
+ * Idempotent: if the reservation is already released, returns it
+ * unchanged rather than erroring on a Prisma "no rows updated"
+ * edge case.
+ */
+export async function releaseReservation(reservationId: string) {
+  const existing = await prisma.stockReservation.findUnique({ where: { id: reservationId } });
+  if (!existing) {
+    throw new AppError(`Reservation not found: ${reservationId}`, 404);
+  }
+  if (existing.releasedAt) return existing;
+  return prisma.stockReservation.update({
+    where: { id: reservationId },
+    data: { releasedAt: new Date() },
+  });
+}
+
+/**
+ * Extend (or shorten) a reservation's TTL. The new `reservedUntil`
+ * is computed relative to NOW, not the previous deadline - so passing
+ * 5 always means "5 minutes from this call", not "5 minutes after
+ * the old deadline". This matches what an admin clicking "give them
+ * 10 more minutes" expects.
+ *
+ * Refuses to extend a reservation that is already released.
+ */
+export async function extendReservation(reservationId: string, ttlMinutes: number) {
+  if (!Number.isFinite(ttlMinutes) || ttlMinutes < 1) {
+    throw new AppError('ttlMinutes must be a positive number', 400);
+  }
+  const existing = await prisma.stockReservation.findUnique({ where: { id: reservationId } });
+  if (!existing) {
+    throw new AppError(`Reservation not found: ${reservationId}`, 404);
+  }
+  if (existing.releasedAt) {
+    throw new AppError('Cannot extend a released reservation', 400);
+  }
+  return prisma.stockReservation.update({
+    where: { id: reservationId },
+    data: { reservedUntil: new Date(Date.now() + ttlMinutes * 60 * 1000) },
+  });
+}
+
+/**
+ * Consume every active reservation tied to a set of cart items.
+ * Called from the order pipeline after the order is created: the
+ * cart items are deleted, but their reservations live on as
+ * `releasedAt = now` for audit. This prevents the post-order
+ * "available" pool from being artificially drained.
+ */
+export async function consumeReservationsForCartItemIds(cartItemIds: string[]) {
+  if (cartItemIds.length === 0) return 0;
+  const r = await prisma.stockReservation.updateMany({
+    where: {
+      cartItemId: { in: cartItemIds },
+      releasedAt: null,
+    },
+    data: { releasedAt: new Date() },
+  });
+  return r.count;
 }
 
 /**

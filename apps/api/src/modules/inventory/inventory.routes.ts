@@ -10,6 +10,8 @@ import {
   incrementStock,
   createReservation,
   consumeReservation,
+  releaseReservation,
+  extendReservation,
   releaseExpiredReservations,
   availableQuantity,
   createStockTake,
@@ -559,27 +561,40 @@ router.post('/warehouse-transfers/:id/complete', authenticate, authorize('admin'
       const t = await tx.warehouseTransfer.findUnique({ where: { id: req.params.id } });
       if (!t) throw new AppError('Transfer not found', 404);
       if (t.status !== 'in_transit') throw new AppError(`Transfer is ${t.status}, can only complete in_transit`, 400);
-      // Decrement source
+      // Compute how many units actually move. If the source doesn't
+      // have enough, the source is clamped at 0 and the destination
+      // receives only what was actually drained. The transfer row's
+      // quantity is updated to reflect reality for the audit trail.
       const sourceWhere = { warehouseId: t.fromWarehouseId, productId: t.productId, variantId: t.variantId };
       const source = await tx.warehouseStock.findFirst({ where: sourceWhere });
+      const available = source ? source.quantity : 0;
+      const moved = Math.min(available, t.quantity);
+      if (moved <= 0) {
+        // Nothing to move; mark the transfer completed with 0 moved
+        // and leave the source/dest untouched.
+        return tx.warehouseTransfer.update({
+          where: { id: t.id },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+      }
       if (source) {
         await tx.warehouseStock.update({
           where: { id: source.id },
-          data: { quantity: Math.max(0, source.quantity - t.quantity) },
+          data: { quantity: source.quantity - moved },
         });
       } else {
         await tx.warehouseStock.create({ data: { ...sourceWhere, quantity: 0 } });
       }
-      // Increment destination
+      // Increment destination by `moved` (not the requested t.quantity).
       const destWhere = { warehouseId: t.toWarehouseId, productId: t.productId, variantId: t.variantId };
       const dest = await tx.warehouseStock.findFirst({ where: destWhere });
       if (dest) {
         await tx.warehouseStock.update({
           where: { id: dest.id },
-          data: { quantity: dest.quantity + t.quantity },
+          data: { quantity: dest.quantity + moved },
         });
       } else {
-        await tx.warehouseStock.create({ data: { ...destWhere, quantity: t.quantity } });
+        await tx.warehouseStock.create({ data: { ...destWhere, quantity: moved } });
       }
       return tx.warehouseTransfer.update({
         where: { id: t.id },
@@ -877,6 +892,28 @@ router.post('/reservations/release-expired', authenticate, authorize('admin', 'm
   try {
     const released = await releaseExpiredReservations();
     res.json({ status: 'success', data: { released } });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/inventory/reservations/:id - extend the TTL.
+// Body: { ttlMinutes: number }
+const reservationPatchSchema = z.object({
+  ttlMinutes: z.number().int().min(1).max(60 * 24 * 7), // max 1 week
+});
+router.patch('/reservations/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const { ttlMinutes } = reservationPatchSchema.parse(req.body);
+    const updated = await extendReservation(req.params.id, ttlMinutes);
+    res.json({ status: 'success', data: updated });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/inventory/reservations/:id - manually release one.
+// Idempotent: releasing an already-released reservation is a no-op.
+router.delete('/reservations/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const updated = await releaseReservation(req.params.id);
+    res.json({ status: 'success', data: updated });
   } catch (err) { next(err); }
 });
 
