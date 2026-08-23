@@ -231,6 +231,20 @@ export interface Facets {
 export async function getFacets(filter: ProductFilter): Promise<Facets> {
   const categoryIds = await resolveCategorySlugs(filter.category || [], true);
 
+  // If the user asked for category slugs but none of them resolved,
+  // every dimension is empty. Match the list endpoint's behaviour.
+  if ((filter.category || []).length > 0 && categoryIds.length === 0) {
+    return {
+      categories: [],
+      types: [],
+      attributes: {},
+      priceRange: { min: 0, max: 0 },
+      inStock: { count: 0, total: 0 },
+      onSale: { count: 0, total: 0 },
+      rating: { min: 0, max: 0, buckets: [1, 2, 3, 4, 5].map((v) => ({ value: v, count: 0 })) },
+    };
+  }
+
   // Pull the broader candidate set: apply every filter EXCEPT the
   // dimension we are about to count, so the counts reflect "what
   // would happen if I added this to my current filter".

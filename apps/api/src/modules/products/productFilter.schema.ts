@@ -29,14 +29,20 @@ const csv = z
   });
 
 // A positive number or empty. The store UI sends an empty string when
-// the user clears a price input.
+// the user clears a price input. Reject garbage (e.g. ?minPrice=abc)
+// with a Zod issue so the route returns a 400, not a 200 with the
+// filter silently coerced.
 const optionalNumber = z
   .union([z.string(), z.number()])
   .optional()
-  .transform((v) => {
+  .transform((v, ctx) => {
     if (v === undefined || v === null || v === '') return undefined;
     const n = Number(v);
-    return Number.isFinite(n) ? n : undefined;
+    if (!Number.isFinite(n)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'expected a number' });
+      return z.NEVER;
+    }
+    return n;
   });
 
 const optionalBool = z
@@ -65,13 +71,25 @@ export const productFilterSchema = z.object({
   page: z
     .union([z.string(), z.number()])
     .optional()
-    .transform((v) => (v === undefined ? 1 : Math.max(1, Number(v) || 1))),
+    .transform((v, ctx) => {
+      if (v === undefined) return 1;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 1) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'page must be a positive integer' });
+        return z.NEVER;
+      }
+      return Math.floor(n);
+    }),
   limit: z
     .union([z.string(), z.number()])
     .optional()
-    .transform((v) => {
-      const n = v === undefined ? 20 : Number(v) || 20;
-      return Math.min(100, Math.max(1, n));
+    .transform((v, ctx) => {
+      const n = v === undefined ? 20 : Number(v);
+      if (!Number.isFinite(n) || n < 1) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'limit must be a positive integer' });
+        return z.NEVER;
+      }
+      return Math.min(100, Math.floor(n));
     }),
 
   // Admin / testing: override the default `active` filter. The route
@@ -117,10 +135,14 @@ export const productFilterSchema = z.object({
   minRating: z
     .union([z.string(), z.number()])
     .optional()
-    .transform((v) => {
+    .transform((v, ctx) => {
       if (v === undefined || v === null || v === '') return undefined;
       const n = Number(v);
-      return Number.isFinite(n) ? Math.max(0, Math.min(5, n)) : undefined;
+      if (!Number.isFinite(n)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'minRating must be a number' });
+        return z.NEVER;
+      }
+      return Math.max(0, Math.min(5, n));
     }),
 
   // Free-text
