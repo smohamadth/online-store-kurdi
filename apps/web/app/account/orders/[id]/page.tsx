@@ -195,6 +195,50 @@ export default function OrderDetailPage() {
         </span>
       </div>
 
+      {/* Receipt actions */}
+      {/* Both endpoints require the customer's bearer token; the
+          browser's fetch-with-credentials handles it automatically
+          when we pass the Authorization header. We open the
+          receipt in a new tab so the order page stays open. */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }} data-testid="receipt-actions">
+        <a
+          href={`/api/orders/${orderId}/receipt`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#000',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: 500,
+            textDecoration: 'none',
+            display: 'inline-block',
+          }}
+        >
+          📄 View receipt
+        </a>
+        <a
+          href={`/api/orders/${orderId}/receipt.pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#f5f5f5',
+            color: '#000',
+            border: '1px solid #e5e5e5',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: 500,
+            textDecoration: 'none',
+            display: 'inline-block',
+          }}
+        >
+          ⬇ Download PDF
+        </a>
+      </div>
+
       {/* Order Status Timeline */}
       {statusStep >= 0 && (
         <div style={{

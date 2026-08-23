@@ -7,6 +7,7 @@ import { logger } from '../../utils/logger';
 import { NotFoundError, ConflictError, AppError } from '../../middleware/errorHandler';
 import slugify from 'slugify';
 import { z } from 'zod';
+import { listProducts, getFacets, parseFilterFromQuery } from './productFilter.service';
 
 const router = Router();
 
@@ -145,79 +146,75 @@ function formatProduct(product: any) {
 }
 
 // GET /api/products - Get products with filtering and pagination
+//
+// The original implementation accepted a single category string, a single
+// type, and a single min/max price. The storefront now needs multi-select
+// categories, attribute filters, an `onSale` flag, and a `minRating`
+// threshold. The new filter service lives in `./productFilter.service.ts`
+// and exposes the same response shape (status / data / pagination) so
+// the old callers keep working.
+/**
+ * Pre-process the query so `?attr.size=M&attr.color=red` becomes
+ * `req.query = { attr: { size: 'M', color: 'red' } }`. Express's `qs`
+ * parser only does this for bracket notation (`attr[size]=M`), and we
+ * want dot notation because it's what most REST clients emit.
+ */
+function flattenAttrQuery(qs: any): any {
+  if (!qs || typeof qs !== 'object') return qs;
+  const attr: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(qs)) {
+    if (k.startsWith('attr.')) {
+      const sub = k.slice(5);
+      attr[sub] = v as any;
+      delete qs[k];
+    }
+  }
+  if (Object.keys(attr).length > 0) {
+    qs.attr = attr;
+  }
+  return qs;
+}
+
 router.get('/', async (req, res, next) => {
   try {
-    const query = productQuerySchema.parse(req.query);
-    const { page, limit, category, type, status, minPrice, maxPrice, search, sort, inStock } = query;
-    const skip = (page - 1) * limit;
-
-    // Build where clause
-    const where: any = {
-      status: status || 'active',
-    };
-
-    if (category) {
-      where.category = { slug: category };
-    }
-
-    if (type) {
-      where.type = type;
-    }
-
-    if (minPrice || maxPrice) {
-      where.price = {};
-      if (minPrice) where.price.gte = minPrice;
-      if (maxPrice) where.price.lte = maxPrice;
-    }
-
-    if (inStock) {
-      where.quantity = { gt: 0 };
-    }
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    // Build order by
-    let orderBy: any;
-    switch (sort) {
-      case 'price_asc': orderBy = { price: 'asc' }; break;
-      case 'price_desc': orderBy = { price: 'desc' }; break;
-      case 'name_asc': orderBy = { name: 'asc' }; break;
-      case 'name_desc': orderBy = { name: 'desc' }; break;
-      case 'popular': orderBy = { reviews: { _count: 'desc' } }; break;
-      default: orderBy = { createdAt: 'desc' }; break;
-    }
-
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: {
-          images: true,
-          category: true,
-          variants: true,
-          reviews: { select: { rating: true } },
-        },
-        orderBy,
-        skip,
-        take: limit,
-      }),
-      prisma.product.count({ where }),
-    ]);
-
+    const query = flattenAttrQuery({ ...req.query });
+    const filter = parseFilterFromQuery(query);
+    const result = await listProducts(filter);
     res.json({
       status: 'success',
-      data: products.map(formatProduct),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+      data: result.data.map(formatProduct),
+      pagination: result.pagination,
+      applied: {
+        category: result.applied.category,
+        type: result.applied.type,
+        attr: result.applied.attr,
+        minPrice: result.applied.minPrice,
+        maxPrice: result.applied.maxPrice,
+        inStock: result.applied.inStock,
+        onSale: result.applied.onSale,
+        minRating: result.applied.minRating,
+        sort: result.applied.sort,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/products/facets - Get facet counts for the filter sidebar.
+//
+// The sidebar needs to know, for each candidate value, how many products
+// would match if the user added it. The counts are computed against
+// every other active filter so the UI updates as the user clicks
+// checkboxes. See the service's `getFacets` for the exact semantics.
+router.get('/facets', async (req, res, next) => {
+  try {
+    const query = flattenAttrQuery({ ...req.query });
+    const filter = parseFilterFromQuery(query);
+    const facets = await getFacets(filter);
+    res.json({
+      status: 'success',
+      data: facets,
     });
   } catch (error) {
     next(error);

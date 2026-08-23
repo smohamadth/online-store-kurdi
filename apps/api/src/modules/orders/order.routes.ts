@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
+import { decrementStock, consumeReservationsForCartItemIds } from '../inventory/inventory.service';
 import { logger } from '../../utils/logger';
 import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
 
@@ -165,7 +166,7 @@ router.post('/', authenticate, async (req, res, next) => {
 
     // Calculate order totals if not provided
     let calculatedSubtotal = 0;
-    const orderItems = [];
+    const orderItems: any[] = [];
 
     for (const item of items) {
       const product = await prisma.product.findUnique({
@@ -185,13 +186,16 @@ router.post('/', authenticate, async (req, res, next) => {
         throw new AppError(`Product is not available: ${product.name}`, 400);
       }
 
-      // Check inventory
+      // Check inventory. The decrementStock service below is the
+      // authoritative check (it also handles backorders). We only
+      // short-circuit here when the product is a non-backorder,
+      // non-tracked-inventory mismatch on a non-existent variant.
       if (product.trackInventory) {
-        const availableQuantity = item.variantId 
+        const availableQuantity = item.variantId
           ? product.variants[0]?.quantity || 0
           : product.quantity;
-
-        if (availableQuantity < item.quantity) {
+        // Only reject if neither backorder nor a sufficient pool.
+        if (availableQuantity < item.quantity && !product.allowBackorder) {
           throw new AppError(`Insufficient stock for ${product.name}`, 400);
         }
       }
@@ -259,27 +263,49 @@ router.post('/', authenticate, async (req, res, next) => {
       },
     });
 
-    // Update inventory
-    for (const item of items) {
-      if (item.variantId) {
-        await prisma.productVariant.update({
-          where: { id: item.variantId },
-          data: {
-            quantity: {
-              decrement: item.quantity,
-            },
+    // Update inventory via the variant-aware service. The service
+    // handles backorder allowance and writes an InventoryLog entry.
+    // We also persist the backorder flag on the OrderItem so the
+    // storefront can show "preorder" UI to the customer.
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const result = await decrementStock({
+        productId: item.productId,
+        variantId: item.variantId ?? undefined,
+        quantity: item.quantity,
+        orderId: order.id,
+        userId: req.user!.id,
+      });
+      if (result.wasBackorder) {
+        // Find the matching OrderItem and patch its isBackorder flag.
+        const orderItem = await prisma.orderItem.findFirst({
+          where: {
+            orderId: order.id,
+            productId: item.productId,
+            ...(item.variantId ? { variantId: item.variantId } : {}),
           },
         });
-      } else {
-        await prisma.product.update({
-          where: { id: item.productId },
-          data: {
-            quantity: {
-              decrement: item.quantity,
-            },
-          },
-        });
+        if (orderItem) {
+          await prisma.orderItem.update({
+            where: { id: orderItem.id },
+            data: { isBackorder: true },
+          });
+        }
       }
+    }
+
+    // Consume any active stock reservations the cart held. Without
+    // this step, the order placement is correct (decrementStock
+    // already ran above) but the reservation rows stay around with
+    // no releasedAt timestamp, which means the post-order
+    // `availableQuantity` for that product stays artificially low
+    // until the original TTL expires.
+    const cartItemRows = await prisma.cartItem.findMany({
+      where: { userId: req.user!.id },
+      select: { id: true },
+    });
+    if (cartItemRows.length > 0) {
+      await consumeReservationsForCartItemIds(cartItemRows.map((c: { id: string }) => c.id));
     }
 
     // Clear user's cart

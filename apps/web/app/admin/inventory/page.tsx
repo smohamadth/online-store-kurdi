@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { authHttp, errorMessage } from '@/lib/http';
 
 interface InventoryItem {
@@ -13,6 +14,15 @@ interface InventoryItem {
   variants: any[];
   category: { name: string };
 }
+
+const SUB_FEATURES: { href: string; label: string; description: string; icon: string }[] = [
+  { href: '/admin/inventory/warehouses', label: 'Warehouses', description: 'Multi-warehouse stock, transfers, default selection.', icon: '🏬' },
+  { href: '/admin/inventory/stock-takes', label: 'Stock takes', description: 'Cycle counts and physical inventory reconciliation.', icon: '📝' },
+  { href: '/admin/inventory/reorder', label: 'Auto-reorder', description: 'Threshold rules and PO drafts for replenishment.', icon: '🔁' },
+  { href: '/admin/inventory/channels', label: 'Channels & 3PL', description: 'Per-channel stock and 3PL webhook secrets.', icon: '📡' },
+  { href: '/admin/inventory/import', label: 'CSV import', description: 'Bulk-update stock from a CSV file.', icon: '📥' },
+  { href: '/admin/inventory/reservations', label: 'Reservations', description: 'Active cart holds and backorder reservations.', icon: '⏱️' },
+];
 
 export default function AdminInventoryPage() {
   const [products, setProducts] = useState<InventoryItem[]>([]);
@@ -88,6 +98,33 @@ export default function AdminInventoryPage() {
 
   return (
     <div>
+      {/* Sub-feature hub */}
+      <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: '#374151' }}>Inventory features</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+          {SUB_FEATURES.map((f) => (
+            <Link
+              key={f.href}
+              href={f.href}
+              data-testid={`hub-${f.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+              style={{
+                display: 'block',
+                padding: '12px',
+                border: '1px solid #e5e5e5',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                color: '#111',
+                background: '#fafafa',
+              }}
+            >
+              <div style={{ fontSize: '20px', marginBottom: '4px' }}>{f.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: '14px' }}>{f.label}</div>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>{f.description}</div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
       {/* API Status */}
       {!apiConnected && (
         <div style={{ padding: '16px', backgroundColor: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', marginBottom: '24px' }}>

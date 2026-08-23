@@ -137,6 +137,43 @@ export default function AdminOrderDetailPage() {
               year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
             }) : 'N/A'}
           </p>
+          {/* Admin/manager receipt downloads. */}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }} data-testid="receipt-actions">
+            <a
+              href={`/api/orders/${order.id}/receipt`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#000',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: 500,
+                textDecoration: 'none',
+              }}
+            >
+              📄 Receipt
+            </a>
+            <a
+              href={`/api/orders/${order.id}/receipt.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#f5f5f5',
+                color: '#000',
+                border: '1px solid #e5e5e5',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: 500,
+                textDecoration: 'none',
+              }}
+            >
+              ⬇ PDF
+            </a>
+          </div>
         </div>
         <span style={{
           padding: '8px 16px',

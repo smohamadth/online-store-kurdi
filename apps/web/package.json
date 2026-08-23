@@ -8,7 +8,12 @@
     "start": "next start -H 127.0.0.1",
     "lint": "next lint",
     "dev:lan": "next dev -H 0.0.0.0",
-    "dev:port": "next dev -H 127.0.0.1 -p 3005"
+    "dev:port": "next dev -H 127.0.0.1 -p 3005",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:components": "vitest run --config vitest.components.config.ts",
+    "test:components:watch": "vitest --config vitest.components.config.ts",
+    "test:all": "npm run test && npm run test:components"
   },
   "dependencies": {
     "next": "14.1.0",
@@ -16,11 +21,14 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^14.3.1",
+    "@testing-library/user-event": "^14.6.6",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "eslint": "^8.56.0",
-    "eslint-config-next": "14.1.0"
+    "eslint-config-next": "14.1.0",
+    "typescript": "^5.3.3"
   }
 }

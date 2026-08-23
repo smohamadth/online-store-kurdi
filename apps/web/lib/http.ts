@@ -56,15 +56,17 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   auth?: boolean;
   /** Serialised as JSON automatically. */
   body?: unknown;
+  /** Send `body` as-is (no JSON encoding). Used for text/csv uploads. */
+  rawBody?: boolean;
   /** Bypass Next's fetch cache (default true — store data changes often). */
   fresh?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { auth = false, body, fresh = true, headers, ...rest } = options;
+  const { auth = false, body, rawBody = false, fresh = true, headers, ...rest } = options;
 
   const finalHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(rawBody ? {} : { 'Content-Type': 'application/json' }),
     ...(headers as Record<string, string>),
   };
 
@@ -78,7 +80,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     res = await fetch(`${API_BASE}${path}`, {
       ...rest,
       headers: finalHeaders,
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined
+        ? { body: rawBody ? String(body) : JSON.stringify(body) }
+        : {}),
       ...(fresh ? { cache: 'no-store' as RequestCache } : {}),
     });
   } catch {

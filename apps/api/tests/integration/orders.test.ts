@@ -1,0 +1,225 @@
+/**
+ * Order integration tests.
+ *
+ * Notable paths:
+ *   - the auto-generated order number is unique even on rapid re-order
+ *   - the inventory is decremented (and re-incremented on cancel)
+ *   - status update rejects unknown statuses (the regression that
+ *     silently typed any string into prisma.update)
+ *   - cancel restores inventory; only pending/processing can be cancelled
+ *   - users can only see their own orders; admins see everything
+ */
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import request from 'supertest';
+import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
+import { mockPrisma } from '../helpers/mockPrisma';
+import { createProduct, createVariant, createAddress, createOrder } from '../helpers/factories';
+import type { Express } from 'express';
+
+let app: Express;
+beforeAll(async () => { app = await getTestApp(); });
+afterAll(async () => { await mockPrisma.$disconnect(); });
+beforeEach(async () => { await cleanDatabase(); });
+
+describe('GET /api/orders', () => {
+  it("returns the user own orders", async () => {
+    const { token, user } = await authHeader();
+    await createOrder(user.id);
+    const res = await request(app).get('/api/orders').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('an admin sees all orders', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const { user: other } = await authHeader();
+    await createOrder(other.id);
+    const res = await request(app).get('/api/orders').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('GET /api/orders/:id', () => {
+  it("returns the user's own order", async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app).get(`/api/orders/${o.id}`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('forbids another customer (403)', async () => {
+    const { user: a } = await authHeader();
+    const { token: b } = await authHeader();
+    const o = await createOrder(a.id);
+    const res = await request(app).get(`/api/orders/${o.id}`).set('Authorization', `Bearer ${b}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('404 for an unknown order', async () => {
+    const { token } = await authHeader();
+    const res = await request(app)
+      .get('/api/orders/00000000-0000-4000-a000-000000000000')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/orders', () => {
+  it('rejects an empty cart (400)', async () => {
+    const { token } = await authHeader();
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('creates an order from cart items, decrements stock, clears the cart', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    await mockPrisma.cartItem.create({ data: { userId: user.id, productId: p.id, quantity: 2 } });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 2 }] });
+    expect(res.status).toBe(201);
+    expect(res.body.data.orderNumber).toMatch(/^ORD-/);
+    const after = await mockPrisma.product.findUnique({ where: { id: p.id } });
+    expect(after?.quantity).toBe(48);
+    const cart = await mockPrisma.cartItem.findMany({ where: { userId: user.id } });
+    expect(cart).toHaveLength(0);
+  });
+
+  it('rejects an order for an inactive product (400)', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ status: 'inactive' });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 1 }] });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects when stock is insufficient (400)', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 1 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 5 }] });
+    expect(res.status).toBe(400);
+  });
+
+  it('creates an order with a variant and decrements variant stock', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct({ quantity: 100 });
+    const v = await createVariant(p.id, { price: 20, quantity: 10 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, variantId: v.id, quantity: 3 }] });
+    expect(res.status).toBe(201);
+    const variant = await mockPrisma.productVariant.findUnique({ where: { id: v.id } });
+    expect(variant?.quantity).toBe(7);
+  });
+
+  it('creates a shipping address from the inline object', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 5 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 1 }],
+        shippingAddress: {
+          firstName: 'A', lastName: 'B', address: '1 St', city: 'NYC', state: 'NY', zipCode: '10001', country: 'US', phone: '555',
+        },
+      });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('PUT /api/orders/:id/status (admin)', () => {
+  it('rejects an unknown status (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .put(`/api/orders/${o.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'not-a-real-status' });
+    expect(res.status).toBe(400);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    // regression: a bad status used to PERSIST before validation
+    expect(after?.status).toBe('pending');
+  });
+
+  it('accepts a valid status and sets shippedAt for "shipped"', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .put(`/api/orders/${o.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'shipped', trackingNumber: 'TRK-1' });
+    expect(res.status).toBe(200);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after?.status).toBe('shipped');
+    expect(after?.trackingNumber).toBe('TRK-1');
+    expect(after?.shippedAt).toBeDefined();
+  });
+
+  it('rejects a non-admin (403)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .put(`/api/orders/${o.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'shipped' });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/orders/:id/cancel', () => {
+  it('cancels a pending order and restores inventory', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 10 });
+    // Create the order via the public route so its items come from the
+    // route's nested-create path (the same path the real checkout uses).
+    const res1 = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 2 }] });
+    expect(res1.status).toBe(201);
+    const orderId = res1.body.data.id;
+    const res = await request(app)
+      .post(`/api/orders/${orderId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(200);
+    const product = await mockPrisma.product.findUnique({ where: { id: p.id } });
+    expect(product?.quantity).toBe(10);
+  });
+
+  it('refuses to cancel a delivered order (400)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id, { status: 'delivered' });
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('forbids cancelling another user\'s order (403)', async () => {
+    const { user: a } = await authHeader();
+    const { token: b } = await authHeader();
+    const o = await createOrder(a.id);
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/cancel`)
+      .set('Authorization', `Bearer ${b}`)
+      .send({});
+    expect(res.status).toBe(403);
+  });
+});

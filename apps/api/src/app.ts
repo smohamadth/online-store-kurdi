@@ -16,10 +16,13 @@ import { csrfTokenRoute } from './middleware/csrf';
 
 // Import routes
 import productRoutes from './modules/products/product.routes';
+import variantRoutes from './modules/products/variant.routes';
 import orderRoutes from './modules/orders/order.routes';
+import receiptRoutes from './modules/orders/receipt.routes';
 import userRoutes from './modules/users/user.routes';
 import authRoutes from './modules/auth/auth.routes';
 import paymentRoutes from './modules/payments/payment.routes';
+import walletRoutes from './modules/payments/wallet.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 import recommendationRoutes from './modules/recommendations/recommendation.routes';
 import storageRoutes from './modules/storage/storage.routes';
@@ -123,9 +126,25 @@ const limiter = rateLimit({
 // Apply rate limiting to API routes
 app.use('/api/', limiter);
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing middleware. The 3PL webhook handler needs the raw body
+// for HMAC verification, so we register a verify hook that stashes it
+// on req.rawBody before express.json parses the JSON.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
+// Plain-text body parser for the CSV bulk-import endpoint. Without
+// this, supertest's `.set('Content-Type', 'text/csv').send(string)`
+// leaves req.body empty (express.json refuses non-JSON content).
+app.use(express.text({
+  type: ['text/csv', 'text/plain'],
+  limit: '10mb',
+}));
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb',
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
 
 // Compression middleware
 app.use(compression());
@@ -172,9 +191,19 @@ app.get('/api', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+// Variant routes are mounted at two prefixes to keep the URL space
+// clean: /api/products/:productId/variants for the nested CRUD
+// (handled by the router's own paths) and /api/variants/:id for the
+// standalone lookup. Mounting variantRoutes twice in the same
+// app.use chain is supported by Express - the router is the same
+// instance and registers its routes on the layer each time.
+app.use('/api/products', variantRoutes);
+app.use('/api/variants', variantRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/orders', receiptRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api', walletRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/storage', storageRoutes);

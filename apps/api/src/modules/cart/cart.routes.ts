@@ -3,6 +3,7 @@ import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { createReservation, availableQuantity } from '../inventory/inventory.service';
 
 const router = Router();
 
@@ -137,11 +138,17 @@ router.post('/', authenticate, async (req, res, next) => {
         return res.status(400).json({ status: 'error', message: 'Variant is not available' });
       }
 
-      if (variant.quantity < quantity) {
+      // Use available quantity (subtracts active reservations) so
+      // two concurrent carts cannot grab the last unit.
+      const avail = await availableQuantity(productId, variantId);
+      if (avail < quantity) {
         return res.status(400).json({ status: 'error', message: 'Insufficient stock' });
       }
-    } else if (product.quantity < quantity) {
-      return res.status(400).json({ status: 'error', message: 'Insufficient stock' });
+    } else {
+      const avail = await availableQuantity(productId);
+      if (avail < quantity) {
+        return res.status(400).json({ status: 'error', message: 'Insufficient stock' });
+      }
     }
 
     // Check if item already in cart
@@ -210,6 +217,63 @@ router.post('/', authenticate, async (req, res, next) => {
         },
       });
     }
+
+    // Stock reservation: hold the items for 15 minutes so another
+    // cart can't oversell. The reservation expires automatically;
+    // at order-placement it is consumed (releasedAt is stamped).
+    const RESERVATION_TTL_MIN = 15;
+    const reservedUntil = new Date(Date.now() + RESERVATION_TTL_MIN * 60 * 1000);
+    if (existingItem) {
+      // The cartItem already has an active reservation tied to it.
+      // Bumping the cart quantity bumps the reservation quantity
+      // too; otherwise the reserved pool would not match the held
+      // pool and the second cart would over-sell.
+      const existingReservation = await prisma.stockReservation.findFirst({
+        where: { cartItemId: existingItem.id, releasedAt: null },
+      });
+      if (existingReservation) {
+        await prisma.stockReservation.update({
+          where: { id: existingReservation.id },
+          data: {
+            quantity: existingItem.quantity + quantity, // the cartItem has already been updated above
+            reservedUntil,
+          },
+        });
+      } else {
+        // Existing cartItem with no active reservation (e.g. the
+        // reservation expired and the user re-added). Create a
+        // fresh one.
+        await prisma.stockReservation.create({
+          data: {
+            productId,
+            variantId: variantId ?? null,
+            quantity: existingItem.quantity + quantity,
+            reservedUntil,
+            reason: 'cart_hold',
+            cartItemId: cartItem.id,
+            originType: 'cart',
+            originId: cartItem.id,
+          },
+        });
+      }
+    } else {
+      await prisma.stockReservation.create({
+        data: {
+          productId,
+          variantId: variantId ?? null,
+          quantity,
+          reservedUntil,
+          reason: 'cart_hold',
+          cartItemId: cartItem.id,
+          originType: 'cart',
+          originId: cartItem.id,
+        },
+      });
+    }
+    await prisma.cartItem.update({
+      where: { id: cartItem.id },
+      data: { reservedUntil },
+    });
 
     logger.info(`Item added to cart: ${product.name} by user ${userId}`);
 

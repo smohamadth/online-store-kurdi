@@ -450,6 +450,21 @@ export default function AdminProductsPage() {
                     >
                       Edit
                     </button>
+                    <Link
+                      href={`/admin/products/${product.id}/variants`}
+                      data-testid={`variants-link-${product.id}`}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#eef2ff',
+                        color: '#3730a3',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Variants
+                    </Link>
                     <button
                       onClick={() => handleDelete(product.id)}
                       style={{
