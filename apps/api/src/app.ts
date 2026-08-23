@@ -16,6 +16,7 @@ import { csrfTokenRoute } from './middleware/csrf';
 
 // Import routes
 import productRoutes from './modules/products/product.routes';
+import variantRoutes from './modules/products/variant.routes';
 import orderRoutes from './modules/orders/order.routes';
 import userRoutes from './modules/users/user.routes';
 import authRoutes from './modules/auth/auth.routes';
@@ -188,6 +189,14 @@ app.get('/api', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+// Variant routes are mounted at two prefixes to keep the URL space
+// clean: /api/products/:productId/variants for the nested CRUD
+// (handled by the router's own paths) and /api/variants/:id for the
+// standalone lookup. Mounting variantRoutes twice in the same
+// app.use chain is supported by Express - the router is the same
+// instance and registers its routes on the layer each time.
+app.use('/api/products', variantRoutes);
+app.use('/api/variants', variantRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);

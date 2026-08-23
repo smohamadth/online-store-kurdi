@@ -24,6 +24,7 @@ export default defineConfig({
       'lib/store.test.{ts,tsx}',
       'lib/theme.test.{ts,tsx}',
       'lib/i18n.test.{ts,tsx}',
+      'app/admin/products/**/*.test.{ts,tsx}',
     ],
     setupFiles: ['./test/setup-components.tsx'],
   },
