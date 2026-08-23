@@ -41,6 +41,25 @@ export default function AccountDashboard() {
       </div>
 
       {/* Quick Actions */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
+        <Link
+          href="/account/wallet"
+          data-testid="wallet-link"
+          style={{
+            padding: '24px',
+            border: '1px solid var(--border, #e5e5e5)',
+            borderRadius: '8px',
+            textDecoration: 'none',
+            color: '#000',
+            textAlign: 'center',
+            display: 'block',
+          }}
+        >
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>💳</div>
+          <h3 style={{ fontWeight: 600, marginBottom: '4px' }}>Wallet</h3>
+          <p style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>Store credit & gift cards</p>
+        </Link>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
         <Link href="/account/orders" style={{
           padding: '24px',

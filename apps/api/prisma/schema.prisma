@@ -44,6 +44,8 @@ model User {
   inventoryLogs InventoryLog[]
   stockTakes      StockTake[]
   reorderDrafts   ReorderDraft[]
+  storeCredit     StoreCredit?
+  giftCardsIssued  GiftCard[]   @relation("GiftCardCreatedBy")
 
   @@index([email])
   @@index([role])
@@ -441,6 +443,106 @@ model Coupon {
   
   @@index([code])
   @@index([isActive])
+}
+
+// Gift card model.
+//
+// Codes are customer-facing; we generate them server-side as
+// upper-cased 16-character strings (XXXX-XXXX-XXXX-XXXX) so
+// they're easy to read and copy-paste. The `balance` field is
+// the remaining value - it starts equal to `initialAmount` and
+// is debited on each use. Allowing the balance to go negative is
+// blocked at the service layer; the constraint here is just
+// `>= 0` so a bad code that somehow ends up with a negative
+// balance is visible in the data.
+//
+// status values:
+//   'active'    - issued, can be redeemed
+//   'depleted'  - balance === 0, can't be used further
+//   'expired'   - expiresAt passed, can't be used
+//   'cancelled' - admin voided the card
+//
+// Note: the service layer also rejects redemption on expired
+// cards even when status='active', to handle clock drift between
+// the time of issue and the next recheck.
+model GiftCard {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  initialAmount Float
+  balance       Float     @default(0)
+  currency      String    @default("USD")
+  status        String    @default("active")
+  issuedAt      DateTime  @default(now())
+  expiresAt     DateTime?
+  redeemedByUserId String?
+  redeemedAt    DateTime?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transactions  GiftCardTransaction[]
+  createdBy     User?     @relation("GiftCardCreatedBy", fields: [createdById], references: [id])
+
+  @@index([code])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// Append-only ledger for gift-card activity. Every balance
+// change is a row here; the live `balance` on the card is the
+// running total. This mirrors the inventory-log pattern and
+// makes audits easy.
+model GiftCardTransaction {
+  id            String    @id @default(uuid())
+  giftCardId    String
+  amount        Float     // positive = credit (issue/refund), negative = debit (use)
+  type          String    // 'issue', 'use', 'expire', 'cancel', 'adjust'
+  orderId       String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  giftCard      GiftCard  @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
+  @@index([orderId])
+}
+
+// Store credit - a per-user balance issued at refund time or as
+// a goodwill gesture. Simpler than gift cards: no codes, no
+// expiration, just a running balance per user. The same
+// append-only ledger pattern is used for the audit trail.
+model StoreCredit {
+  id            String    @id @default(uuid())
+  userId        String
+  balance       Float     @default(0)
+  currency      String    @default("USD")
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  StoreCreditTransaction[]
+
+  @@unique([userId, currency])
+  @@index([userId])
+}
+
+model StoreCreditTransaction {
+  id            String    @id @default(uuid())
+  storeCreditId String
+  amount        Float     // positive = credit, negative = debit
+  type          String    // 'refund', 'goodwill', 'order_use', 'adjust'
+  orderId       String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  storeCredit   StoreCredit @relation(fields: [storeCreditId], references: [id], onDelete: Cascade)
+
+  @@index([storeCreditId])
+  @@index([orderId])
 }
 
 // Analytics and ML Data Collection Models

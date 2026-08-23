@@ -153,6 +153,8 @@ const RELATION_TO_MODEL: Record<string, string> = {
   threePLSyncEvents: 'ThreePLSyncEvent',
   syncEvents: 'ThreePLSyncEvent',
   webhookSecret: 'WebhookSecret',
+  'GiftCard.transactions': 'GiftCardTransaction',
+  'StoreCredit.transactions': 'StoreCreditTransaction',
 };
 
 /**
@@ -764,6 +766,7 @@ const KNOWN_MODELS = [
   'warehouse', 'warehouseStock', 'warehouseTransfer', 'stockReservation',
   'stockTake', 'stockTakeItem', 'reorderRule', 'reorderDraft',
   'channel', 'channelStock', 'threePLSyncEvent', 'webhookSecret',
+  'giftCard', 'giftCardTransaction', 'storeCredit', 'storeCreditTransaction',
 ];
 
 const prisma: any = {};

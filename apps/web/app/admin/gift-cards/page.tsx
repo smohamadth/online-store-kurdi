@@ -1,0 +1,184 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { authHttp, errorMessage } from '@/lib/http';
+
+interface GiftCard {
+  id: string;
+  code: string;
+  initialAmount: number;
+  balance: number;
+  currency: string;
+  status: 'active' | 'depleted' | 'expired' | 'cancelled';
+  issuedAt: string;
+  expiresAt: string | null;
+  notes: string | null;
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  active: '#22c55e',
+  depleted: '#6b7280',
+  expired: '#f59e0b',
+  cancelled: '#ef4444',
+};
+
+/**
+ * Admin > Gift cards page.
+ *
+ * Issue new cards, list existing ones, cancel a card, top up a
+ * card. The transaction ledger view lives at /admin/gift-cards/:id.
+ */
+export default function AdminGiftCardsPage() {
+  const [cards, setCards] = useState<GiftCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ amount: '50', currency: 'USD', notes: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    try {
+      const res = await authHttp.get<GiftCard[]>('/gift-cards');
+      setCards(res.data || []);
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to load gift cards.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const body: any = {
+        amount: Number(form.amount),
+        currency: form.currency,
+        notes: form.notes || undefined,
+      };
+      const res = await authHttp.post<GiftCard>('/gift-cards', body);
+      setShowForm(false);
+      setForm({ amount: '50', currency: 'USD', notes: '' });
+      // Show the code once so the operator can copy it.
+      alert(`Issued: ${res.data.code} ($${res.data.initialAmount})`);
+      await fetch();
+    } catch (err) {
+      setError(errorMessage(err, 'Could not issue card.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = async (id: string) => {
+    if (!confirm('Cancel this card? It can no longer be redeemed.')) return;
+    try {
+      await authHttp.post(`/gift-cards/${id}/cancel`, { reason: 'Admin cancellation' });
+      await fetch();
+    } catch (err) {
+      alert(errorMessage(err, 'Could not cancel card.'));
+    }
+  };
+
+  if (loading) return <div style={{ padding: '32px' }}>Loading gift cards…</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Gift cards</h2>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          data-testid="new-gift-card"
+          style={{ padding: '8px 16px', background: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+        >
+          {showForm ? 'Cancel' : '+ Issue card'}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ padding: '12px', background: '#fef2f2', border: '1px solid #ef4444', borderRadius: '6px', color: '#991b1b', marginBottom: '16px' }}>
+          {error}
+        </div>
+      )}
+
+      {showForm && (
+        <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e5e5e5', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '12px' }}>
+            <label style={label}>Amount
+              <input data-testid="gc-amount" type="number" min="1" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={input} />
+            </label>
+            <label style={label}>Currency
+              <input data-testid="gc-currency" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} style={input} maxLength={3} />
+            </label>
+            <label style={label}>Note
+              <input data-testid="gc-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} style={input} placeholder="optional internal note" />
+            </label>
+          </div>
+          <div style={{ marginTop: '12px', textAlign: 'right' }}>
+            <button
+              onClick={submit}
+              disabled={busy}
+              data-testid="gc-submit"
+              style={{ padding: '8px 16px', background: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+            >
+              {busy ? 'Issuing…' : 'Issue'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }} data-testid="gc-table">
+          <thead>
+            <tr style={{ background: '#f9f9f9' }}>
+              <th style={th}>Code</th>
+              <th style={th}>Amount</th>
+              <th style={th}>Balance</th>
+              <th style={th}>Status</th>
+              <th style={th}>Issued</th>
+              <th style={{ ...th, textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.length === 0 && (
+              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#666' }}>No gift cards yet.</td></tr>
+            )}
+            {cards.map((c) => (
+              <tr key={c.id} style={{ borderTop: '1px solid #e5e5e5' }} data-testid={`gc-row-${c.code}`}>
+                <td style={td}><code>{c.code}</code></td>
+                <td style={td}>${c.initialAmount.toFixed(2)} {c.currency}</td>
+                <td style={td}><strong>${c.balance.toFixed(2)}</strong></td>
+                <td style={td}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: '50px', fontSize: '12px',
+                    background: `${STATUS_COLOR[c.status]}20`, color: STATUS_COLOR[c.status],
+                  }}>
+                    {c.status}
+                  </span>
+                </td>
+                <td style={td}>{new Date(c.issuedAt).toLocaleDateString()}</td>
+                <td style={{ ...td, textAlign: 'right' }}>
+                  {c.status === 'active' && (
+                    <button
+                      onClick={() => cancel(c.id)}
+                      data-testid={`cancel-${c.code}`}
+                      style={{ padding: '4px 8px', background: '#fef2f2', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const label: React.CSSProperties = { display: 'flex', flexDirection: 'column', fontSize: '13px', fontWeight: 500, color: '#374151' };
+const input: React.CSSProperties = { padding: '8px', border: '1px solid #e5e5e5', borderRadius: '4px', marginTop: '4px' };
+const th: React.CSSProperties = { padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600 };
+const td: React.CSSProperties = { padding: '12px 16px', fontSize: '14px' };
