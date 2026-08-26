@@ -81,16 +81,20 @@ Covered by `scripts/verify-users.py` (21 assertions, API + browser).
 
 ---
 
-## 5. No automated tests
+## 5. ~~No automated tests~~ — FIXED
 
-There is no test suite. Every change in this repo was verified by driving a real
-browser with Playwright and querying the database directly, which catches
-integration bugs but is not a substitute for regression tests.
+A full Vitest suite now exists and runs in CI (`.github/workflows/ci.yml`,
+jobs `api-tests` and `web-tests`):
 
-Highest-value tests to add first:
-- checkout: valid order persists; rejected order shows an error and keeps the cart
-- auth: customer cannot reach admin endpoints (403) or self-approve reviews
-- settings: currency and store name propagate to the storefront
+| Suite | Count | What it covers |
+|---|---|---|
+| API unit (`apps/api/tests/unit`) | 238 | middleware (auth, CSRF, error handling), variant/currency/review/download helpers, schedulers |
+| API integration (`apps/api/tests/integration`) | 624 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, …) |
+| Web lib (`apps/web`, vitest) | 255 | filter params, i18n, SEO, structured data, theme config, preview |
+| Web components (React Testing Library + happy-dom) | 413 | PDP, cart, admin pages, filter sidebar, theme picker |
+
+The Playwright browser suites in CI (`regression-ui.py` etc.) still run on top
+of this; they and the Vitest suites are complementary, not duplicates.
 
 ---
 
@@ -194,9 +198,9 @@ contrast guards, admin isolation) and `verify-theme-tokens.js` (no browser:
 token completeness + a hardcoded-colour ratchet on the swept storefront
 files). The browser suite needs the CI runner; the token suite runs anywhere.
 
-Still missing: unit tests (Vitest is configured but there are no test files),
-Sentry or any error tracking, and CD - nothing deploys automatically because
-there is no server yet.
+Still missing: Sentry or any error tracking, and CD - nothing deploys
+automatically because there is no server yet. (Unit tests are done - see
+section 5.)
 
 ---
 
@@ -238,3 +242,21 @@ against the real stack (Express API + Next storefront running together):
    so the page CATCHES the throw and renders the error view itself rather than
    relying on `error.tsx`.
 
+---
+
+## 9. Schema migrations lag behind `schema.prisma`
+
+**Status:** known, must be resolved before relying on `migrate deploy`.
+
+The committed migrations stop at `20260821090000_add_blog`. Several schema
+changes shipped without migrations (inventory/warehouse models, then the
+variant-first-class rename, multi-currency, downloads, review photos,
+`pageType`, `activeTheme`, …). On a **fresh** database, `prisma migrate deploy`
+therefore creates a schema missing those tables, and the seed + new routes hit
+missing tables. Existing dev databases only work because they were built with
+`prisma db push` or an earlier full schema.
+
+The product is pre-release, so the clean fix is a single canonical migration
+set generated from the current `schema.prisma` (drop `prisma/migrations/`,
+`npx prisma migrate dev --name init`, commit the result). Until that lands,
+CI and any deployment built from a clean checkout cannot be trusted.

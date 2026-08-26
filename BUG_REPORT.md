@@ -2,11 +2,13 @@
 
 ## 🔴 CRITICAL BUGS
 
-### **1. Password Reset Not Implemented**
+### **1. ~~Password Reset Not Implemented~~**
 **Location:** `apps/api/src/modules/auth/auth.routes.ts`
-**Lines:** ~150-180
 **Issue:** Password reset returns success but doesn't actually send email or update password
-**Status:** ❌ Incomplete
+**Status:** ✅ FIXED — `POST /auth/forgot-password` creates a hashed, expiring
+`PasswordReset` token and `sendPasswordResetEmail` delivers it;
+`POST /auth/reset-password` validates the token (expiry + single-use) and
+updates the password. Storefront has `/forgot-password` + `/reset-password`.
 
 ### **2. Test Email Not Implemented**
 **Location:** `apps/api/src/modules/settings/settings.routes.ts`
@@ -14,29 +16,33 @@
 **Issue:** Test email endpoint exists but doesn't send actual email
 **Status:** ❌ Incomplete
 
-### **3. Order Status Update Missing Email**
+### **3. ~~Order Status Update Missing Email~~**
 **Location:** `apps/api/src/modules/orders/order.routes.ts`
 **Issue:** When order status changes to "shipped", no shipping notification email sent
-**Status:** ❌ Missing
+**Status:** ✅ FIXED — `sendShippingNotification` fires when an order moves to
+"shipped" (admin status update).
 
 ### **4. Inventory Alert System Not Triggered**
 **Location:** `apps/api/src/modules/inventory/inventory.routes.ts`
 **Issue:** Stock alerts are stored but never checked/triggered
 **Status:** ❌ Incomplete
 
-### **5. Coupon Usage Not Tracked**
-**Location:** `apps/api/src/modules/coupons/coupon.routes.ts`
+### **5. ~~Coupon Usage Not Tracked~~**
+**Location:** `apps/api/src/modules/orders/order.routes.ts`
 **Issue:** When coupon is applied to order, `usedCount` not incremented
-**Status:** ❌ Missing
+**Status:** ✅ FIXED — order placement increments `usedCount`
+(`coupon.update({ data: { usedCount: { increment: 1 } } })`).
 
 ---
 
 ## 🟡 MEDIUM BUGS
 
-### **6. Product Search Fallback**
+### **6. ~~Product Search Fallback~~**
 **Location:** `apps/web/components/SearchBar.tsx`
 **Issue:** Search falls back to hardcoded mock products when API fails
-**Status:** ⚠️ Should fetch all products and filter locally
+**Status:** ✅ FIXED — search hits `api.searchProducts` first and, on failure,
+fetches all products and filters locally (name/description/category). No
+hardcoded mock results.
 
 ### **7. Review Section Mock Data**
 **Location:** `apps/web/components/ReviewSection.tsx`
