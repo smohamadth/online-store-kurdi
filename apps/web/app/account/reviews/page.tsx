@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/http';
 
-interface Review {
+// Inlined until `lib/types.ts` is committed; the canonical
+// `ReviewPhoto` interface there is the source of truth.
+interface ReviewPhoto {
+  id: string;
+  url: string;
+  thumbnail: string | null;
+  sortOrder: number;
+}
+
+interface MyReview {
   id: string;
   productId: string;
   productName: string;
@@ -13,12 +22,15 @@ interface Review {
   rating: number;
   title?: string;
   comment?: string;
+  isVerified: boolean;
+  isApproved: boolean;
+  photos: ReviewPhoto[];
   createdAt: string;
 }
 
 export default function MyReviewsPage() {
   const router = useRouter();
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<MyReview[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,7 +59,7 @@ export default function MyReviewsPage() {
       const response = await fetch(`${API_BASE}/users/me/reviews`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setReviews(data.data || []);
@@ -120,7 +132,7 @@ export default function MyReviewsPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {reviews.map((review) => (
-                <div key={review.id} style={{
+                <div key={review.id} data-testid="my-review-card" style={{
                   padding: '24px',
                   border: '1px solid var(--border, #e5e5e5)',
                   borderRadius: '8px',
@@ -138,6 +150,8 @@ export default function MyReviewsPage() {
                       </Link>
                       <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginTop: '4px' }}>
                         {new Date(review.createdAt).toLocaleDateString()}
+                        {' · '}
+                        {review.isApproved ? 'Published' : 'Awaiting moderation'}
                       </p>
                     </div>
                     <button
@@ -164,11 +178,70 @@ export default function MyReviewsPage() {
                     {review.title && (
                       <span style={{ fontWeight: 600, marginLeft: '8px' }}>{review.title}</span>
                     )}
+                    {/* Surface the verified-purchaser badge here too
+                        so the user can see the trust signal carried
+                        alongside their own review. */}
+                    {review.isVerified && (
+                      <span
+                        data-testid="my-review-verified"
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          backgroundColor: '#ecfdf5',
+                          color: 'var(--success, #047857)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✓ Verified Purchaser
+                      </span>
+                    )}
                   </div>
 
                   {/* Comment */}
                   {review.comment && (
                     <p style={{ color: '#555', lineHeight: 1.6 }}>{review.comment}</p>
+                  )}
+
+                  {/* Photos (read-only here; the PDP is where the
+                      lightbox lives, but each thumb is still a
+                      link to its full image in a new tab so a
+                      customer can revisit their own shots). */}
+                  {review.photos && review.photos.length > 0 && (
+                    <div
+                      data-testid="my-review-photos"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                        gap: '8px',
+                        marginTop: '12px',
+                      }}
+                    >
+                      {review.photos.map((photo) => (
+                        <a
+                          key={photo.id}
+                          href={photo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid="my-review-photo"
+                          style={{
+                            display: 'block',
+                            aspectRatio: '1',
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                            backgroundColor: '#f5f5f5',
+                          }}
+                        >
+                          <img
+                            src={photo.thumbnail || photo.url}
+                            alt="Review photo"
+                            loading="lazy"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          />
+                        </a>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}

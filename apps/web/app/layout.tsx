@@ -1,7 +1,13 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
-import { getStoreInfo } from '@/lib/seo';
+import { getStoreInfo, SITE } from '@/lib/seo';
 import AppShell from '@/components/AppShell';
+import { JsonLdScript } from '@/components/JsonLdScript';
+import {
+  buildOrganizationJsonLd,
+  buildWebSiteJsonLd,
+} from '@/lib/structured-data';
+import { resolveRequestLocale } from '@/lib/serverLocale';
 
 /**
  * Root layout — a SERVER component.
@@ -45,17 +51,46 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
+  // No `maximumScale` and no `userScalable: false` - those block pinch-to-zoom
+  // and are a WCAG 1.4.4 violation. The browser's default zoom behaviour is
+  // already what we want.
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Site-wide structured data: Organization (who owns the
+  // content) and WebSite with a SearchAction (lets Google
+  // show a sitelinks searchbox). These run on the server so
+  // they're in the initial HTML for crawlers; the client
+  // shell never needs to know about them.
+  const store = await getStoreInfo();
+  // Resolve the visitor's chosen language on the server so the initial HTML
+  // already has the right <html lang="..." dir="..."> - no flash of LTR/English
+  // content before the i18n hook runs in the client. The cookie is the same
+  // key the i18n hook writes (`localStorage.language`) re-purposed as a
+  // cookie so server components can read it; clients keep reading localStorage
+  // for backwards compat. Until the cookie is set we fall back to the
+  // default-language list, which mirrors the i18n hook's "browser lang or
+  // English" behaviour.
+  const { code: lang, dir } = await resolveRequestLocale();
+  const org = buildOrganizationJsonLd({
+    name: store.storeName,
+    url: SITE,
+    description: store.storeDescription,
+  });
+  const site = buildWebSiteJsonLd({
+    name: store.storeName,
+    url: SITE,
+    description: store.storeDescription,
+  });
   return (
-    <html lang="en">
+    <html lang={lang} dir={dir}>
+      <head>
+        <JsonLdScript data={[org, site]} testId="json-ld-site" />
+      </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <AppShell>{children}</AppShell>
+        <AppShell initialLang={lang} initialDir={dir}>{children}</AppShell>
       </body>
     </html>
   );

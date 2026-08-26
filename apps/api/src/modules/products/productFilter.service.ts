@@ -94,6 +94,7 @@ export async function listProducts(
     inStock: filter.inStock,
     onSale: filter.onSale,
     search: filter.search,
+    optionValueIds: filter.optionValueId?.length ? filter.optionValueId : undefined,
   });
 
   const orderBy = buildOrderBy(filter.sort);
@@ -222,6 +223,18 @@ export interface Facets {
     string,
     { value: string; count: number; selected: boolean }[]
   >;
+  // Typed option facets. One section per Option, with the
+  // distinct OptionValues from the candidate variants.
+  // `optionValueId` is the value used in the `?optionValueId=`
+  // query string. The same option may appear under a different
+  // name on different products (e.g. "Colour" vs "Color"), so
+  // the facet is global across the catalogue rather than per
+  // product.
+  typedOptions: {
+    id: string;
+    name: string;
+    values: { id: string; value: string; swatch: string | null; count: number; selected: boolean }[];
+  }[];
   priceRange: { min: number; max: number };
   inStock: { count: number; total: number };
   onSale: { count: number; total: number };
@@ -238,6 +251,7 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
       categories: [],
       types: [],
       attributes: {},
+      typedOptions: [],
       priceRange: { min: 0, max: 0 },
       inStock: { count: 0, total: 0 },
       onSale: { count: 0, total: 0 },
@@ -248,7 +262,7 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
   // Pull the broader candidate set: apply every filter EXCEPT the
   // dimension we are about to count, so the counts reflect "what
   // would happen if I added this to my current filter".
-  const candidate = (excludedDim: 'category' | 'type' | 'attr' | 'price' | 'inStock' | 'onSale' | 'rating') => {
+  const candidate = (excludedDim: 'category' | 'type' | 'attr' | 'price' | 'inStock' | 'onSale' | 'rating' | 'optionValueId') => {
     return buildProductWhere({
       categoryIds:
         excludedDim === 'category' || categoryIds.length === 0 ? categoryIds : categoryIds,
@@ -259,6 +273,9 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
       inStock: excludedDim === 'inStock' ? undefined : filter.inStock,
       onSale: excludedDim === 'onSale' ? undefined : filter.onSale,
       search: filter.search,
+      optionValueIds: excludedDim === 'optionValueId'
+        ? undefined
+        : (filter.optionValueId?.length ? filter.optionValueId : undefined),
     });
   };
 
@@ -273,6 +290,7 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     inStock: filter.inStock,
     onSale: filter.onSale,
     search: filter.search,
+    optionValueIds: filter.optionValueId?.length ? filter.optionValueId : undefined,
   });
 
   // Categories
@@ -380,7 +398,7 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
 
   // Attributes: enumerate distinct (key, value) pairs across all
   // variants of the base candidate set.
-  const variants = await prisma.productVariant.findMany({
+  const variants = await prisma.variant.findMany({
     where: { isActive: true, product: { ...baseWhere, status: 'active' } },
     select: { attributes: true },
   });
@@ -417,10 +435,71 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     attributes[key] = entries;
   }
 
+  // Typed options. Pull every Option across the candidate products
+  // and bucket the OptionValues. We group by (optionId) so a single
+  // "Color" option on a product shows up once with the union of
+  // values across all products that use it.
+  const optionRows = await prisma.option.findMany({
+    where: { product: { ...baseWhere, status: 'active' } },
+    include: {
+      values: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          // The variantOptionValue rows are the join between a
+          // Variant and an OptionValue. We need the count of
+          // DISTINCT products that have a variant pointing at this
+          // option value (under the current filter).
+          variantOptionValues: {
+            where: { variant: { isActive: true, product: { ...candidate('optionValueId'), status: 'active' } } },
+            select: { variant: { select: { productId: true } } },
+          },
+        },
+      },
+    },
+    orderBy: { sortOrder: 'asc' },
+  });
+  // Reduce to one entry per (option name); tally per-value products.
+  const optionTally = new Map<string, { id: string; name: string; values: Map<string, { id: string; value: string; swatch: string | null; products: Set<string> }> }>();
+  for (const o of optionRows) {
+    if (!optionTally.has(o.name)) {
+      optionTally.set(o.name, { id: o.id, name: o.name, values: new Map() });
+    }
+    const bucket = optionTally.get(o.name)!;
+    for (const v of o.values) {
+      const products = new Set<string>();
+      for (const vv of v.variantOptionValues) {
+        if (vv.variant?.productId) products.add(vv.variant.productId);
+      }
+      const existing = bucket.values.get(v.value);
+      if (existing) {
+        for (const p of products) existing.products.add(p);
+      } else {
+        bucket.values.set(v.value, {
+          id: v.id,
+          value: v.value,
+          swatch: v.swatch,
+          products,
+        });
+      }
+    }
+  }
+  const typedOptions: Facets['typedOptions'] = [...optionTally.values()].map((o) => ({
+    id: o.id,
+    name: o.name,
+    values: [...o.values.values()].map((v) => ({
+      id: v.id,
+      value: v.value,
+      swatch: v.swatch,
+      count: v.products.size,
+      selected: (filter.optionValueId || []).includes(v.id),
+    })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value)),
+  })).filter((o) => o.values.some((v) => v.count > 0));
+
   return {
     categories: categoryFacets,
     types: typeFacets,
     attributes,
+    typedOptions,
     priceRange: {
       min: Number(priceAgg?._min?.price ?? 0),
       max: Number(priceAgg?._max?.price ?? 0),

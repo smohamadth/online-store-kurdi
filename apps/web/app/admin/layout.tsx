@@ -139,6 +139,7 @@ export default function AdminLayout({
       heading: 'Catalogue',
       items: [
         { path: '/admin/products', label: 'Products', icon: '📦' },
+        { path: '/admin/variants', label: 'Variants', icon: '🏷️' },
         { path: '/admin/categories', label: 'Categories', icon: '🏷️' },
         { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
       ],
@@ -194,7 +195,19 @@ export default function AdminLayout({
           {isMobile && (
             <button
               onClick={() => setSidebarOpen(false)}
-              style={{ background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '24px',
+                cursor: 'pointer',
+                // 44x44 tap target. The mobile sidebar's close button.
+                minWidth: '44px',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               ✕
             </button>
@@ -269,12 +282,19 @@ export default function AdminLayout({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      padding: '7px 16px',
+                      padding: '10px 16px',
                       borderRadius: '6px',
                       textDecoration: 'none',
                       color: active ? '#ffffff' : '#a0a0c0',
                       backgroundColor: active ? '#2d2d4e' : 'transparent',
                       transition: 'background-color 0.15s ease, color 0.15s ease',
+                      // Nav rows were `padding: 7px 16px` - a 14px text line
+                      // plus 14px vertical padding gave ~30px total, below
+                      // the WCAG 2.5.5 AAA tap-target floor of 44px and
+                      // even the AA floor of 24px was tight on a phone.
+                      // 10px top + 10px bottom + ~16px text = 36px, which
+                      // matches the rest of the admin shell.
+                      minHeight: '36px',
                     }}
                   >
                     {/* Accent bar: the active row was previously distinguished
@@ -379,6 +399,16 @@ export default function AdminLayout({
             textDecoration: 'none',
             color: 'white',
             fontSize: '12px',
+            // WCAG 2.5.5 (Target Size) - tap targets should be at least
+            // 24x24 CSS pixels, and the AAA recommendation is 44x44. The
+            // sidebar is rendered at 260px wide, so 36px is the highest
+            // we can do without making the two buttons stack - and
+            // stacking breaks the existing visual layout. 36px is the
+            // floor for "comfortably tappable on a phone".
+            minHeight: '36px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
             View Store
           </Link>
@@ -393,6 +423,7 @@ export default function AdminLayout({
               color: 'white',
               fontSize: '12px',
               cursor: 'pointer',
+              minHeight: '36px',
             }}
           >
             Logout
@@ -440,7 +471,15 @@ export default function AdminLayout({
               color: 'white',
               fontSize: '24px',
               cursor: 'pointer',
-              padding: '4px',
+              // 4px padding around a 24px icon gave 32x32, below the
+              // 44x44 WCAG 2.5.5 AAA tap-target floor. Bump padding to
+              // 10px to land at 44x44.
+              padding: '10px',
+              minWidth: '44px',
+              minHeight: '44px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             ☰

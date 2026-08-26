@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
 
@@ -336,7 +337,7 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
                         textDecoration: 'none',
                       }}
                     >
-                      {slide.secondaryText} →
+                      {slide.secondaryText} <DirectionArrow kind="forward" />
                     </Link>
                   )}
                 </div>

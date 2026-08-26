@@ -1,0 +1,50 @@
+{
+  "key": "default",
+  "name": "Default",
+  "description": "The platform's default storefront. Clean, modern, conversion-focused. Works for any product type.",
+  "version": "1.0.0",
+  "author": "Platform Team",
+  "preview": "/themes/default/preview.png",
+  "features": {
+    "rtl": true,
+    "darkMode": false,
+    "paid": false
+  },
+  "tokens": {
+    "primaryColor": "#111111",
+    "primaryTextColor": "#ffffff",
+    "accentColor": "#2563eb",
+    "bodyBg": "#ffffff",
+    "cardBg": "#ffffff",
+    "bodyText": "#111111",
+    "mutedText": "#6b7280",
+    "borderColor": "#e5e7eb",
+    "headerBg": "#ffffff",
+    "headerText": "#111111",
+    "footerBg": "#f9fafb",
+    "footerText": "#111111",
+    "priceColor": "#111111",
+    "saleColor": "#dc2626",
+    "fontFamily": "system",
+    "baseFontSize": 16,
+    "headingWeight": 800,
+    "radius": 8,
+    "buttonRadius": 8,
+    "containerWidth": 1200,
+    "cardShadow": "soft",
+    "productsPerRow": 4,
+    "showTrustBar": true,
+    "showTestimonials": true,
+    "showStats": true,
+    "showNewsletter": true,
+    "showDealCountdown": true,
+    "showCategories": true,
+    "showFeatured": true,
+    "showNewArrivals": true,
+    "announcementBg": "#111111",
+    "announcementText2": "#ffffff"
+  },
+  "sections": {
+    "hero": "@/themes/default/sections/Hero"
+  }
+}

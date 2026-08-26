@@ -103,4 +103,46 @@ describe('LanguageSwitcher', () => {
     expect((globalThis as any).__i18nState.language).toBe('en');
     expect(screen.queryByText('English')).not.toBeInTheDocument();
   });
+
+  /**
+   * RTL: when the document direction is rtl the dropdown anchor, the row
+   * text alignment, and the caret must all flip. The previous version
+   * hard-coded `right: 0` on the dropdown (so it stuck off the right edge
+   * when the trigger was on the right of a header) and `textAlign: 'left'`
+   * on the rows (so Arabic / Kurdish names were left-aligned inside a
+   * right-aligned page).
+   */
+  it('anchors the dropdown to the inline-start of the trigger in RTL', () => {
+    (globalThis as any).__i18nState = { language: 'ar' };
+    const { container } = render(<LanguageSwitcher />);
+    act(() => screen.getByRole('button').click());
+
+    // The dropdown is the only absolute-positioned div inside the
+    // switcher's root besides the scrim. It is also identifiable by
+    // its min-width: 150px inline style.
+    const dropdown = container.querySelector('div[style*="min-width: 150px"]') as HTMLElement;
+    expect(dropdown).toBeTruthy();
+    // Inline-start in RTL is the LEFT edge of the trigger, so the
+    // dropdown must pin to `left: 0`, NOT `right: 0`.
+    expect(dropdown.style.left).toBe('0px');
+    expect(dropdown.style.right).toBe('');
+  });
+
+  it('right-aligns row text in RTL so the script reads naturally', () => {
+    (globalThis as any).__i18nState = { language: 'ku' };
+    render(<LanguageSwitcher />);
+    act(() => screen.getByRole('button').click());
+    // Every row in the dropdown.
+    const arRow = screen.getByText('العربية').closest('button') as HTMLButtonElement;
+    const enRow = screen.getByText('English').closest('button') as HTMLButtonElement;
+    expect(arRow.style.textAlign).toBe('right');
+    expect(enRow.style.textAlign).toBe('right');
+  });
+
+  it('left-aligns row text in LTR (regression guard)', () => {
+    render(<LanguageSwitcher />);
+    act(() => screen.getByRole('button', { name: /🇬🇧 EN/ }).click());
+    const enRow = screen.getByText('English').closest('button') as HTMLButtonElement;
+    expect(enRow.style.textAlign).toBe('left');
+  });
 });

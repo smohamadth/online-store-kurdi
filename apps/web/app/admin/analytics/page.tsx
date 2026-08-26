@@ -4,9 +4,14 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { API_BASE } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function AdminAnalyticsPage() {
   const { settings } = useStoreSettings();
+  // The 1fr/1fr grid for "Orders by Status" + "Top Products" splits a
+  // narrow viewport in half, leaving each card with a column narrower
+  // than a phone screen. Stack them under 640px.
+  const isMobile = useIsMobile(640);
   const [analytics, setAnalytics] = useState({
     totalProducts: 0,
     totalOrders: 0,
@@ -121,7 +126,7 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
         {/* Orders by Status */}
         <div style={{
           backgroundColor: 'white',
@@ -229,7 +234,10 @@ export default function AdminAnalyticsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: auto` (was 'hidden'): four columns don't fit a 360px
+        // phone; allow horizontal scroll inside the card instead of
+        // overflowing the document.
+        overflow: 'auto',
       }}>
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e5e5' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Recent Orders</h3>

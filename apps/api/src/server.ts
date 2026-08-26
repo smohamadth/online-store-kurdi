@@ -16,15 +16,17 @@ import { connectRedis, disconnectRedis } from './config/redis';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
 import { startScheduler, stopScheduler } from './jobs/inventory-scheduler';
+import { startCurrencyScheduler, stopCurrencyScheduler } from './jobs/currency.scheduler';
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
   logger.info(`${signal} received. Starting graceful shutdown...`);
   
   try {
-    // Stop the inventory scheduler first so no new ticks fire
+    // Stop the schedulers first so no new ticks fire
     // while we're tearing down.
     stopScheduler();
+    stopCurrencyScheduler();
 
     // Close HTTP server
     httpServer.close(() => {
@@ -138,10 +140,11 @@ async function startServer() {
 
     httpServer.listen(port, host, () => {
       logger.info(`✅ Server running on http://${host}:${port}`);
-      // Start the inventory background jobs (auto-reorder,
-      // reservation release) after the server is accepting traffic
-      // so the first tick doesn't compete with startup.
+      // Start the background jobs (inventory, currency refresh)
+      // after the server is accepting traffic so the first tick
+      // doesn't compete with startup.
       startScheduler();
+      startCurrencyScheduler();
       if (alsoBindIpv6Loopback) {
         // net.Server can only listen once, so open a twin server that feeds
         // the same Express app.

@@ -16,6 +16,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { ThemeProvider, useTheme, DEFAULT_THEME, themeToCssVars } from '@/lib/theme';
+import {
+  THEMES,
+  FALLBACK_THEME_KEY,
+  getTheme,
+  getDefaultTheme,
+  isInstalledTheme,
+  listThemeKeys,
+} from '@/lib/themeRegistry';
 
 function Probe() {
   const { theme, loading, reload } = useTheme();
@@ -239,5 +247,295 @@ describe('themeToCssVars', () => {
     expect(css).toContain('--btn-radius: 6px');
     expect(css).toContain('--container: 1280px');
     expect(css).toContain('--heading-weight: 700');
+  });
+});
+
+/**
+ * Theme registry tests.
+ *
+ * The registry is the source of truth for "what themes are
+ * installed." The whole multi-theme system depends on it
+ * being correct.
+ */
+describe('themeRegistry', () => {
+  it('includes both installed themes', () => {
+    const keys = THEMES.map((t) => t.key);
+    expect(keys).toContain('default');
+    expect(keys).toContain('minimal');
+  });
+
+  it('default theme is the fallback', () => {
+    expect(FALLBACK_THEME_KEY).toBe('default');
+  });
+
+  it('getDefaultTheme() returns the default theme', () => {
+    const t = getDefaultTheme();
+    expect(t.key).toBe('default');
+  });
+
+  it('getTheme("minimal") returns the minimal theme', () => {
+    const t = getTheme('minimal');
+    expect(t.key).toBe('minimal');
+  });
+
+  it('getTheme() with an unknown key falls back to default', () => {
+    const t = getTheme('does-not-exist');
+    expect(t.key).toBe('default');
+  });
+
+  it('getTheme(null) falls back to default', () => {
+    expect(getTheme(null).key).toBe('default');
+  });
+
+  it('getTheme(undefined) falls back to default', () => {
+    expect(getTheme(undefined).key).toBe('default');
+  });
+
+  it('isInstalledTheme returns true for installed keys', () => {
+    expect(isInstalledTheme('default')).toBe(true);
+    expect(isInstalledTheme('minimal')).toBe(true);
+  });
+
+  it('isInstalledTheme returns false for unknown keys', () => {
+    expect(isInstalledTheme('foo')).toBe(false);
+    expect(isInstalledTheme('')).toBe(false);
+    expect(isInstalledTheme(null)).toBe(false);
+    expect(isInstalledTheme(undefined)).toBe(false);
+  });
+
+  it('listThemeKeys returns all installed keys', () => {
+    expect(listThemeKeys()).toContain('default');
+    expect(listThemeKeys()).toContain('minimal');
+  });
+
+  it('the default theme is free', () => {
+    const t = THEMES.find((th) => th.key === 'default');
+    expect(t?.features.paid).toBe(false);
+  });
+
+  it('the minimal theme is marked as paid', () => {
+    const t = THEMES.find((th) => th.key === 'minimal');
+    expect(t?.features.paid).toBe(true);
+  });
+
+  it('the minimal theme uses a serif font and zero button radius', () => {
+    const t = THEMES.find((th) => th.key === 'minimal')!;
+    expect(t.tokens.fontFamily).toBe('georgia');
+    expect(t.tokens.buttonRadius).toBe(0);
+    expect(t.tokens.cardShadow).toBe('none');
+    expect(t.tokens.productsPerRow).toBe(3);
+  });
+
+  it('the minimal theme disables marketing chrome', () => {
+    const t = THEMES.find((th) => th.key === 'minimal')!;
+    expect(t.tokens.showTrustBar).toBe(false);
+    expect(t.tokens.showTestimonials).toBe(false);
+    expect(t.tokens.showStats).toBe(false);
+    expect(t.tokens.showDealCountdown).toBe(false);
+    expect(t.tokens.showNewArrivals).toBe(false);
+  });
+
+  it('the minimal theme keeps the content sections (newsletter, categories, featured)', () => {
+    const t = THEMES.find((th) => th.key === 'minimal')!;
+    expect(t.tokens.showNewsletter).toBe(true);
+    expect(t.tokens.showCategories).toBe(true);
+    expect(t.tokens.showFeatured).toBe(true);
+  });
+
+  it('the minimal theme declares section overrides for hero, featured, categories', () => {
+    const t = THEMES.find((th) => th.key === 'minimal')!;
+    expect(t.sections).toBeDefined();
+    expect(Object.keys(t.sections!)).toEqual(
+      expect.arrayContaining(['hero', 'featured', 'categories']),
+    );
+  });
+});
+
+/**
+ * Bold theme tests.
+ *
+ * The Bold theme is the third installed theme — image-first,
+ * dark by default, marketing chrome on. It exists to prove
+ * the multi-theme system holds for a third design that's
+ * substantially different from the default and the Minimal
+ * theme.
+ */
+describe('themeRegistry — Bold theme', () => {
+  it('is in the registry', () => {
+    expect(THEMES.map((t) => t.key)).toContain('bold');
+  });
+
+  it('is marked as a paid theme', () => {
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.features.paid).toBe(true);
+  });
+
+  it('declares dark-mode support', () => {
+    // The "dark mode" feature flag is informational for now
+    // (the platform doesn't yet have a runtime toggle), but
+    // the Bold theme is the first one to opt in. Pinning
+    // the flag means a future "actually implement dark mode"
+    // PR can find this via the test.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.features.darkMode).toBe(true);
+  });
+
+  it('uses a near-black body background (dark mode default)', () => {
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.bodyBg).toBe('#0a0a0a');
+  });
+
+  it('uses an accent-coloured price (yellow on dark)', () => {
+    // The price colour is what catches the eye. Bold uses
+    // a yellow accent so prices pop on the dark background.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.priceColor).toBe('#facc15');
+  });
+
+  it('uses a heavy display font (rounded / Trebuchet) with heading weight 900', () => {
+    // Bold's signature: heavy + heavy. Font weight 900 is
+    // the heaviest available.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.fontFamily).toBe('rounded');
+    expect(t.tokens.headingWeight).toBe(900);
+  });
+
+  it('uses zero border-radius (no rounded corners anywhere)', () => {
+    // Where Minimal is rounded with `radius: 2`, Bold is
+    // hard-edged: 0px on every corner. Pinning the values
+    // catches a future refactor that accidentally bumps
+    // either of them.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.radius).toBe(0);
+    expect(t.tokens.buttonRadius).toBe(0);
+  });
+
+  it('uses strong card shadow (high contrast against dark bg)', () => {
+    // The default theme uses 'soft' shadows; Minimal uses
+    // 'none'. Bold's high-contrast dark cards need a strong
+    // shadow to separate from the background.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.cardShadow).toBe('strong');
+  });
+
+  it('shows 2 products per row (large, image-focused cards)', () => {
+    // Bold's 2-col grid is the visual statement. The default
+    // is 4; Minimal is 3. Pinning the 2 ensures the
+    // editorial-grid feel.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.productsPerRow).toBe(2);
+  });
+
+  it('uses a wider content container (1400px) than the default', () => {
+    // The default is 1200px; Minimal is 960px. Bold's
+    // 1400px gives the wide hero and the 2-col product
+    // grid room to breathe.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.containerWidth).toBe(1400);
+  });
+
+  it('keeps every marketing section on (Bold stores want to scream)', () => {
+    // Where Minimal turns everything off, Bold turns
+    // everything on. The contrast is the point.
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.tokens.showTrustBar).toBe(true);
+    expect(t.tokens.showTestimonials).toBe(true);
+    expect(t.tokens.showStats).toBe(true);
+    expect(t.tokens.showDealCountdown).toBe(true);
+    expect(t.tokens.showCategories).toBe(true);
+    expect(t.tokens.showFeatured).toBe(true);
+    expect(t.tokens.showNewArrivals).toBe(true);
+    expect(t.tokens.showNewsletter).toBe(true);
+  });
+
+  it('declares section overrides for hero, featured, categories', () => {
+    const t = THEMES.find((th) => th.key === 'bold')!;
+    expect(t.sections).toBeDefined();
+    expect(Object.keys(t.sections!)).toEqual(
+      expect.arrayContaining(['hero', 'featured', 'categories']),
+    );
+  });
+});
+
+/**
+ * Cross-theme assertions.
+ *
+ * Properties that should hold across every installed theme
+ * regardless of design direction. If a future theme breaks
+ * one of these, the test is a sign that the property is
+ * no longer universal — which might be intentional, but
+ * should be a deliberate decision.
+ */
+describe('themeRegistry — universal properties', () => {
+  it('every theme has a unique key', () => {
+    const keys = THEMES.map((t) => t.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('every theme has a non-empty name and description', () => {
+    for (const t of THEMES) {
+      expect(t.name.length).toBeGreaterThan(0);
+      expect(t.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every theme has a semver version', () => {
+    for (const t of THEMES) {
+      expect(t.version).toMatch(/^\d+\.\d+\.\d+/);
+    }
+  });
+
+  it('every theme declares a primary color', () => {
+    for (const t of THEMES) {
+      expect(typeof t.tokens.primaryColor).toBe('string');
+      expect((t.tokens.primaryColor as string).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+/**
+ * tokensToTheme — the helper that flattens a ThemeConfig into
+ * a runtime Theme. Pinned here because the function is now
+ * exported (the preview provider uses it).
+ *
+ * The most important contract is the activeTheme guard: a
+ * caller passing `activeTheme: 'foo'` via the customizations
+ * spread must NOT be able to clobber the config's
+ * authoritative `activeTheme.key`. The function strips
+ * `activeTheme` from customizations before merging; this test
+ * pins that behaviour so a future refactor can't
+ * accidentally re-introduce the leak.
+ */
+describe('tokensToTheme — activeTheme guard', () => {
+  it('uses the config key when no customizations are passed', async () => {
+    const { tokensToTheme } = await import('./theme');
+    const config = getTheme('minimal');
+    const merged = tokensToTheme(config);
+    expect(merged.activeTheme).toBe('minimal');
+  });
+
+  it('uses the config key when the customizations try to override activeTheme', async () => {
+    const { tokensToTheme } = await import('./theme');
+    const config = getTheme('minimal');
+    // Even when the customizations pass a different activeTheme,
+    // the config's authoritative key wins. This is the bug fix:
+    // a previous version of this function let the customizations
+    // spread clobber the config.
+    const merged = tokensToTheme(config, { activeTheme: 'default' as any });
+    expect(merged.activeTheme).toBe('minimal');
+  });
+
+  it('still applies the rest of the customizations', async () => {
+    const { tokensToTheme } = await import('./theme');
+    const config = getTheme('default');
+    const merged = tokensToTheme(config, {
+      primaryColor: '#ff00ff',
+      containerWidth: 999,
+    });
+    // Custom fields are applied…
+    expect(merged.primaryColor).toBe('#ff00ff');
+    expect(merged.containerWidth).toBe(999);
+    // …but the activeTheme is still the config's.
+    expect(merged.activeTheme).toBe('default');
   });
 });

@@ -145,8 +145,20 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
           {hasDiscount && (
             <span style={badge('var(--sale, #dc2626)')}>-{discountPct}%</span>
           )}
-          {outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
-          {lowStock && <span style={badge('var(--warning, #d97706)')}>Only {product.quantity} left</span>}
+          {/* "Digital" badge sits above the sale badge so it's
+              the first thing a shopper sees on a product card.
+              A digital SKU is never "out of stock" - hide that
+              branch and the low-stock warning. */}
+          {product.type === 'digital' && (
+            <span
+              data-testid="product-card-digital"
+              style={badge('var(--success, #16a34a)')}
+            >
+              ⚡ Digital
+            </span>
+          )}
+          {product.type !== 'digital' && outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
+          {product.type !== 'digital' && lowStock && <span style={badge('var(--warning, #d97706)')}>Only {product.quantity} left</span>}
         </div>
 
         {/* Quick add */}

@@ -94,6 +94,14 @@ export interface ProductResponse {
   variants: ProductVariantResponse[];
   averageRating: number;
   reviewCount: number;
+  /** Digital-product fields. Only meaningful when `type === 'digital'`,
+   * but we always return them so the storefront doesn't have to branch
+   * on the type before deciding what to render. */
+  downloadUrl: string | null;
+  downloadLimit: number | null;
+  /** Number of days from order placement until the per-order link
+   * expires. `null` means no expiry. */
+  downloadExpiry: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

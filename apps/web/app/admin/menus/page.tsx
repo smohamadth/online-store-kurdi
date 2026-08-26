@@ -486,7 +486,7 @@ export default function AdminMenusPage() {
       {/* Create Menu Modal */}
       {showMenuModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '32px', width: '400px' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '400px' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Create New Menu</h2>
             <form onSubmit={handleCreateMenu}>
               <div style={{ marginBottom: '16px' }}>
@@ -524,7 +524,7 @@ export default function AdminMenusPage() {
       {/* Add/Edit Item Modal */}
       {showItemModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '32px', width: '500px', maxHeight: '85vh', overflow: 'auto' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '500px', maxHeight: '85vh', overflow: 'auto' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
               {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
             </h2>
@@ -551,7 +551,7 @@ export default function AdminMenusPage() {
                   style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '6px', boxSizing: 'border-box' }}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Icon (emoji)</label>
                   <input
@@ -574,7 +574,7 @@ export default function AdminMenusPage() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Parent Item</label>
                   <select

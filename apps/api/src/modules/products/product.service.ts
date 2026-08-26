@@ -508,6 +508,9 @@ export class ProductService {
       })),
       averageRating: Math.round(averageRating * 10) / 10,
       reviewCount: ratings.length,
+      downloadUrl: product.downloadUrl ?? null,
+      downloadLimit: product.downloadLimit ?? null,
+      downloadExpiry: product.downloadExpiry ?? null,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };

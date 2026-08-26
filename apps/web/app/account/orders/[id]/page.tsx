@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { DirectionArrow } from '@/components/DirectionArrow';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -489,7 +490,7 @@ export default function OrderDetailPage() {
               textDecoration: 'none',
               fontWeight: 500,
             }}>
-              ← Back to Orders
+              <DirectionArrow kind="back" /> Back to Orders
             </Link>
           </div>
         </div>

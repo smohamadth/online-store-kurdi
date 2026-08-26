@@ -140,6 +140,12 @@ function formatProduct(product: any) {
     })) || [],
     averageRating: Math.round(averageRating * 10) / 10,
     reviewCount: ratings.length,
+    // Digital-product fields. Returned on every product so the
+    // storefront doesn't have to branch on `type` before deciding
+    // which fields to render. `null` for physical products.
+    downloadUrl: product.downloadUrl ?? null,
+    downloadLimit: product.downloadLimit ?? null,
+    downloadExpiry: product.downloadExpiry ?? null,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -193,6 +199,7 @@ router.get('/', async (req, res, next) => {
         inStock: result.applied.inStock,
         onSale: result.applied.onSale,
         minRating: result.applied.minRating,
+        optionValueId: (result.applied as any).optionValueId,
         sort: result.applied.sort,
       },
     });

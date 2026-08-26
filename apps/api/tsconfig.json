@@ -23,6 +23,6 @@
       "@shared/*": ["../../packages/shared/*"]
     }
   },
-  "include": ["src/**/*", "prisma/**/*", "tests/**/*", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "coverage", "tests", "prisma", "vitest.config.ts"]
 }

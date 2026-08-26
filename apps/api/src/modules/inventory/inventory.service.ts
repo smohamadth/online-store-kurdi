@@ -344,7 +344,7 @@ export async function availableQuantity(productId: string, variantId?: string): 
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) return 0;
   if (variantId) {
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await prisma.variant.findUnique({ where: { id: variantId } });
     if (!variant) return 0;
     const reserved = await prisma.stockReservation.aggregate({
       where: {
@@ -537,7 +537,7 @@ export async function runAutoReorder(args: { dryRun?: boolean } = {}): Promise<A
       // reservations) if no variant, or the variant quantity.
       let effectiveStock = product.quantity;
       if (rule.variantId) {
-        const v = await prisma.productVariant.findUnique({ where: { id: rule.variantId } });
+        const v = await prisma.variant.findUnique({ where: { id: rule.variantId } });
         if (v) effectiveStock = v.quantity;
       }
       const reserved = await prisma.stockReservation.aggregate({

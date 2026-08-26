@@ -17,6 +17,7 @@ import { csrfTokenRoute } from './middleware/csrf';
 // Import routes
 import productRoutes from './modules/products/product.routes';
 import variantRoutes from './modules/products/variant.routes';
+import productVariantRoutes from './modules/products/product-variant.routes';
 import orderRoutes from './modules/orders/order.routes';
 import receiptRoutes from './modules/orders/receipt.routes';
 import userRoutes from './modules/users/user.routes';
@@ -47,6 +48,12 @@ import themeRoutes from './modules/theme/theme.routes';
 import homeSectionRoutes from './modules/home/home.routes';
 import pageRoutes from './modules/pages/page.routes';
 import blogRoutes from './modules/blog/blog.routes';
+import currencyRoutes from './modules/currency/currency.routes';
+import {
+  publicDownloadsRouter,
+  accountDownloadsRouter,
+  orderItemDownloadRouter,
+} from './modules/downloads/downloads.routes';
 
 // Create Express app
 const app = express();
@@ -191,14 +198,14 @@ app.get('/api', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
-// Variant routes are mounted at two prefixes to keep the URL space
-// clean: /api/products/:productId/variants for the nested CRUD
-// (handled by the router's own paths) and /api/variants/:id for the
-// standalone lookup. Mounting variantRoutes twice in the same
-// app.use chain is supported by Express - the router is the same
-// instance and registers its routes on the layer each time.
-app.use('/api/products', variantRoutes);
+// Standalone variant routes (/api/variants/...) - the first-class
+// CRUD that doesn't require a product id in the URL.
 app.use('/api/variants', variantRoutes);
+// Product-nested variant routes (/api/products/:productId/variants,
+// /api/products/:productId/options). Kept in a separate router
+// from the standalone variant routes so /:id/options and
+// /:productId/options don't compete for the same path.
+app.use('/api/products', productVariantRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/orders', receiptRoutes);
 app.use('/api/users', userRoutes);
@@ -228,6 +235,16 @@ app.use('/api/theme', themeRoutes);
 app.use('/api/home-sections', homeSectionRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/blog', blogRoutes);
+app.use('/api/currencies', currencyRoutes);
+// Digital downloads. Three routers, three mount points - the
+// public token route is at /api/downloads/*, account-scoped
+// routes are at /api/account/downloads, and the per-order-item
+// download lookup is at /api/orders/:id/items/:itemId/download.
+app.use('/api/downloads', publicDownloadsRouter);
+app.use('/api/account', accountDownloadsRouter);
+// The order routes already mount at /api/orders; this adds the
+// /:orderId/items/:itemId/download path.
+app.use('/api/orders', orderItemDownloadRouter);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

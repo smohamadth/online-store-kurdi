@@ -7,6 +7,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ApiError, authHttp, http, getToken } from './http';
 
+
+type FetchMockInit = {
+  headers: Record<string, string>;
+  body: string;
+  method?: string;
+};
+
 describe('ApiError', () => {
   it('carries the status, code, and field errors', () => {
     const e = new ApiError('Bad', 400, 'INVALID', [{ field: 'x', message: 'y' }]);
@@ -110,7 +117,7 @@ describe('http client', () => {
     }));
     vi.stubGlobal('fetch', fetchMock as any);
     await authHttp.get('/admin/ping');
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.headers.Authorization).toBe('Bearer tok123');
   });
 
@@ -122,7 +129,7 @@ describe('http client', () => {
     }));
     vi.stubGlobal('fetch', fetchMock as any);
     await authHttp.post('/x', { a: 1 });
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.body).toBe('{"a":1}');
   });
 
@@ -147,7 +154,7 @@ describe('http client', () => {
       headers: { 'Content-Type': 'text/csv' },
       rawBody: true,
     });
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.body).toBe('a,b,c\n1,2,3');
     expect(init.headers['Content-Type']).toBe('text/csv');
   });

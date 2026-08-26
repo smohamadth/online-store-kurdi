@@ -97,6 +97,19 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
   const template = await getTemplate('order_confirmation');
   
   const subject = template?.subject || `Order Confirmation #${order.orderNumber}`;
+
+  // The downloads array is set by the orders route when the order
+  // contains a digital line item. The route passes a stamp of
+  // { productName, token, url, expiresAt, downloadLimit } so
+  // the email can render a "Download" button per digital line
+  // without a second query here.
+  const downloads: Array<{
+    productName: string;
+    token: string;
+    url: string;
+    expiresAt?: Date | null;
+    downloadLimit?: number | null;
+  }> = Array.isArray(order.downloads) ? order.downloads : [];
   
   const defaultHtml = `
     <!DOCTYPE html>
@@ -111,6 +124,8 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
         .item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
         .total { font-size: 18px; font-weight: bold; margin-top: 15px; }
         .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+        .download { background: #eef6ff; border: 1px solid #93c5fd; border-radius: 5px; padding: 15px; margin: 10px 0; }
+        .download .meta { color: #555; font-size: 12px; margin-top: 4px; }
       </style>
     </head>
     <body>
@@ -143,6 +158,27 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
             <div class="item"><span>Tax</span><span>$${order.taxAmount}</span></div>
             <div class="item total"><span>Total</span><span>$${order.totalAmount}</span></div>
           </div>
+          
+          ${downloads.length > 0 ? `
+            <h3>Your downloads</h3>
+            <p>Your digital purchases are ready. Use the buttons below to download each file.</p>
+            ${downloads.map((d) => `
+              <div class="download">
+                <strong>${d.productName}</strong>
+                <div style="margin-top: 8px;">
+                  <a href="${d.url}" class="button">Download</a>
+                </div>
+                <div class="meta">
+                  ${d.expiresAt ? `Expires ${new Date(d.expiresAt).toLocaleDateString()}` : 'No expiry'}
+                  ${d.downloadLimit ? `&middot; Up to ${d.downloadLimit} downloads` : ''}
+                </div>
+              </div>
+            `).join('')}
+            <p style="font-size: 12px; color: #666; margin-top: 12px;">
+              You can always find your downloads at
+              <a href="${env.FRONTEND_URL}/account/downloads">${env.FRONTEND_URL}/account/downloads</a>.
+            </p>
+          ` : ''}
           
           ${order.shippingAddress ? `
             <h3>Shipping Address</h3>

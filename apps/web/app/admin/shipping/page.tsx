@@ -4,6 +4,7 @@ import { useStoreSettings, formatPrice } from '@/lib/settings';
 
 import { useState, useEffect } from 'react';
 import { API_BASE, authHttp, errorMessage } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 interface ShippingZone {
   id: string;
@@ -26,6 +27,9 @@ interface ShippingMethod {
 
 export default function AdminShippingPage() {
   const { settings } = useStoreSettings();
+  // The shipping form has two 1fr/1fr rows (name/rate, min/max).
+  // Stack under 640px.
+  const isMobile = useIsMobile(640);
   const [zones, setZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddZone, setShowAddZone] = useState(false);
@@ -217,7 +221,7 @@ export default function AdminShippingPage() {
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           zIndex: 1000,
         }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '32px', width: '400px' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '400px' }}>
             <h3 style={{ marginBottom: '16px' }}>Add Shipping Zone</h3>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Zone Name</label>
@@ -266,7 +270,7 @@ export default function AdminShippingPage() {
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           zIndex: 1000,
         }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '32px', width: '500px' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '500px' }}>
             <h3 style={{ marginBottom: '16px' }}>Add Shipping Method</h3>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Method Name</label>
@@ -278,7 +282,7 @@ export default function AdminShippingPage() {
                 style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Rate ($)</label>
                 <input
@@ -298,7 +302,7 @@ export default function AdminShippingPage() {
                 />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Min Days</label>
                 <input

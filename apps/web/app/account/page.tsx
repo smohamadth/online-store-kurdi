@@ -114,7 +114,7 @@ export default function AccountDashboard() {
           border: '1px solid var(--border, #e5e5e5)',
           borderRadius: '8px',
         }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
             <div>
               <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginBottom: '4px' }}>Name</p>
               <p style={{ fontWeight: 500 }}>{user.firstName} {user.lastName}</p>

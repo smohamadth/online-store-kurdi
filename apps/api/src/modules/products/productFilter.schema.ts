@@ -148,12 +148,25 @@ export const productFilterSchema = z.object({
   // Free-text
   search: z.string().optional(),
 
+  // Typed option filter (?optionValueId=...) - returns products
+  // that have at least one variant with this OptionValue selected.
+  // Plumbed through the storefront URL: any "swatch chip" link
+  // on the PDP can deep-link to /products?optionValueId=<id> and
+  // land on a filtered list. Multi-value is supported as CSV.
+  optionValueId: csv,
+
   // Sort + ordering
   sort: sortEnum.default('newest'),
 });
 
 export type ProductFilter = z.infer<typeof productFilterSchema>;
 export type ProductSort = z.infer<typeof sortEnum>;
+
+// Re-export the option filter helper for callers that want to
+// introspect a filter (the storefront's decodeFilter, etc.).
+export function getOptionValueIds(filter: ProductFilter): string[] {
+  return filter.optionValueId || [];
+}
 
 /**
  * Convert a parsed filter into a Prisma `where` clause.
@@ -185,6 +198,7 @@ export interface BuildWhereArgs {
   inStock?: boolean;
   onSale?: boolean;
   search?: string;
+  optionValueIds?: string[];
   // When true, ignore the `status` filter (used for the facets endpoint,
   // which counts every state so the sidebar shows the user what's
   // possible).
@@ -256,6 +270,20 @@ export function buildProductWhere(args: BuildWhereArgs) {
       { sku: { contains: q, mode: 'insensitive' } },
       { metaKeywords: { contains: q, mode: 'insensitive' } },
     ];
+  }
+
+  // Typed option filter: at least one variant must have a
+  // VariantOptionValue pointing at one of the requested option
+  // values. We express this as a relation filter on variants. The
+  // mock prisma supports the same nested-where shape (it resolves
+  // via the VariantOptionValue model), so this works in tests too.
+  if (args.optionValueIds && args.optionValueIds.length > 0) {
+    where.variants = {
+      some: {
+        isActive: true,
+        optionValues: { some: { optionValueId: { in: args.optionValueIds } } },
+      },
+    };
   }
 
   return where;

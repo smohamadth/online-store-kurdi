@@ -91,6 +91,53 @@ describe('POST /api/orders', () => {
     expect(cart).toHaveLength(0);
   });
 
+  it('mints a download token for digital line items and returns it in the response', async () => {
+    // Digital products don't decrement stock; they mint a
+    // per-order ProductDownload row instead. The response shape
+    // must include the token so the storefront can show the
+    // download button right after checkout.
+    const { token, user } = await authHeader();
+    const p = await createProduct({
+      name: 'eBook',
+      slug: 'ebook',
+      price: 9.99,
+      type: 'digital',
+      // Digital SKUs don't track inventory. The order route
+      // rejects with 400 "Insufficient stock" otherwise, even
+      // though for digital products there's no physical stock
+      // to deplete.
+      trackInventory: false,
+      quantity: 0,
+      downloadUrl: 'https://cdn.example.com/files/ebook.pdf',
+      downloadLimit: 5,
+      downloadExpiry: 30,
+    });
+    await mockPrisma.cartItem.create({ data: { userId: user.id, productId: p.id, quantity: 1 } });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 1 }] });
+    if (res.status !== 201) {
+      // Surface the server message so a 400 vs 500 is easy to
+      // tell apart when this test regresses.
+      throw new Error(`expected 201, got ${res.status}: ${JSON.stringify(res.body)}`);
+    }
+    // The freshly-created order carries the download token at
+    // the top-level `downloads` array (also reflected on each
+    // `items[].downloads[0]`).
+    const order = res.body.data;
+    expect(order.downloads).toBeDefined();
+    expect(order.downloads).toHaveLength(1);
+    expect(order.downloads[0].token).toMatch(/.+/);
+    expect(order.downloads[0].productName).toBe('eBook');
+    // The download row also persists in the DB.
+    const itemId = order.items[0].id;
+    const rows = await mockPrisma.productDownload.findMany({
+      where: { orderItemId: itemId },
+    });
+    expect(rows).toHaveLength(1);
+  });
+
   it('rejects an order for an inactive product (400)', async () => {
     const { token } = await authHeader();
     const p = await createProduct({ status: 'inactive' });

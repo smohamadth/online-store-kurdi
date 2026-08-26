@@ -16,6 +16,9 @@ import {
 } from '@/lib/filterParams';
 import type { ProductFilter } from '@/lib/filterParams.types';
 import { API_BASE } from '@/lib/apiBase';
+import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
+import { SITE } from '@/lib/seo';
+import { getImageUrl } from '@/lib/api';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -31,7 +34,7 @@ function ProductsContent() {
   // mutates it via setFilter; a useEffect below pushes the change to
   // the URL and refetches.
   const initialFilter = useMemo(
-    () => decodeFilter(searchParams),
+    () => decodeFilter(Object.fromEntries(searchParams)),
     // Only decode on the first render; subsequent updates come from
     // the URL pushes the page makes itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,6 +113,35 @@ function ProductsContent() {
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+      {/* Structured data: ItemList of the visible products + a
+          BreadcrumbList. The script is rendered every render
+          because the products list is client-side, but the
+          payload is small and the validator is happy with
+          any well-formed JSON-LD block. */}
+      {products.length > 0 && (() => {
+        const listUrl = `${SITE}/products${typeof window !== 'undefined' && window.location.search ? window.location.search : ''}`;
+        const list = buildItemListJsonLd(
+          'Products',
+          products.slice(0, 50).map((p, i) => ({
+            url: `${SITE}/products/${p.slug}`,
+            name: p.name,
+            image: p.images?.[0] ? getImageUrl(p.images[0].url) : undefined,
+            position: i + 1,
+          })),
+          listUrl,
+        );
+        const breadcrumb = buildBreadcrumbJsonLd([
+          { name: 'Home', url: `${SITE}/` },
+          { name: 'Products', url: `${SITE}/products` },
+        ]);
+        return (
+          <script
+            type="application/ld+json"
+            data-testid="json-ld-list"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(asGraph([list, breadcrumb])) }}
+          />
+        );
+      })()}
       {/* Breadcrumb */}
       <nav
         style={{

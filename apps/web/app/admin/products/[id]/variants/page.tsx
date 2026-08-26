@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { authHttp, errorMessage } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 interface Variant {
   id: string;
@@ -61,6 +63,8 @@ function formatAttributes(attrs: Record<string, string>): string {
 export default function ProductVariantsPage() {
   const params = useParams();
   const productId = params?.id as string;
+  // The variant form has a 1fr/1fr row (name/sku). Stack under 640px.
+  const isMobile = useIsMobile(640);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,7 +181,7 @@ export default function ProductVariantsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Link href="/admin/products" style={btnSecondary}>← Products</Link>
+          <Link href="/admin/products" style={btnSecondary}><DirectionArrow kind="back" /> Products</Link>
           <button
             onClick={() => { resetForm(); setShowForm(true); }}
             data-testid="new-variant"
@@ -197,7 +201,7 @@ export default function ProductVariantsPage() {
           <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '12px' }}>
             {editingId ? 'Edit variant' : 'New variant'}
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <label style={label}>
               Name
               <input

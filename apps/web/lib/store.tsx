@@ -14,6 +14,9 @@ export interface CartItem {
   variant?: string;
   variantId?: string;
   category: string;
+  /** Digital vs physical; stamped at add-to-cart so views can
+      * branch (e.g. "all digital" carts) without re-fetching. */
+  type?: 'digital' | 'physical';
 }
 
 interface CartStore {

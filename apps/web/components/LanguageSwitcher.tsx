@@ -4,10 +4,26 @@ import { useState } from 'react';
 import { languages, useTranslation } from '@/lib/i18n';
 
 export default function LanguageSwitcher() {
-  const { language, changeLanguage } = useTranslation();
+  const { language, changeLanguage, direction } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   const currentLang = languages.find(l => l.code === language);
+  // RTL mirror:
+  //   - caret flips (▼ in LTR, ▲ in RTL feels backwards; the cleaner
+  //     signal is a chevron rotated by the text direction).
+  //   - the dropdown anchors to the inline-end of the trigger so it stays
+  //     under the button in either direction.
+  //   - the row text aligns to the start edge of the row, not always left,
+  //     so an Arabic language name is right-aligned in an RTL page.
+  const isRtl = direction === 'rtl';
+  const caret = isRtl ? '◀' : '▶';
+  const dropdownAlign = isRtl ? { left: 0 } : { right: 0 };
+  const rowTextAlign: 'left' | 'right' = isRtl ? 'right' : 'left';
+  // The check that marks the current language should sit on the trailing
+  // edge of the row, opposite the language name.
+  const checkEdge = isRtl
+    ? { marginRight: 'auto' }
+    : { marginLeft: 'auto' };
 
   return (
     <div style={{ position: 'relative' }}>
@@ -30,7 +46,7 @@ export default function LanguageSwitcher() {
       >
         <span>{currentLang?.flag}</span>
         <span style={{ fontSize: '12px' }}>{currentLang?.code.toUpperCase()}</span>
-        <span style={{ fontSize: '10px' }}>▼</span>
+        <span style={{ fontSize: '10px' }}>{caret}</span>
       </button>
 
       {isOpen && (
@@ -49,8 +65,11 @@ export default function LanguageSwitcher() {
           <div style={{
             position: 'absolute',
             top: '100%',
-            right: 0,
             marginTop: '4px',
+            // Was hard-coded `right: 0`, which lined the dropdown up with the
+            // right edge of the trigger in LTR but pushed it off-screen in
+            // RTL when the trigger sat on the right side of the header.
+            ...dropdownAlign,
             backgroundColor: 'var(--card-bg, white)',
             border: '1px solid var(--border, #e5e5e5)',
             borderRadius: '8px',
@@ -77,13 +96,13 @@ export default function LanguageSwitcher() {
                   cursor: 'pointer',
                   fontSize: '14px',
                   fontWeight: language === lang.code ? 600 : 400,
-                  textAlign: 'left',
+                  textAlign: rowTextAlign,
                 }}
               >
                 <span style={{ fontSize: '18px' }}>{lang.flag}</span>
                 <span>{lang.name}</span>
                 {language === lang.code && (
-                  <span style={{ marginLeft: 'auto', color: '#22c55e' }}>✓</span>
+                  <span style={{ ...checkEdge, color: '#22c55e' }}>✓</span>
                 )}
               </button>
             ))}

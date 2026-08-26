@@ -3,9 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, Product, getCategoryEmoji } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n';
 
 export default function SearchBar() {
   const router = useRouter();
+  const { t, direction } = useTranslation();
+  // Direction-aware icon/padding: in RTL the magnifying glass must sit on
+  // the right edge of the input and the text must start on the right. The
+  // browser's `direction` CSS property would do most of this for us if we
+  // used logical properties (inset-inline-start, padding-inline-start), but
+  // the rest of the app uses absolute positioning, so we mirror explicitly
+  // and pin the same value in a regression test.
+  const isRtl = direction === 'rtl';
+  const textInset = isRtl ? '40px 40px 10px 16px' : '10px 16px 10px 40px';
+  const iconPos = isRtl ? { right: '12px' } : { left: '12px' };
+  // Arrow that points to the side where the destination is. In LTR a
+  // "view all results →" points right; in RTL it points left.
+  const moreArrow = isRtl ? '←' : '→';
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
@@ -125,10 +139,10 @@ export default function SearchBar() {
             setShowDropdown(true);
           }}
           onFocus={() => setShowDropdown(true)}
-          placeholder="Search products..."
+          placeholder={t('nav.search', 'Search products...')}
           style={{
             width: '100%',
-            padding: '10px 16px 10px 40px',
+            padding: textInset,
             border: '1px solid var(--border, #e5e7eb)',
             borderRadius: '8px',
             fontSize: '14px',
@@ -138,9 +152,12 @@ export default function SearchBar() {
         />
         <button
           type="submit"
+          aria-label={t('nav.search', 'Search')}
           style={{
             position: 'absolute',
-            left: '12px',
+            // LTR: glass on the left. RTL: glass on the right so it sits
+            // next to the leading text edge (which is now the right side).
+            ...iconPos,
             top: '50%',
             transform: 'translateY(-50%)',
             background: 'none',
@@ -243,7 +260,7 @@ export default function SearchBar() {
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                 >
-                  View all {results.length} results →
+                  View all {results.length} results {moreArrow}
                 </div>
               )}
             </div>

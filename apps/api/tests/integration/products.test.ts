@@ -186,6 +186,38 @@ describe('POST /api/products (admin)', () => {
     expect(res.body.data.slug).toBe('new-product');
   });
 
+  it('persists digital product fields and surfaces them on the response', async () => {
+    // The storefront branches on `type === 'digital'`; if the
+    // downloadUrl / downloadLimit / downloadExpiry fields
+    // vanish from the response shape, the whole digital-buy
+    // flow breaks. Lock the round-trip here.
+    const { token } = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const res = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'eBook',
+        sku: 'EB-1',
+        type: 'digital',
+        price: 9.99,
+        description: '<p>An eBook.</p>',
+        categoryId: cat.id,
+        downloadUrl: 'https://cdn.example.com/files/ebook.pdf',
+        downloadLimit: 5,
+        downloadExpiry: 30,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.type).toBe('digital');
+    expect(res.body.data.downloadUrl).toBe('https://cdn.example.com/files/ebook.pdf');
+    expect(res.body.data.downloadLimit).toBe(5);
+    expect(res.body.data.downloadExpiry).toBe(30);
+    // GET /api/products/:id surfaces the same fields.
+    const detail = await request(app).get(`/api/products/${res.body.data.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.downloadUrl).toBe('https://cdn.example.com/files/ebook.pdf');
+  });
+
   it('rejects anonymous (401)', async () => {
     const res = await request(app).post('/api/products').send({ name: 'X', sku: 'X', price: 1, description: 'x' });
     expect(res.status).toBe(401);

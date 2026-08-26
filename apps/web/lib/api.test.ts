@@ -13,6 +13,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api, getImageUrl, getProductImage, getCategoryEmoji } from './api';
 
+
+type FetchMockInit = {
+  headers: Record<string, string>;
+  body: string;
+  method?: string;
+};
+
 describe('getImageUrl', () => {
   it('returns the URL unchanged for absolute http(s) URLs', () => {
     expect(getImageUrl('https://cdn.example.com/x.png')).toBe('https://cdn.example.com/x.png');
@@ -122,7 +129,7 @@ describe('api client', () => {
     }));
     vi.stubGlobal('fetch', fetchMock as any);
     await api.getCurrentUser('abc.def.ghi');
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.headers.Authorization).toBe('Bearer abc.def.ghi');
   });
 
@@ -134,7 +141,7 @@ describe('api client', () => {
     }));
     vi.stubGlobal('fetch', fetchMock as any);
     await api.getProducts();
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.headers.Authorization).toBeUndefined();
   });
 
@@ -146,7 +153,7 @@ describe('api client', () => {
     }));
     vi.stubGlobal('fetch', fetchMock as any);
     await api.login('a@b.c', 'Password123!');
-    const [, init] = fetchMock.mock.calls[0];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.body).toBe(JSON.stringify({ email: 'a@b.c', password: 'Password123!' }));
   });
 

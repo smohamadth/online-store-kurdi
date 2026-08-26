@@ -5,6 +5,8 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { decrementStock, consumeReservationsForCartItemIds } from '../inventory/inventory.service';
 import { logger } from '../../utils/logger';
 import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
+import { mintDownloadForOrderItem } from '../downloads/downloads.service';
+import { env } from '../../config/environment';
 
 const router = Router();
 
@@ -207,12 +209,29 @@ router.post('/', authenticate, async (req, res, next) => {
       const totalPrice = unitPrice * item.quantity;
       calculatedSubtotal += totalPrice;
 
+      // Snapshot the digital fields onto the line item. The
+      // product-level URL is what the legacy single-URL flow
+      // reads; the per-order token we mint below is what the
+      // token-based flow reads. We keep both so an order
+      // placed before the per-order token system still works.
+      const isDigital = product.type === 'digital';
       orderItems.push({
         productId: item.productId,
         variantId: item.variantId || null,
         quantity: item.quantity,
         unitPrice,
         totalPrice,
+        // Snapshot the digital fields at order-placement time
+        // so a product edit later doesn't invalidate the
+        // customer's downloads.
+        downloadUrl: isDigital ? product.downloadUrl : null,
+        downloadLimit: isDigital ? product.downloadLimit : null,
+        downloadExpiry: isDigital && product.downloadExpiry
+          // Schema stores days; the per-order column is a Date.
+          // Convert: purchasedAt + days.
+          ? new Date(Date.now() + product.downloadExpiry * 24 * 60 * 60 * 1000)
+          : null,
+        isBackorder: false,
       });
     }
 
@@ -257,6 +276,73 @@ router.post('/', authenticate, async (req, res, next) => {
                 },
               },
             },
+            // Include the freshly-minted download row so the
+            // confirmation email can include the link.
+            downloads: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
+        },
+        shippingAddress: true,
+      },
+    });
+
+    // Mint a per-order download token for every digital line
+    // item. The customer's confirmation email embeds these
+    // tokens, and the /api/downloads/:token route redeems
+    // them. We also keep the legacy product-level URL on
+    // OrderItem.downloadUrl for backward compatibility with
+    // orders placed before the token system shipped.
+    for (const item of order.items) {
+      const isDigital = item.product?.type === 'digital';
+      if (!isDigital) continue;
+      const sourceUrl = item.downloadUrl || item.product?.downloadUrl;
+      if (!sourceUrl) {
+        // Defensive: a digital product without a download URL
+        // is a config error, not a payment failure. The order
+        // succeeds; we just skip minting a token. Log it so
+        // an admin notices.
+        logger.warn(
+          `Skipped download token for orderItem=${item.id} ` +
+          `product=${item.productId}: no downloadUrl configured`,
+        );
+        continue;
+      }
+      try {
+        await mintDownloadForOrderItem({
+          orderItemId: item.id,
+          sourceUrl,
+          // Schema column is days; the per-order column is a
+          // Date. Read what we snapshoted on the order item.
+          expiryDays: item.downloadExpiry
+            ? Math.max(0, Math.ceil(
+                (item.downloadExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+              ))
+            : null,
+          // Per-token download limit. Copied from the
+          // OrderItem.downloadLimit snapshot (which in turn was
+          // copied from the product). null = unlimited.
+          downloadLimit: item.downloadLimit,
+          purchaseDate: order.createdAt,
+        });
+      } catch (err) {
+        // Don't fail the whole order if the download mint
+        // fails; the order is paid for. We log so an admin
+        // can retry.
+        logger.error(
+          `Failed to mint download for orderItem=${item.id}:`,
+          err as any,
+        );
+      }
+    }
+
+    // Re-fetch the order so the email includes the freshly
+    // minted download rows.
+    const orderWithDownloads = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: {
+          include: {
+            product: { include: { images: { where: { isPrimary: true }, take: 1 } } },
+            downloads: { orderBy: { createdAt: 'desc' }, take: 1 },
           },
         },
         shippingAddress: true,
@@ -331,16 +417,66 @@ router.post('/', authenticate, async (req, res, next) => {
     
     if (orderUser) {
       sendOrderConfirmation({
-        ...order,
-        items: order.items,
+        ...(orderWithDownloads || order),
+        items: (orderWithDownloads || order).items,
+        // Stamp the API base on each download so the email
+        // gets a fully qualified URL the user can click.
+        downloads: ((orderWithDownloads || order).items as any[])
+          .filter((it: any) => it.downloads?.[0]?.token)
+          .map((it: any) => ({
+            orderItemId: it.id,
+            productName: it.product?.name,
+            token: it.downloads[0].token,
+            expiresAt: it.downloads[0].expiresAt,
+            downloadLimit: it.downloads[0].downloadLimit,
+            url: `${env.API_URL || 'http://localhost:3001/api'}/downloads/${it.downloads[0].token}`,
+          })),
       }, orderUser).catch(err => {
         logger.error('Failed to send order confirmation:', err);
       });
     }
 
+    // Build the response from the freshly-refetched order so
+    // the storefront sees the downloads that were just minted
+    // for digital line items. The same shape (`items[].downloads`)
+    // is also what the email uses above.
+    const responseOrder = (orderWithDownloads || order) as any;
+    // The mock prisma doesn't apply `orderBy` / `take` to
+    // nested `include` blocks, so the re-fetched order's
+    // `items[].downloads` array is empty. Re-resolve downloads
+    // by query against ProductDownload directly so the response
+    // still has the tokens regardless of mock-fidelity.
+    const allDownloads = (responseOrder.items || []).length
+      ? await prisma.productDownload.findMany({
+          where: { orderItemId: { in: (responseOrder.items || []).map((it: any) => it.id) } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+
     res.status(201).json({
       status: 'success',
-      data: order,
+      data: {
+        ...responseOrder,
+        // Convenience field for the storefront: a flat array of
+        // {orderItemId, productName, token, url, ...} the checkout
+        // success page can iterate without having to flatten
+        // items[].downloads itself.
+        downloads: (responseOrder.items || [])
+          .map((it: any) => {
+            const dl = allDownloads.find((d: any) => d.orderItemId === it.id);
+            if (!dl || !dl.token) return null;
+            return {
+              orderItemId: it.id,
+              productName: it.product?.name,
+              token: dl.token,
+              expiresAt: dl.expiresAt,
+              downloadLimit: dl.downloadLimit,
+              downloadCount: dl.downloadCount,
+              url: `${env.API_URL || 'http://localhost:3001/api'}/downloads/${dl.token}`,
+            };
+          })
+          .filter(Boolean),
+      },
     });
   } catch (error) {
     next(error);
@@ -488,7 +624,7 @@ router.post('/:id/cancel', authenticate, async (req, res, next) => {
     // Restore inventory
     for (const item of order.items) {
       if (item.variantId) {
-        await prisma.productVariant.update({
+        await prisma.variant.update({
           where: { id: item.variantId },
           data: {
             quantity: {

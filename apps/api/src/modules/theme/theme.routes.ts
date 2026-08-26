@@ -56,6 +56,16 @@ const themeSchema = z.object({
   // Blocked below: <script>, javascript: and expression() would let a
   // compromised admin account run JS on every storefront page.
   customCss: z.string().max(20000).optional().nullable(),
+
+  // Active theme key. Whitelisted to keys returned by the theme
+  // registry. The schema is `@unique` to a small set of string
+  // constants; the runtime check is in the route handler.
+  //
+  // The schema is intentionally NOT validated here. The handler
+  // does the validation against the registry, which is the source
+  // of truth for "what themes are installed". A theme the platform
+  // doesn't know about is rejected before it ever touches the DB.
+  activeTheme: z.string().min(1).max(60).optional().nullable(),
 });
 
 const DANGEROUS_CSS = /<\/?script|javascript\s*:|expression\s*\(|@import\s+url\s*\(\s*['"]?\s*javascript/i;
@@ -63,7 +73,7 @@ const DANGEROUS_CSS = /<\/?script|javascript\s*:|expression\s*\(|@import\s+url\s
 async function getOrCreate() {
   const existing = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
   if (existing) return existing;
-  return prisma.themeSettings.create({ data: { id: 'default' } });
+  return prisma.themeSettings.create({ data: { id: 'default', activeTheme: 'default' } });
 }
 
 // GET /api/theme - public: the storefront needs this to paint itself.
@@ -98,12 +108,27 @@ router.put('/', authenticate, authorize('admin', 'manager'), async (req, res, ne
     // looked like "my change didn't save". Nullable fields now accept null;
     // the non-nullable colour/number columns still ignore it, because writing
     // null there would violate the schema and 500.
-    const NULLABLE = new Set(['announcementText', 'announcementLink', 'customCss']);
+    const NULLABLE = new Set(['announcementText', 'announcementLink', 'customCss', 'activeTheme']);
 
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       if (v === undefined) continue;
       if (v === null && !NULLABLE.has(k)) continue;
+      // Validate activeTheme against the registry. The web app's
+      // themeRegistry.ts is the source of truth for "what themes
+      // are installed"; this whitelist is kept in sync. If the
+      // platforms diverge, a future change is to publish the
+      // registry as a shared package.
+      if (k === 'activeTheme' && v !== null) {
+        const INSTALLED_THEMES = new Set(['default', 'minimal', 'bold']);
+        if (!INSTALLED_THEMES.has(v as string)) {
+          return res.status(400).json({
+            status: 'error',
+            message: `Unknown theme "${v}". Available themes: ${Array.from(INSTALLED_THEMES).join(', ')}.`,
+            code: 'UNKNOWN_THEME',
+          });
+        }
+      }
       clean[k] = v;
     }
 
@@ -124,7 +149,9 @@ router.put('/', authenticate, authorize('admin', 'manager'), async (req, res, ne
 router.post('/reset', authenticate, authorize('admin', 'manager'), async (_req, res, next) => {
   try {
     await prisma.themeSettings.deleteMany({ where: { id: 'default' } });
-    const theme = await prisma.themeSettings.create({ data: { id: 'default' } });
+    const theme = await prisma.themeSettings.create({
+      data: { id: 'default', activeTheme: 'default' },
+    });
     logger.info('Theme settings reset to defaults');
     res.json({ status: 'success', data: theme });
   } catch (err) {

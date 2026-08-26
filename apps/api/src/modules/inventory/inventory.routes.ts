@@ -145,7 +145,7 @@ router.post('/adjust', authenticate, authorize('admin', 'manager'), async (req, 
     // Get current quantity
     let currentQuantity: number;
     if (variantId) {
-      const variant = await prisma.productVariant.findUnique({
+      const variant = await prisma.variant.findUnique({
         where: { id: variantId },
         select: { quantity: true },
       });
@@ -177,7 +177,7 @@ router.post('/adjust', authenticate, authorize('admin', 'manager'), async (req, 
 
     // Update quantity
     if (variantId) {
-      await prisma.productVariant.update({
+      await prisma.variant.update({
         where: { id: variantId },
         data: { quantity: newQuantity },
       });
@@ -229,7 +229,7 @@ router.post('/bulk-update', authenticate, authorize('admin'), async (req, res, n
     for (const update of validatedData.updates) {
       try {
         if (update.variantId) {
-          await prisma.productVariant.update({
+          await prisma.variant.update({
             where: { id: update.variantId },
             data: { quantity: update.quantity },
           });
@@ -955,10 +955,10 @@ router.post('/import-csv', authenticate, authorize('admin'), async (req, res, ne
         if (row.quantity >= 0) {
           // Positive: set absolute
           if (row.variantSku) {
-            const v = await prisma.productVariant.findFirst({ where: { sku: row.variantSku } });
+            const v = await prisma.variant.findFirst({ where: { sku: row.variantSku } });
             if (!v) throw new Error(`variant not found: ${row.variantSku}`);
             const previous = v.quantity;
-            await prisma.productVariant.update({ where: { id: v.id }, data: { quantity: row.quantity } });
+            await prisma.variant.update({ where: { id: v.id }, data: { quantity: row.quantity } });
             await prisma.inventoryLog.create({
               data: { productId: v.productId, variantId: v.id, quantityChange: row.quantity - previous, previousQuantity: previous, newQuantity: row.quantity, reason: 'restock', notes: 'csv import' },
             });
@@ -975,7 +975,7 @@ router.post('/import-csv', authenticate, authorize('admin'), async (req, res, ne
           // Negative: delta
           const abs = -row.quantity;
           if (row.variantSku) {
-            const v = await prisma.productVariant.findFirst({ where: { sku: row.variantSku } });
+            const v = await prisma.variant.findFirst({ where: { sku: row.variantSku } });
             if (!v) throw new Error(`variant not found: ${row.variantSku}`);
             await decrementStock({ productId: v.productId, variantId: v.id, quantity: abs, userId: req.user!.id });
           } else {

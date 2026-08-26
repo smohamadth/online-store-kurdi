@@ -1,6 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+/**
+ * SSR seed for the i18n hook.
+ *
+ * The server root layout (app/layout.tsx) resolves a locale from the cookie
+ * and Accept-Language, then renders <html lang="..." dir="..."> AND passes
+ * the same values down to AppShell. AppShell stuffs them in this context
+ * so useTranslation() can read them as its initial state, before the
+ * localStorage / navigator.language effect runs.
+ *
+ * Without this seed the first client render always uses 'en' / 'ltr', which
+ * (a) disagrees with the server-rendered <html> for a frame, causing a
+ * flash of LTR/English content for Kurdish or Arabic visitors, and
+ * (b) makes tests that render components with non-English locale unstable
+ * because every assertion sees a re-render after the effect lands.
+ *
+ * The matching <I18nSeedProvider> lives in `lib/I18nSeedProvider.tsx` because
+ * the provider needs JSX, and this file is `i18n.ts` (renaming to `.tsx`
+ * would force every importer to update its path).
+ */
+export const I18nSeedContext = createContext<{ lang: string; dir: 'ltr' | 'rtl' } | null>(null);
 
 // Supported languages
 export const languages = [
@@ -313,31 +334,50 @@ function getBrowserLanguage(): string {
 
 // Translation hook
 export function useTranslation() {
-  const [language, setLanguage] = useState('en');
-  const [direction, setDirection] = useState<'ltr' | 'rtl'>('ltr');
+  // Seed with the locale the server already resolved for this request
+  // (passed in by AppShell). Before the i18n hook reads from localStorage
+  // and the browser, the first render matches the server-rendered
+  // <html lang dir>, so there is no flash of LTR/English on hydration.
+  // The context is read inside this hook (not in a module-scope helper)
+  // because useContext is only legal inside a component or another hook.
+  const seed = useContext(I18nSeedContext);
+  const [language, setLanguage] = useState<string>(seed?.lang ?? 'en');
+  const [direction, setDirection] = useState<'ltr' | 'rtl'>(seed?.dir ?? 'ltr');
 
   useEffect(() => {
+    // When the server has already resolved a locale for us, trust it.
+    // Local visitors' last-chosen language currently lives in
+    // localStorage (not a cookie), so the server can't see it. If we
+    // rehydrated from localStorage on every mount we'd undo the SSR
+    // seed for a returning user who happened to land on a different
+    // device or a fresh browser profile. The cookie migration is a
+    // separate task; until then, the seed wins.
+    if (seed) {
+      document.documentElement.dir = seed.dir;
+      document.documentElement.lang = seed.lang;
+      return;
+    }
     const lang = getBrowserLanguage();
     setLanguage(lang);
-    
+
     const langConfig = languages.find(l => l.code === lang);
     setDirection((langConfig?.dir as 'ltr' | 'rtl') || 'ltr');
-    
+
     // Set document direction
     document.documentElement.dir = langConfig?.dir || 'ltr';
     document.documentElement.lang = lang;
-  }, []);
+  }, [seed]);
 
   const changeLanguage = (langCode: string) => {
     setLanguage(langCode);
     localStorage.setItem('language', langCode);
-    
+
     const langConfig = languages.find(l => l.code === langCode);
     setDirection((langConfig?.dir as 'ltr' | 'rtl') || 'ltr');
-    
+
     document.documentElement.dir = langConfig?.dir || 'ltr';
     document.documentElement.lang = langCode;
-    
+
     // Force re-render by dispatching event
     window.dispatchEvent(new Event('languageChange'));
   };

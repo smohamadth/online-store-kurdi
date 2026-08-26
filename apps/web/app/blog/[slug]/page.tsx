@@ -7,6 +7,7 @@ import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
 import { encodeRouteParam } from '@/lib/routeParam';
+import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 
 /**
  * A single blog post at /blog/<slug>.
@@ -166,25 +167,31 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
 
   // Structured data: lets Google show the headline, date and image directly in
   // results. Cheap to emit and the main reason a blog earns traffic.
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
+  // Built by the shared helper so this page and the unit test
+  // can't drift on the field names.
+  const jsonLd = buildBlogPostingJsonLd({
+    url: `${SITE}/blog/${post.slug}`,
     headline: post.title,
     description: post.excerpt || post.metaDescription || undefined,
-    image: image ? [image] : undefined,
+    image: image || undefined,
     datePublished: post.publishedAt || post.createdAt,
     dateModified: post.updatedAt,
-    author: { '@type': 'Person', name: post.author || store.storeName },
-    publisher: { '@type': 'Organization', name: store.storeName },
-    mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE}/blog/${post.slug}` },
-    keywords: post.tags.join(', ') || undefined,
-  };
+    author: post.author || store.storeName,
+    publisherName: store.storeName,
+    keywords: post.tags.join(', '),
+  });
+  const breadcrumb = buildBreadcrumbJsonLd([
+    { name: 'Home', url: `${SITE}/` },
+    { name: 'Blog', url: `${SITE}/blog` },
+    { name: post.title, url: `${SITE}/blog/${post.slug}` },
+  ]);
 
   return (
     <article style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 20px 72px' }}>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        data-testid="json-ld-post"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(asGraph([jsonLd, breadcrumb])) }}
       />
 
       <PostViewCounter slug={post.slug} />

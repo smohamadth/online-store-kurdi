@@ -35,7 +35,7 @@ export interface BlogPagination {
 }
 
 /** Human date, stable between server and client to avoid hydration mismatch. */
-export function formatPostDate(iso: string | null): string {
+export function formatPostDate(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });

@@ -125,7 +125,7 @@ router.post('/', authenticate, async (req, res, next) => {
 
     // Check variant if provided
     if (variantId) {
-      const variant = await prisma.productVariant.findUnique({
+      const variant = await prisma.variant.findUnique({
         where: { id: variantId },
         select: { id: true, quantity: true, isActive: true },
       });

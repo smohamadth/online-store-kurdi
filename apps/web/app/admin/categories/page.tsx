@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { http, authHttp, errorMessage } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 interface Category {
   id: string;
@@ -17,6 +18,9 @@ interface Category {
 }
 
 export default function AdminCategoriesPage() {
+  // Used to collapse the name/slug row of the category form on mobile
+  // so the inputs get the full viewport width.
+  const isMobile = useIsMobile(640);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -217,8 +221,8 @@ export default function AdminCategoriesPage() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '32px', width: '500px', maxHeight: '80vh', overflow: 'auto' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: isMobile ? 'flex-start' : 'center', zIndex: 1000, overflow: 'auto' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '500px', maxWidth: '100%', maxHeight: isMobile ? 'none' : '80vh', minHeight: isMobile ? '100vh' : 'auto', overflow: 'auto' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
               {editingCategory ? 'Edit Category' : 'Add New Category'}
             </h2>
@@ -249,7 +253,7 @@ export default function AdminCategoriesPage() {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Sort Order</label>
                   <input type="number" value={formData.sortOrder} onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }} />

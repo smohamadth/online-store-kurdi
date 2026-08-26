@@ -8,7 +8,12 @@
 }
 
 html, body {
-  overflow-x: hidden;
+  /* `width: 100%` keeps flex/grid children from expanding the body past the
+     viewport on phones. We deliberately do NOT set `overflow-x: hidden` on
+     the <html> element: that suppresses the scrollbar that tells you a
+     child is too wide, masking real layout bugs. The <body> still gets
+     `overflow-x: hidden` below so a single rogue child can't horizontally
+     scroll the document, but the <html> will report overflow. */
   width: 100%;
 }
 

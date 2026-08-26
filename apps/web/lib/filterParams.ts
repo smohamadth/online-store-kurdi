@@ -47,6 +47,7 @@ export const EMPTY_FILTER: ProductFilter = {
   minPrice: undefined,
   maxPrice: undefined,
   search: undefined,
+  optionValueId: [],
   sort: 'newest',
 };
 
@@ -61,6 +62,7 @@ export interface SerialisedFilter {
   minPrice?: string;
   maxPrice?: string;
   search?: string;
+  optionValueId?: string;
   sort?: string;
   page?: string;
   limit?: string;
@@ -96,6 +98,9 @@ export function encodeFilter(filter: Partial<ProductFilter>): URLSearchParams {
     params.set('maxPrice', String(filter.maxPrice));
   }
   if (filter.search && filter.search.trim()) params.set('search', filter.search.trim());
+  if (filter.optionValueId && filter.optionValueId.length) {
+    params.set('optionValueId', filter.optionValueId.join(','));
+  }
   if (filter.sort && filter.sort !== 'newest') params.set('sort', filter.sort);
   if (filter.page && filter.page > 1) params.set('page', String(filter.page));
   if (filter.limit && filter.limit !== 20) params.set('limit', String(filter.limit));
@@ -185,6 +190,7 @@ export function decodeFilter(input: URLSearchParams | Record<string, string | st
     minPrice: toNumber(get('minPrice')),
     maxPrice: toNumber(get('maxPrice')),
     search: get('search'),
+    optionValueId: csv('optionValueId'),
     sort,
   };
 }
@@ -204,6 +210,7 @@ export function isEmptyFilter(filter: Partial<ProductFilter>): boolean {
     (filter.minPrice === undefined || filter.minPrice === null) &&
     (filter.maxPrice === undefined || filter.maxPrice === null) &&
     (!filter.search || !filter.search.trim()) &&
+    (!filter.optionValueId || filter.optionValueId.length === 0) &&
     (!filter.sort || filter.sort === 'newest')
   );
 }
@@ -223,6 +230,7 @@ export function activeFilterCount(filter: Partial<ProductFilter>): number {
   if (filter.minRating !== undefined && filter.minRating !== null) n += 1;
   if (filter.minPrice !== undefined || filter.maxPrice !== undefined) n += 1;
   if (filter.search && filter.search.trim()) n += 1;
+  if (filter.optionValueId && filter.optionValueId.length) n += filter.optionValueId.length;
   if (filter.sort && filter.sort !== 'newest') n += 1;
   return n;
 }

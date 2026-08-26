@@ -20,6 +20,12 @@ export interface Product {
   variants: ProductVariant[];
   averageRating: number;
   reviewCount: number;
+  /** Digital product fields. Returned by the API for every product;
+   * meaningful only when `type === 'digital'`. */
+  downloadUrl: string | null;
+  downloadLimit: number | null;
+  /** Number of days the per-order link is valid. */
+  downloadExpiry: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,10 +49,13 @@ export interface ProductVariant {
   id: string;
   name: string;
   sku: string;
+  slug?: string | null;
   price: number;
+  compareAtPrice?: number | null;
   quantity: number;
   attributes: string;
   isActive: boolean;
+  sortOrder?: number;
 }
 
 export interface ApiResponse<T> {

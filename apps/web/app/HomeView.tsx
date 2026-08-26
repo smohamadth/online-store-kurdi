@@ -38,6 +38,7 @@ import {
 } from '@/components/HomeSections';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { API_BASE } from '@/lib/http';
+import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 
 const CONTAINER = 'var(--container, 1200px)';
 
@@ -199,7 +200,14 @@ export default function HomeView() {
 
     switch (s.type) {
       case 'hero':
-        return <HeroGallery key={s.id} banners={heroBanners} loaded={bannersLoaded} />;
+        return (
+          <ThemeSectionRenderer
+            key={s.id}
+            section="hero"
+            fallback={<HeroGallery banners={heroBanners} loaded={bannersLoaded} />}
+            props={{ banners: heroBanners }}
+          />
+        );
 
       case 'promo':
         return <PromoGrid key={s.id} banners={promoBanners} />;
@@ -215,32 +223,39 @@ export default function HomeView() {
 
       case 'categories':
         return (
-          <section key={s.id} style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
-            <SectionHeading
-              title={s.title}
-              subtitle={s.subtitle}
-              linkText={cfg.linkText || 'View All →'}
-              linkHref={cfg.linkHref || '/products'}
-            />
-            {categories.length === 0 ? (
-              <p style={{ marginTop: '24px', color: 'var(--muted,#666)' }}>
-                No categories yet. Add some in Admin → Categories.
-              </p>
-            ) : (
-              <div
-                style={{
-                  marginTop: '32px',
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${perRow}, 1fr)`,
-                  gap: '16px',
-                }}
-              >
-                {categories.slice(0, cfg.limit || 8).map((c) => (
-                  <CategoryTile key={c.slug} category={c} />
-                ))}
-              </div>
-            )}
-          </section>
+          <ThemeSectionRenderer
+            key={s.id}
+            section="categories"
+            fallback={
+              <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+                <SectionHeading
+                  title={s.title}
+                  subtitle={s.subtitle}
+                  linkText={cfg.linkText || 'View All →'}
+                  linkHref={cfg.linkHref || '/products'}
+                />
+                {categories.length === 0 ? (
+                  <p style={{ marginTop: '24px', color: 'var(--muted,#666)' }}>
+                    No categories yet. Add some in Admin → Categories.
+                  </p>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: '32px',
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${perRow}, 1fr)`,
+                      gap: '16px',
+                    }}
+                  >
+                    {categories.slice(0, cfg.limit || 8).map((c) => (
+                      <CategoryTile key={c.slug} category={c} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            }
+            props={{ title: s.title ?? undefined, categories, config: cfg }}
+          />
         );
 
       case 'featured': {
@@ -251,41 +266,48 @@ export default function HomeView() {
           Math.max(cols, Math.floor(featuredProducts.length / cols) * cols)
         );
         return (
-          <section key={s.id} style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
-            <SectionHeading
-              title={s.title}
-              subtitle={s.subtitle}
-              linkText={cfg.linkText || 'View All Products →'}
-              linkHref={cfg.linkHref || '/products'}
-            />
-            {loading && (
-              <div style={{ marginTop: '32px' }}>
-                <ProductGridSkeleton count={perRow * 2} />
-              </div>
-            )}
-            {!loading && shown.length > 0 && (
-              <div
-                style={{
-                  marginTop: '32px',
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                  gap: '24px',
-                }}
-              >
-                {shown.map((p) => (
-                  <ProductCard key={p.id} product={p} currencySymbol={settings.currencySymbol} />
-                ))}
-              </div>
-            )}
-            {!loading && featuredProducts.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted,#666)' }}>
-                <p>No featured products yet.</p>
-                <p style={{ fontSize: '14px', marginTop: '8px' }}>
-                  Mark products as “featured” in Admin → Products.
-                </p>
-              </div>
-            )}
-          </section>
+          <ThemeSectionRenderer
+            key={s.id}
+            section="featured"
+            fallback={
+              <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+                <SectionHeading
+                  title={s.title}
+                  subtitle={s.subtitle}
+                  linkText={cfg.linkText || 'View All Products →'}
+                  linkHref={cfg.linkHref || '/products'}
+                />
+                {loading && (
+                  <div style={{ marginTop: '32px' }}>
+                    <ProductGridSkeleton count={perRow * 2} />
+                  </div>
+                )}
+                {!loading && shown.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: '32px',
+                      display: 'grid',
+                      gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                      gap: '24px',
+                    }}
+                  >
+                    {shown.map((p) => (
+                      <ProductCard key={p.id} product={p} currencySymbol={settings.currencySymbol} />
+                    ))}
+                  </div>
+                )}
+                {!loading && featuredProducts.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted,#666)' }}>
+                    <p>No featured products yet.</p>
+                    <p style={{ fontSize: '14px', marginTop: '8px' }}>
+                      Mark products as “featured” in Admin → Products.
+                    </p>
+                  </div>
+                )}
+              </section>
+            }
+            props={{ title: s.title ?? undefined, products: shown, config: cfg }}
+          />
         );
       }
 

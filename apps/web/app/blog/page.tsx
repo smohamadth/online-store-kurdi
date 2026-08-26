@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
@@ -225,7 +226,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
         >
           {pagination.page > 1 && (
             <Link href={pageHref(pagination.page - 1)} style={pagerStyle(false)}>
-              ← Previous
+              <DirectionArrow kind="back" /> Previous
             </Link>
           )}
           {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((n) => (
@@ -240,7 +241,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
           ))}
           {pagination.page < pagination.totalPages && (
             <Link href={pageHref(pagination.page + 1)} style={pagerStyle(false)}>
-              Next →
+              <DirectionArrow kind="forward" /> Next
             </Link>
           )}
         </nav>

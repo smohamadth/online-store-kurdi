@@ -51,7 +51,8 @@ export const REQUIRED_MODELS = [
   'payment',
   'product',
   'productImage',
-  'productVariant',
+  'productVariant', // back-compat alias for `variant` (post-rename)
+  'option', 'optionValue', 'variantOptionValue', 'variantImage',
   'recommendationLog',
   'review',
   'session',

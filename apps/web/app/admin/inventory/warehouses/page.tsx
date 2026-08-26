@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { authHttp, errorMessage } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 interface Warehouse {
   id: string;
@@ -15,6 +16,11 @@ interface Warehouse {
 }
 
 export default function WarehousesPage() {
+  // Four-column summary row (warehouses, total stock, low stock, capacity).
+  // At 360px each cell is ~80px - the count number fits but the label
+  // wraps to two lines, which is fine, while the icons get cramped.
+  // Switch to 2x2 on mobile so the layout reads as a real grid.
+  const isMobile = useIsMobile(640);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -84,7 +90,7 @@ export default function WarehousesPage() {
 
       {showForm && (
         <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e5e5e5', marginBottom: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: '12px' }}>
             <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
             <input placeholder="Code (DAL-01)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} style={inputStyle} />
             <input placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={inputStyle} />

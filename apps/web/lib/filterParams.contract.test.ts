@@ -130,6 +130,14 @@ const apiSchema = z.object({
       return Math.max(0, Math.min(5, n));
     }),
   search: z.string().optional(),
+  optionValueId: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return [] as string[];
+      if (Array.isArray(v)) return v.flatMap((s) => s.split(','));
+      return v.split(',').map((s) => s.trim()).filter(Boolean);
+    }),
   sort: z
     .enum(['newest', 'oldest', 'price_asc', 'price_desc', 'name_asc', 'name_desc', 'rating_desc', 'popular', 'relevance'])
     .default('newest'),
@@ -229,5 +237,15 @@ describe('Storefront <-> API contract', () => {
     const parsed = parseApiQuery(Object.fromEntries(url.entries()));
     expect(parsed.inStock).toBe(true);
     expect(parsed.onSale).toBe(true);
+  });
+
+  it('optionValueId round-trips through the API parser', () => {
+    const original: ProductFilter = {
+      ...EMPTY_FILTER,
+      optionValueId: ['ov-1', 'ov-2'],
+    };
+    const url = encodeFilter(original);
+    const parsed = parseApiQuery(Object.fromEntries(url.entries()));
+    expect(parsed.optionValueId).toEqual(['ov-1', 'ov-2']);
   });
 });

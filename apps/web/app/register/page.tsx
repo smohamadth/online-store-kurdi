@@ -6,8 +6,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function RegisterPage() {
+  // The register form has a 1fr/1fr row (first name / last name).
+  // Stack under 640px.
+  const isMobile = useIsMobile(640);
   const router = useRouter();
   const [formData, setFormData] = useState({
     firstName: '',
@@ -100,7 +104,7 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
                 First Name
