@@ -37,6 +37,12 @@ const envSchema = z.object({
   
   // Frontend
   FRONTEND_URL: z.string().url(),
+
+  // Public base URL of the API (e.g. https://api.example.com/api), used to
+  // build absolute links that leave the server (digital-download links in
+  // order emails). Optional: without it those fall back to localhost,
+  // which is only right for local development.
+  API_URL: z.string().url().optional(),
   
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),

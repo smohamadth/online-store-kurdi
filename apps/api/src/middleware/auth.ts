@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import { env } from '../config/environment';
 import { prisma } from '../config/database';
 import { UnauthorizedError, ForbiddenError } from './errorHandler';
@@ -26,6 +27,10 @@ interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  // Refresh tokens carry type + jti (see generateTokens); access tokens
+  // do not, hence optional.
+  type?: string;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -162,7 +167,7 @@ export const generateTokens = (user: { id: string; email: string; role: string }
       role: user.role,
     },
     env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN }
+    { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] }
   );
 
   // `jti` makes every refresh token unique.
@@ -180,7 +185,7 @@ export const generateTokens = (user: { id: string; email: string; role: string }
       jti: crypto.randomUUID(),
     },
     env.JWT_SECRET,
-    { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
+    { expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'] }
   );
 
   return { accessToken, refreshToken };

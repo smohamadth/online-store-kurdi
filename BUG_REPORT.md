@@ -112,10 +112,14 @@ availability, rating, category and description per column. A broken
 product degrades to a "no longer available" column instead of blanking the
 table. 11 tests (bar/provider behaviour + table rendering).
 
-### **15. Recently Viewed Products**
-**Location:** No component exists
+### **15. ~~Recently Viewed Products~~**
+**Location:** `apps/web/lib/recentlyViewed.tsx` + `components/RecentlyViewed.tsx`
 **Issue:** No tracking of recently viewed products
-**Status:** ❌ Not implemented
+**Status:** ✅ FIXED — every product-page view records the product to a
+localStorage-backed list (max 8, newest first, deduped, per-browser, works
+logged out). The home page renders a "Recently viewed" row of product cards
+below the curated sections; it renders nothing for a fresh visitor so it
+never shows as an empty section. 10 tests (storage semantics + component).
 
 ---
 
@@ -135,7 +139,7 @@ table. 11 tests (bar/provider behaviour + table rendering).
 - [x] Image upload
 - [ ] Bulk import/export
 - [x] Product comparison
-- [ ] Recently viewed
+- [x] Recently viewed
 
 ### **3. Orders**
 - [x] Create order
@@ -213,7 +217,7 @@ table. 11 tests (bar/provider behaviour + table rendering).
 
 ### **Low Priority (Future)**
 1. [x] Product comparison
-2. [ ] Recently viewed
+2. [x] Recently viewed
 3. [ ] Social login
 4. [ ] Mobile app
 

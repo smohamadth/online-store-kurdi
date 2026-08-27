@@ -34,7 +34,7 @@ function ProductsContent() {
   // mutates it via setFilter; a useEffect below pushes the change to
   // the URL and refetches.
   const initialFilter = useMemo(
-    () => decodeFilter(Object.fromEntries(searchParams)),
+    () => decodeFilter(searchParams),
     // Only decode on the first render; subsequent updates come from
     // the URL pushes the page makes itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps

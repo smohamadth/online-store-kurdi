@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { useCompare } from '@/lib/compare';
+import { trackRecentlyViewed } from '@/lib/recentlyViewed';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
@@ -64,6 +65,9 @@ export default function ProductView() {
     try {
       const response = await api.getProductBySlug(slug);
       setProduct(response.data);
+      // Remember it for the home page's "Recently viewed" row.
+      // Client-side only (localStorage); a no-op if storage is blocked.
+      trackRecentlyViewed(response.data);
       if (response.data?.variants?.length > 0) {
         setSelectedVariant(response.data.variants[0].id);
       }

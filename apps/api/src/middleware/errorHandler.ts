@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { env, isDevelopment } from '../config/environment';
+import { Sentry, isSentryEnabled } from '../config/sentry';
 import { logger } from '../utils/logger';
 
 // Custom error class
@@ -72,6 +73,18 @@ export const errorHandler = (
     ip: req.ip,
     userAgent: req.get('User-Agent'),
   });
+
+  // Error tracking (opt-in via SENTRY_DSN). Capture here, at the single
+  // funnel every error passes through: the branches below all respond
+  // directly without next(err), so no handler mounted after this one can
+  // see the error. expressIntegration() (config/sentry.ts) binds the
+  // current request's span to the isolation scope, so the event lands on
+  // the right request.
+  if (isSentryEnabled()) {
+    Sentry.captureException(err, {
+      extra: { url: req.url, method: req.method, code: (err as any).code },
+    });
+  }
 
   // Handle known operational errors
   if (err instanceof AppError) {

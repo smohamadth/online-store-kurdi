@@ -29,9 +29,12 @@ export { serializeAttributes, parseAttributes };
 export interface VariantInput {
   name: string;
   sku: string;
-  slug?: string;
+  // slug/compareAtPrice accept null: variantPatchSchema emits them
+  // nullable, and null means "clear the column" (the service maps
+  // null/'' to a NULL column value).
+  slug?: string | null;
+  compareAtPrice?: number | null;
   price: number;
-  compareAtPrice?: number;
   quantity?: number;
   attributes?: Record<string, unknown> | string;
   isActive?: boolean;
@@ -124,7 +127,9 @@ export async function createVariant(productId: string, input: VariantInput): Pro
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new AppError('Product not found', 404);
   if (input.price <= 0) throw new AppError('price must be a positive number', 400);
-  if (input.compareAtPrice !== undefined) {
+  // null = "clear the was-price", so skip validation for null (and
+  // undefined).
+  if (input.compareAtPrice != null) {
     if (input.compareAtPrice < 0) throw new AppError('compareAtPrice must be >= 0', 400);
     if (input.compareAtPrice > 0 && input.compareAtPrice < input.price) {
       throw new AppError('compareAtPrice must be >= price (the "was" cannot be less than the "is")', 400);
@@ -176,7 +181,8 @@ export async function updateVariant(id: string, input: Partial<VariantInput>): P
     const dup = await prisma.variant.findUnique({ where: { slug: input.slug } });
     if (dup) throw new AppError(`Variant with slug "${input.slug}" already exists`, 409);
   }
-  if (input.compareAtPrice !== undefined) {
+  // null = "clear the was-price", so skip validation for null/undefined.
+  if (input.compareAtPrice != null) {
     if (input.compareAtPrice < 0) throw new AppError('compareAtPrice must be >= 0', 400);
     const effectivePrice = input.price ?? existing.price;
     if (input.compareAtPrice > 0 && input.compareAtPrice < effectivePrice) {
@@ -212,7 +218,8 @@ export async function deleteVariant(id: string, opts: { force?: boolean } = {}):
 export interface OptionInput {
   name: string;
   sortOrder?: number;
-  values: { value: string; swatch?: string; sortOrder?: number }[];
+  // swatch is nullable in optionInputSchema (null clears it); stored as NULL.
+  values: { value: string; swatch?: string | null; sortOrder?: number }[];
 }
 
 export async function setProductOptions(productId: string, options: OptionInput[]) {

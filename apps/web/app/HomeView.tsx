@@ -39,6 +39,7 @@ import {
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { API_BASE } from '@/lib/http';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
+import RecentlyViewed from '@/components/RecentlyViewed';
 
 const CONTAINER = 'var(--container, 1200px)';
 
@@ -416,6 +417,12 @@ export default function HomeView() {
       ) : (
         visible.map(renderSection)
       )}
+
+      {/* "Recently viewed" - client-side, per-browser. Renders nothing
+          for a fresh visitor (empty list), so it never shows as an
+          empty section. Kept below the curated sections on purpose:
+          it's a recall aid, not merchandising. */}
+      <RecentlyViewed />
     </div>
   );
 }

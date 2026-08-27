@@ -144,7 +144,12 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     // Parse with the schema matching the caller's privileges. A non-admin
     // sending `role` gets a 400 naming the field rather than a silent drop.
-    const parsed = isAdmin ? adminUpdateSchema.parse(req.body) : selfUpdateSchema.parse(req.body);
+    // adminUpdateSchema is a strict superset of selfUpdateSchema, so a
+    // self-parse result (no role/isActive keys) is a valid narrower shape of
+    // the same type - the guard rails below treat absent keys as "not sent".
+    const parsed = (isAdmin
+      ? adminUpdateSchema.parse(req.body)
+      : selfUpdateSchema.parse(req.body)) as z.infer<typeof adminUpdateSchema>;
 
     const target = await prisma.user.findUnique({
       where: { id },

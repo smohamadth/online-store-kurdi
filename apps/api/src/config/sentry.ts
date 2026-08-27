@@ -17,6 +17,12 @@ export function initSentry(): void {
   Sentry.init({
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV,
+    // httpIntegration() creates the per-request spans and
+    // expressIntegration() binds them to per-request isolation scopes
+    // (v8+ replacement for the old Handlers.requestHandler), so a
+    // captureException() inside a route or the error handler lands on
+    // the right request.
+    integrations: [Sentry.httpIntegration(), Sentry.expressIntegration()],
     // 10% of transactions get traces; errors are always captured.
     // Raise tracesSampleRate for launch week on a client install.
     tracesSampleRate: 0.1,

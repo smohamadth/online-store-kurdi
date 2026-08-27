@@ -11,7 +11,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { env, isDevelopment } from './config/environment';
 import { logger, loggerStream } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
-import { Sentry, initSentry, isSentryEnabled } from './config/sentry';
+import { initSentry } from './config/sentry';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { csrfTokenRoute } from './middleware/csrf';
 
@@ -135,10 +135,9 @@ const limiter = rateLimit({
   skip: (req) => isDevelopment && req.method === 'GET',
 });
 
-// Apply rate limiting to API routes
-if (isSentryEnabled()) {
-  app.use(Sentry.Handlers.requestHandler());
-}
+// Request spans are created automatically by Sentry.httpIntegration()
+// (registered in config/sentry.ts, v8+ replacement for the old
+// Handlers.requestHandler).
 app.use('/api/', limiter);
 
 // Body parsing middleware. The 3PL webhook handler needs the raw body
@@ -273,14 +272,14 @@ io.on('connection', (socket) => {
   });
 });
 
-// Error handling middleware
+// Error handling middleware. Every error funnels through errorHandler,
+// which responds without calling next(err) - so a Sentry handler mounted
+// after it would never see anything (the old Sentry.Handlers.errorHandler
+// mount was dead). Sentry capture happens inside errorHandler itself
+// (guarded by isSentryEnabled()), with the request span bound by
+// Sentry.expressIntegration().
 app.use(notFoundHandler);
 app.use(errorHandler);
-// Sentry's error handler goes LAST: it captures whatever reached the
-// custom error handler (and what fell through it), then forwards.
-if (isSentryEnabled()) {
-  app.use(Sentry.Handlers.errorHandler());
-}
 
 export { app, httpServer, io };
 export default app;

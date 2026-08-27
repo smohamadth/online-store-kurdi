@@ -8,9 +8,10 @@ let stripe: Stripe | null = null;
 
 export function initializeStripe(): void {
   if (env.STRIPE_SECRET_KEY) {
-    stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-      apiVersion: '2023-10-16',
-    });
+    // No explicit apiVersion: stripe >= v10 pins the API version to the
+    // installed package, and passing a stale one is a type error (and a
+    // request-time failure) rather than a way to "freeze" behaviour.
+    stripe = new Stripe(env.STRIPE_SECRET_KEY);
     logger.info('✅ Stripe initialized');
   } else {
     logger.warn('⚠️ Stripe not configured - payments will be mocked');
