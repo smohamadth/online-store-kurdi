@@ -179,3 +179,46 @@ The path is mechanical but it touches four files. A future
 refactor (publish the registry as a shared package, build a
 CLI to scaffold a new theme) would compress this to one
 command. Not worth doing until the second or third theme.
+
+---
+
+## Theme catalog (6 themes)
+
+| Key | Look | Design inspiration |
+|---|---|---|
+| `default` | Clean, modern, conversion-focused platform default | Platform original |
+| `minimal` | Text-first, serif, no marketing chrome | Platform original |
+| `bold` | Dark, image-first poster theme | Platform original |
+| `dawnlight` | Clean, flat, hairline-bordered, white canvas, square corners | Shopify **Dawn** (the most widely installed store theme) |
+| `heritage` | Classic catalogue: serif headlines, classic blue, rules, slate footer | WooCommerce **Storefront** (the most-installed WordPress store theme) |
+| `pulse` | Modern rounded cards, off-white canvas, indigo accent, pill buttons | **Medusa Next.js starter** (most-starred open commerce starter) |
+
+### Licensing note (read before modifying theme code)
+
+The three imported themes are **original implementations of a design
+language**, not code ports. This was a deliberate constraint:
+
+- Dawn's license (MIT with a restriction) limits use to themes that
+  interoperate with **Shopify** software — its code may not ship in this
+  product.
+- Storefront is GPL-3.0 — porting its code would copyleft this product.
+- The Medusa starter is MIT, but we still re-implemented rather than
+  ported, to keep one codebase idiom and one section contract.
+
+Design patterns (palettes, layout rhythm, typographic choices) are
+referenced from the three projects above; every line of code under
+`apps/web/themes/{dawnlight,heritage,pulse}/` was written for this
+platform's `SectionProps` contract. If you change or redistribute the
+themes, keep that provenance — it is the difference between "inspired
+by" (fine) and "copied from" (not fine to sell).
+
+### Adding another theme
+
+The doc above says the path "touches four files" — with six themes in
+the catalog the friction is real. The four touch points are:
+1. `apps/web/themes/<key>/theme.json` (+ `sections/*.tsx`),
+2. the import + `THEMES` entry in `lib/themeRegistry.ts`,
+3. the import + `THEME_SECTION_COMPONENTS` entry in `lib/themeSections.tsx`,
+4. a preview image at `public/themes/<key>/preview.png` and the
+   `ThemePicker` count test.
+A `scaffold-theme` script would be the natural next step.

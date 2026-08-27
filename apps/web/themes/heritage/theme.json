@@ -1,0 +1,52 @@
+{
+  "key": "heritage",
+  "name": "Heritage",
+  "description": "A classic catalogue theme in the spirit of WooCommerce Storefront, the most-installed WordPress store theme: serif headlines, a dependable blue, thin rules, a slate footer and a trust bar. Built for established shops, makers, and anything that should feel established rather than trendy.",
+  "version": "1.0.0",
+  "author": "Store Builder Platform",
+  "preview": "/themes/heritage/preview.png",
+  "features": {
+    "rtl": true,
+    "darkMode": false,
+    "paid": true
+  },
+  "tokens": {
+    "primaryColor": "#1f4e8c",
+    "primaryTextColor": "#ffffff",
+    "accentColor": "#a13d2d",
+    "bodyBg": "#ffffff",
+    "cardBg": "#ffffff",
+    "bodyText": "#212529",
+    "mutedText": "#5f6b7a",
+    "borderColor": "#d9dee3",
+    "headerBg": "#ffffff",
+    "headerText": "#212529",
+    "footerBg": "#243447",
+    "footerText": "#e8edf2",
+    "priceColor": "#1f4e8c",
+    "saleColor": "#a13d2d",
+    "fontFamily": "georgia",
+    "baseFontSize": 16,
+    "headingWeight": 700,
+    "radius": 0,
+    "buttonRadius": 0,
+    "containerWidth": 1160,
+    "cardShadow": "none",
+    "productsPerRow": 4,
+    "showTrustBar": true,
+    "showTestimonials": true,
+    "showStats": false,
+    "showNewsletter": true,
+    "showDealCountdown": false,
+    "showCategories": true,
+    "showFeatured": true,
+    "showNewArrivals": false,
+    "announcementBg": "#243447",
+    "announcementText2": "#ffffff"
+  },
+  "sections": {
+    "hero": "@/themes/heritage/sections/Hero",
+    "featured": "@/themes/heritage/sections/Featured",
+    "categories": "@/themes/heritage/sections/Categories"
+  }
+}

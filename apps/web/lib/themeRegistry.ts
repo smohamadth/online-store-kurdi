@@ -27,6 +27,9 @@
 import defaultThemeJson from '@/themes/default/theme.json';
 import minimalThemeJson from '@/themes/minimal/theme.json';
 import boldThemeJson from '@/themes/bold/theme.json';
+import dawnlightThemeJson from '@/themes/dawnlight/theme.json';
+import heritageThemeJson from '@/themes/heritage/theme.json';
+import pulseThemeJson from '@/themes/pulse/theme.json';
 import { themeConfigSchema, type ThemeConfig } from './themeConfigSchema';
 
 /**
@@ -107,6 +110,9 @@ export const THEMES: readonly ThemeConfig[] = [
   parseTheme(defaultThemeJson, 'default'),
   parseTheme(minimalThemeJson, 'minimal'),
   parseTheme(boldThemeJson, 'bold'),
+  parseTheme(dawnlightThemeJson, 'dawnlight'),
+  parseTheme(heritageThemeJson, 'heritage'),
+  parseTheme(pulseThemeJson, 'pulse'),
 ] as const;
 
 /**
