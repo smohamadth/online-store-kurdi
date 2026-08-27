@@ -10,11 +10,13 @@
 `POST /auth/reset-password` validates the token (expiry + single-use) and
 updates the password. Storefront has `/forgot-password` + `/reset-password`.
 
-### **2. Test Email Not Implemented**
+### **2. ~~Test Email Not Implemented~~**
 **Location:** `apps/api/src/modules/settings/settings.routes.ts`
-**Line:** ~120
 **Issue:** Test email endpoint exists but doesn't send actual email
-**Status:** ❌ Incomplete
+**Status:** ✅ FIXED — the endpoint now validates the address, goes through
+`sendEmail` (real SMTP when configured), returns 502 when the mail server
+rejects, and reports `delivered: false` with a plain-English hint when no
+SMTP is configured (no more fake "sent successfully"). 3 tests.
 
 ### **3. ~~Order Status Update Missing Email~~**
 **Location:** `apps/api/src/modules/orders/order.routes.ts`
@@ -22,10 +24,14 @@ updates the password. Storefront has `/forgot-password` + `/reset-password`.
 **Status:** ✅ FIXED — `sendShippingNotification` fires when an order moves to
 "shipped" (admin status update).
 
-### **4. Inventory Alert System Not Triggered**
-**Location:** `apps/api/src/modules/inventory/inventory.routes.ts`
+### **4. ~~Inventory Alert System Not Triggered~~**
+**Location:** `apps/api/src/modules/inventory/inventory.service.ts`
 **Issue:** Stock alerts are stored but never checked/triggered
-**Status:** ❌ Incomplete
+**Status:** ✅ FIXED — `decrementStock` now raises a `StockAlert` row when a
+sale crosses the low-stock threshold (or hits zero), and re-notifies the
+admin's opt-in `notifyEmail` on fresh crossings (edge-triggered, so a
+slow-moving item can't spam). Fire-and-forget mail: a delivery failure
+never fails a sale. 5 tests.
 
 ### **5. ~~Coupon Usage Not Tracked~~**
 **Location:** `apps/api/src/modules/orders/order.routes.ts`
@@ -57,12 +63,17 @@ hardcoded mock results.
 ### **9. Checkout Missing Shipping Selection**
 **Location:** `apps/web/app/checkout/page.tsx`
 **Issue:** No shipping method selection, uses hardcoded $9.99
-**Status:** ❌ Incomplete
+**Status:** ✅ FIXED — checkout now renders the `ShippingSelector`
+(real shipping zones/methods from the API; the $9.99 hardcode is gone,
+with a free-shipping-aware fallback).
 
 ### **10. Checkout Missing Tax Calculation**
 **Location:** `apps/web/app/checkout/page.tsx`
 **Issue:** Tax is hardcoded at 10%, not calculated based on location
-**Status:** ❌ Incomplete
+**Status:** ✅ FIXED — checkout renders the `TaxCalculator`, which
+computes tax from the customer's location via the API's tax rates;
+the 10% figure remains only as a last-resort fallback when the API
+is unreachable.
 
 ---
 
