@@ -49,6 +49,10 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+  // Error tracking (optional): with no DSN the app runs with Sentry
+  // fully disabled - it is an observability add-on, never a dependency.
+  SENTRY_DSN: z.string().url().optional(),
   
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),

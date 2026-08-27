@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // `next build` emits a self-contained server bundle (.next/standalone)
+  // that the production Docker image runs with almost no node_modules.
+  output: 'standalone',
   
   images: {
     remotePatterns: [

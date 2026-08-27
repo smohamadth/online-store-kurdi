@@ -115,12 +115,14 @@ of this; they and the Vitest suites are complementary, not duplicates.
 
 ---
 
-## 6. Product images are placeholders
+## 6. ~~Product images are placeholders~~ — seeded
 
-Seed products reference `/images/products/*.jpg`, which do not exist on disk and
-return 404. `ProductCard` falls back to a generated gradient tile with the
-product initials, so nothing looks broken. Upload real images via
-**Admin → Products** to replace them.
+The six seed products ship with product photos in
+`apps/web/public/images/products/` (iPhone 15 Pro ×2, MacBook Pro 14",
+Classic T-Shirt, JavaScript: The Good Parts, Web Development Course), so a
+fresh install looks like a store out of the box. Clients replace them via
+**Admin → Products** (uploads go to MinIO/S3, not this folder). `ProductCard`
+still falls back to a generated gradient tile if an image 404s.
 
 
 ---
@@ -215,9 +217,12 @@ contrast guards, admin isolation) and `verify-theme-tokens.js` (no browser:
 token completeness + a hardcoded-colour ratchet on the swept storefront
 files). The browser suite needs the CI runner; the token suite runs anywhere.
 
-Still missing: Sentry or any error tracking, and CD - nothing deploys
-automatically because there is no server yet. (Unit tests are done - see
-section 5.)
+Still missing: CD (continuous deployment) - nothing deploys automatically
+because there is no hosting account yet. One-command *install* on a client
+server exists: `scripts/install-store.sh` + `docs/DEPLOYMENT.md` (docker
+compose or plain node). (Unit tests are done - see section 5.) Error
+tracking is done: optional Sentry, no-op without a DSN (`SENTRY_DSN` in
+`apps/api/.env`, `NEXT_PUBLIC_SENTRY_DSN` in the web build).
 
 ---
 

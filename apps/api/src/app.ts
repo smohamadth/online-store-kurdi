@@ -11,6 +11,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { env, isDevelopment } from './config/environment';
 import { logger, loggerStream } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
+import { Sentry, initSentry, isSentryEnabled } from './config/sentry';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { csrfTokenRoute } from './middleware/csrf';
 
@@ -54,6 +55,10 @@ import {
   accountDownloadsRouter,
   orderItemDownloadRouter,
 } from './modules/downloads/downloads.routes';
+
+// Error tracking: initialise BEFORE any middleware mounts. No-op when
+// SENTRY_DSN is unset, so the app runs identically without it.
+initSentry();
 
 // Create Express app
 const app = express();
@@ -131,6 +136,9 @@ const limiter = rateLimit({
 });
 
 // Apply rate limiting to API routes
+if (isSentryEnabled()) {
+  app.use(Sentry.Handlers.requestHandler());
+}
 app.use('/api/', limiter);
 
 // Body parsing middleware. The 3PL webhook handler needs the raw body
@@ -268,6 +276,11 @@ io.on('connection', (socket) => {
 // Error handling middleware
 app.use(notFoundHandler);
 app.use(errorHandler);
+// Sentry's error handler goes LAST: it captures whatever reached the
+// custom error handler (and what fell through it), then forwards.
+if (isSentryEnabled()) {
+  app.use(Sentry.Handlers.errorHandler());
+}
 
 export { app, httpServer, io };
 export default app;
