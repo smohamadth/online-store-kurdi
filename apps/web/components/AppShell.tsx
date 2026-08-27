@@ -17,6 +17,8 @@
  */
 
 import { CartProvider, useCart } from '@/lib/store';
+import { CompareProvider } from '@/lib/compare';
+import CompareBar from '@/components/CompareBar';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -980,6 +982,7 @@ export default function AppShell({
             }}
           >
             <CartProvider>
+              <CompareProvider>
               <AnnouncementBar />
               <Header />
 
@@ -1004,6 +1007,8 @@ export default function AppShell({
 
               {/* Footer */}
               <DynamicFooter />
+              <CompareBar />
+              </CompareProvider>
             </CartProvider>
           </div>
         </ThemeProvider>

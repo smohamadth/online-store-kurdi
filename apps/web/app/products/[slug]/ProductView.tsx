@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
+import { useCompare } from '@/lib/compare';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
@@ -24,6 +25,7 @@ export default function ProductView() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const { addItem, items } = useCart();
+  const { isCompared, toggle: toggleCompare } = useCompare();
   const { settings } = useStoreSettings();
   
   const slug = params?.slug as string;
@@ -794,6 +796,31 @@ export default function ProductView() {
               }}
             >
               {isDigital ? '⬇ Download now' : 'Buy Now'}
+            </button>
+            <button
+              onClick={() =>
+                toggleCompare({
+                  id: product.id,
+                  name: product.name,
+                  slug: product.slug,
+                  price: currentPrice,
+                  image: getProductImage(product),
+                })
+              }
+              aria-pressed={isCompared(product.id)}
+              style={{
+                width: '100%',
+                padding: '10px 24px',
+                backgroundColor: isCompared(product.id) ? '#eef2ff' : 'transparent',
+                color: isCompared(product.id) ? '#4338ca' : 'var(--muted, #666)',
+                border: `1px solid ${isCompared(product.id) ? '#c7d2fe' : 'var(--border, #e5e5e5)'}`,
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {isCompared(product.id) ? '✓ Added to compare' : '⚖️ Compare'}
             </button>
           </div>
 

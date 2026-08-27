@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Product, getImageUrl, getCategoryEmoji } from '@/lib/api';
 import { formatPrice } from '@/lib/settings';
 import { useCart } from '@/lib/store';
+import { useCompare } from '@/lib/compare';
 
 interface Props {
   product: Product;
@@ -18,6 +19,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
   const [imgFailed, setImgFailed] = useState(false);
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
+  const { isCompared, toggle: toggleCompare } = useCompare();
 
   const primary =
     product.images?.find((i) => i.isPrimary)?.url || product.images?.[0]?.url || '';
@@ -33,6 +35,19 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
   const outOfStock = product.quantity !== undefined && product.quantity <= 0;
   const lowStock = !outOfStock && product.quantity > 0 && product.quantity <= 5;
   const rating = Number(product.averageRating) || 0;
+
+  const handleCompare = (e: React.MouseEvent) => {
+    // Same card-is-a-link caveat as handleAdd.
+    e.preventDefault();
+    e.stopPropagation();
+    toggleCompare({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price,
+      image: primary,
+    });
+  };
 
   const handleAdd = (e: React.MouseEvent) => {
     // The whole card is a link - don't navigate when using the quick action.
@@ -242,6 +257,29 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
             </span>
           )}
         </div>
+        <label
+          onClick={handleCompare}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            color: 'var(--muted, #666)',
+            cursor: 'pointer',
+            userSelect: 'none',
+            marginTop: '2px',
+            width: 'fit-content',
+          }}
+        >
+          <input
+            type="checkbox"
+            tabIndex={-1}
+            checked={isCompared(product.id)}
+            readOnly
+            style={{ accentColor: 'var(--accent, #2563eb)', margin: 0 }}
+          />
+          Compare
+        </label>
       </div>
     </Link>
   );

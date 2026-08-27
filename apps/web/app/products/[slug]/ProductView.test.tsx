@@ -62,6 +62,13 @@ vi.mock('@/lib/store', () => ({
   }),
 }));
 
+vi.mock('@/lib/compare', () => ({
+  useCompare: () => ({
+    items: [], isCompared: () => false, toggle: vi.fn(),
+    remove: vi.fn(), clear: vi.fn(),
+  }),
+}));
+
 vi.mock('@/lib/settings', () => ({
   useStoreSettings: () => ({ settings: { currency: 'USD', currencySymbol: '$' }, loading: false }),
   formatPrice: (n: number) => `$${Number(n).toFixed(2)}`,

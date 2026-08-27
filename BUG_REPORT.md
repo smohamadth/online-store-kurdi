@@ -102,10 +102,15 @@ the tracking number, and an honest terminal state for cancelled/refunded
 orders). The order detail page renders it as a status timeline; cancelled
 orders no longer hide their status. Owner/admin auth, 6 integration tests.
 
-### **14. Product Comparison**
-**Location:** No page exists
+### **14. ~~Product Comparison~~**
+**Location:** `apps/web/app/compare/page.tsx` + `CompareProvider`/`CompareBar`
 **Issue:** No product comparison feature
-**Status:** ❌ Not implemented
+**Status:** ✅ FIXED — a localStorage-backed compare list (max 4, survives
+refresh) with a Compare toggle on every product card and the product page,
+a floating compare bar, and a /compare table that renders live price,
+availability, rating, category and description per column. A broken
+product degrades to a "no longer available" column instead of blanking the
+table. 11 tests (bar/provider behaviour + table rendering).
 
 ### **15. Recently Viewed Products**
 **Location:** No component exists
@@ -129,7 +134,7 @@ orders no longer hide their status. Owner/admin auth, 6 integration tests.
 - [x] Search
 - [x] Image upload
 - [ ] Bulk import/export
-- [ ] Product comparison
+- [x] Product comparison
 - [ ] Recently viewed
 
 ### **3. Orders**
@@ -207,7 +212,7 @@ orders no longer hide their status. Owner/admin auth, 6 integration tests.
 5. [ ] Add email verification
 
 ### **Low Priority (Future)**
-1. [ ] Product comparison
+1. [x] Product comparison
 2. [ ] Recently viewed
 3. [ ] Social login
 4. [ ] Mobile app
