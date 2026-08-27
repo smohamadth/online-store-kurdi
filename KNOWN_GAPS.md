@@ -5,27 +5,44 @@ Everything here is deliberate and documented — not silently broken.
 
 ---
 
-## 1. No online card payments
+## 1. ~~No online card payments~~ — Stripe integrated (optional per store)
 
-**Status:** offline payment only.
+**Status:** card payment works when the store configures Stripe; otherwise
+the offline flow remains.
 
-There is no Stripe/PayPal integration. Checkout offers **Cash on Delivery** and
-**Bank Transfer**, and orders are created with `paymentStatus: 'pending'`.
+The store ships **without** a payment gateway on purpose: it installs on the
+client's server, and the merchant decides whether to take cards. Two modes:
 
-`POST /api/payments/process` does *not* contact a gateway — it simply marks an
-order paid. It is therefore restricted to **admin/manager**, so staff can record
-a bank transfer or a COD collection. It previously accepted any authenticated
-customer, which let a buyer mark their own order as paid and receive the goods
-for free.
+* **Offline (default).** No `STRIPE_SECRET_KEY` → checkout offers **Cash on
+  Delivery** and **Bank Transfer**; orders are created `paymentStatus:
+  'pending'` and staff settle them via `POST /api/payments/process`
+  (admin/manager only — a customer can never mark their own order paid).
+  `PAYMENTS_ALLOW_MOCK=true` re-opens it for local demos; **never enable it on
+  a public store.**
 
-`PAYMENTS_ALLOW_MOCK=true` re-opens it to customers for local demos. **Never
-enable this on a public store.**
+* **Stripe (opt-in per store).** Set `STRIPE_SECRET_KEY` +
+  `STRIPE_WEBHOOK_SECRET` (see `.env.example`) and the card option appears in
+  checkout. Order placement creates a **Stripe Checkout** session (hosted
+  page — no card data touches this server); the customer pays and is sent back
+  to `/checkout?paid=true` (or `?canceled=true`). A **verified** webhook
+  (`checkout.session.completed`, signature-checked via
+  `stripe.webhooks.constructEvent` against the raw request body) settles the
+  order idempotently — Stripe retries never create duplicate payments. If the
+  store has no Stripe keys, a card order is rejected with 400 *before* the
+  order row is created, so a customer is never left with an unpayable pending
+  order.
 
-To go live with cards:
-1. Add the Stripe SDK and keys to `apps/api/.env`.
-2. Create a PaymentIntent in `payment.routes.ts` instead of the mock branch.
-3. Verify the webhook signature before setting `paymentStatus: 'completed'`.
-4. Re-add the Credit Card option in `apps/web/app/checkout/page.tsx`.
+To go live with cards on a client store:
+1. Put `STRIPE_SECRET_KEY` (sk_live_…) in `apps/api/.env`.
+2. In the Stripe dashboard add a webhook for
+   `https://<api-host>/api/payments/webhooks/stripe` with event
+   `checkout.session.completed`; put its secret in `STRIPE_WEBHOOK_SECRET`.
+3. Restart the API. The card option appears in checkout on the next load.
+
+Covered by `tests/integration/payments.test.ts` (capability flag, card
+rejection without Stripe, session creation, webhook settling + idempotency)
+and `tests/unit/payments/stripe-webhook.test.ts` (real-SDK signature
+verification: valid secret, wrong secret, tampered payload, missing header).
 
 ---
 

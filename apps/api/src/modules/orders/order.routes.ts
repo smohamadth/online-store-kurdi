@@ -7,6 +7,7 @@ import { logger } from '../../utils/logger';
 import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
 import { mintDownloadForOrderItem } from '../downloads/downloads.service';
 import { env } from '../../config/environment';
+import { getStripe, isStripeConfigured } from '../../config/stripe';
 
 const router = Router();
 
@@ -142,6 +143,17 @@ router.post('/', authenticate, async (req, res, next) => {
 
     if (!items || items.length === 0) {
       throw new AppError('Order must contain at least one item', 400);
+    }
+
+    // Card payments go through Stripe Checkout. If the store has not
+    // configured Stripe, refuse BEFORE creating the order so the
+    // customer picks cash on delivery / bank transfer instead of
+    // being left with an unpayable pending order.
+    if (paymentMethod === 'card' && !isStripeConfigured()) {
+      throw new AppError(
+        'Card payment is not enabled for this store. Please choose cash on delivery or bank transfer.',
+        400
+      );
     }
 
     // Handle shipping address - either ID or full object
@@ -284,6 +296,43 @@ router.post('/', authenticate, async (req, res, next) => {
         shippingAddress: true,
       },
     });
+
+    // Card payment: hand the customer a Stripe Checkout session for
+    // this order. The webhook settles the order server-side; the
+    // response carries checkoutUrl and the storefront redirects the
+    // customer into Stripe's hosted payment page (no card data ever
+    // touches this server).
+    let checkoutUrl: string | null = null;
+    if (paymentMethod === 'card') {
+      const stripe = getStripe();
+      if (!stripe) {
+        // Race with a config change between the check above and here
+        // is practically impossible; fail closed if it happens.
+        throw new AppError('Card payment is not enabled for this store.', 500);
+      }
+      const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+      const currency = (settings?.currency || 'USD').toLowerCase();
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        // One line item for the order total: the store builder does
+        // not sync per-SKU Stripe Prices, and the merchant settles the
+        // same amount they see in the admin.
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency,
+              unit_amount: Math.round(order.totalAmount * 100),
+              product_data: { name: `Order ${order.orderNumber}` },
+            },
+          },
+        ],
+        metadata: { orderId: order.id, orderNumber: order.orderNumber },
+        success_url: `${env.FRONTEND_URL}/checkout?paid=true`,
+        cancel_url: `${env.FRONTEND_URL}/checkout?canceled=true`,
+      });
+      checkoutUrl = session.url ?? null;
+    }
 
     // Mint a per-order download token for every digital line
     // item. The customer's confirmation email embeds these
@@ -457,6 +506,10 @@ router.post('/', authenticate, async (req, res, next) => {
       status: 'success',
       data: {
         ...responseOrder,
+        // Non-null when the customer paid with a card: the storefront
+        // redirects into Stripe Checkout. COD / bank transfer orders
+        // get null and stay on the normal success screen.
+        checkoutUrl,
         // Convenience field for the storefront: a flat array of
         // {orderItemId, productName, token, url, ...} the checkout
         // success page can iterate without having to flatten

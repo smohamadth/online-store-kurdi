@@ -4,6 +4,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
 import { sendEmail, isEmailConfigured } from '../../services/email.service';
+import { isStripeConfigured } from '../../config/stripe';
 
 const router = Router();
 
@@ -66,7 +67,14 @@ router.get('/', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: settings,
+      data: {
+        ...settings,
+        // Capability flag, not a setting: the storefront uses it to
+        // decide whether the card option exists in checkout. Always
+        // reflects the live env so a merchant adding Stripe keys is
+        // live on the next page load, no cache to bust.
+        stripeEnabled: isStripeConfigured(),
+      },
     });
   } catch (err) {
     next(err);

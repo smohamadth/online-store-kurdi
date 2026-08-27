@@ -21,6 +21,8 @@ interface StoreSettings {
   youtubeUrl: string;
   maintenanceMode: boolean;
   maintenanceMessage: string;
+  /** True when the store has Stripe configured (server capability flag). */
+  stripeEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: StoreSettings = {
@@ -42,6 +44,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   youtubeUrl: '',
   maintenanceMode: false,
   maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
+  stripeEnabled: false,
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -92,6 +95,7 @@ async function fetchSettingsFromAPI(): Promise<StoreSettings | null> {
         youtubeUrl: data.data.youtubeUrl || DEFAULT_SETTINGS.youtubeUrl,
         maintenanceMode: data.data.maintenanceMode ?? DEFAULT_SETTINGS.maintenanceMode,
         maintenanceMessage: data.data.maintenanceMessage || DEFAULT_SETTINGS.maintenanceMessage,
+        stripeEnabled: data.data.stripeEnabled === true,
       };
       
       // Update localStorage with API data

@@ -51,6 +51,11 @@ export default function CheckoutPage() {
   const [selectedShipping, setSelectedShipping] = useState<any>(null);
   const [taxInfo, setTaxInfo] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState('cod');
+  // Stripe Checkout sends the customer back to /checkout?paid=true
+  // (or ?canceled=true). The order already exists by then, so the
+  // empty-cart redirect below must not fire and the customer needs
+  // an honest status instead of a blank page.
+  const [returnState, setReturnState] = useState<'paid' | 'canceled' | null>(null);
 
   const subtotal = getTotal();
   const shippingCost = selectedShipping?.isFree ? 0 : (selectedShipping?.rate || 0);
@@ -84,10 +89,21 @@ export default function CheckoutPage() {
     }
 
     // Redirect if cart is empty
-    if (items.length === 0 && !orderPlaced) {
+    // A customer returning from Stripe Checkout has an empty cart by
+    // design (it was cleared when the order was placed) - don't
+    // bounce them to /cart before the return banner has a chance.
+    if (items.length === 0 && !orderPlaced && !returnState) {
       router.push('/cart');
     }
-  }, [items, orderPlaced, router]);
+  }, [items, orderPlaced, returnState, router]);
+
+  // Stripe Checkout redirects back to /checkout?paid=true / ?canceled=true.
+  // Read the flag once on mount; the order already exists either way.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid') === 'true') setReturnState('paid');
+    else if (params.get('canceled') === 'true') setReturnState('canceled');
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setShippingInfo({ ...shippingInfo, [e.target.name]: e.target.value });
@@ -138,6 +154,19 @@ export default function CheckoutPage() {
 
       if (!confirmed) {
         throw new Error('The server did not confirm the order. Please try again.');
+      }
+
+      // Card payment: the API created a Stripe Checkout session for
+      // this order. Hand the customer over to Stripe's hosted
+      // payment page; the webhook settles the order server-side.
+      // The cart is cleared now - the order is already real.
+      const checkoutUrl = response?.data?.checkoutUrl;
+      if (paymentMethod === 'card' && checkoutUrl) {
+        setOrderNumber(confirmed);
+        clearCart();
+        localStorage.removeItem('appliedCoupon');
+        window.location.replace(checkoutUrl);
+        return;
       }
 
       setOrderNumber(confirmed);
@@ -279,6 +308,17 @@ export default function CheckoutPage() {
 
       <h1 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 'bold', marginBottom: '32px' }}>Checkout</h1>
 
+      {returnState === 'paid' && (
+        <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', marginBottom: '24px', fontSize: '14px' }}>
+          ✅ Payment received — we're confirming your order. Your confirmation email follows once the payment settles. <Link href="/account/orders" style={{ fontWeight: 600 }}>View your orders</Link>
+        </div>
+      )}
+      {returnState === 'canceled' && (
+        <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', marginBottom: '24px', fontSize: '14px' }}>
+          ⚠️ Your card payment was not completed. The order is still pending — the store will contact you, or you can retry from <Link href="/account/orders" style={{ fontWeight: 600 }}>your orders</Link>.
+        </div>
+      )}
+
       {orderError && (
         <div
           role="alert"
@@ -377,13 +417,16 @@ export default function CheckoutPage() {
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Payment Method</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {[
-                  // Only offline methods are listed. No card gateway is wired
-                  // up: checkout never collected card details and nothing was
-                  // ever charged, so offering "Credit Card" / "PayPal" told
-                  // the customer their card had been taken when it had not.
-                  // Re-add them once Stripe/PayPal is integrated.
                   { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
                   { id: 'bank_transfer', label: 'Bank Transfer', icon: '🏦' },
+                  // Card payment only exists when the store configured
+                  // Stripe: the server advertises the capability in
+                  // settings, so a store without keys can never show a
+                  // card option it cannot collect (the old UI offered
+                  // "Credit Card" that charged nothing - fake success).
+                  ...(settings.stripeEnabled
+                    ? [{ id: 'card', label: 'Credit / Debit Card', icon: '💳' }]
+                    : []),
                 ].map(method => (
                   <label key={method.id} style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',
