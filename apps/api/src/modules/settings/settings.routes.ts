@@ -3,6 +3,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { sendEmail, isEmailConfigured } from '../../services/email.service';
 
 const router = Router();
 
@@ -175,16 +176,47 @@ router.put('/email-templates/:name', authenticate, authorize('admin'), async (re
 });
 
 // POST /api/settings/test-email - Test email configuration
+//
+// The previous version returned "sent successfully" without sending
+// anything (the classic fake-success bug class). It now actually goes
+// through sendEmail and reports the real outcome:
+//   - 502 when the SMTP server rejected the mail,
+//   - 200 with `delivered: false` when no SMTP server is configured
+//     (log-only mode), so the admin knows to set SMTP_HOST etc.
 router.post('/test-email', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const { email } = req.body;
+    const parsed = z.string().email().max(254).safeParse(email);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'A valid email address is required',
+      });
+    }
 
-    // TODO: Send test email
-    logger.info(`Test email requested for: ${email}`);
+    const storeName = (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.storeName || 'your store';
+    const ok = await sendEmail(
+      parsed.data,
+      `Test email — ${storeName} is configured`,
+      `<p>This confirms the email settings of <strong>${storeName}</strong> work.</p>` +
+        `<p>If you did not request this, someone with admin access is testing the store's email.</p>`,
+      `This confirms the email settings of ${storeName} work.`
+    );
 
+    if (!ok) {
+      return res.status(502).json({
+        status: 'error',
+        message: 'The mail server rejected the test email. Check SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS.',
+      });
+    }
+
+    const delivered = isEmailConfigured();
     res.json({
       status: 'success',
-      message: 'Test email sent successfully',
+      delivered,
+      message: delivered
+        ? 'Test email sent successfully'
+        : 'SMTP is not configured — the email was logged instead of sent. Set SMTP_HOST (and SMTP_PORT / SMTP_USER / SMTP_PASS) to deliver it.',
     });
   } catch (err) {
     next(err);

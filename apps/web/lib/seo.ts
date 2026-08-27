@@ -25,6 +25,8 @@ export interface StoreInfo {
   metaDescription?: string | null;
   storeEmail?: string | null;
   storePhone?: string | null;
+  storeAddress?: string | null;
+  googleAnalyticsId?: string | null;
 }
 
 export async function getStoreInfo(): Promise<StoreInfo> {
@@ -43,10 +45,29 @@ export async function getStoreInfo(): Promise<StoreInfo> {
       metaDescription: d.metaDescription,
       storeEmail: d.storeEmail,
       storePhone: d.storePhone,
+      storeAddress: d.storeAddress,
+      googleAnalyticsId: d.googleAnalyticsId,
     };
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Build the inline gtag() bootstrap for a GA4/Universal property id.
+ * Pure so the root layout and its tests agree on the emitted JS.
+ * Returns '' for anything that doesn't look like a GA id
+ * (G-XXXX, UA-XXXX-1) so a garbage value can never inject a
+ * malformed snippet into every page.
+ */
+export function buildGtagSnippet(gaId: string | null | undefined): string {
+  if (!gaId) return '';
+  if (!/^[A-Z]{1,2}-[0-9A-Za-z-]+$/.test(gaId)) return '';
+  return (
+    `window.dataLayer=window.dataLayer||[];` +
+    `function gtag(){dataLayer.push(arguments);}gtag('js',new Date());` +
+    `gtag('config','${gaId}');`
+  );
 }
 
 /** Build an absolute image URL. Relative paths get the API origin

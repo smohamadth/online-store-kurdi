@@ -1,6 +1,6 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
-import { getStoreInfo, SITE } from '@/lib/seo';
+import { getStoreInfo, SITE, buildGtagSnippet } from '@/lib/seo';
 import AppShell from '@/components/AppShell';
 import { JsonLdScript } from '@/components/JsonLdScript';
 import {
@@ -74,6 +74,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // default-language list, which mirrors the i18n hook's "browser lang or
   // English" behaviour.
   const { code: lang, dir } = await resolveRequestLocale();
+  // Google Analytics: only when the store owner set a property id in
+  // admin settings. Previously stored-but-never-used (KNOWN_GAPS #3).
+  const gtagSnippet = buildGtagSnippet(store.googleAnalyticsId);
   const org = buildOrganizationJsonLd({
     name: store.storeName,
     url: SITE,
@@ -88,6 +91,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={lang} dir={dir}>
       <head>
         <JsonLdScript data={[org, site]} testId="json-ld-site" />
+        {gtagSnippet && (
+          <>
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${store.googleAnalyticsId}`}
+            />
+            <script dangerouslySetInnerHTML={{ __html: gtagSnippet }} />
+          </>
+        )}
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <AppShell initialLang={lang} initialDir={dir}>{children}</AppShell>

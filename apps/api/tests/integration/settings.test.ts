@@ -82,12 +82,35 @@ describe('Email templates', () => {
 });
 
 describe('POST /api/settings/test-email', () => {
-  it('sends a test email (logs only)', async () => {
+  it('sends a test email and reports the real delivery state', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const res = await request(app)
       .post('/api/settings/test-email')
       .set('Authorization', `Bearer ${token}`)
       .send({ email: 'test@example.com' });
     expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    // The test env has no SMTP server: the mail is logged, not sent.
+    // The response must say so instead of claiming a delivery.
+    expect(res.body.delivered).toBe(false);
+    expect(res.body.message).toMatch(/SMTP is not configured/);
+  });
+
+  it('rejects an invalid address with 400', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/settings/test-email')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'not-an-email' });
+    expect(res.status).toBe(400);
+  });
+
+  it('requires an admin', async () => {
+    const { token } = await authHeader({ role: 'customer' });
+    const res = await request(app)
+      .post('/api/settings/test-email')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'test@example.com' });
+    expect(res.status).toBe(403);
   });
 });

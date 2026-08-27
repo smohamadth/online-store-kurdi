@@ -794,6 +794,11 @@ function DynamicFooter() {
               📞 {settings.storePhone}
             </p>
           )}
+          {settings.storeAddress && (
+            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '4px' }}>
+              📍 {settings.storeAddress}
+            </p>
+          )}
         </div>
         <div>
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>

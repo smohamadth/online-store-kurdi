@@ -27,6 +27,16 @@ export async function initializeEmail(): Promise<void> {
   }
 }
 
+/**
+ * True when a real SMTP transporter is available. In log-only mode
+ * (no reachable SMTP server) `sendEmail` still succeeds, so callers
+ * that must be honest with the user — like the admin test-email
+ * button — check this to say "logged" instead of "delivered".
+ */
+export function isEmailConfigured(): boolean {
+  return Boolean(transporter);
+}
+
 // Send email
 export async function sendEmail(
   to: string,

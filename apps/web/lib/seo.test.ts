@@ -195,3 +195,30 @@ describe('absoluteImageUrl', () => {
     });
   });
 });
+
+describe('buildGtagSnippet', () => {
+  it('emits the dataLayer bootstrap for a valid GA4 id', () => {
+    return import('./seo').then(({ buildGtagSnippet }) => {
+      const snippet = buildGtagSnippet('G-ABC123DEF');
+      expect(snippet).toContain("function gtag(){dataLayer.push(arguments);}");
+      expect(snippet).toContain("gtag('js',new Date());");
+      expect(snippet).toContain("gtag('config','G-ABC123DEF');");
+    });
+  });
+
+  it('accepts legacy UA ids', () => {
+    return import('./seo').then(({ buildGtagSnippet }) => {
+      expect(buildGtagSnippet('UA-12345-1')).toContain("gtag('config','UA-12345-1');");
+    });
+  });
+
+  it('refuses garbage ids (no snippet, no injection)', () => {
+    return import('./seo').then(({ buildGtagSnippet }) => {
+      expect(buildGtagSnippet('')).toBe('');
+      expect(buildGtagSnippet(null)).toBe('');
+      expect(buildGtagSnippet(undefined)).toBe('');
+      expect(buildGtagSnippet('not-a-ga-id')).toBe('');
+      expect(buildGtagSnippet("G-1';alert(1);//")).toBe('');
+    });
+  });
+});
