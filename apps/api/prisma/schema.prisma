@@ -42,9 +42,7 @@ model User {
   sessions      Session[]
   passwordResets PasswordReset[]
   inventoryLogs InventoryLog[]
-  stockTakes      StockTake[]
-  reorderDrafts   ReorderDraft[]
-  storeCredit     StoreCredit?
+  storeCredits    StoreCredit[]
   giftCardsIssued  GiftCard[]   @relation("GiftCardCreatedBy")
 
   @@index([email])
@@ -200,7 +198,7 @@ model Product {
   reorderDrafts   ReorderDraft[]
   stockTakeItems  StockTakeItem[]
   warehouseTransfers WarehouseTransfer[]
-  threePLSyncEvents ThreePLSyncEvent[]
+  stockReservations  StockReservation[]
   
   // ML/Analytics relations
   events        UserEvent[]
@@ -286,6 +284,11 @@ model Variant {
   inventoryLogs InventoryLog[]
   warehouseStocks WarehouseStock[]
   stockReservations StockReservation[]
+  warehouseTransfers WarehouseTransfer[]
+  stockTakeItems StockTakeItem[]
+  reorderRules ReorderRule[]
+  reorderDrafts ReorderDraft[]
+  channelStocks ChannelStock[]
 
   @@index([productId])
   @@index([sku])
@@ -499,8 +502,6 @@ model Order {
   items             OrderItem[]
   payments          Payment[]
   inventoryLogs     InventoryLog[]
-  stockReservations StockReservation[]
-  reorderDrafts     ReorderDraft[]
   
   @@index([userId])
   @@index([orderNumber])
@@ -1071,6 +1072,7 @@ model Warehouse {
   transfersFrom WarehouseTransfer[] @relation("TransferFrom")
   transfersTo   WarehouseTransfer[] @relation("TransferTo")
   takeItems     StockTakeItem[]
+  stockTakes    StockTake[]
   reorderRules  ReorderRule[]
   reorderDrafts ReorderDraft[]
 
