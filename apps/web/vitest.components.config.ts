@@ -23,6 +23,7 @@ export default defineConfig({
       'components/**/*.test.{ts,tsx}',
       'lib/store.test.{ts,tsx}',
       'lib/theme.test.{ts,tsx}',
+      'lib/theme-rtl.test.{ts,tsx}',
       'lib/themeSections.test.{ts,tsx}',
       'lib/themeConfigSchema.test.{ts,tsx}',
       'lib/previewTheme.test.{ts,tsx}',

@@ -50,8 +50,7 @@ export default function BoldCategories({ title, categories, config }: SectionPro
             marginBottom: '64px',
             textAlign: 'center',
             maxWidth: 'var(--container, 1400px)',
-            marginLeft: 'auto',
-            marginRight: 'auto',
+            marginInline: 'auto',
           }}
         >
           {title}

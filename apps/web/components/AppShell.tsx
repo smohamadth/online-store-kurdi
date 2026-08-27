@@ -240,7 +240,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
               </Link>
               {/* Children */}
               {item.children && item.children.length > 0 && (
-                <div style={{ paddingLeft: '24px' }}>
+                <div style={{ paddingInlineStart: '24px' }}>
                   {item.children.map((child) => (
                     <Link 
                       key={child.id}
@@ -563,7 +563,7 @@ function Header() {
                     <div style={{
                       position: 'absolute',
                       top: '100%',
-                      left: '0',
+                      insetInlineStart: '0',
                       backgroundColor: 'var(--card-bg, white)',
                       border: '1px solid var(--border, #e5e7eb)',
                       borderRadius: '8px',
@@ -809,7 +809,7 @@ function DynamicFooter() {
                   {item.icon ? `${item.icon} ` : ''}{item.label}
                 </Link>
                 {item.children?.map((child) => (
-                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: 'var(--muted, #6b7280)', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
+                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: 'var(--muted, #6b7280)', textDecoration: 'none', display: 'block', paddingInlineStart: '16px', marginTop: '4px' }}>
                     {child.icon ? `${child.icon} ` : ''}{child.label}
                   </Link>
                 ))}

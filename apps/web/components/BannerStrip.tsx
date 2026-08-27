@@ -93,7 +93,17 @@ export default function BannerStrip({ banners }: { banners: Banner[] }) {
                 alignItems: isMobile ? 'flex-start' : 'center',
                 justifyContent: 'space-between',
                 gap: isMobile ? '22px' : '32px',
-                textAlign: isMobile ? 'left' : align,
+                // Logical alignment (see HeroGallery): the stored
+                // "left"/"right" mirrors to the reading-start /
+                // reading-end side in RTL instead of staying on the
+                // physical side.
+                textAlign: isMobile
+                  ? 'start'
+                  : align === 'center'
+                    ? 'center'
+                    : align === 'right'
+                      ? 'end'
+                      : 'start',
               }}
             >
               {/* Photo background + scrim so text stays legible on any image */}

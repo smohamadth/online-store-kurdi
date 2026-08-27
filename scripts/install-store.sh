@@ -80,49 +80,91 @@ log "Installing dependencies (npm ci)"
 ( cd "$REPO_ROOT" && npm ci --no-audit --no-fund )
 
 # --- 4. database -------------------------------------------------------------
+#
+# Docker mode: the database runs INSIDE the compose network, so the host
+# cannot reach it. Convergence happens at container boot instead: the API
+# image's entrypoint runs `prisma migrate deploy` and then VERIFIES that
+# the deployed state matches prisma/schema.prisma, failing fast (with an
+# actionable message) if the committed migrations lag the schema. It never
+# generates migrations inside the container - that would create ephemeral
+# migrations that "disappear" on restart and turn into a drift/reset risk.
+#
+# Node mode: the database is on the host, so we converge it here, and
+# self-heal by generating the missing migration (this is safe on a host
+# checkout: the generated files persist in ./prisma/migrations).
+#
 log "Converging the database"
 cd "$REPO_ROOT/apps/api"
 
-echo "    4a. applying committed migrations (prisma migrate deploy)"
-npx prisma migrate deploy
-
-echo "    4b. checking schema drift (schema.prisma vs committed migrations)"
-if npx prisma migrate diff \
-    --from-migrations ./prisma/migrations \
-    --to-schema-datamodel ./prisma/schema.prisma \
-    --exit-code >/dev/null 2>&1; then
-  echo "    in sync - nothing to do"
-else
-  echo "    schema has drifted: generating the missing migration (auto_sync_schema)"
-  npx prisma migrate dev --name auto_sync_schema --skip-generate
-  echo "    deploying the generated migration"
-  npx prisma migrate deploy
-fi
-
-# --- 5. seed -----------------------------------------------------------------
-if [ "$SEED" = "1" ]; then
-  log "Seeding the store (demo catalog, admin@store.com / admin123)"
-  npx prisma db seed
-else
-  echo "    skipping seed (--no-seed)"
-fi
-
-# --- 6. build + start ----------------------------------------------------------
 if [ "$MODE" = "docker" ]; then
+  echo "    (docker mode) the database lives in the compose network;"
+  echo "    migrations are applied and verified at container boot."
+  echo "    If boot fails on 'schema drift', run: scripts/sync-migrations.sh"
+else
+  echo "    4a. applying committed migrations (prisma migrate deploy)"
+  npx prisma migrate deploy
+
+  echo "    4b. checking schema drift (schema.prisma vs committed migrations)"
+  if npx prisma migrate diff \
+      --from-migrations ./prisma/migrations \
+      --to-schema-datamodel ./prisma/schema.prisma \
+      --exit-code >/dev/null 2>&1; then
+    echo "    in sync - nothing to do"
+  else
+    echo "    schema has drifted: generating the missing migration (auto_sync_schema)"
+    npx prisma migrate dev --name auto_sync_schema --skip-generate
+    echo "    deploying the generated migration"
+    npx prisma migrate deploy
+  fi
+fi
+
+# --- 5 + 6. seed, build, start (order depends on mode) ------------------------
+if [ "$MODE" = "docker" ]; then
+  # Docker mode order: up the stack first (the API entrypoint converges
+  # the database on boot), THEN seed through the api container so the
+  # seed uses the compose-network DATABASE_URL (the host cannot reach
+  # the containerised postgres).
   log "Building and starting the stack (docker compose, profile: mail)"
+  COMPOSE="docker compose -f docker/docker-compose.prod.yml --profile mail"
   ( cd "$REPO_ROOT" \
     && POSTGRES_PASSWORD="$(grep '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)" \
        JWT_SECRET="$(grep '^JWT_SECRET=' "$ENV_FILE" | cut -d= -f2-)" \
-    docker compose -f docker/docker-compose.prod.yml --profile mail up -d --build )
+    $COMPOSE up -d --build )
+
+  echo "    waiting for the API health endpoint..."
+  for i in $(seq 1 60); do
+    if curl -sf http://localhost:3001/health >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  curl -sf http://localhost:3001/health >/dev/null 2>&1 \
+    || { echo "    api is not healthy - check: $COMPOSE logs api"; exit 1; }
+
+  if [ "$SEED" = "1" ]; then
+    log "Seeding the store (demo catalog, admin@store.com / admin123)"
+    ( cd "$REPO_ROOT" && $COMPOSE run --rm --no-deps api node_modules/.bin/prisma db seed )
+  else
+    echo "    skipping seed (--no-seed)"
+  fi
+
   echo
   echo "    storefront:  http://localhost:8080"
   echo "    api:         http://localhost:3001/health"
   echo "    mail sink:   http://localhost:8025 (profile: mail)"
   echo "    minio:       http://localhost:9001"
   echo
-  echo "    logs: docker compose -f docker/docker-compose.prod.yml logs -f"
+  echo "    logs: $COMPOSE logs -f"
   warn "change the admin password (admin@store.com / admin123) before going live"
 else
+  # Node mode: database is on the host - converge it, seed it, build.
+  if [ "$SEED" = "1" ]; then
+    log "Seeding the store (demo catalog, admin@store.com / admin123)"
+    npx prisma db seed
+  else
+    echo "    skipping seed (--no-seed)"
+  fi
+
   log "Building the web app (next build)"
   ( cd "$REPO_ROOT/apps/web" && npm run build )
   log "Starting API (node dist/server.js) - run: (cd apps/api && npm run build && npm start)"

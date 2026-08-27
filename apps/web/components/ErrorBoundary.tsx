@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </p>
           {process.env.NODE_ENV === 'development' && this.state.error && (
             <details style={{
-              textAlign: 'left',
+              textAlign: 'start',
               padding: '12px',
               backgroundColor: 'var(--card-bg, #fff)',
               borderRadius: '4px',

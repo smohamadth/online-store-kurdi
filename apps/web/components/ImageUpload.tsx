@@ -247,7 +247,7 @@ export default function ImageUpload({
                       borderRadius: '6px',
                       backgroundColor: selectedSize === size ? '#f0f0f0' : 'white',
                       cursor: 'pointer',
-                      textAlign: 'left',
+                      textAlign: 'start',
                       transition: 'all 0.2s',
                     }}
                   >

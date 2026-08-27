@@ -79,10 +79,14 @@ is unreachable.
 
 ## 🟢 LOW PRIORITY
 
-### **11. Product Image Upload**
-**Location:** `apps/web/app/admin/products/page.tsx`
+### **11. ~~Product Image Upload~~**
+**Location:** `apps/web/components/ImageGalleryUpload.tsx` (wired into
+`apps/web/app/admin/products/page.tsx`)
 **Issue:** No image upload UI, uses placeholder emojis
-**Status:** ❌ Not implemented
+**Status:** ✅ FIXED — the product edit modal carries an image gallery
+(`ImageGalleryUpload`): multi-file select, upload via `POST
+/api/upload/image`, primary-image + sort-order control, remove. Existing
+images are loaded back into the gallery on edit.
 
 ### **12. User Avatar Upload**
 **Location:** `apps/web/app/account/profile/page.tsx`
@@ -119,7 +123,7 @@ is unreachable.
 ### **2. Products**
 - [x] CRUD operations
 - [x] Search
-- [ ] Image upload
+- [x] Image upload
 - [ ] Bulk import/export
 - [ ] Product comparison
 - [ ] Recently viewed

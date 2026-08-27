@@ -18,19 +18,64 @@ The installer:
 1. creates `apps/api/.env` with a **fresh random `JWT_SECRET`** (edit it for
    SMTP / Stripe / `FRONTEND_URL` before go-live),
 2. runs `npm ci`,
-3. converges the database:
-   - `prisma migrate deploy` (committed migrations),
-   - a **drift check** — if `schema.prisma` has moved ahead of the committed
-     migrations (pre-release reality), it regenerates the missing migration
-     non-interactively (`migrate dev --name auto_sync_schema`) and deploys it.
-     The database always ends up matching the checkout.
-4. seeds the demo catalog + `admin@store.com / admin123`,
-5. `docker compose -f docker/docker-compose.prod.yml --profile mail up -d --build`.
+3. `docker compose -f docker/docker-compose.prod.yml --profile mail up -d --build`
+   (the API entrypoint converges the database on first boot),
+4. waits for the API health endpoint, then seeds the demo catalog
+   (`admin@store.com / admin123`) **through the api container**, so the
+   seed uses the compose-network database.
+
+Database convergence is the **API container's entrypoint**'s job, because in
+docker mode the database lives inside the compose network (the host can't
+reach it). On every boot it:
+
+1. runs `prisma migrate deploy` (all committed migrations),
+2. **verifies** that the deployed state matches `prisma/schema.prisma`
+   (`migrate diff --exit-code`).
+
+It never *generates* migrations inside the container: a migration created
+there would live in ephemeral storage, "disappear" on the next restart, and
+turn into a drift that `migrate dev` offers to fix with a database **reset**.
+Generating migrations is a host/repo action — see below. If verification
+fails at boot, the container exits with the exact fix:
+
+```
+x schema drift: prisma/schema.prisma has moved ahead of the
+  committed migrations ...
+  Fix on the HOST:  scripts/sync-migrations.sh
+```
 
 Services: postgres 16, redis 7, minio (object storage for uploads), api
-(entrypoint runs `migrate deploy` on every boot, so upgrades converge
-automatically), web (Next standalone, published on `:8080` — `WEB_PORT`
-to change), optional MailHog on `:8025`.
+(deploy + verify on every boot), web (Next standalone, published on
+`:8080` — `WEB_PORT` to change), optional MailHog on `:8025`.
+
+## Schema migrations — current state (read once before installing)
+
+`prisma/schema.prisma` is currently **ahead** of the committed migrations:
+the variant-first-class rename, multi-currency, downloads, the stock system
+and review photos landed in the schema before their migration was generated.
+Generating that migration needs the Prisma engine binary (network-fetched),
+which some sandboxes block — so it was not generated in this repository's
+current state.
+
+**One-time fix** (any machine with network, before shipping to a client):
+
+```bash
+scripts/sync-migrations.sh
+git add apps/api/prisma/migrations && git commit -m "prisma: sync migrations with schema"
+```
+
+The script is non-interactive and safe: it applies the committed
+migrations, generates the missing one (`auto_sync_schema`), applies it, and
+verifies the deployed state matches the schema exactly. On a fresh
+database it is a pure create. Review the generated `migration.sql` once
+before committing (it includes the `ProductVariant -> Variant` rename).
+
+Until that commit lands, docker-mode installs will fail at container boot
+with the drift message above — deliberately. A store that boots against a
+schema its migrations did not create would 500 on every query that touches
+a missing table; failing loudly at boot is the honest outcome. In
+**node mode** (`--node`) the installer self-heals instead (host database,
+generated migrations persist in the checkout).
 
 Point a reverse proxy (nginx/Caddy/Traefik) at `:8080` and `:3001` for the
 API, and put TLS in front. `PUBLIC_API_URL` in the compose environment must
@@ -83,9 +128,12 @@ git pull
                                     # image rebuild picks up the new schema
 ```
 
-The API container's entrypoint runs `prisma migrate deploy` on boot, so a
-`docker compose up -d --build` after a pull is enough once the image is
-rebuilt.
+The API container's entrypoint runs `prisma migrate deploy` **and
+verifies** the deployed state against `schema.prisma` on boot, so a
+`docker compose up -d --build` after a pull is enough — as long as the
+pulled migrations are in sync with the schema (if the schema moved ahead
+of them, boot fails with the drift message; run `scripts/sync-migrations.sh`
+first).
 
 ## Rollback
 

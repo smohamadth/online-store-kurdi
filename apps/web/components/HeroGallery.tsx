@@ -229,7 +229,12 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
-                textAlign: align === 'center' ? 'center' : align === 'right' ? 'right' : 'left',
+                // align is stored physically ("left"/"right") from the
+                // admin form. Render it as a LOGICAL alignment so the
+                // same banner mirrors correctly in RTL documents
+                // (left = reading start). In LTR this is visually
+                // identical to the old physical values.
+                textAlign: align === 'center' ? 'center' : align === 'right' ? 'end' : 'start',
                 color: slide.textColor || '#ffffff',
               }}
             >

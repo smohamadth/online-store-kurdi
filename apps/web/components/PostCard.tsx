@@ -77,7 +77,7 @@ export default function PostCard({ post }: { post: BlogPost }) {
             style={{
               position: 'absolute',
               top: '10px',
-              left: '10px',
+              insetInlineStart: '10px',
               padding: '4px 10px',
               borderRadius: '999px',
               backgroundColor: 'var(--sale, #dc2626)',
