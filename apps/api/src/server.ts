@@ -16,7 +16,14 @@ import { connectRedis, disconnectRedis } from './config/redis';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
 import { startScheduler, stopScheduler } from './jobs/inventory-scheduler';
-import { startCurrencyScheduler, stopCurrencyScheduler } from './jobs/currency.scheduler';
+// Both schedulers export the same startScheduler/stopScheduler names, so
+// alias the currency side. (An unaliased import of a non-existent
+// startCurrencyScheduler made the entry point fail at import time - the
+// API never bound its port and CI's health poll timed out.)
+import {
+  startScheduler as startCurrencyScheduler,
+  stopScheduler as stopCurrencyScheduler,
+} from './jobs/currency.scheduler';
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
