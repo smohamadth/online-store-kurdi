@@ -56,7 +56,7 @@ describe('ThemePicker — list rendering', () => {
     expect(cardIds).toEqual(sortedKeys);
   });
 
-  it('renders six cards once the Dawnlight, Heritage and Pulse themes are installed', () => {
+  it('renders five cards once the Dawnlight and Pulse themes are installed', () => {
     // Pinning the count makes the test fail loudly if a
     // future theme is removed or a duplicate is added. The
     // test would also need to be updated when the count
@@ -64,7 +64,7 @@ describe('ThemePicker — list rendering', () => {
     // forces the developer to think about the gallery size.
     render(<ThemePicker activeTheme={null} onSelect={() => {}} />);
     const cards = screen.getAllByTestId(/^theme-card-/);
-    expect(cards).toHaveLength(6);
+    expect(cards).toHaveLength(5);
   });
 
   it('renders the empty-state message when the registry is empty', () => {

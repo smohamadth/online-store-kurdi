@@ -47,9 +47,6 @@ import BoldCategories from '@/themes/bold/sections/Categories';
 import DawnlightHero from '@/themes/dawnlight/sections/Hero';
 import DawnlightFeatured from '@/themes/dawnlight/sections/Featured';
 import DawnlightCategories from '@/themes/dawnlight/sections/Categories';
-import HeritageHero from '@/themes/heritage/sections/Hero';
-import HeritageFeatured from '@/themes/heritage/sections/Featured';
-import HeritageCategories from '@/themes/heritage/sections/Categories';
 import PulseHero from '@/themes/pulse/sections/Hero';
 import PulseFeatured from '@/themes/pulse/sections/Featured';
 import PulseCategories from '@/themes/pulse/sections/Categories';
@@ -118,10 +115,6 @@ const THEME_SECTION_COMPONENTS: Record<string, SectionComponent> = {
   'dawnlight/hero': DawnlightHero,
   'dawnlight/featured': DawnlightFeatured,
   'dawnlight/categories': DawnlightCategories,
-  // Heritage theme overrides.
-  'heritage/hero': HeritageHero,
-  'heritage/featured': HeritageFeatured,
-  'heritage/categories': HeritageCategories,
   // Pulse theme overrides.
   'pulse/hero': PulseHero,
   'pulse/featured': PulseFeatured,

@@ -182,7 +182,7 @@ command. Not worth doing until the second or third theme.
 
 ---
 
-## Theme catalog (6 themes)
+## Theme catalog (5 themes)
 
 | Key | Look | Design inspiration |
 |---|---|---|
@@ -190,31 +190,35 @@ command. Not worth doing until the second or third theme.
 | `minimal` | Text-first, serif, no marketing chrome | Platform original |
 | `bold` | Dark, image-first poster theme | Platform original |
 | `dawnlight` | Clean, flat, hairline-bordered, white canvas, square corners | Shopify **Dawn** (the most widely installed store theme) |
-| `heritage` | Classic catalogue: serif headlines, classic blue, rules, slate footer | WooCommerce **Storefront** (the most-installed WordPress store theme) |
 | `pulse` | Modern rounded cards, off-white canvas, indigo accent, pill buttons | **Medusa Next.js starter** (most-starred open commerce starter) |
 
 ### Licensing note (read before modifying theme code)
 
-The three imported themes are **original implementations of a design
+The imported themes are **original implementations of a design
 language**, not code ports. This was a deliberate constraint:
 
 - Dawn's license (MIT with a restriction) limits use to themes that
   interoperate with **Shopify** software — its code may not ship in this
   product.
-- Storefront is GPL-3.0 — porting its code would copyleft this product.
 - The Medusa starter is MIT, but we still re-implemented rather than
   ported, to keep one codebase idiom and one section contract.
 
 Design patterns (palettes, layout rhythm, typographic choices) are
-referenced from the three projects above; every line of code under
-`apps/web/themes/{dawnlight,heritage,pulse}/` was written for this
+referenced from those projects; every line of code under
+`apps/web/themes/{dawnlight,pulse}/` was written for this
 platform's `SectionProps` contract. If you change or redistribute the
 themes, keep that provenance — it is the difference between "inspired
 by" (fine) and "copied from" (not fine to sell).
 
+(A fourth candidate — a classic catalogue theme after WooCommerce
+Storefront, which is GPL-3.0 — was prototyped as "heritage" and then
+removed from the catalog at the product owner's request. If it is ever
+re-added, it must remain a from-scratch design interpretation, not a
+port of Storefront's code.)
+
 ### Adding another theme
 
-The doc above says the path "touches four files" — with six themes in
+The doc above says the path "touches four files" — with five themes in
 the catalog the friction is real. The four touch points are:
 1. `apps/web/themes/<key>/theme.json` (+ `sections/*.tsx`),
 2. the import + `THEMES` entry in `lib/themeRegistry.ts`,
