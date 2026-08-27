@@ -270,3 +270,89 @@ describe('POST /api/orders/:id/cancel', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('GET /api/orders/:id/tracking', () => {
+  it('returns the timeline for the order owner (pending order)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .get(`/api/orders/${o.id}/tracking`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.orderNumber).toBe(o.orderNumber);
+    expect(res.body.data.status).toBe('pending');
+    expect(res.body.data.steps).toHaveLength(4);
+    expect(res.body.data.steps[0]).toMatchObject({ key: 'placed', done: true });
+    expect(res.body.data.steps[1].done).toBe(false);
+    expect(res.body.data.terminal).toBeNull();
+    expect(res.body.data.trackingNumber).toBeNull();
+  });
+
+  it("returns 403 for a non-owner user", async () => {
+    const { token, user } = await authHeader(); // the order owner
+    const { token: stranger } = await authHeader(); // a different customer
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .get(`/api/orders/${o.id}/tracking`)
+      .set('Authorization', `Bearer ${stranger}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 for a missing order', async () => {
+    const { token } = await authHeader();
+    const res = await request(app)
+      .get('/api/orders/does-not-exist/tracking')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('reflects paid + shipped state with the tracking number', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    const p = await mockPrisma;
+    await p.order.update({
+      where: { id: o.id },
+      data: {
+        status: 'shipped',
+        paymentStatus: 'completed',
+        shippedAt: new Date('2026-01-05T10:00:00Z'),
+        trackingNumber: 'TRK-12345',
+      },
+    });
+    const res = await request(app)
+      .get(`/api/orders/${o.id}/tracking`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.steps[1]).toMatchObject({ key: 'paid', done: true });
+    expect(res.body.data.steps[2]).toMatchObject({ key: 'shipped', done: true });
+    expect(res.body.data.steps[3].done).toBe(false);
+    expect(res.body.data.trackingNumber).toBe('TRK-12345');
+    expect(res.body.data.terminal).toBeNull();
+  });
+
+  it('ends in an honest terminal state for cancelled orders', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id, { status: 'cancelled' });
+    const p = await mockPrisma;
+    await p.order.update({
+      where: { id: o.id },
+      data: { cancelledAt: new Date('2026-01-06T09:00:00Z') },
+    });
+    const res = await request(app)
+      .get(`/api/orders/${o.id}/tracking`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('cancelled');
+    expect(res.body.data.terminal).toMatchObject({ type: 'cancelled' });
+  });
+
+  it('lets an admin track any order', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .get(`/api/orders/${o.id}/tracking`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(res.status).toBe(200);
+  });
+});

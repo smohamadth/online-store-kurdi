@@ -218,6 +218,13 @@ class ApiClient {
     });
   }
 
+  // Customer-facing status timeline for the order detail page.
+  async getOrderTracking(token: string, orderId: string): Promise<ApiResponse<any>> {
+    return this.request(`/orders/${orderId}/tracking`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
   // Analytics
   async trackEvent(event: {
     eventType: string;

@@ -93,10 +93,14 @@ images are loaded back into the gallery on edit.
 **Issue:** No avatar upload functionality
 **Status:** ❌ Not implemented
 
-### **13. Order Tracking Page**
-**Location:** No dedicated page
+### **13. ~~Order Tracking Page~~**
+**Location:** `apps/web/app/account/orders/[id]/page.tsx` + `GET /api/orders/:id/tracking`
 **Issue:** No visual order tracking with timeline
-**Status:** ❌ Not implemented
+**Status:** ✅ FIXED — a new `GET /api/orders/:id/tracking` endpoint returns a
+derived timeline (placed → paid → shipped → delivered, with real timestamps,
+the tracking number, and an honest terminal state for cancelled/refunded
+orders). The order detail page renders it as a status timeline; cancelled
+orders no longer hide their status. Owner/admin auth, 6 integration tests.
 
 ### **14. Product Comparison**
 **Location:** No page exists
@@ -132,7 +136,7 @@ images are loaded back into the gallery on edit.
 - [x] Create order
 - [x] View orders
 - [x] Update status
-- [ ] Order tracking page
+- [x] Order tracking page
 - [ ] Shipping label generation
 - [ ] Return/refund process
 
@@ -196,8 +200,8 @@ images are loaded back into the gallery on edit.
 5. ✅ Connect checkout to tax API
 
 ### **Medium Priority (Next 2 Weeks)**
-1. [ ] Add product image upload
-2. [ ] Add order tracking page
+1. [x] Add product image upload
+2. [x] Add order tracking page
 3. [ ] Fix admin orders to show customer info
 4. [ ] Implement inventory alerts
 5. [ ] Add email verification
@@ -260,7 +264,7 @@ await sendPasswordResetEmail(user, resetToken);
 **Overall Status:** 70% complete, needs refinement
 
 **Biggest Gaps:**
-1. Password reset
-2. Shipping/tax integration in checkout
-3. Product image upload
-4. Order tracking
+1. [x] Password reset
+2. [x] Shipping/tax integration in checkout
+3. [x] Product image upload
+4. [x] Order tracking

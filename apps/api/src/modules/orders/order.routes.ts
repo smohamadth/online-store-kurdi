@@ -135,6 +135,75 @@ router.get('/:id', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /api/orders/:id/tracking - customer-facing status timeline
+//
+// Derived from the order's own fields (createdAt / shippedAt /
+// deliveredAt / cancelledAt / paymentStatus) - no extra history table.
+// The storefront renders this as a vertical timeline; the shape is
+// stable so that view can't break when the admin flow changes.
+router.get('/:id/tracking', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        payments: {
+          where: { status: 'completed' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundError('Order');
+    }
+
+    // Non-admin users can only view their own orders
+    if (req.user?.role !== 'admin' && req.user?.role !== 'manager' && order.userId !== req.user?.id) {
+      throw new AppError('Forbidden', 403);
+    }
+
+    const isPaid = order.paymentStatus === 'completed';
+    // paidAt: the completed payment row's timestamp, falling back to
+    // the order's own updatedAt (the status flip happened then).
+    // (defensive: the in-memory test mock omits include args, so
+    // `payments` may be undefined there; the real client always
+    // returns an array for an include.)
+    const paidAt = isPaid ? (order.payments?.[0]?.createdAt ?? order.updatedAt) : null;
+
+    const isTerminal = order.status === 'cancelled' || order.status === 'refunded';
+
+    const steps = [
+      { key: 'placed', label: 'Order placed', at: order.createdAt, done: true },
+      { key: 'paid', label: 'Payment confirmed', at: paidAt, done: isPaid },
+      { key: 'shipped', label: 'Shipped', at: order.shippedAt, done: !!order.shippedAt },
+      { key: 'delivered', label: 'Delivered', at: order.deliveredAt, done: !!order.deliveredAt },
+    ];
+
+    res.json({
+      status: 'success',
+      data: {
+        orderNumber: order.orderNumber,
+        status: order.status,
+        trackingNumber: order.trackingNumber ?? null,
+        // Populated for cancelled/refunded orders so the timeline can
+        // end in an honest terminal state instead of a fake "in transit".
+        terminal: isTerminal
+          ? {
+              type: order.status === 'refunded' ? 'refunded' : 'cancelled',
+              at: order.cancelledAt,
+            }
+          : null,
+        steps,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/orders - Create new order
 router.post('/', authenticate, async (req, res, next) => {
   try {
