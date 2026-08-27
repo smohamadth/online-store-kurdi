@@ -38,8 +38,7 @@
     "test:web:lib": "cd apps/web && npm run test",
     "test:web:components": "cd apps/web && npm run test:components",
     "docs:build": "node docs/build-pdf.cjs",
-    "db:deploy": "cd apps/api && npm run db:deploy",
-    "postinstall": "cd apps/api && npx prisma generate"
+    "db:deploy": "cd apps/api && npm run db:deploy"
   },
   "devDependencies": {
     "@types/pdfkit": "^0.17.6",
@@ -64,10 +63,5 @@
     "ml-ready"
   ],
   "author": "Your Name",
-  "license": "MIT",
-  "dependencies": {
-    "@prisma/client": "^5.22.0",
-    "@prisma/engines": "^5.22.0",
-    "prisma": "^5.22.0"
-  }
+  "license": "MIT"
 }
