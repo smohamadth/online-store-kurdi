@@ -71,7 +71,10 @@ export function ToastContainer() {
     <div style={{
       position: 'fixed',
       top: '20px',
-      right: '20px',
+      // Logical anchor: sits on the inline-end edge, so it mirrors to the
+      // left in RTL. (A JS dir check would go stale after a client-side
+      // language switch; document.dir is the live source of truth.)
+      insetInlineEnd: '20px',
       zIndex: 9999,
       display: 'flex',
       flexDirection: 'column',
@@ -89,7 +92,9 @@ export function ToastContainer() {
             backgroundColor: 'var(--card-bg, white)',
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            borderLeft: `4px solid ${getBackgroundColor(toast.type)}`,
+            // Logical edge: the type-accent stripe mirrors to the right in
+            // RTL, matching the mirrored toast anchor.
+            borderInlineStart: `4px solid ${getBackgroundColor(toast.type)}`,
             animation: 'slideIn 0.3s ease-out',
             cursor: 'pointer',
           }}
@@ -129,9 +134,11 @@ export function ToastContainer() {
         </div>
       ))}
       <style jsx>{`
+        /* Mirrors globals.css slideIn: the toast enters from its anchored
+           (inline-end) edge, so the offset flips with dir via --slide-from. */
         @keyframes slideIn {
           from {
-            transform: translateX(100%);
+            transform: translateX(var(--slide-from, 100%));
             opacity: 0;
           }
           to {

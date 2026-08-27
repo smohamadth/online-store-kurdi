@@ -398,7 +398,7 @@ export default function OrderDetailPage() {
                 </div>
                 
                 {/* Price */}
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: 'end' }}>
                   <p style={{ fontWeight: 600 }}>{formatPrice(getItemPrice(item) * (item.quantity || 1), settings.currencySymbol)}</p>
                   <p style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>{formatPrice(getItemPrice(item), settings.currencySymbol)} each</p>
                 </div>

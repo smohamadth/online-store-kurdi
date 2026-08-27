@@ -218,7 +218,7 @@ export default function AccountShell({
         >
           <span>☰</span>
           <span>Account Menu</span>
-          <span style={{ marginLeft: 'auto' }}>
+          <span style={{ marginInlineStart: 'auto' }}>
             {sidebarOpen
               ? (isRtl ? '▼' : '▲')
               : (isRtl ? '▲' : '▼')}

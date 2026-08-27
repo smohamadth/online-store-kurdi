@@ -436,7 +436,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
         <div>
           {ratingDistribution.map(({ rating, count, percentage }) => (
             <div key={rating} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              <span style={{ width: '20px', textAlign: 'right', fontSize: '14px' }}>{rating}★</span>
+              <span style={{ width: '20px', textAlign: 'end', fontSize: '14px' }}>{rating}★</span>
               <div style={{ flex: 1, height: '8px', backgroundColor: '#e5e5e5', borderRadius: '4px', overflow: 'hidden' }}>
                 <div style={{ width: `${percentage}%`, height: '100%', backgroundColor: 'var(--warning, #d97706)', borderRadius: '4px' }} />
               </div>
@@ -764,7 +764,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                   <span key={i} style={{ color: i <= review.rating ? '#f59e0b' : '#d1d5db' }}>★</span>
                 ))}
                 {review.title && (
-                  <span style={{ fontWeight: 600, marginLeft: '8px' }}>{review.title}</span>
+                  <span style={{ fontWeight: 600, marginInlineStart: '8px' }}>{review.title}</span>
                 )}
               </div>
 

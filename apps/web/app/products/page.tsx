@@ -244,7 +244,7 @@ function ProductsContent() {
           {filterCount > 0 && (
             <span
               style={{
-                marginLeft: '6px',
+                marginInlineStart: '6px',
                 backgroundColor: showAdvanced ? 'rgba(255,255,255,0.25)' : 'var(--accent, #2563eb)',
                 color: '#fff',
                 borderRadius: '999px',

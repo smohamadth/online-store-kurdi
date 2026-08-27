@@ -66,7 +66,7 @@ export default function ReturnsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
           <div style={{ padding: '20px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
             <h3 style={{ fontWeight: 600, marginBottom: '12px', color: '#22c55e' }}>Eligible for Return</h3>
-            <ul style={{ paddingLeft: '20px', fontSize: '14px', color: '#555' }}>
+            <ul style={{ paddingInlineStart: '20px', fontSize: '14px', color: '#555' }}>
               <li>Unused and in original condition</li>
               <li>Original packaging included</li>
               <li>Tags still attached</li>
@@ -75,7 +75,7 @@ export default function ReturnsPage() {
           </div>
           <div style={{ padding: '20px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
             <h3 style={{ fontWeight: 600, marginBottom: '12px', color: '#ef4444' }}>Not Eligible for Return</h3>
-            <ul style={{ paddingLeft: '20px', fontSize: '14px', color: '#555' }}>
+            <ul style={{ paddingInlineStart: '20px', fontSize: '14px', color: '#555' }}>
               <li>Used or worn items</li>
               <li>Digital products (after download)</li>
               <li>Personalized/custom items</li>

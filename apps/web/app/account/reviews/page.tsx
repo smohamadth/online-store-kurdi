@@ -176,7 +176,7 @@ export default function MyReviewsPage() {
                       <span key={i} style={{ color: i <= review.rating ? '#f59e0b' : '#d1d5db' }}>★</span>
                     ))}
                     {review.title && (
-                      <span style={{ fontWeight: 600, marginLeft: '8px' }}>{review.title}</span>
+                      <span style={{ fontWeight: 600, marginInlineStart: '8px' }}>{review.title}</span>
                     )}
                     {/* Surface the verified-purchaser badge here too
                         so the user can see the trust signal carried
@@ -185,7 +185,7 @@ export default function MyReviewsPage() {
                       <span
                         data-testid="my-review-verified"
                         style={{
-                          marginLeft: '8px',
+                          marginInlineStart: '8px',
                           padding: '2px 8px',
                           borderRadius: '999px',
                           backgroundColor: '#ecfdf5',

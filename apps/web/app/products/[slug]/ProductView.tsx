@@ -602,7 +602,7 @@ export default function ProductView() {
                   <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--body-text, #111)' }}>
                     {opt.name}
                     {chosen[opt.name] && (
-                      <span style={{ fontWeight: 400, color: 'var(--muted, #666)', marginLeft: '6px' }}>
+                      <span style={{ fontWeight: 400, color: 'var(--muted, #666)', marginInlineStart: '6px' }}>
                         {chosen[opt.name]}
                       </span>
                     )}
@@ -698,7 +698,7 @@ export default function ProductView() {
                       {onSale && (
                         <span
                           style={{
-                            marginLeft: '6px',
+                            marginInlineStart: '6px',
                             color: 'var(--muted, #666)',
                             textDecoration: 'line-through',
                             fontSize: '12px',
@@ -708,7 +708,7 @@ export default function ProductView() {
                           {formatPrice(Number(variant.compareAtPrice), settings.currencySymbol)}
                         </span>
                       )}
-                      <span style={{ marginLeft: '6px', color: onSale ? 'var(--sale, #dc2626)' : 'var(--muted, #666)', fontWeight: onSale ? 700 : 400 }}>
+                      <span style={{ marginInlineStart: '6px', color: onSale ? 'var(--sale, #dc2626)' : 'var(--muted, #666)', fontWeight: onSale ? 700 : 400 }}>
                         {formatPrice(Number(variant.price), settings.currencySymbol)}
                       </span>
                     </button>

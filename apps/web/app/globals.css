@@ -179,8 +179,15 @@ a[data-link]:hover {
   to { opacity: 1; }
 }
 
+/* Toast slides in from its anchored edge. The toast container uses
+   insetInlineEnd, so it sits on the right in LTR and the left in RTL;
+   --slide-from mirrors the entry direction to match (custom properties
+   resolve per-element, so the [dir="rtl"] flip on :root is inherited). */
+:root { --slide-from: 100%; }
+:root[dir="rtl"] { --slide-from: -100%; }
+
 @keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
+  from { transform: translateX(var(--slide-from)); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
 

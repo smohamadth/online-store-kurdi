@@ -12,7 +12,7 @@ export default function PrivacyPage() {
         <section style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>1. Information We Collect</h2>
           <p style={{ marginBottom: '12px' }}>We collect information you provide directly, including:</p>
-          <ul style={{ paddingLeft: '24px', marginBottom: '12px' }}>
+          <ul style={{ paddingInlineStart: '24px', marginBottom: '12px' }}>
             <li>Name, email address, and phone number</li>
             <li>Shipping and billing addresses</li>
             <li>Payment information (processed securely by our payment providers)</li>
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
 
         <section style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>2. How We Use Your Information</h2>
-          <ul style={{ paddingLeft: '24px' }}>
+          <ul style={{ paddingInlineStart: '24px' }}>
             <li>Process and fulfill your orders</li>
             <li>Send order confirmations and shipping updates</li>
             <li>Provide customer support</li>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
         <section style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>3. Information Sharing</h2>
           <p style={{ marginBottom: '12px' }}>We do not sell your personal information. We may share data with:</p>
-          <ul style={{ paddingLeft: '24px' }}>
+          <ul style={{ paddingInlineStart: '24px' }}>
             <li>Payment processors to complete transactions</li>
             <li>Shipping carriers to deliver orders</li>
             <li>Analytics services to improve our website</li>
@@ -51,7 +51,7 @@ export default function PrivacyPage() {
 
         <section style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>5. Your Rights</h2>
-          <ul style={{ paddingLeft: '24px' }}>
+          <ul style={{ paddingInlineStart: '24px' }}>
             <li>Access your personal data</li>
             <li>Correct inaccurate data</li>
             <li>Request deletion of your data</li>

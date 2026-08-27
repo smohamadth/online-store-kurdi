@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
               backgroundColor: '#fef3c7',
               borderRadius: '6px',
               marginBottom: '24px',
-              textAlign: 'left',
+              textAlign: 'start',
             }}>
               <p style={{ fontSize: '12px', fontWeight: 600, color: '#92400e', marginBottom: '8px' }}>
                 🔧 Development Mode - Reset Token:

@@ -82,13 +82,13 @@ export default function FAQPage() {
                     background: isOpen ? '#f9f9f9' : 'white',
                     border: 'none',
                     cursor: 'pointer',
-                    textAlign: 'left',
+                    textAlign: 'start',
                     fontSize: '15px',
                     fontWeight: 500,
                   }}
                 >
                   <span>{faq.q}</span>
-                  <span style={{ fontSize: '18px', marginLeft: '16px', flexShrink: 0 }}>{isOpen ? '−' : '+'}</span>
+                  <span style={{ fontSize: '18px', marginInlineStart: '16px', flexShrink: 0 }}>{isOpen ? '−' : '+'}</span>
                 </button>
                 {isOpen && (
                   <div style={{ padding: '0 20px 16px', color: '#555', lineHeight: 1.6, fontSize: '14px' }}>

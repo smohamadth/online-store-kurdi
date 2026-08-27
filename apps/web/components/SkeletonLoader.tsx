@@ -94,7 +94,7 @@ export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; column
           {Array.from({ length: columns }).map((_, i) => (
             <th key={i} style={{
               padding: '12px 16px',
-              textAlign: 'left',
+              textAlign: 'start',
               borderBottom: '2px solid #e5e5e5',
             }}>
               <div style={{

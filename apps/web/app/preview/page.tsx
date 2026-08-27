@@ -65,8 +65,8 @@ export default function PreviewGalleryPage() {
               color: '#666',
               margin: 0,
               maxWidth: 640,
-              marginLeft: 'auto',
-              marginRight: 'auto',
+              marginInlineStart: 'auto',
+              marginInlineEnd: 'auto',
             }}
           >
             Every theme shipped with the platform. Click a theme to see what

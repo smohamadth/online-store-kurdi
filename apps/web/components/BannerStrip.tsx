@@ -138,8 +138,8 @@ export default function BannerStrip({ banners }: { banners: Banner[] }) {
                 style={{
                   position: 'relative',
                   maxWidth: isMobile ? '100%' : '640px',
-                  marginLeft: !isMobile && align === 'center' ? 'auto' : undefined,
-                  marginRight: !isMobile && align === 'center' ? 'auto' : undefined,
+                  marginInlineStart: !isMobile && align === 'center' ? 'auto' : undefined,
+                  marginInlineEnd: !isMobile && align === 'center' ? 'auto' : undefined,
                 }}
               >
                 {b.badge && (

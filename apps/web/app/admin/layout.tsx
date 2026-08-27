@@ -441,6 +441,15 @@ export default function AdminLayout({
     // to its own neutral palette regardless of what the store looks like.
     <div
       data-admin-shell
+      // Deliberately pinned LTR even when the storefront renders RTL
+      // (ku/ar). The admin is staff tooling, and like Shopify/WooCommerce
+      // its dashboard stays LTR regardless of the store's display
+      // language: ~100 table alignments, indents and button gaps in the
+      // admin pages are physical by design, and mirroring them all is a
+      // bigger project than the value it would add. Storefront (and the
+      // account area) is fully RTL - only this shell opts out. To revisit,
+      // remove this attribute and run the RTL sweep over app/admin.
+      dir="ltr"
       style={{
         display: 'flex',
         minHeight: '100vh',

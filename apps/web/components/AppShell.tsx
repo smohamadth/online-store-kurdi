@@ -556,7 +556,7 @@ function Header() {
                   >
                     {item.icon ? `${item.icon} ` : ''}{item.label}
                     {item.children && item.children.length > 0 && (
-                      <span style={{ fontSize: '10px', marginLeft: '2px' }}>▼</span>
+                      <span style={{ fontSize: '10px', marginInlineStart: '2px' }}>▼</span>
                     )}
                   </Link>
                   
