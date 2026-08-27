@@ -225,4 +225,4 @@ the catalog the friction is real. The four touch points are:
 3. the import + `THEME_SECTION_COMPONENTS` entry in `lib/themeSections.tsx`,
 4. a preview image at `public/themes/<key>/preview.png` and the
    `ThemePicker` count test.
-A `scaffold-theme` script would be the natural next step.
+A `scaffold-theme` script now exists: `node scripts/scaffold-theme.mjs <key>`. It creates the theme directory (theme.json + Hero/Featured/Categories scaffolds that are RTL-safe by construction) and patches every source touch point — registry, section map, RTL test matrix, and the ThemePicker card count — so a new theme compiles and passes the RTL ratchet test before you've written a single line of real design.
