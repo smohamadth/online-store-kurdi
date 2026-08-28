@@ -133,7 +133,15 @@ export function buildMetadata(opts: BuildMetadataOptions): Metadata {
   const image = absoluteImageUrl(opts.image);
   // Cast to any when emitting the type so 'product' (which Next
   // doesn't include in the OpenGraph union) round-trips.
-  const ogType = opts.ogType || 'website';
+  // Next.js 14.2 validates og:type against a fixed allowlist at REQUEST
+  // time (website, article, book, profile, music.*, video.*) and throws
+  // "Invalid OpenGraph type: product" for anything else - 500ing the whole
+  // page even though 'product' is legal in the OG protocol. Emit
+  // 'website' instead; the product semantics travel in the `product:*`
+  // keys the caller adds via `other` (that's what the rich-preview
+  // scrapers read).
+  const ogType =
+    opts.ogType === 'product' ? 'website' : (opts.ogType || 'website');
   const index = opts.index !== false;
   const follow = opts.follow !== false;
 

@@ -21,6 +21,29 @@ afterAll(() => {
 });
 
 describe('buildMetadata', () => {
+  // Regression: Next.js 14.2 throws "Invalid OpenGraph type: product"
+  // at request time (its og:type allowlist is website/article/book/
+  // profile/music.*/video.*), which 500ed every product page. The
+  // ogType must be emitted as a Next-legal value; the product semantics
+  // live in the product:* keys the caller adds via `other`.
+  it('emits a Next-legal og:type for the "product" ogType (no runtime throw)', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m = buildMetadata({
+        title: 'Classic T-Shirt - My Shop',
+        description: 'Comfortable cotton t-shirt',
+        path: '/products/classic-t-shirt',
+        storeName: 'My Shop',
+        image: '/images/products/t-shirt-1.jpg',
+        ogType: 'product',
+      });
+      expect(m.openGraph?.type).toBe('website');
+      // Only Next-legal og:type values may ever be emitted.
+      expect(
+        ['website', 'article', 'book', 'profile'].includes(m.openGraph?.type as string),
+      ).toBe(true);
+    });
+  });
+
   it('produces a complete metadata object (no image)', () => {
     return import('./seo').then(({ buildMetadata }) => {
       const m = buildMetadata({
