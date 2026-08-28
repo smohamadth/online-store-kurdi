@@ -86,6 +86,20 @@ const baseSchema = {
   metaDescription: z.string().max(400).optional().nullable(),
   showInFooter: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(10000).optional(),
+  // Layout blocks (page CMS). Unknown types are accepted here and
+  // dropped client-side, so a newer admin bundle can save block types
+  // an older API doesn't know yet without a 400.
+  blocks: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(40),
+        type: z.string().min(1).max(40),
+        config: z.record(z.any()).optional().nullable(),
+      }),
+    )
+    .max(100)
+    .optional()
+    .nullable(),
 };
 
 const createSchema = z.object({ slug: slugField, ...baseSchema });
@@ -97,14 +111,68 @@ const updateSchema = z.object({
 });
 
 /** Nullable text fields that an admin must be able to CLEAR. */
-const NULLABLE = new Set(['excerpt', 'metaTitle', 'metaDescription']);
+const NULLABLE = new Set(['excerpt', 'metaTitle', 'metaDescription', 'blocks']);
+
+/**
+ * Sanitise the HTML fields of a block list, then serialise it to the
+ * JSON string column. Block config carries the same kind of admin
+ * markup as `content` (richText / two-column HTML), so it gets the
+ * same on-write sanitisation - never store what the storefront might
+ * dangerouslySetInnerHTML.
+ */
+function serializeBlocks(blocks: unknown): string | null {
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const cleaned = blocks
+    .map((b: any) => {
+      if (!b || typeof b !== 'object' || typeof b.id !== 'string' || typeof b.type !== 'string') {
+        return null;
+      }
+      const config: Record<string, any> = {
+        ...(b.config && typeof b.config === 'object' ? b.config : {}),
+      };
+      if (b.type === 'richText' && typeof config.html === 'string') {
+        config.html = sanitizeRichText(config.html);
+      }
+      if (b.type === 'columns') {
+        if (typeof config.left === 'string') config.left = sanitizeRichText(config.left);
+        if (typeof config.right === 'string') config.right = sanitizeRichText(config.right);
+      }
+      return { id: b.id, type: b.type, config };
+    })
+    .filter(Boolean);
+  return cleaned.length ? JSON.stringify(cleaned) : null;
+}
+
+/**
+ * Rows come back with `blocks` as a JSON string column; hand every
+ * client a parsed array (or null) instead of making each one JSON.parse
+ * and swallow its own errors.
+ */
+function withParsedBlocks(page: any) {
+  if (!page) return page;
+  let blocks: unknown = null;
+  if (typeof page.blocks === 'string' && page.blocks.trim() !== '') {
+    try {
+      blocks = JSON.parse(page.blocks);
+    } catch {
+      blocks = null;
+    }
+  }
+  return { ...page, blocks };
+}
 
 function buildData(parsed: Record<string, unknown>) {
   const data: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(parsed)) {
     if (v === undefined) continue;
     if (v === null && !NULLABLE.has(k)) continue;
-    data[k] = k === 'content' && typeof v === 'string' ? sanitizeRichText(v) : v;
+    if (k === 'content' && typeof v === 'string') {
+      data[k] = sanitizeRichText(v);
+    } else if (k === 'blocks') {
+      data[k] = serializeBlocks(v);
+    } else {
+      data[k] = v;
+    }
   }
   return data;
 }
@@ -133,7 +201,7 @@ router.get('/all', authenticate, authorize('admin', 'manager'), async (_req, res
     const pages = await prisma.page.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
-    res.json({ status: 'success', data: pages });
+    res.json({ status: 'success', data: pages.map(withParsedBlocks) });
   } catch (err) {
     next(err);
   }
@@ -168,7 +236,7 @@ router.get('/by-type/:type/slug/:slug', async (req, res, next) => {
         .status(404)
         .json({ status: 'error', message: 'Page not found', code: 'NOT_FOUND' });
     }
-    res.json({ status: 'success', data: page });
+    res.json({ status: 'success', data: withParsedBlocks(page) });
   } catch (err) {
     next(err);
   }
@@ -192,7 +260,7 @@ router.get('/slug/:slug', async (req, res, next) => {
         .json({ status: 'error', message: 'Page not found', code: 'NOT_FOUND' });
     }
 
-    res.json({ status: 'success', data: page });
+    res.json({ status: 'success', data: withParsedBlocks(page) });
   } catch (err) {
     next(err);
   }
@@ -207,7 +275,7 @@ router.get('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
         .status(404)
         .json({ status: 'error', message: 'Page not found', code: 'NOT_FOUND' });
     }
-    res.json({ status: 'success', data: page });
+    res.json({ status: 'success', data: withParsedBlocks(page) });
   } catch (err) {
     next(err);
   }
@@ -257,7 +325,7 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
 
     const page = await prisma.page.create({ data: data as any });
     logger.info(`Page created: ${page.slug} (${page.pageType}/${page.status})`);
-    res.status(201).json({ status: 'success', data: page });
+    res.status(201).json({ status: 'success', data: withParsedBlocks(page) });
   } catch (err) {
     next(err);
   }
@@ -309,7 +377,7 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
 
     const page = await prisma.page.update({ where: { id: req.params.id }, data: data as any });
     logger.info(`Page updated: ${page.slug}`);
-    res.json({ status: 'success', data: page });
+    res.json({ status: 'success', data: withParsedBlocks(page) });
   } catch (err) {
     next(err);
   }

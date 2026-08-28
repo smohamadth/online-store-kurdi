@@ -4,8 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import { PageBlocks } from '@/components/PageBlocks';
 import { authHttp, errorMessage } from '@/lib/http';
+import {
+  type PageBlock,
+  blocksFromLegacyContent,
+  blocksToLegacyContent,
+} from '@/lib/pageBlocks';
 import { CmsEditor, type CmsEditorBaseFields, type CmsEditorExtras, type PageType } from '../../../_components/CmsEditor';
+import { PageBlocksEditor } from '../../_components/PageBlocksEditor';
 
 /**
  * Admin → Pages → Edit.
@@ -21,9 +28,14 @@ interface PageRow extends CmsEditorBaseFields, CmsEditorExtras {
   id: string;
   updatedAt: string;
   pageType: PageType;
+  /** Parsed block list from the API (null when the page has none). */
+  blocks?: PageBlock[] | null;
 }
 
-const BLANK: CmsEditorBaseFields & CmsEditorExtras = {
+/** Form state = editor base + extras + the block layout. */
+type PageValues = CmsEditorBaseFields & CmsEditorExtras & { blocks: PageBlock[] };
+
+const BLANK: PageValues = {
   title: '',
   slug: '',
   content: '<p></p>',
@@ -33,15 +45,27 @@ const BLANK: CmsEditorBaseFields & CmsEditorExtras = {
   showInFooter: false,
   metaTitle: '',
   metaDescription: '',
+  blocks: [],
 };
+
+/**
+ * Every value that reaches the form must carry a block array. Rows saved
+ * before blocks existed have none - their legacy `content` becomes a
+ * single rich-text block so the editor shows exactly what renders.
+ * (Also covers autosaved drafts written before this feature shipped.)
+ */
+function withBlocks(v: CmsEditorBaseFields & CmsEditorExtras & { blocks?: PageBlock[] | null }): PageValues {
+  const blocks = Array.isArray(v.blocks) && v.blocks.length > 0 ? v.blocks : blocksFromLegacyContent(v.content);
+  return { ...v, blocks };
+}
 
 export default function EditPagePage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string | undefined;
 
-  const [initial, setInitial] = useState<(CmsEditorBaseFields & CmsEditorExtras) | null>(null);
-  const [values, setValues] = useState<CmsEditorBaseFields & CmsEditorExtras>(BLANK);
+  const [initial, setInitial] = useState<PageValues | null>(null);
+  const [values, setValues] = useState<PageValues>(BLANK);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -60,7 +84,7 @@ export default function EditPagePage() {
         const res = await authHttp.get<PageRow>(`/pages/${id}`);
         if (!alive) return;
         const row = res.data;
-        const next: CmsEditorBaseFields & CmsEditorExtras = {
+        const next = withBlocks({
           title: row.title || '',
           slug: row.slug || '',
           content: row.content || '',
@@ -70,7 +94,8 @@ export default function EditPagePage() {
           showInFooter: !!row.showInFooter,
           metaTitle: row.metaTitle || '',
           metaDescription: row.metaDescription || '',
-        };
+          blocks: row.blocks,
+        });
         setInitial(next);
         // Restore a newer autosaved draft if one exists. We
         // trust the local copy when it's been touched more
@@ -85,7 +110,7 @@ export default function EditPagePage() {
               const ts = Number(parsed?.savedAt) || 0;
               const srvTs = new Date(row.updatedAt).getTime();
               if (ts > srvTs) {
-                setValues(parsed.values);
+                setValues(withBlocks(parsed.values));
               } else {
                 setValues(next);
               }
@@ -135,10 +160,16 @@ export default function EditPagePage() {
     setSaving(true);
     setFormError('');
     try {
+      // For pages the blocks ARE the content: the editor's layout
+      // section (not a free-text field) is the single source of truth.
+      // We sync the legacy `content` column from the blocks so a page
+      // whose blocks were all deleted never renders stale text, and so
+      // any consumer that only reads `content` still sees the words.
       const body = {
         title: values.title,
         slug: values.slug,
-        content: values.content,
+        content: blocksToLegacyContent(values.blocks),
+        blocks: values.blocks,
         excerpt: values.excerpt || null,
         status: values.status,
         pageType: values.pageType,
@@ -172,12 +203,30 @@ export default function EditPagePage() {
       headerTitle={values.title || 'Untitled page'}
       initial={initial}
       values={values}
-      onChange={setValues}
+      // The shared shell edits the base fields only; the block array
+      // lives in this route's state and is preserved on every change.
+      onChange={(next) => setValues({ ...withBlocks(next), blocks: values.blocks })}
       onSave={save}
       isDirty={isDirty}
       saving={saving}
       formError={formError}
       formatLivePath={(v) => `/${v.pageType ?? 'info'}/${v.slug || '…'}`}
+      contentSection={
+        <div style={{ marginTop: '14px' }}>
+          <label style={{ fontSize: '14px', fontWeight: 600, color: '#333', display: 'block', marginBottom: '8px' }}>
+            Layout
+          </label>
+          <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#777' }}>
+            Compose the page from sections - text, headings, images, two columns,
+            callout boxes, buttons, dividers and spacing. Order matters: sections
+            render top to bottom.
+          </p>
+          <PageBlocksEditor
+            blocks={values.blocks}
+            onChange={(blocks) => setValues({ ...values, blocks })}
+          />
+        </div>
+      }
       renderPreview={(v) => (
         <article style={{ maxWidth: '720px', margin: '0 auto' }}>
           <h1
@@ -203,15 +252,20 @@ export default function EditPagePage() {
               {v.excerpt}
             </p>
           )}
-          <div
-            style={{ fontSize: '16px', lineHeight: 1.75 }}
-            // The content is sanitised on the server; the
-            // editor and the preview both render the same
-            // safe HTML. The admin's preview and the live page
-            // are pixel-identical for any content the API
-            // accepts.
-            dangerouslySetInnerHTML={{ __html: v.content || '' }}
-          />
+          <div style={{ fontSize: '16px' }}>
+            {(v as PageValues).blocks && (v as PageValues).blocks.length > 0 ? (
+              // Same renderer as the storefront, so the preview is
+              // pixel-identical to the live page.
+              <PageBlocks blocks={(v as PageValues).blocks} />
+            ) : (
+              // Legacy single-column page (no blocks): the content is
+              // sanitised on the server, never on read.
+              <div
+                style={{ lineHeight: 1.75 }}
+                dangerouslySetInnerHTML={{ __html: v.content || '' }}
+              />
+            )}
+          </div>
         </article>
       )}
     />

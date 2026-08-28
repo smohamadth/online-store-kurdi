@@ -1615,6 +1615,15 @@ model Page {
   showInFooter    Boolean  @default(false)
   sortOrder       Int      @default(0)
 
+  // Layout blocks as a JSON string (array of { id, type, config }).
+  // Lets the admin compose a page from blocks (heading, image, two
+  // columns, callout, button, divider, spacer, rich text) instead of a
+  // single content blob - the same block model as the home builder.
+  // Null/empty means "no blocks" and the storefront renders `content`.
+  // Stored as a string (not Json) to match the SQLite provider and the
+  // dimensions/metaKeywords/tags pattern. HTML fields sanitised on write.
+  blocks          String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   publishedAt     DateTime?

@@ -85,6 +85,13 @@ export interface CmsEditorProps {
   renderPreview: (values: CmsEditorBaseFields & CmsEditorExtras) => React.ReactNode;
   /** The slug for live URL preview, formatted by the host. */
   formatLivePath: (values: CmsEditorBaseFields & CmsEditorExtras) => string;
+  /**
+   * Optional replacement for the default "Content" rich-text field.
+   * The page host passes the block layout editor here; the blog host
+   * leaves it undefined and gets the classic single rich-text field.
+   * The replacement should include its own label.
+   */
+  contentSection?: React.ReactNode;
   /** True if there are unsaved changes. */
   isDirty: boolean;
   /** Save-in-flight flag (drives the toolbar). */
@@ -110,6 +117,7 @@ export function CmsEditor(props: CmsEditorProps) {
     onSave,
     renderPreview,
     formatLivePath,
+    contentSection,
     isDirty,
     saving,
     formError,
@@ -358,6 +366,7 @@ export function CmsEditor(props: CmsEditorProps) {
           initial={initial}
           kind={kind}
           isMobile={isMobile}
+          contentSection={contentSection}
         />
       ) : (
         <PreviewPanel livePath={livePath}>
@@ -492,9 +501,11 @@ interface EditPanelProps {
   initial: CmsEditorBaseFields & CmsEditorExtras;
   kind: CmsKind;
   isMobile: boolean;
+  /** Host-provided replacement for the default Content field (pages: block editor). */
+  contentSection?: React.ReactNode;
 }
 
-function EditPanel({ values, onChange, kind, isMobile }: EditPanelProps) {
+function EditPanel({ values, onChange, kind, isMobile, contentSection }: EditPanelProps) {
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '10px 12px',
@@ -719,14 +730,16 @@ function EditPanel({ values, onChange, kind, isMobile }: EditPanelProps) {
         />
       </div>
 
-      <div style={{ marginTop: '14px' }}>
-        <label style={labelStyle}>Content</label>
-        <RichTextEditor
-          value={values.content}
-          onChange={(html) => onChange({ ...values, content: html })}
-          minHeight={360}
-        />
-      </div>
+      {contentSection ?? (
+        <div style={{ marginTop: '14px' }}>
+          <label style={labelStyle}>Content</label>
+          <RichTextEditor
+            value={values.content}
+            onChange={(html) => onChange({ ...values, content: html })}
+            minHeight={360}
+          />
+        </div>
+      )}
 
       <div
         style={{

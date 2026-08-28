@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { serverFetch } from '@/lib/serverFetch';
 import { encodeRouteParam } from '@/lib/routeParam';
+import { PageBlocks } from '@/components/PageBlocks';
+import type { PageBlock } from '@/lib/pageBlocks';
 
 /**
  * Shared renderer for the type-aware CMS pages.
@@ -33,6 +35,8 @@ export interface Page {
   excerpt?: string | null;
   metaTitle?: string | null;
   metaDescription?: string | null;
+  /** Layout blocks, or null/absent for pages saved before blocks existed. */
+  blocks?: PageBlock[] | null;
   updatedAt: string;
 }
 
@@ -209,17 +213,26 @@ export async function renderPage(
         </p>
       )}
 
-      <div
-        data-page-content
-        style={{
-          marginTop: '28px',
-          fontSize: '16px',
-          lineHeight: 1.75,
-        }}
-        // Sanitised server-side on write (see pages/page.routes.ts),
-        // never on read - so nothing dangerous is ever stored.
-        dangerouslySetInnerHTML={{ __html: page.content || '' }}
-      />
+      {page.blocks && page.blocks.length > 0 ? (
+        // Block layout. The admin composed this page from blocks; the
+        // HTML fields were sanitised server-side on write exactly like
+        // `content` (see pages/page.routes.ts serializeBlocks).
+        <div data-page-content style={{ marginTop: '28px', fontSize: '16px' }}>
+          <PageBlocks blocks={page.blocks} />
+        </div>
+      ) : (
+        <div
+          data-page-content
+          style={{
+            marginTop: '28px',
+            fontSize: '16px',
+            lineHeight: 1.75,
+          }}
+          // Legacy single-column page. Sanitised server-side on write,
+          // never on read - so nothing dangerous is ever stored.
+          dangerouslySetInnerHTML={{ __html: page.content || '' }}
+        />
+      )}
 
       <p style={{ marginTop: '40px', fontSize: '13px', color: 'var(--muted, #888)' }}>
         Last updated {new Date(page.updatedAt).toLocaleDateString()}

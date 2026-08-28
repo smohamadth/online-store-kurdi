@@ -439,6 +439,16 @@ try:
         page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         page_ui.wait_for_timeout(300)
 
+        # Layout blocks: compose a section in the block editor. The
+        # template draft loads as one rich-text section; add a callout
+        # and confirm it reaches the storefront after publish.
+        page_ui.get_by_test_id("page-blocks-type-select").select_option("callout")
+        page_ui.get_by_test_id("page-blocks-add-btn").click()
+        page_ui.wait_for_timeout(500)
+        page_ui.locator('[data-block-type="callout"]') \
+                .locator('[data-testid$="-text"]').fill("UI block note: free returns")
+        page_ui.wait_for_timeout(300)
+
         # The new flow creates DRAFTS. Ticking Publish is part of the
         # default workflow now (the regression this suite exists for is a
         # page the admin publishes still 404'ing on visit).
@@ -461,6 +471,8 @@ try:
             check("visiting a newly created page returns 200, not 404",
                   code == 200, f"status={code} — this was the reported bug")
             check("the new page renders its title", "UI Made Page" in body)
+            check("the new page renders its layout block",
+                  "UI block note: free returns" in body)
 
         # a duplicate slug must surface the server error, not a fake success
         page_ui.get_by_test_id("admin-pages-new").click()
