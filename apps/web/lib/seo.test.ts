@@ -36,11 +36,12 @@ describe('buildMetadata', () => {
         image: '/images/products/t-shirt-1.jpg',
         ogType: 'product',
       });
-      expect(m.openGraph?.type).toBe('website');
+      // `type` isn't on Next's OpenGraph type (seo.ts casts when emitting
+      // it), so read it through a cast here too.
+      const og = m.openGraph as { type?: string } | undefined;
+      expect(og?.type).toBe('website');
       // Only Next-legal og:type values may ever be emitted.
-      expect(
-        ['website', 'article', 'book', 'profile'].includes(m.openGraph?.type as string),
-      ).toBe(true);
+      expect(['website', 'article', 'book', 'profile'].includes(og?.type ?? '')).toBe(true);
     });
   });
 
