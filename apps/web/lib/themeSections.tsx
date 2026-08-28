@@ -124,23 +124,27 @@ const THEME_SECTION_COMPONENTS: Record<string, SectionComponent> = {
 /**
  * Platform default components. Used when the active theme doesn't
  * ship an override for a section.
+ *
+ * NOTE: only `hero` has one. featured / categories are intentionally
+ * ABSENT here: their platform renderers live inline in HomeView.tsx as
+ * the `fallback` of ThemeSectionRenderer. Mapping them to a component
+ * (even `() => null`) would make useSection() return a truthy value,
+ * and the renderer would render that component INSTEAD of the fallback
+ * - which is exactly how the default theme shipped a home page with no
+ * featured section and no category section at all (the CI home-builder
+ * suite caught the missing "Featured Products" heading).
  */
 const PLATFORM_DEFAULT_SECTIONS: Record<string, SectionComponent> = {
   hero: HeroGallery,
-  // The platform's existing section renderer for featured / categories
-  // lives inline in HomeView.tsx; the theme overrides replace that
-  // wholesale. If a theme doesn't override these, HomeView uses
-  // its inline JSX.
-  featured: () => null,
-  categories: () => null,
 };
 
 /**
  * Resolve a section component for the active theme.
  *
- * Returns the theme's override if one exists, otherwise the
- * platform default. Returns `null` if neither is available (the
- * home page should skip rendering in that case).
+ * Returns the theme's override if one exists, otherwise the platform
+ * default. Returns `null` when there is no component - for those
+ * sections (featured, categories) HomeView's inline JSX is the platform
+ * rendering, and ThemeSectionRenderer falls back to it.
  */
 export function useSection(sectionName: string): SectionComponent | null {
   const theme = useTheme();
