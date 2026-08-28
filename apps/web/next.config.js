@@ -17,6 +17,14 @@ const nextConfig = {
         source: '/api/:path*',
         destination: 'http://127.0.0.1:3001/api/:path*',
       },
+      // Uploaded files: the API serves them at its own /uploads (app root,
+      // no /api prefix). Same loopback reasoning as above - in dev and
+      // proxied previews the browser asks the web origin for /uploads/*
+      // and we forward it to the API, where loopback works.
+      {
+        source: '/uploads/:path*',
+        destination: 'http://127.0.0.1:3001/uploads/:path*',
+      },
     ];
   },
   

@@ -6,6 +6,7 @@ import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
 import BlogSearch from '@/components/BlogSearch';
 import PostCard from '@/components/PostCard';
+import FeaturedPostHero from '@/components/FeaturedPostHero';
 
 /**
  * Blog index at /blog.
@@ -198,17 +199,27 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
           )}
         </div>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '24px',
-          }}
-        >
-          {posts.map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
-        </div>
+        <>
+          {/* The pinned (featured) post leads as a wide hero card; the API
+              already sorts featured posts first. Kept as a real card
+              (data-post-card) so list counts and scripts see it like any
+              other post. */}
+          {posts[0]?.isFeatured && <FeaturedPostHero post={posts[0]} />}
+          {posts.length > 1 && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: '24px',
+                marginTop: posts[0]?.isFeatured ? '24px' : 0,
+              }}
+            >
+              {posts.slice(posts[0].isFeatured ? 1 : 0).map((p) => (
+                <PostCard key={p.id} post={p} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Pagination */}

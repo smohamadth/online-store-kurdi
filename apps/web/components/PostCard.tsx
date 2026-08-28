@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { getImageUrl } from '@/lib/api';
 import { BlogPost, formatPostDate } from '@/lib/blog';
+import { DirectionArrow } from '@/components/DirectionArrow';
 
 /**
  * One post in the blog grid.
@@ -116,25 +117,55 @@ export default function PostCard({ post }: { post: BlogPost }) {
           </p>
         )}
 
-        {post.tags.length > 0 && (
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: 'auto', paddingTop: '8px' }}>
-            {post.tags.slice(0, 3).map((t) => (
-              <span
-                key={t}
-                style={{
-                  fontSize: '11px',
-                  padding: '3px 9px',
-                  borderRadius: '999px',
-                  backgroundColor: 'var(--body-bg, #f3f4f6)',
-                  border: '1px solid var(--border, #e5e5e5)',
-                  color: 'var(--muted, #555)',
-                }}
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Fixed-height bottom row: tags always, plus a "Read post"
+            affordance that fades in on hover (height reserved so the
+            card never jumps). */}
+        <div
+          style={{
+            marginTop: 'auto',
+            paddingTop: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+          }}
+        >
+          {post.tags.length > 0 && (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {post.tags.slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  style={{
+                    fontSize: '11px',
+                    padding: '3px 9px',
+                    borderRadius: '999px',
+                    backgroundColor: 'var(--body-bg, #f3f4f6)',
+                    border: '1px solid var(--border, #e5e5e5)',
+                    color: 'var(--muted, #555)',
+                  }}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+              fontWeight: 700,
+              color: 'var(--accent, #3b82f6)',
+              opacity: hovered ? 1 : 0,
+              transform: hovered ? 'none' : 'translateY(2px)',
+              transition: 'opacity 200ms ease, transform 200ms ease',
+              height: '18px',
+            }}
+          >
+            Read post
+            <DirectionArrow kind="forward" />
+          </span>
+        </div>
       </div>
     </Link>
   );

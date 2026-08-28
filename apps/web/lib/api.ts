@@ -1,5 +1,7 @@
 'use client';
 
+import { API_BASE, CLIENT_API_BASE } from './apiBase';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 // Types
@@ -251,8 +253,16 @@ export function getImageUrl(url: string | undefined | null): string {
   if (!url) return '';
   // Already a full URL (http/https) or data URI
   if (url.startsWith('http') || url.startsWith('data:')) return url;
-  // Relative URL - prepend API base
-  const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace('/api', '');
+  // Loopback API base (dev / proxied preview): the browser cannot reach
+  // 127.0.0.1:3001 - that is the SERVER's loopback, not the reader's
+  // machine. Resolve images against the page's own origin instead: the
+  // web app serves /images/* from public/, and /uploads/* (files the
+  // API stores) is proxied to the API by the rewrites in next.config.js.
+  if (CLIENT_API_BASE === '/api') {
+    return url;
+  }
+  // Relative URL on a real deployment - prepend the API base
+  const baseUrl = API_BASE.replace('/api', '');
   return `${baseUrl}${url}`;
 }
 

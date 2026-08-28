@@ -238,11 +238,11 @@ router.get('/slug/:slug', async (req, res, next) => {
         .json({ status: 'error', message: 'Post not found', code: 'NOT_FOUND' });
     }
 
-    // Two most recent other posts, for "keep reading".
+    // Three most recent other posts, for the "keep reading" card grid.
     const related = await prisma.blogPost.findMany({
       where: { status: 'published', id: { not: post.id } },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-      take: 2,
+      take: 3,
     });
 
     res.json({
