@@ -12,7 +12,6 @@
  * component is a pure controlled editor.
  */
 
-import { useState } from 'react';
 import RichTextEditor from '@/components/RichTextEditor';
 import ImageUpload from '@/components/ImageUpload';
 import {
@@ -20,6 +19,8 @@ import {
   PageBlockType,
   PAGE_BLOCK_TYPES,
   PAGE_BLOCK_LABELS,
+  PAGE_BLOCK_ICONS,
+  newBlock,
   newBlockId,
 } from '@/lib/pageBlocks';
 
@@ -178,6 +179,103 @@ function BlockFields({
         </div>
       );
 
+    case 'quote':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <textarea
+            style={{ ...fieldStyle, minHeight: '70px', resize: 'vertical', fontStyle: 'italic' }}
+            value={c.text || ''}
+            onChange={(e) => set('text', e.target.value)}
+            placeholder="The quote itself"
+            data-testid={`page-block-field-${block.id}-text`}
+          />
+          <input
+            style={fieldStyle}
+            value={c.attribution || ''}
+            onChange={(e) => set('attribution', e.target.value)}
+            placeholder="Attribution, e.g. “Dana, shop owner” (optional)"
+          />
+        </div>
+      );
+
+    case 'gallery': {
+      const images: { url?: string; caption?: string; alt?: string }[] = Array.isArray(c.images)
+        ? c.images
+        : [];
+      const patchImage = (index: number, patch: Record<string, string>) => {
+        const next = images.map((im, i) => (i === index ? { ...im, ...patch } : im));
+        set('images', next);
+      };
+      const removeImage = (index: number) => set('images', images.filter((_, i) => i !== index));
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {images.map((im, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr)) auto',
+                gap: '10px',
+                alignItems: 'center',
+                padding: '10px',
+                border: '1px solid #eee',
+                borderRadius: '8px',
+                backgroundColor: '#fff',
+              }}
+            >
+              <ImageUpload
+                currentImage={im.url || undefined}
+                folder="pages"
+                label={`Image ${i + 1}`}
+                onUpload={(url) => patchImage(i, { url })}
+              />
+              <input
+                style={fieldStyle}
+                value={im.url || ''}
+                onChange={(e) => patchImage(i, { url: e.target.value })}
+                placeholder={`…or paste an image URL`}
+              />
+              <input
+                style={fieldStyle}
+                value={im.caption || ''}
+                onChange={(e) => patchImage(i, { caption: e.target.value })}
+                placeholder={`Caption (optional)`}
+              />
+              <button
+                type="button"
+                title="Remove image"
+                style={{ ...iconButtonStyle, color: '#b91c1c', borderColor: '#fecaca' }}
+                onClick={() => removeImage(i)}
+                data-testid={`page-block-image-remove-${block.id}-${i}`}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {images.length < 4 && (
+            <button
+              type="button"
+              onClick={() => set('images', [...images, { url: '', caption: '' }])}
+              data-testid={`page-block-gallery-add-${block.id}`}
+              style={{
+                alignSelf: 'flex-start',
+                padding: '8px 14px',
+                border: '1px dashed #c0c0c0',
+                borderRadius: '6px',
+                backgroundColor: '#fff',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#555',
+                cursor: 'pointer',
+              }}
+            >
+              + Add image ({images.length}/4)
+            </button>
+          )}
+        </div>
+      );
+    }
+
     case 'cta':
       return (
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -225,10 +323,18 @@ export function PageBlocksEditor({
   blocks: PageBlock[];
   onChange: (blocks: PageBlock[]) => void;
 }) {
-  const [newType, setNewType] = useState<PageBlockType>('richText');
+  const addBlock = (type: PageBlockType) => {
+    onChange([...blocks, newBlock(type)]);
+  };
 
-  const addBlock = () => {
-    onChange([...blocks, { id: newBlockId(), type: newType, config: {} }]);
+  const duplicate = (index: number) => {
+    const next = [...blocks];
+    next.splice(index + 1, 0, {
+      ...next[index],
+      id: newBlockId(),
+      config: { ...next[index].config },
+    });
+    onChange(next);
   };
 
   const move = (index: number, dir: -1 | 1) => {
@@ -312,6 +418,15 @@ export function PageBlocksEditor({
             </button>
             <button
               type="button"
+              title="Duplicate section"
+              style={iconButtonStyle}
+              onClick={() => duplicate(i)}
+              data-testid={`page-block-duplicate-${block.id}`}
+            >
+              ⧉
+            </button>
+            <button
+              type="button"
               title="Remove section"
               style={{ ...iconButtonStyle, color: '#b91c1c', borderColor: '#fecaca' }}
               onClick={() => remove(block.id)}
@@ -324,47 +439,54 @@ export function PageBlocksEditor({
         </div>
       ))}
 
+      {/* Visual add-picker: one tap per section type. New sections are
+          added with starter content (see defaultBlockConfig) so they are
+          visible in the preview immediately. */}
       <div
         style={{
-          display: 'flex',
-          gap: '10px',
-          flexWrap: 'wrap',
-          alignItems: 'center',
           padding: '12px 14px',
           border: '1px dashed #d0d0d0',
           borderRadius: '8px',
         }}
       >
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#555' }}>Add section:</span>
-        <select
-          style={smallSelectStyle}
-          value={newType}
-          onChange={(e) => setNewType(e.target.value as PageBlockType)}
-          data-testid="page-blocks-type-select"
-        >
-          {PAGE_BLOCK_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {PAGE_BLOCK_LABELS[t]}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={addBlock}
-          data-testid="page-blocks-add-btn"
+        <span style={{ fontSize: '13px', fontWeight: 600, color: '#555', display: 'block', marginBottom: '10px' }}>
+          Add a section:
+        </span>
+        <div
           style={{
-            padding: '8px 16px',
-            backgroundColor: '#111',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+            gap: '8px',
           }}
         >
-          + Add section
-        </button>
+          {PAGE_BLOCK_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => addBlock(t)}
+              data-testid={`page-blocks-add-${t}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '10px 8px',
+                border: '1px solid #e0e0e0',
+                borderRadius: '8px',
+                backgroundColor: '#fff',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#333',
+              }}
+            >
+              <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">
+                {PAGE_BLOCK_ICONS[t]}
+              </span>
+              {PAGE_BLOCK_LABELS[t]}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

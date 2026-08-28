@@ -69,6 +69,60 @@ describe('PageBlocks', () => {
     expect(container.textContent).toContain('Right col');
   });
 
+  it('renders quote text and attribution as text (not html)', () => {
+    const { container } = render(
+      <PageBlocks blocks={[b('a', 'quote', { text: 'Great service.', attribution: 'Dana, owner' })]} />,
+    );
+    const bq = container.querySelector('blockquote');
+    expect(bq).not.toBeNull();
+    expect(bq?.textContent).toContain('Great service.');
+    expect(bq?.textContent).toContain('Dana, owner');
+    // The attribution is a <footer>, not an <h*> or script.
+    expect(bq?.querySelector('footer')?.textContent).toContain('Dana, owner');
+  });
+
+  it('renders a quote without attribution when it is empty', () => {
+    const { container } = render(
+      <PageBlocks blocks={[b('a', 'quote', { text: 'Just words.' })]} />,
+    );
+    expect(container.querySelector('blockquote')?.querySelector('footer')).toBeNull();
+  });
+
+  it('renders a gallery of images with captions, skipping empty urls', () => {
+    const { container } = render(
+      <PageBlocks
+        blocks={[
+          b('a', 'gallery', {
+            images: [
+              { url: '/one.jpg', caption: 'One' },
+              { url: '', caption: 'no url, skipped' },
+              { url: '/three.jpg', caption: 'Three' },
+            ],
+          }),
+        ]}
+      />,
+    );
+    const imgs = container.querySelectorAll('img');
+    expect(imgs).toHaveLength(2);
+    expect(imgs[0].getAttribute('src')).toBe('/one.jpg');
+    expect(imgs[1].getAttribute('src')).toBe('/three.jpg');
+    const figcaps = Array.from(container.querySelectorAll('figcaption')).map((f) => f.textContent);
+    expect(figcaps).toEqual(['One', 'Three']);
+  });
+
+  it('caps a gallery at four images', () => {
+    const five = Array.from({ length: 5 }, (_, i) => ({ url: `/x${i}.jpg`, caption: `${i}` }));
+    const { container } = render(<PageBlocks blocks={[b('a', 'gallery', { images: five })]} />);
+    expect(container.querySelectorAll('img')).toHaveLength(4);
+  });
+
+  it('renders nothing for a gallery with no usable images', () => {
+    const { container } = render(
+      <PageBlocks blocks={[b('a', 'gallery', { images: [{ url: '', caption: '' }] })]} />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+  });
+
   it('renders a cta link with its label and href', () => {
     const { container } = render(
       <PageBlocks blocks={[b('a', 'cta', { label: 'Contact us', href: '/contact', variant: 'outline' })]} />,

@@ -13,7 +13,11 @@ import {
   blocksFromLegacyContent,
   blocksToLegacyContent,
   newBlockId,
+  newBlock,
+  defaultBlockConfig,
   PAGE_BLOCK_TYPES,
+  PAGE_BLOCK_LABELS,
+  PAGE_BLOCK_ICONS,
   type PageBlock,
 } from './pageBlocks';
 
@@ -134,9 +138,25 @@ describe('blocksToLegacyContent', () => {
     expect(out).toContain('&lt;script&gt;');
   });
 
-  it('ignores structural-only blocks (image, divider, spacer, columns)', () => {
+  it('renders quotes as blockquote equivalents with attribution', () => {
+    const out = blocksToLegacyContent([
+      block('quote', { text: 'Great service.', attribution: 'Dana, owner' }),
+    ]);
+    expect(out).toBe('<blockquote>Great service. — Dana, owner</blockquote>');
+  });
+
+  it('escapes quote text and attribution', () => {
+    const out = blocksToLegacyContent([
+      block('quote', { text: '5 <script>', attribution: 'a<b' }),
+    ]);
+    expect(out).not.toContain('<script>');
+    expect(out).not.toContain('a<b');
+  });
+
+  it('ignores structural-only blocks (image, gallery, divider, spacer, columns)', () => {
     const out = blocksToLegacyContent([
       block('image', { url: 'x.jpg' }),
+      block('gallery', { images: [{ url: 'x.jpg', caption: 'c' }] }),
       block('divider', {}),
       block('spacer', { size: 'lg' }),
       block('columns', { left: '<p>a</p>', right: '<p>b</p>' }),
@@ -161,7 +181,42 @@ describe('newBlockId', () => {
 describe('PAGE_BLOCK_TYPES', () => {
   it('covers the documented block set', () => {
     expect(PAGE_BLOCK_TYPES.sort()).toEqual(
-      ['callout', 'columns', 'cta', 'divider', 'heading', 'image', 'richText', 'spacer'].sort(),
+      [
+        'callout', 'columns', 'cta', 'divider', 'gallery', 'heading',
+        'image', 'quote', 'richText', 'spacer',
+      ].sort(),
     );
+  });
+
+  it('has a label and an icon for every type (the picker renders both)', () => {
+    for (const t of PAGE_BLOCK_TYPES) {
+      expect(PAGE_BLOCK_LABELS[t]).toBeTruthy();
+      expect(PAGE_BLOCK_ICONS[t]).toBeTruthy();
+    }
+  });
+});
+
+describe('defaultBlockConfig / newBlock', () => {
+  it('gives content blocks visible starter content', () => {
+    expect(defaultBlockConfig('heading').text).toBeTruthy();
+    expect(defaultBlockConfig('callout').text).toBeTruthy();
+    expect(defaultBlockConfig('quote').text).toBeTruthy();
+    expect(defaultBlockConfig('cta').label).toBe('Learn more');
+    expect(defaultBlockConfig('cta').href).toBe('/contact');
+    expect(defaultBlockConfig('gallery')).toEqual({
+      images: [{ url: '', caption: '' }, { url: '', caption: '' }],
+    });
+    expect(defaultBlockConfig('columns').left).toBeTruthy();
+    expect(defaultBlockConfig('divider')).toEqual({});
+  });
+
+  it('produces well-formed blocks with unique ids', () => {
+    const a = newBlock('callout');
+    const b = newBlock('callout');
+    expect(a.id).not.toBe(b.id);
+    expect(a.type).toBe('callout');
+    // The id round-trips through parse/serialize (40-char cap).
+    expect(a.id.length).toBeLessThanOrEqual(40);
+    expect(parsePageBlocks(serializePageBlocks([a]))).toEqual([a]);
   });
 });

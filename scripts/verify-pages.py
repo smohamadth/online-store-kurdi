@@ -21,6 +21,7 @@ repeatable.
 """
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -439,14 +440,23 @@ try:
         page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         page_ui.wait_for_timeout(300)
 
-        # Layout blocks: compose a section in the block editor. The
+        # Layout blocks: compose sections in the block editor. The
         # template draft loads as one rich-text section; add a callout
-        # and confirm it reaches the storefront after publish.
-        page_ui.get_by_test_id("page-blocks-type-select").select_option("callout")
-        page_ui.get_by_test_id("page-blocks-add-btn").click()
+        # and a quote, duplicate the callout, and confirm all of it
+        # reaches the storefront after publish.
+        page_ui.get_by_test_id("page-blocks-add-callout").click()
         page_ui.wait_for_timeout(500)
         page_ui.locator('[data-block-type="callout"]') \
                 .locator('[data-testid$="-text"]').fill("UI block note: free returns")
+        page_ui.wait_for_timeout(300)
+        page_ui.get_by_test_id("page-blocks-add-quote").click()
+        page_ui.wait_for_timeout(300)
+        page_ui.locator('[data-block-type="quote"]') \
+                .locator('[data-testid$="-text"]').fill("UI quote: trusted since 2020")
+        page_ui.wait_for_timeout(300)
+        # Duplicate the callout - the copy lands directly below it.
+        page_ui.locator('[data-block-type="callout"]').first \
+                .get_by_test_id(re.compile(r"^page-block-duplicate-")).click()
         page_ui.wait_for_timeout(300)
 
         # The new flow creates DRAFTS. Ticking Publish is part of the
@@ -473,6 +483,14 @@ try:
             check("the new page renders its title", "UI Made Page" in body)
             check("the new page renders its layout block",
                   "UI block note: free returns" in body)
+            # body is raw HTML, so the text also occurs in the
+            # __NEXT_DATA__ hydration payload - count the rendered
+            # callout elements instead (the renderer marks them role=note).
+            note_count = body.count('role="note"')
+            check("the duplicated callout renders twice",
+                  note_count == 2, f"callouts={note_count}")
+            check("the quote section renders",
+                  "UI quote: trusted since 2020" in body)
 
         # a duplicate slug must surface the server error, not a fake success
         page_ui.get_by_test_id("admin-pages-new").click()

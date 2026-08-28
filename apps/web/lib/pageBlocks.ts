@@ -21,6 +21,8 @@ export type PageBlockType =
   | 'image'
   | 'columns'
   | 'callout'
+  | 'quote'
+  | 'gallery'
   | 'cta'
   | 'divider'
   | 'spacer';
@@ -39,6 +41,8 @@ export const PAGE_BLOCK_TYPES: PageBlockType[] = [
   'image',
   'columns',
   'callout',
+  'quote',
+  'gallery',
   'cta',
   'divider',
   'spacer',
@@ -50,10 +54,62 @@ export const PAGE_BLOCK_LABELS: Record<PageBlockType, string> = {
   image: 'Image',
   columns: 'Two columns',
   callout: 'Callout box',
+  quote: 'Quote',
+  gallery: 'Image gallery',
   cta: 'Button',
   divider: 'Divider',
   spacer: 'Spacer',
 };
+
+/** Icon per block type - the visual add-picker and (optionally) tooling. */
+export const PAGE_BLOCK_ICONS: Record<PageBlockType, string> = {
+  richText: '📝',
+  heading: '𝐇',
+  image: '🖼️',
+  columns: '◫',
+  callout: '💬',
+  quote: '❝',
+  gallery: '🗂️',
+  cta: '🎯',
+  divider: '➖',
+  spacer: '↕',
+};
+
+/**
+ * Starter content for a freshly added block, so a new section is
+ * immediately visible on the preview instead of an empty box the admin
+ * has to guess how to fill. (Same pattern as the home builder's
+ * defaultConfigFor.) Text is placeholder-ish on purpose - it says what
+ * belongs there.
+ */
+export function defaultBlockConfig(type: PageBlockType): Record<string, any> {
+  switch (type) {
+    case 'heading':
+      return { text: 'Section heading', level: 2 };
+    case 'callout':
+      return { text: 'A short note for your customers - for example a warranty or shipping reminder.', tone: 'info' };
+    case 'quote':
+      return { text: 'A short quote from a happy customer or the founder…', attribution: 'Name, title' };
+    case 'gallery':
+      return {
+        images: [
+          { url: '', caption: '' },
+          { url: '', caption: '' },
+        ],
+      };
+    case 'cta':
+      return { label: 'Learn more', href: '/contact', variant: 'primary' };
+    case 'columns':
+      return { left: '<p>Left column…</p>', right: '<p>Right column…</p>' };
+    default:
+      return {};
+  }
+}
+
+/** A new block of the given type, with its default config. */
+export function newBlock(type: PageBlockType = 'richText'): PageBlock {
+  return { id: newBlockId(), type, config: defaultBlockConfig(type) };
+}
 
 const KNOWN_TYPES = new Set<string>(PAGE_BLOCK_TYPES);
 
@@ -146,6 +202,13 @@ export function blocksToLegacyContent(blocks: PageBlock[] | null | undefined): s
       case 'callout':
         if (c.text) parts.push(`<p>${escapeHtml(String(c.text))}</p>`);
         break;
+      case 'quote': {
+        if (c.text) {
+          const who = c.attribution ? ` — ${escapeHtml(String(c.attribution))}` : '';
+          parts.push(`<blockquote>${escapeHtml(String(c.text))}${who}</blockquote>`);
+        }
+        break;
+      }
       case 'cta':
         if (c.label && c.href) {
           parts.push(`<p><a href="${escapeHtml(String(c.href))}">${escapeHtml(String(c.label))}</a></p>`);

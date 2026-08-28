@@ -92,6 +92,12 @@ export interface CmsEditorProps {
    * The replacement should include its own label.
    */
   contentSection?: React.ReactNode;
+  /**
+   * Show the Auto/LTR/RTL direction switch in the preview panel (pages
+   * only) - the admin shell is pinned LTR but the storefront renders
+   * RTL for Kurdish/Arabic readers, so the preview needs a manual switch.
+   */
+  previewDirToggle?: boolean;
   /** True if there are unsaved changes. */
   isDirty: boolean;
   /** Save-in-flight flag (drives the toolbar). */
@@ -118,6 +124,7 @@ export function CmsEditor(props: CmsEditorProps) {
     renderPreview,
     formatLivePath,
     contentSection,
+    previewDirToggle,
     isDirty,
     saving,
     formError,
@@ -127,6 +134,7 @@ export function CmsEditor(props: CmsEditorProps) {
   const router = useRouter();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [previewDir, setPreviewDir] = useState<'auto' | 'ltr' | 'rtl'>('auto');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -369,7 +377,12 @@ export function CmsEditor(props: CmsEditorProps) {
           contentSection={contentSection}
         />
       ) : (
-        <PreviewPanel livePath={livePath}>
+        <PreviewPanel
+          livePath={livePath}
+          showDirToggle={previewDirToggle}
+          dir={previewDir}
+          onDirChange={setPreviewDir}
+        >
           {renderPreview(values)}
         </PreviewPanel>
       )}
@@ -823,11 +836,38 @@ function livePathFor(
 // ----------------------------------------------------------------------------
 function PreviewPanel({
   livePath,
+  showDirToggle = false,
+  dir = 'auto',
+  onDirChange,
   children,
 }: {
   livePath: string;
+  /** Show the Auto/LTR/RTL direction switch (pages only). */
+  showDirToggle?: boolean;
+  dir?: 'auto' | 'ltr' | 'rtl';
+  onDirChange?: (d: 'auto' | 'ltr' | 'rtl') => void;
   children: React.ReactNode;
 }) {
+  const dirButton = (value: 'auto' | 'ltr' | 'rtl', label: string) => (
+    <button
+      key={value}
+      type="button"
+      onClick={() => onDirChange?.(value)}
+      data-testid={`cms-preview-dir-${value}`}
+      style={{
+        padding: '3px 10px',
+        fontSize: '11px',
+        fontWeight: 600,
+        borderRadius: '999px',
+        border: '1px solid var(--border, #d4d4d4)',
+        cursor: 'pointer',
+        backgroundColor: dir === value ? '#111' : '#fff',
+        color: dir === value ? '#fff' : 'var(--muted, #555)',
+      }}
+    >
+      {label}
+    </button>
+  );
   return (
     <div
       data-testid="cms-preview-panel"
@@ -845,11 +885,30 @@ function PreviewPanel({
           background: '#f5f5f5',
           color: 'var(--muted, #6b7280)',
           borderBottom: '1px solid var(--border, #e5e5e5)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
         }}
       >
-        Live URL: <code>{livePath}</code>
+        <span>
+          Live URL: <code>{livePath}</code>
+        </span>
+        {showDirToggle && (
+          // The admin shell is pinned LTR, but the storefront renders
+          // RTL for Kurdish/Arabic visitors - this switch previews the
+          // page the way the majority of its readers will see it.
+          <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', marginLeft: 'auto' }}>
+            <span style={{ fontSize: '11px' }}>Direction:</span>
+            {dirButton('auto', 'Auto (site)')}
+            {dirButton('ltr', 'LTR')}
+            {dirButton('rtl', 'RTL')}
+          </span>
+        )}
       </div>
-      <div style={{ padding: '32px 24px' }}>{children}</div>
+      <div dir={dir === 'auto' ? undefined : dir} style={{ padding: '32px 24px' }}>
+        {children}
+      </div>
     </div>
   );
 }

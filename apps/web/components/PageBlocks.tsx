@@ -150,6 +150,87 @@ export function PageBlocks({ blocks }: { blocks: PageBlock[] }) {
             );
           }
 
+          case 'quote': {
+            if (!b.config.text) return null;
+            return (
+              <blockquote
+                key={b.id}
+                style={{
+                  margin: '24px 0',
+                  padding: '8px 24px',
+                  borderInlineStart: '4px solid var(--brand, #111)',
+                  fontSize: '18px',
+                  fontStyle: 'italic',
+                  lineHeight: 1.6,
+                  color: 'var(--body-text, #111)',
+                }}
+              >
+                “{b.config.text}”
+                {b.config.attribution && (
+                  <footer
+                    style={{
+                      marginTop: '10px',
+                      fontSize: '13.5px',
+                      fontStyle: 'normal',
+                      color: 'var(--muted, #666)',
+                    }}
+                  >
+                    — {b.config.attribution}
+                  </footer>
+                )}
+              </blockquote>
+            );
+          }
+
+          case 'gallery': {
+            // Up to four images, each { url, caption }. Entries without a
+            // URL are skipped so a half-filled gallery still looks right.
+            const items = Array.isArray(b.config.images)
+              ? b.config.images.filter((im: any) => im && typeof im === 'object' && im.url).slice(0, 4)
+              : [];
+            if (items.length === 0) return null;
+            return (
+              <div
+                key={b.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '14px',
+                  margin: '24px 0',
+                }}
+              >
+                {items.map((im: any, i: number) => (
+                  <figure key={i} style={{ margin: 0 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={im.url}
+                      alt={im.alt || im.caption || ''}
+                      style={{
+                        width: '100%',
+                        display: 'block',
+                        borderRadius: '8px',
+                        aspectRatio: '4 / 3',
+                        objectFit: 'cover',
+                      }}
+                    />
+                    {im.caption && (
+                      <figcaption
+                        style={{
+                          fontSize: '12.5px',
+                          color: 'var(--muted, #666)',
+                          marginTop: '6px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {im.caption}
+                      </figcaption>
+                    )}
+                  </figure>
+                ))}
+              </div>
+            );
+          }
+
           case 'cta': {
             if (!b.config.label || !b.config.href) return null;
             const outline = b.config.variant === 'outline';

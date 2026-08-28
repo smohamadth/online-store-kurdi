@@ -194,6 +194,7 @@ export default function EditPagePage() {
     <CmsEditor
       kind="page"
       resourceId={id ?? null}
+      previewDirToggle
       backHref="/admin/pages"
       publicHref={
         values.status === 'published'
