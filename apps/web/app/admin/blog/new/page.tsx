@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authHttp, errorMessage } from '@/lib/http';
+import { slugifyWithFallback } from '@/lib/slug';
 
 /**
  * Admin → Blog → New.
@@ -21,8 +22,14 @@ export default function NewPostPage() {
     setCreating(true);
     setErr('');
     try {
+      // The create endpoint requires a title (min 1) and a valid slug.
+      // A bare title-derived slug ("new-post") would 409 the second time
+      // an admin picks this preset, so every draft gets a unique starting
+      // address the admin can rename freely in the editor.
+      const slug = `${slugifyWithFallback(preset.title, 'post')}-${Date.now().toString(36)}`;
       const res = await authHttp.post<{ id: string }>('/blog', {
-        title: preset.title,
+        title: preset.title || 'Untitled post',
+        slug,
         content: preset.content,
         status: 'draft',
       });

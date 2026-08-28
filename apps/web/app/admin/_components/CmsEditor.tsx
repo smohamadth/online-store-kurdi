@@ -167,8 +167,13 @@ export function CmsEditor(props: CmsEditorProps) {
       await onSave();
       discardAutosave();
       setSavedAt(new Date());
+      return true;
     } catch {
-      // Parent owns the error display; nothing to do here.
+      // Parent owns the error display; nothing to do here. The caller
+      // must NOT treat this as a success - a rejected save (e.g. a
+      // duplicate-slug 409) has to keep the admin on the editor so the
+      // server's reason stays visible.
+      return false;
     }
   }, [discardAutosave, onSave]);
 
@@ -185,8 +190,8 @@ export function CmsEditor(props: CmsEditorProps) {
 
       if (isMod && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        wrappedSave().then(() => {
-          if (e.shiftKey) router.push(backHref);
+        wrappedSave().then((ok) => {
+          if (ok && e.shiftKey) router.push(backHref);
         });
         return;
       }
@@ -269,7 +274,7 @@ export function CmsEditor(props: CmsEditorProps) {
         )}
         <button
           type="button"
-          onClick={() => wrappedSave().then(() => router.push(backHref))}
+          onClick={() => wrappedSave().then((ok) => { if (ok) router.push(backHref); })}
           disabled={saving || !isDirty}
           data-testid="cms-save-and-close"
           style={{

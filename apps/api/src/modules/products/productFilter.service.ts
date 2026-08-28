@@ -445,11 +445,11 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
       values: {
         orderBy: { sortOrder: 'asc' },
         include: {
-          // The variantOptionValue rows are the join between a
+          // The VariantOptionValue rows are the join between a
           // Variant and an OptionValue. We need the count of
           // DISTINCT products that have a variant pointing at this
           // option value (under the current filter).
-          variantOptionValues: {
+          variantValues: {
             where: { variant: { isActive: true, product: { ...candidate('optionValueId'), status: 'active' } } },
             select: { variant: { select: { productId: true } } },
           },
@@ -467,7 +467,7 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     const bucket = optionTally.get(o.name)!;
     for (const v of o.values) {
       const products = new Set<string>();
-      for (const vv of v.variantOptionValues) {
+      for (const vv of v.variantValues) {
         if (vv.variant?.productId) products.add(vv.variant.productId);
       }
       const existing = bucket.values.get(v.value);

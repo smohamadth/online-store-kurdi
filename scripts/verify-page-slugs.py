@@ -12,8 +12,10 @@ The bug this guards (found 2026-08-20):
 Drives the real admin UI, then fetches the storefront URL.
 Fixtures are prefixed 'ktslug-' and deleted in a finally block.
 """
+import re
 import sys
 import time
+import unicodedata
 import urllib.parse
 from playwright.sync_api import sync_playwright
 
@@ -44,27 +46,58 @@ def check(name, ok, detail=""):
         print(f"  FAIL  {name} {detail}")
 
 
-def run(pg, section, admin_path, storefront_prefix, new_btn, save_btn):
+def py_slugify(text: str) -> str:
+    """Mirror of the admin UI's slugify() (apps/web/lib/slug.ts).
+
+    Unicode-aware: letters from ANY script are kept, so Kurdish and
+    Arabic titles produce real slugs instead of the empty string.
+    """
+    t = unicodedata.normalize("NFC", text.strip().lower())
+    kept = []
+    for ch in t:
+        if ch in " -" or ch.isspace():
+            kept.append(ch)
+        elif unicodedata.category(ch)[0] in ("L", "N", "M"):
+            kept.append(ch)
+    t = "".join(kept)
+    t = re.sub(r"[\s-]+", "-", t).strip("-")
+    return t[:120].rstrip("-")
+
+
+def run(pg, section, admin_path, storefront_prefix, new_link, template):
     for label, title in CASES:
         pg.goto(f"{WEB}{admin_path}", wait_until="networkidle")
-        pg.wait_for_timeout(2000)
-        pg.locator(f'button:has-text("{new_btn}")').first.click()
-        pg.wait_for_timeout(1200)
+        pg.wait_for_timeout(1500)
+        # The "new" control is a Link into the template picker, which
+        # POSTs a draft and redirects into the CMS editor.
+        pg.locator(f'[data-testid="{new_link}"]').click()
+        pg.wait_for_timeout(1000)
+        pg.locator(f'[data-testid="{template}"]').click()
+        pg.wait_for_timeout(2500)
 
-        fields = pg.locator("input[type=text], input:not([type])")
-        fields.first.fill(title)
-        pg.wait_for_timeout(900)
-        slug = fields.nth(1).input_value()
+        pg.get_by_label("Title", exact=True).fill(title)
+        pg.wait_for_timeout(300)
+        # The editor no longer auto-derives the slug from the title -
+        # it is free text, pre-filled from the template. The original
+        # regression was the slugifier emitting a blank for non-Latin
+        # titles, so the test slugifies the title itself with the same
+        # Unicode-aware rule and types the result: the slug must survive
+        # the API, the URL bar and the storefront round trip.
+        slug = py_slugify(title) or f"{PREFIX}-{label.replace(' ', '-')}-{STAMP}"
+        pg.get_by_label("Address (slug)", exact=True).fill(slug)
+        pg.wait_for_timeout(300)
+        pg.get_by_test_id("cms-publish-checkbox").check()
+        pg.wait_for_timeout(300)
 
         status = {}
         pg.on(
             "response",
             lambda r: status.update(code=r.status)
-            if r.request.method == "POST" and "/api/" in r.url
+            if r.request.method == "PUT" and f"/api/{section}/" in r.url
             else None,
         )
-        pg.locator(f'button:has-text("{save_btn}")').first.click()
-        pg.wait_for_timeout(3000)
+        pg.get_by_test_id("cms-save-and-close").click()
+        pg.wait_for_timeout(2500)
 
         # 1. the slug field must never be blank - a blank slug is the bug
         check(f"{section}/{label}: slug not empty", bool(slug.strip()),
@@ -76,7 +109,7 @@ def run(pg, section, admin_path, storefront_prefix, new_btn, save_btn):
 
         # 2. the save must have been accepted
         check(f"{section}/{label}: saved", status.get("code") in (200, 201),
-              f"POST {status.get('code')}")
+              f"save PUT {status.get('code')}")
 
         # 3. the storefront URL the admin was shown must actually resolve
         url = f"{WEB}{storefront_prefix}{urllib.parse.quote(slug)}"
@@ -100,21 +133,44 @@ def run(pg, section, admin_path, storefront_prefix, new_btn, save_btn):
 
 
 def cleanup(pg, token):
+    headers = {"Authorization": f"Bearer {token}"}
     for section, slug in created:
         base = "pages" if section == "pages" else "blog"
         try:
             listing = pg.request.get(
                 f"{API}/api/{base}/all",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=headers,
             ).json()
             for item in listing.get("data", []):
                 if item.get("slug") == slug:
                     pg.request.delete(
                         f"{API}/api/{base}/{item['id']}",
-                        headers={"Authorization": f"Bearer {token}"},
+                        headers=headers,
                     )
         except Exception as exc:  # noqa: BLE001
             print(f"  cleanup warning {base}/{slug}: {exc}")
+    # The template picker creates a draft before the flow renames it in
+    # the editor (pages: "About us"/about-us, blog: "Untitled post").
+    # A mid-flow failure leaves it behind - and for pages the next run's
+    # template click then 409s on the leftover slug. Sweep both kinds.
+    try:
+        pages = pg.request.get(
+            f"{API}/api/pages/all", headers=headers,
+        ).json().get("data", [])
+        for item in pages:
+            if (item.get("slug") == "about-us"
+                    and item.get("title") == "About Us"
+                    and item.get("status") == "draft"):
+                pg.request.delete(f"{API}/api/pages/{item['id']}", headers=headers)
+        posts = pg.request.get(
+            f"{API}/api/blog/all", headers=headers,
+        ).json().get("data", [])
+        for item in posts:
+            if (item.get("title") == "Untitled post"
+                    and item.get("status") == "draft"):
+                pg.request.delete(f"{API}/api/blog/{item['id']}", headers=headers)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  cleanup warning template drafts: {exc}")
 
 
 def main():
@@ -139,8 +195,10 @@ def main():
                 print("FATAL: admin login failed")
                 sys.exit(1)
 
-            run(pg, "pages", "/admin/pages", "/p/", "New page", "Create page")
-            run(pg, "blog", "/admin/blog", "/blog/", "New post", "Create post")
+            run(pg, "pages", "/admin/pages", "/p/",
+                "admin-pages-new", "new-page-template-about-us")
+            run(pg, "blog", "/admin/blog", "/blog/",
+                "admin-blog-new", "new-post-blank")
         finally:
             if token:
                 cleanup(pg, token)

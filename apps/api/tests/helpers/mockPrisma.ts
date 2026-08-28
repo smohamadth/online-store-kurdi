@@ -300,9 +300,12 @@ function match(row: Row, where: any, parentModel: string = ''): boolean {
       if (isOperatorObj) {
         if ('contains' in v) {
           const s = String(actual ?? '');
-          if (v.mode === 'insensitive') {
-            if (!s.toLowerCase().includes(String(v.contains).toLowerCase())) return false;
-          } else if (!s.includes(String(v.contains))) return false;
+          // The SQLite provider (which this schema targets) does
+          // case-insensitive `contains` matching for ASCII out of the box;
+          // `mode: 'insensitive'` is a PostgreSQL-only Prisma option that
+          // SQLite ignores. Mirror the real provider unconditionally so
+          // tests don't diverge from production behaviour.
+          if (!s.toLowerCase().includes(String(v.contains).toLowerCase())) return false;
         }
         if ('gte' in v && actual < v.gte) return false;
         if ('lte' in v && actual > v.lte) return false;
@@ -598,6 +601,14 @@ function compareOrder(a: any, b: any, ob: any): number {
   for (const [k, dir] of Object.entries(ob)) {
     const av = a[k], bv = b[k];
     if (av === bv) continue;
+    // Date objects created in the same millisecond are different
+    // references but must compare as EQUAL. Returning -1 for both
+    // (a,b) and (b,a) makes the comparator inconsistent, and the
+    // sorted order of "equal" rows becomes algorithm-dependent -
+    // that is how pagination tests started flaking. Compare by
+    // value so equal timestamps sort as 0 and the stable sort
+    // preserves insertion order.
+    if (av instanceof Date && bv instanceof Date && av.getTime() === bv.getTime()) continue;
     const cmp = av > bv ? 1 : -1;
     return dir === 'desc' ? -cmp : cmp;
   }

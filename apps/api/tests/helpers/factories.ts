@@ -74,12 +74,15 @@ export async function createProduct(overrides: Partial<{
   downloadUrl: string | null;
   downloadLimit: number | null;
   downloadExpiry: number | null;
+  /** Tests that assert on ordering can pin an explicit timestamp. */
+  createdAt?: Date;
 }> = {}) {
   const p = await prisma();
   const slug = overrides.slug ?? uniq('p');
   return p.product.create({
     data: {
       name: overrides.name ?? slug,
+      createdAt: overrides.createdAt ?? undefined,
       slug,
       description: overrides.description ?? 'A test product',
       shortDescription: 'short',

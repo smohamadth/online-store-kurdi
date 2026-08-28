@@ -452,7 +452,13 @@ export default function AdminLayout({
       dir="ltr"
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        // `height`, not `minHeight`: with minHeight the shell grew to the
+        // content (the dashboard is ~1080px tall), so on any shorter
+        // viewport the WHOLE page scrolled - rail included - instead of
+        // just the main column. Pinned to the viewport, the main area's
+        // `overflow: auto` does the scrolling and the rail stays exactly
+        // viewport-tall (verify-admin-rail.py checks this).
+        height: '100vh',
         flexDirection: 'column',
         overflow: 'hidden',
         backgroundColor: '#f5f5f7',
@@ -500,7 +506,11 @@ export default function AdminLayout({
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, alignItems: 'stretch' }}>
+      {/* minHeight: 0 lets this row shrink to the shell's height.
+          Without it the row's automatic minimum size is the content
+          height (~1080px for the dashboard), so it overgrew the
+          100vh shell and the whole rail + main column overflowed it. */}
+      <div style={{ display: 'flex', flex: 1, alignItems: 'stretch', minHeight: 0 }}>
         {/* Sidebar - always visible on desktop, slide-out on mobile */}
         {!isMobile ? (
           <div style={{

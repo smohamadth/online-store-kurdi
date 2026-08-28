@@ -66,16 +66,25 @@ export class ProductService {
           downloadExpiry: data.downloadExpiry,
           weight: data.weight,
           weightUnit: data.weightUnit,
-          dimensions: data.dimensions,
+          // SQLite schema stores these as JSON strings.
+          dimensions: data.dimensions ? JSON.stringify(data.dimensions) : undefined,
           categoryId: data.categoryId,
           metaTitle: data.metaTitle,
           metaDescription: data.metaDescription,
-          metaKeywords: data.metaKeywords,
+          metaKeywords: JSON.stringify(data.metaKeywords),
           images: {
             create: data.images,
           },
           variants: {
-            create: data.variants,
+            // attributes is stored as a JSON string on the SQLite schema.
+            create: data.variants.map((v) => ({
+              name: v.name,
+              sku: v.sku,
+              price: v.price,
+              quantity: v.quantity,
+              attributes: JSON.stringify(v.attributes),
+              isActive: v.isActive,
+            })),
           },
         },
         include: {
@@ -194,10 +203,12 @@ export class ProductService {
         ...(maxPrice && { price: { ...((minPrice && { gte: minPrice }) || {}), lte: maxPrice } }),
         ...(inStock && { quantity: { gt: 0 } }),
         ...(search && {
+          // No `mode: 'insensitive'`: the SQLite provider rejects it
+          // (PostgreSQL-only). Matching is case-sensitive here.
           OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { description: { contains: search, mode: 'insensitive' } },
-            { sku: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search } },
+            { description: { contains: search } },
+            { sku: { contains: search } },
           ],
         }),
       };
@@ -299,10 +310,34 @@ export class ProductService {
       }
 
       // Update product
+      // Explicit field mapping (not `...data`): the DTO carries objects
+      // and arrays (dimensions, metaKeywords, images, variants) that the
+      // SQLite schema stores as JSON strings / relation writes.
       const product = await this.prisma.product.update({
         where: { id },
         data: {
-          ...data,
+          name: data.name,
+          description: data.description,
+          shortDescription: data.shortDescription,
+          sku: data.sku,
+          type: data.type,
+          status: data.status,
+          price: data.price,
+          compareAtPrice: data.compareAtPrice,
+          costPrice: data.costPrice,
+          trackInventory: data.trackInventory,
+          quantity: data.quantity,
+          lowStockThreshold: data.lowStockThreshold,
+          downloadUrl: data.downloadUrl,
+          downloadLimit: data.downloadLimit,
+          downloadExpiry: data.downloadExpiry,
+          weight: data.weight,
+          weightUnit: data.weightUnit,
+          dimensions: data.dimensions ? JSON.stringify(data.dimensions) : undefined,
+          categoryId: data.categoryId,
+          metaTitle: data.metaTitle,
+          metaDescription: data.metaDescription,
+          metaKeywords: data.metaKeywords ? JSON.stringify(data.metaKeywords) : undefined,
           slug: data.slug || (data.name ? slugify(data.name, { lower: true, strict: true }) : undefined),
         },
         include: {
@@ -439,10 +474,11 @@ export class ProductService {
       const products = await this.prisma.product.findMany({
         where: {
           status: 'active',
+          // SQLite provider: `mode` is not supported (case-sensitive).
           OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
-            { sku: { contains: query, mode: 'insensitive' } },
+            { name: { contains: query } },
+            { description: { contains: query } },
+            { sku: { contains: query } },
           ],
         },
         include: {

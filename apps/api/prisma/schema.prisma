@@ -565,6 +565,11 @@ model ProductDownload {
   // Per-token usage counter. The global product-level counter on
   // OrderItem tracks the legacy single-URL flow.
   downloadCount Int       @default(0)
+  // Max redemptions for THIS token. Snapshot of the product's
+  // downloadLimit at order-placement time (same pattern as
+  // sourceUrl) so changing the product later doesn't alter what
+  // the customer already bought. Null = unlimited.
+  downloadLimit Int?
   // The product's per-purchase URL template. We snapshot it at
   // order-placement time so changing the product later doesn't
   // invalidate the customer's existing downloads.

@@ -267,13 +267,14 @@ router.get('/search', async (req, res, next) => {
       });
     }
 
+    // No `mode: 'insensitive'`: SQLite provider rejects it.
     const products = await prisma.product.findMany({
       where: {
         status: 'active',
         OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { description: { contains: q, mode: 'insensitive' } },
-          { sku: { contains: q, mode: 'insensitive' } },
+          { name: { contains: q } },
+          { description: { contains: q } },
+          { sku: { contains: q } },
         ],
       },
       include: {
@@ -512,11 +513,36 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
     // Extract images and variants from data (handle separately)
     const { images, variants, ...productData } = data;
 
-    // Update product
+    // Update product. Explicit field mapping (not `...productData`):
+    // the DTO carries objects/arrays (dimensions, metaKeywords) that
+    // the SQLite schema stores as JSON strings.
     const product = await prisma.product.update({
       where: { id },
       data: {
-        ...productData,
+        name: productData.name,
+        shortDescription: productData.shortDescription,
+        sku: productData.sku,
+        type: productData.type,
+        status: productData.status,
+        price: productData.price,
+        compareAtPrice: productData.compareAtPrice,
+        costPrice: productData.costPrice,
+        trackInventory: productData.trackInventory,
+        quantity: productData.quantity,
+        lowStockThreshold: productData.lowStockThreshold,
+        downloadUrl: productData.downloadUrl,
+        downloadLimit: productData.downloadLimit,
+        downloadExpiry: productData.downloadExpiry,
+        weight: productData.weight,
+        weightUnit: productData.weightUnit,
+        dimensions: productData.dimensions ? JSON.stringify(productData.dimensions) : undefined,
+        // categoryId is NOT NULL in the schema: null/undefined keeps the
+        // existing category (same "leave as-is" rule as the other
+        // non-nullable columns below).
+        categoryId: productData.categoryId ?? undefined,
+        metaTitle: productData.metaTitle,
+        metaDescription: productData.metaDescription,
+        metaKeywords: productData.metaKeywords ? JSON.stringify(productData.metaKeywords) : undefined,
         ...(productData.description !== undefined
           ? { description: sanitizeDescription(productData.description as string) }
           : {}),

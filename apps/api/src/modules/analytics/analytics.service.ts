@@ -38,7 +38,8 @@ export class AnalyticsService {
           productId: event.productId || null,
           categoryId: event.categoryId || null,
           searchQuery: event.searchQuery || null,
-          metadata: event.metadata || {},
+          // SQLite stores the metadata as a JSON string.
+          metadata: JSON.stringify(event.metadata || {}),
           timestamp: event.timestamp || new Date(),
           userAgent: event.userAgent || null,
           ipAddress: event.ipAddress || null,
@@ -82,7 +83,8 @@ export class AnalyticsService {
           productId: event.productId || null,
           categoryId: event.categoryId || null,
           searchQuery: event.searchQuery || null,
-          metadata: event.metadata || {},
+          // SQLite stores the metadata as a JSON string.
+          metadata: JSON.stringify(event.metadata || {}),
           timestamp: event.timestamp || new Date(),
           userAgent: event.userAgent || null,
           ipAddress: event.ipAddress || null,

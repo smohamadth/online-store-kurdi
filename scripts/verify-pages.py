@@ -421,7 +421,9 @@ try:
         # section exists for - an admin's page 404'ing when visited - is now
         # tested as: created through the editor, published from the editor,
         # live on the storefront.
-        page_ui.get_by_role("button", name="+ New page").click()
+        # The "+ New page" control is a <Link> (role "link"), not a button -
+        # a role-based locator for "button" never resolves and times out.
+        page_ui.get_by_test_id("admin-pages-new").click()
         page_ui.wait_for_timeout(1500)
         # Picking a template POSTs a draft and redirects into the editor.
         # (The "About us" template: pageType "info", so the live URL is
@@ -461,7 +463,7 @@ try:
             check("the new page renders its title", "UI Made Page" in body)
 
         # a duplicate slug must surface the server error, not a fake success
-        page_ui.get_by_role("button", name="+ New page").click()
+        page_ui.get_by_test_id("admin-pages-new").click()
         page_ui.wait_for_timeout(1500)
         page_ui.get_by_test_id("new-page-template-about-us").click()
         page_ui.wait_for_timeout(2500)
@@ -501,7 +503,10 @@ finally:
     # or the next run's template click 409s on the leftover slug.
     template_leftovers = [
         p for p in everything.get("data", [])
-        if p["slug"] == "about-us" and p["status"] == "draft" and p["title"] == "About us"
+        # The template's title is "About Us" (capital U) - match it
+        # exactly or interrupted runs leave drafts that 409 the next
+        # run's template click.
+        if p["slug"] == "about-us" and p["status"] == "draft" and p["title"] == "About Us"
     ]
     for p in template_leftovers:
         call("DELETE", f"/pages/{p['id']}", admin)

@@ -260,15 +260,16 @@ export function buildProductWhere(args: BuildWhereArgs) {
   // The post-filter in `listProducts` does the real work.
   void args;
 
-  // Free-text: case-insensitive contains on name, description, sku, and
-  // tags (from metaKeywords JSON).
+  // Free-text: contains on name, description, sku, and
+  // tags (from metaKeywords JSON). No `mode: 'insensitive'` - the
+  // SQLite provider rejects it (case-sensitive matching instead).
   if (args.search && args.search.trim()) {
     const q = args.search.trim();
     where.OR = [
-      { name: { contains: q, mode: 'insensitive' } },
-      { description: { contains: q, mode: 'insensitive' } },
-      { sku: { contains: q, mode: 'insensitive' } },
-      { metaKeywords: { contains: q, mode: 'insensitive' } },
+      { name: { contains: q } },
+      { description: { contains: q } },
+      { sku: { contains: q } },
+      { metaKeywords: { contains: q } },
     ];
   }
 

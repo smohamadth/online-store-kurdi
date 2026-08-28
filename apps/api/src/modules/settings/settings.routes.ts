@@ -3,6 +3,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { sendEmail, isEmailConfigured } from '../../services/email.service';
 import { isStripeConfigured } from '../../config/stripe';
 
@@ -81,17 +82,50 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Columns that are NOT NULL in the DB (defaults, no `?` in the schema).
+// The admin form round-trips null for unset values; writing null into a
+// NOT NULL column is a type error, and there is no meaningful "clear"
+// for these, so null/'' on them means "leave the current value".
+// Nullable columns DO accept null (that clears the field).
+const NOT_NULL_SETTINGS = new Set([
+  'storeName', 'storeEmail', 'storeCountry',
+  'currency', 'currencySymbol', 'currencyPosition', 'enabledCurrencies',
+  'weightUnit', 'dimensionUnit', 'timezone', 'dateFormat',
+  'maintenanceMode',
+]);
+
+// Intersecting the create and update inputs leaves only plain scalar
+// fields (no `set:`-style update operations), so the result is valid
+// for BOTH sides of the upsert.
+type SettingsWriteInput = Prisma.StoreSettingsCreateInput &
+  Prisma.StoreSettingsUpdateInput;
+
+function toSettingsData(row: z.infer<typeof settingsSchema>): SettingsWriteInput {
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value === undefined) continue;
+    if (value === '' || value === null) {
+      if (!NOT_NULL_SETTINGS.has(key)) data[key] = null;
+      continue;
+    }
+    data[key] = value;
+  }
+  // The filter above guarantees no null lands on a NOT NULL column.
+  return data as SettingsWriteInput;
+}
+
 // PUT /api/settings - Update store settings (admin only)
 router.put('/', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const validatedData = settingsSchema.parse(req.body);
+    const settingsData = toSettingsData(validatedData);
 
     const settings = await prisma.storeSettings.upsert({
       where: { id: 'default' },
-      update: validatedData,
+      update: settingsData,
       create: {
         id: 'default',
-        ...validatedData,
+        ...settingsData,
       },
     });
 

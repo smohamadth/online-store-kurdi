@@ -353,7 +353,8 @@ export class RecommendationService {
           sessionId,
           recommendationType,
           algorithmVersion,
-          products: [productId],
+          // JSON array of product IDs (SQLite stores it as a string).
+          products: JSON.stringify([productId]),
           clicked: true,
           timestamp: new Date(),
         },
@@ -379,7 +380,8 @@ export class RecommendationService {
           sessionId,
           recommendationType,
           algorithmVersion: 'v1',
-          products: [productId],
+          // JSON array of product IDs (SQLite stores it as a string).
+          products: JSON.stringify([productId]),
           purchased: true,
           timestamp: new Date(),
         },
@@ -397,7 +399,10 @@ export class RecommendationService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const [totalClicks, totalPurchases, byType] = await Promise.all([
+      // Prisma cannot `_sum` boolean columns (clicked/purchased), so
+      // per-type clicks and purchases come from their own groupBy
+      // counts instead of an aggregate on the flag.
+      const [totalClicks, totalPurchases, byType, clicksByType, purchasesByType] = await Promise.all([
         this.prisma.recommendationLog.count({
           where: {
             clicked: true,
@@ -418,14 +423,34 @@ export class RecommendationService {
           _count: {
             id: true,
           },
-          _sum: {
+        }),
+        this.prisma.recommendationLog.groupBy({
+          by: ['recommendationType'],
+          where: {
+            timestamp: { gte: startDate },
             clicked: true,
+          },
+          _count: {
+            id: true,
+          },
+        }),
+        this.prisma.recommendationLog.groupBy({
+          by: ['recommendationType'],
+          where: {
+            timestamp: { gte: startDate },
             purchased: true,
+          },
+          _count: {
+            id: true,
           },
         }),
       ]);
 
       const conversionRate = totalClicks > 0 ? (totalPurchases / totalClicks) * 100 : 0;
+      const countForType = (
+        rows: Array<{ recommendationType: string; _count: { id: number } }>,
+        type: string,
+      ) => rows.find((r) => r.recommendationType === type)?._count.id ?? 0;
 
       return {
         period: `${days} days`,
@@ -435,8 +460,8 @@ export class RecommendationService {
         byType: byType.map(type => ({
           type: type.recommendationType,
           impressions: type._count.id,
-          clicks: type._sum.clicked || 0,
-          purchases: type._sum.purchased || 0,
+          clicks: countForType(clicksByType, type.recommendationType),
+          purchases: countForType(purchasesByType, type.recommendationType),
         })),
       };
     } catch (error) {
