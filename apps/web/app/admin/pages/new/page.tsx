@@ -110,8 +110,12 @@ export default function NewPagePage() {
           onClick={() =>
             start({
               name: 'Blank',
-              title: '',
-              slug: '',
+              // The create endpoint requires a title and a valid slug, so
+              // start from a placeholder the admin renames in the editor.
+              // (An empty title/slug 400s on write, which made this button
+              // look broken.)
+              title: 'Untitled page',
+              slug: `untitled-${Date.now().toString(36)}`,
               pageType: 'info',
               content: '<p></p>',
             })

@@ -412,35 +412,48 @@ try:
         page_ui.wait_for_timeout(2000)
         check("Pages screen lists the page", f"{PREFIX}hello" in page_ui.inner_text("body"))
 
-        # THE DEFAULT WORKFLOW - no boxes ticked.
+        # THE DEFAULT WORKFLOW - the template-picker flow.
         #
-        # This previously ticked "Published" before saving, which is why it
-        # never caught the real complaint: a page created the ordinary way
-        # (New page -> type a title -> Create) defaulted to DRAFT and then
-        # 404'd when the admin visited it. Testing my own assumption instead of
-        # the user's path made a broken flow look covered.
+        # Pre-merge this was a single form (New page -> type a title ->
+        # Create, slug auto-derived). The theme-system merge replaced it
+        # with two steps: pick a template (which immediately creates a
+        # DRAFT) then edit + publish in the CMS editor. The regression this
+        # section exists for - an admin's page 404'ing when visited - is now
+        # tested as: created through the editor, published from the editor,
+        # live on the storefront.
         page_ui.get_by_role("button", name="+ New page").click()
-        page_ui.wait_for_timeout(800)
-        page_ui.get_by_label("Title", exact=True).fill("UI Made Page")
-        page_ui.wait_for_timeout(300)
-
-        slug_val = page_ui.get_by_label("Address (slug)", exact=True).input_value()
-        check("slug auto-derives from the title", slug_val == "ui-made-page", slug_val)
-
-        page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
-        # Deliberately NOT touching the Published checkbox.
-        page_ui.get_by_role("button", name="Create page").click()
+        page_ui.wait_for_timeout(1500)
+        # Picking a template POSTs a draft and redirects into the editor.
+        # (The "About us" template: pageType "info", so the live URL is
+        # /info/<slug>; the legacy /p/<slug> route 301s there.)
+        page_ui.get_by_test_id("new-page-template-about-us").click()
         page_ui.wait_for_timeout(2500)
 
-        check("save confirmation names the live address",
-              f"/p/{PREFIX}ui" in page_ui.inner_text("body"))
+        # The template pre-fills title/slug; the admin overwrites both.
+        # (The new editor does NOT auto-derive the slug from the title -
+        # the slug field is free text, pre-filled from the template.)
+        page_ui.get_by_label("Title", exact=True).fill("UI Made Page")
+        page_ui.wait_for_timeout(300)
+        page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
+        page_ui.wait_for_timeout(300)
+
+        # The new flow creates DRAFTS. Ticking Publish is part of the
+        # default workflow now (the regression this suite exists for is a
+        # page the admin publishes still 404'ing on visit).
+        page_ui.get_by_test_id("cms-publish-checkbox").check()
+        page_ui.wait_for_timeout(300)
+        page_ui.get_by_test_id("cms-save-and-close").click()
+        page_ui.wait_for_timeout(2500)
+
+        check("save returns to the pages list with the new page",
+              "UI Made Page" in page_ui.inner_text("body"))
 
         st, all_pages = call("GET", "/pages/all", admin)
         made = [p for p in all_pages["data"] if p["slug"] == f"{PREFIX}ui"]
         check("page created through the UI reached the database", len(made) == 1)
         if made:
             created.append(made[0]["id"])
-            check("a page created the DEFAULT way is published",
+            check("a page PUBLISHED from the editor is published",
                   made[0]["status"] == "published", made[0]["status"])
             code, body = web_status(f"/p/{PREFIX}ui")
             check("visiting a newly created page returns 200, not 404",
@@ -449,14 +462,18 @@ try:
 
         # a duplicate slug must surface the server error, not a fake success
         page_ui.get_by_role("button", name="+ New page").click()
-        page_ui.wait_for_timeout(800)
+        page_ui.wait_for_timeout(1500)
+        page_ui.get_by_test_id("new-page-template-about-us").click()
+        page_ui.wait_for_timeout(2500)
         page_ui.get_by_label("Title", exact=True).fill("Duplicate")
         page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
-        page_ui.get_by_role("button", name="Create page").click()
+        page_ui.wait_for_timeout(300)
+        page_ui.get_by_test_id("cms-save-and-close").click()
         page_ui.wait_for_timeout(2500)
         check("duplicate slug shows the server's reason",
               "already exists" in page_ui.inner_text("body").lower())
-        page_ui.get_by_role("button", name="Cancel").click()
+        # Back out of the editor without saving.
+        page_ui.get_by_role("link", name="Back", exact=True).click()
         page_ui.wait_for_timeout(500)
 
         check("no console errors during normal use",
@@ -479,7 +496,16 @@ finally:
     leftovers = [p for p in everything.get("data", []) if p["slug"].startswith(PREFIX)]
     for p in leftovers:
         call("DELETE", f"/pages/{p['id']}", admin)
-    print(f"\n(cleanup: removed {len(set(created)) + len(leftovers)} fixture page(s))")
+    # The template picker creates a draft carrying the template's own slug
+    # ("about-us") before the flow renames it. Remove those leftovers too,
+    # or the next run's template click 409s on the leftover slug.
+    template_leftovers = [
+        p for p in everything.get("data", [])
+        if p["slug"] == "about-us" and p["status"] == "draft" and p["title"] == "About us"
+    ]
+    for p in template_leftovers:
+        call("DELETE", f"/pages/{p['id']}", admin)
+    print(f"\n(cleanup: removed {len(set(created)) + len(leftovers) + len(template_leftovers)} fixture page(s))")
 
 print()
 print(f"{sum(results)}/{len(results)} passed")

@@ -669,6 +669,38 @@ function EditPanel({ values, onChange, kind, isMobile }: EditPanelProps) {
         </div>
       )}
 
+      {/* Publish control. Pages/posts created from the template picker
+          start as drafts; without a status toggle here the admin had no
+          way to publish at all (the pre-merge form had a "Published"
+          checkbox this flow dropped). */}
+      <div style={{ marginTop: '14px' }}>
+        <label
+          style={{
+            ...labelStyle,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <input
+            type="checkbox"
+            data-testid="cms-publish-checkbox"
+            checked={values.status === 'published'}
+            onChange={(e) =>
+              onChange({
+                ...values,
+                status: e.target.checked ? 'published' : 'draft',
+              })
+            }
+          />
+          Publish — visible to customers
+        </label>
+        <p style={helpStyle}>
+          Unpublishing takes the page down immediately (visitors get a
+          404). Save to apply.
+        </p>
+      </div>
+
       <div style={{ marginTop: '14px' }}>
         <label style={labelStyle} htmlFor="cms-excerpt">
           Short summary (optional)
