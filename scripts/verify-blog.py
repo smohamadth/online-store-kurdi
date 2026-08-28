@@ -316,6 +316,19 @@ try:
 
         pg.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         pg.get_by_label("Tags", exact=True).fill("uitag")
+        # Layout blocks: the post editor uses the same block builder as
+        # the page CMS. Add a callout and a quote and confirm both reach
+        # the storefront after publish.
+        pg.get_by_test_id("page-blocks-add-callout").click()
+        pg.wait_for_timeout(300)
+        pg.locator('[data-block-type="callout"]') \
+                .locator('[data-testid$="-text"]').fill("Post block note: shipped from Baku")
+        pg.wait_for_timeout(300)
+        pg.get_by_test_id("page-blocks-add-quote").click()
+        pg.wait_for_timeout(300)
+        pg.locator('[data-block-type="quote"]') \
+                .locator('[data-testid$="-text"]').fill("Post quote: quality first")
+        pg.wait_for_timeout(300)
         pg.get_by_test_id("cms-publish-checkbox").check()
         pg.get_by_test_id("cms-save-and-close").click()
         pg.wait_for_timeout(2500)
@@ -327,8 +340,11 @@ try:
             created.append(made[0]["id"])
             check("UI post was published", made[0]["status"] == "published")
             check("UI tags were parsed", made[0]["tags"] == ["uitag"], str(made[0]["tags"]))
-            code, _ = web(f"/blog/{PREFIX}ui")
+            code, post_body = web(f"/blog/{PREFIX}ui")
             check("UI post is live on the storefront", code == 200, f"status={code}")
+            check("the post renders its layout blocks",
+                  "Post block note: shipped from Baku" in post_body
+                  and "Post quote: quality first" in post_body)
 
         # A rejected save must show the server's reason, not a fake success.
         pg.get_by_test_id("admin-blog-new").click()

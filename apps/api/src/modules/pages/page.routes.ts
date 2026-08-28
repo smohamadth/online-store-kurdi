@@ -4,6 +4,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
+import { serializeContentBlocks, withParsedBlocks } from '../../utils/contentBlocks';
 
 const router = Router();
 
@@ -113,54 +114,6 @@ const updateSchema = z.object({
 /** Nullable text fields that an admin must be able to CLEAR. */
 const NULLABLE = new Set(['excerpt', 'metaTitle', 'metaDescription', 'blocks']);
 
-/**
- * Sanitise the HTML fields of a block list, then serialise it to the
- * JSON string column. Block config carries the same kind of admin
- * markup as `content` (richText / two-column HTML), so it gets the
- * same on-write sanitisation - never store what the storefront might
- * dangerouslySetInnerHTML.
- */
-function serializeBlocks(blocks: unknown): string | null {
-  if (!Array.isArray(blocks) || blocks.length === 0) return null;
-  const cleaned = blocks
-    .map((b: any) => {
-      if (!b || typeof b !== 'object' || typeof b.id !== 'string' || typeof b.type !== 'string') {
-        return null;
-      }
-      const config: Record<string, any> = {
-        ...(b.config && typeof b.config === 'object' ? b.config : {}),
-      };
-      if (b.type === 'richText' && typeof config.html === 'string') {
-        config.html = sanitizeRichText(config.html);
-      }
-      if (b.type === 'columns') {
-        if (typeof config.left === 'string') config.left = sanitizeRichText(config.left);
-        if (typeof config.right === 'string') config.right = sanitizeRichText(config.right);
-      }
-      return { id: b.id, type: b.type, config };
-    })
-    .filter(Boolean);
-  return cleaned.length ? JSON.stringify(cleaned) : null;
-}
-
-/**
- * Rows come back with `blocks` as a JSON string column; hand every
- * client a parsed array (or null) instead of making each one JSON.parse
- * and swallow its own errors.
- */
-function withParsedBlocks(page: any) {
-  if (!page) return page;
-  let blocks: unknown = null;
-  if (typeof page.blocks === 'string' && page.blocks.trim() !== '') {
-    try {
-      blocks = JSON.parse(page.blocks);
-    } catch {
-      blocks = null;
-    }
-  }
-  return { ...page, blocks };
-}
-
 function buildData(parsed: Record<string, unknown>) {
   const data: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(parsed)) {
@@ -169,7 +122,7 @@ function buildData(parsed: Record<string, unknown>) {
     if (k === 'content' && typeof v === 'string') {
       data[k] = sanitizeRichText(v);
     } else if (k === 'blocks') {
-      data[k] = serializeBlocks(v);
+      data[k] = serializeContentBlocks(v);
     } else {
       data[k] = v;
     }

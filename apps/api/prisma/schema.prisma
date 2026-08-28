@@ -1652,6 +1652,13 @@ model BlogPost {
   content         String   @default("")
   excerpt         String?
 
+  // Layout blocks as a JSON string (array of { id, type, config }) - the
+  // same block model as the page CMS (see the Page model). Null/empty
+  // means "no blocks": the storefront renders the legacy `content` column,
+  // and the editor loads it as a single rich-text section. Stored as a
+  // string to match the SQLite provider and the tags/dimensions pattern.
+  blocks          String?
+
   coverImage      String?
 
   // Free-text author name rather than a User relation: shops often publish

@@ -6,11 +6,16 @@
  * a client-reference Symbol rather than the value.
  */
 
+import type { PageBlock } from './pageBlocks';
+
 export interface BlogPost {
   id: string;
   slug: string;
   title: string;
   content?: string;
+  /** Layout blocks, or null/absent for posts saved before blocks existed.
+   *  When present the storefront renders these instead of `content`. */
+  blocks?: PageBlock[] | null;
   excerpt: string | null;
   coverImage: string | null;
   author: string | null;

@@ -459,6 +459,23 @@ try:
                 .get_by_test_id(re.compile(r"^page-block-duplicate-")).click()
         page_ui.wait_for_timeout(300)
 
+        # Drag-and-drop: drag the quote (last section) onto the bottom
+        # half of the first section's grip target, so it lands in
+        # position two. (Order at this point:
+        # richText, callout, callout-copy, quote.)
+        cards = page_ui.locator('[data-block-type]')
+        first_box = cards.nth(0).bounding_box()
+        page_ui.locator('[data-block-type="quote"]').first \
+                .locator('[data-testid^="page-block-drag-"]') \
+                .drag_to(cards.nth(0),
+                         target_position={"x": 60, "y": first_box["height"] - 10})
+        page_ui.wait_for_timeout(400)
+        types_now = [cards.nth(k).get_attribute("data-block-type")
+                     for k in range(cards.count())]
+        check("drag-and-drop reorders the sections",
+              types_now == ["richText", "quote", "callout", "callout"],
+              str(types_now))
+
         # The new flow creates DRAFTS. Ticking Publish is part of the
         # default workflow now (the regression this suite exists for is a
         # page the admin publishes still 404'ing on visit).

@@ -12,6 +12,7 @@
  * component is a pure controlled editor.
  */
 
+import { useState } from 'react';
 import RichTextEditor from '@/components/RichTextEditor';
 import ImageUpload from '@/components/ImageUpload';
 import {
@@ -323,6 +324,13 @@ export function PageBlocksEditor({
   blocks: PageBlock[];
   onChange: (blocks: PageBlock[]) => void;
 }) {
+  // ----- Drag-and-drop reordering ------------------------------------------
+  // Native HTML5 DnD (no dependency): the grip handle starts the drag,
+  // the cards are the drop targets, and a thin bar marks the insertion
+  // point. The up/down buttons remain as a keyboard-friendly fallback.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropHint, setDropHint] = useState<{ index: number; after: boolean } | null>(null);
+
   const addBlock = (type: PageBlockType) => {
     onChange([...blocks, newBlock(type)]);
   };
@@ -353,6 +361,45 @@ export function PageBlocksEditor({
     onChange(blocks.map((b) => (b.id === id ? { ...b, config } : b)));
   };
 
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox requires some data for a drag to start.
+    e.dataTransfer.setData('text/plain', String(index));
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    if (dragIndex === null) return;
+    e.preventDefault(); // mark the card as a valid drop target
+    e.dataTransfer.dropEffect = 'move';
+    // Insert above the card when the cursor is in its top half, below
+    // when in the bottom half.
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    setDropHint((h) => (h && h.index === index && h.after === after ? h : { index: index, after }));
+  };
+
+  const handleDrop = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const from = dragIndex;
+    const after = dropHint?.index === index ? dropHint.after : false;
+    setDragIndex(null);
+    setDropHint(null);
+    if (from === null || from === index) return;
+    let to = after ? index + 1 : index;
+    const next = [...blocks];
+    const [moved] = next.splice(from, 1);
+    if (from < to) to -= 1;
+    if (to === from) return; // dropped back on itself
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDropHint(null);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {blocks.length === 0 && (
@@ -366,8 +413,9 @@ export function PageBlocksEditor({
             fontSize: '14px',
           }}
         >
-          This page has no sections yet. Add one below - text, images, callouts,
-          columns and buttons.
+          This page has no sections yet. Add one below - text, headings,
+          images, columns, callouts, quotes, galleries, buttons and more.
+          Drag sections by the ⠿ handle (or use the arrows) to reorder.
         </div>
       )}
 
@@ -376,14 +424,44 @@ export function PageBlocksEditor({
           key={block.id}
           data-testid={`page-block-${block.id}`}
           data-block-type={block.type}
+          onDragOver={handleDragOver(i)}
+          onDrop={handleDrop(i)}
           style={{
             border: '1px solid #e5e5e5',
             borderRadius: '8px',
             backgroundColor: '#fafafa',
             padding: '12px 14px',
+            // The card being dragged fades so the drop hint reads clearly.
+            opacity: dragIndex === i ? 0.45 : 1,
           }}
         >
+          {dropHint && dropHint.index === i && !dropHint.after && (
+            <div
+              data-testid={`page-block-drop-above-${block.id}`}
+              style={{ height: 3, borderRadius: 2, backgroundColor: 'var(--brand, #111)', margin: '-6px 0 8px' }}
+            />
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <button
+              type="button"
+              title="Drag to reorder"
+              aria-label={`Reorder ${PAGE_BLOCK_LABELS[block.type]} section`}
+              draggable
+              onDragStart={handleDragStart(i)}
+              onDragEnd={handleDragEnd}
+              data-testid={`page-block-drag-${block.id}`}
+              style={{
+                border: 'none',
+                background: 'none',
+                cursor: 'grab',
+                fontSize: '14px',
+                color: '#aaa',
+                padding: '2px 4px',
+                lineHeight: 1,
+              }}
+            >
+              ⠿
+            </button>
             <span
               style={{
                 fontSize: '12px',
@@ -436,6 +514,12 @@ export function PageBlocksEditor({
             </button>
           </div>
           <BlockFields block={block} onPatch={(config) => patchConfig(block.id, config)} />
+          {dropHint && dropHint.index === i && dropHint.after && (
+            <div
+              data-testid={`page-block-drop-below-${block.id}`}
+              style={{ height: 3, borderRadius: 2, backgroundColor: 'var(--brand, #111)', margin: '8px 0 -6px' }}
+            />
+          )}
         </div>
       ))}
 

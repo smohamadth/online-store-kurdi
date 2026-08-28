@@ -6,6 +6,7 @@ import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
+import { PageBlocks } from '@/components/PageBlocks';
 import { encodeRouteParam } from '@/lib/routeParam';
 import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 
@@ -270,11 +271,20 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </p>
       )}
 
-      <div
-        style={{ marginTop: '24px', fontSize: '17px', lineHeight: 1.8, color: 'var(--body-text, #222)' }}
-        // Sanitised server-side ON WRITE (blog.routes.ts), never on read.
-        dangerouslySetInnerHTML={{ __html: post.content || '' }}
-      />
+      {post.blocks && post.blocks.length > 0 ? (
+        // Block layout. The HTML block fields were sanitised server-side
+        // ON WRITE (blog.routes.ts / contentBlocks.ts), never on read -
+        // same contract as the legacy content column below.
+        <div style={{ marginTop: '24px', fontSize: '17px' }}>
+          <PageBlocks blocks={post.blocks} />
+        </div>
+      ) : (
+        <div
+          style={{ marginTop: '24px', fontSize: '17px', lineHeight: 1.8, color: 'var(--body-text, #222)' }}
+          // Sanitised server-side ON WRITE (blog.routes.ts), never on read.
+          dangerouslySetInnerHTML={{ __html: post.content || '' }}
+        />
+      )}
 
       {post.related && post.related.length > 0 && (
         <section

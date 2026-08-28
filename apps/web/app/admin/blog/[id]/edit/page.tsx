@@ -4,12 +4,19 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import { PageBlocks } from '@/components/PageBlocks';
 import { authHttp, errorMessage } from '@/lib/http';
+import {
+  type PageBlock,
+  blocksFromLegacyContent,
+  blocksToLegacyContent,
+} from '@/lib/pageBlocks';
 import {
   CmsEditor,
   type CmsEditorBaseFields,
   type CmsEditorExtras,
 } from '../../../_components/CmsEditor';
+import { PageBlocksEditor } from '../../../pages/_components/PageBlocksEditor';
 
 interface PostRow extends CmsEditorBaseFields, CmsEditorExtras {
   id: string;
@@ -19,9 +26,14 @@ interface PostRow extends CmsEditorBaseFields, CmsEditorExtras {
    *  works with a comma-separated string. We split on read and
    *  join on save, so the form sees a single text field. */
   tagsList?: string[];
+  /** Parsed block list from the API (null when the post has none). */
+  blocks?: PageBlock[] | null;
 }
 
-const BLANK: CmsEditorBaseFields & CmsEditorExtras = {
+/** Form state = editor base + extras + the block layout. */
+type PostValues = CmsEditorBaseFields & CmsEditorExtras & { blocks: PageBlock[] };
+
+const BLANK: PostValues = {
   title: '',
   slug: '',
   content: '<p></p>',
@@ -33,15 +45,27 @@ const BLANK: CmsEditorBaseFields & CmsEditorExtras = {
   isFeatured: false,
   metaTitle: '',
   metaDescription: '',
+  blocks: [],
 };
+
+/**
+ * Every value that reaches the form must carry a block array. Posts saved
+ * before blocks existed have none - their legacy `content` becomes a
+ * single rich-text section so the editor shows exactly what renders.
+ * (Also covers autosaved drafts written before this feature shipped.)
+ */
+function withBlocks(v: CmsEditorBaseFields & CmsEditorExtras & { blocks?: PageBlock[] | null }): PostValues {
+  const blocks = Array.isArray(v.blocks) && v.blocks.length > 0 ? v.blocks : blocksFromLegacyContent(v.content);
+  return { ...v, blocks };
+}
 
 export default function EditPostPage() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string | undefined;
 
-  const [initial, setInitial] = useState<(CmsEditorBaseFields & CmsEditorExtras) | null>(null);
-  const [values, setValues] = useState<CmsEditorBaseFields & CmsEditorExtras>(BLANK);
+  const [initial, setInitial] = useState<PostValues | null>(null);
+  const [values, setValues] = useState<PostValues>(BLANK);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -56,7 +80,7 @@ export default function EditPostPage() {
         const res = await authHttp.get<PostRow>(`/blog/${id}`);
         if (!alive) return;
         const row = res.data;
-        const next: CmsEditorBaseFields & CmsEditorExtras = {
+        const next = withBlocks({
           title: row.title || '',
           slug: row.slug || '',
           content: row.content || '',
@@ -68,7 +92,8 @@ export default function EditPostPage() {
           isFeatured: !!row.isFeatured,
           metaTitle: row.metaTitle || '',
           metaDescription: row.metaDescription || '',
-        };
+          blocks: row.blocks,
+        });
         setInitial(next);
         if (draftKey) {
           try {
@@ -77,7 +102,7 @@ export default function EditPostPage() {
               const parsed = JSON.parse(raw);
               const ts = Number(parsed?.savedAt) || 0;
               const srvTs = new Date(row.updatedAt).getTime();
-              setValues(ts > srvTs ? parsed.values : next);
+              setValues(ts > srvTs ? withBlocks(parsed.values) : next);
             } else {
               setValues(next);
             }
@@ -133,10 +158,16 @@ export default function EditPostPage() {
         .filter(Boolean);
       const deduped = Array.from(new Set(tagsList));
 
+      // For posts the blocks ARE the content: the layout section is the
+      // single source of truth. We sync the legacy `content` column from
+      // the blocks so a post whose blocks were all deleted never renders
+      // stale text, and content-only consumers (excerpt, reading time,
+      // search) still see the words.
       const body = {
         title: values.title,
         slug: values.slug,
-        content: values.content,
+        content: blocksToLegacyContent(values.blocks),
+        blocks: values.blocks,
         excerpt: values.excerpt || null,
         coverImage: values.coverImage || null,
         author: values.author || null,
@@ -160,6 +191,7 @@ export default function EditPostPage() {
     <CmsEditor
       kind="post"
       resourceId={id ?? null}
+      previewDirToggle
       backHref="/admin/blog"
       publicHref={
         values.status === 'published' ? `/blog/${values.slug}` : undefined
@@ -167,12 +199,30 @@ export default function EditPostPage() {
       headerTitle={values.title || 'Untitled post'}
       initial={initial}
       values={values}
-      onChange={setValues}
+      // The shared shell edits the base fields only; the block array
+      // lives in this route's state and is preserved on every change.
+      onChange={(next) => setValues({ ...withBlocks(next), blocks: values.blocks })}
       onSave={save}
       isDirty={isDirty}
       saving={saving}
       formError={formError}
       formatLivePath={(v) => `/blog/${v.slug || '…'}`}
+      contentSection={
+        <div style={{ marginTop: '14px' }}>
+          <label style={{ fontSize: '14px', fontWeight: 600, color: '#333', display: 'block', marginBottom: '8px' }}>
+            Layout
+          </label>
+          <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#777' }}>
+            Compose the post from sections - text, headings, images, two
+            columns, callout boxes, quotes, galleries, buttons, dividers and
+            spacing. Order matters: sections render top to bottom.
+          </p>
+          <PageBlocksEditor
+            blocks={values.blocks}
+            onChange={(blocks) => setValues({ ...values, blocks })}
+          />
+        </div>
+      }
       renderPreview={(v) => (
         <article style={{ maxWidth: '720px', margin: '0 auto' }}>
           {v.coverImage && (
@@ -215,10 +265,19 @@ export default function EditPostPage() {
               {v.excerpt}
             </p>
           )}
-          <div
-            style={{ fontSize: '16px', lineHeight: 1.75 }}
-            dangerouslySetInnerHTML={{ __html: v.content || '' }}
-          />
+          <div style={{ fontSize: '16px' }}>
+            {(v as PostValues).blocks && (v as PostValues).blocks.length > 0 ? (
+              // Same renderer as the storefront, so the preview is
+              // pixel-identical to the live post.
+              <PageBlocks blocks={(v as PostValues).blocks} />
+            ) : (
+              // Legacy single-column post (no blocks).
+              <div
+                style={{ lineHeight: 1.75 }}
+                dangerouslySetInnerHTML={{ __html: v.content || '' }}
+              />
+            )}
+          </div>
         </article>
       )}
     />

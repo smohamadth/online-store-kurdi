@@ -4,6 +4,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
+import { serializeContentBlocks, parseBlocksColumn } from '../../utils/contentBlocks';
 
 const router = Router();
 
@@ -53,6 +54,20 @@ const baseSchema = {
   isFeatured: z.boolean().optional(),
   metaTitle: z.string().max(200).optional().nullable(),
   metaDescription: z.string().max(400).optional().nullable(),
+  // Layout blocks (same model as the page CMS). Unknown types are
+  // accepted here and dropped client-side, so a newer admin bundle can
+  // save block types an older API doesn't know yet without a 400.
+  blocks: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(40),
+        type: z.string().min(1).max(40),
+        config: z.record(z.any()).optional().nullable(),
+      }),
+    )
+    .max(100)
+    .optional()
+    .nullable(),
 };
 
 const createSchema = z.object({ slug: slugField, ...baseSchema });
@@ -64,7 +79,7 @@ const updateSchema = z.object({
 
 /** Text fields an admin must be able to CLEAR. */
 const NULLABLE = new Set([
-  'excerpt', 'coverImage', 'author', 'tags', 'metaTitle', 'metaDescription',
+  'excerpt', 'coverImage', 'author', 'tags', 'metaTitle', 'metaDescription', 'blocks',
 ]);
 
 /** Rough reading time, shown on the list and the post. */
@@ -86,11 +101,14 @@ function parseTags(raw: string | null): string[] {
 }
 
 function fromRow(row: any, opts: { withContent?: boolean } = {}) {
-  const { content, tags, ...rest } = row;
+  const { content, tags, blocks, ...rest } = row;
   return {
     ...rest,
     tags: parseTags(tags),
     readingMinutes: readingMinutes(content || ''),
+    // Hand the client a parsed block array (or null), never the raw JSON
+    // column - mirrors the page API.
+    blocks: parseBlocksColumn(blocks),
     ...(opts.withContent === false ? {} : { content }),
   };
 }
@@ -103,6 +121,8 @@ function buildData(parsed: Record<string, unknown>) {
 
     if (k === 'content' && typeof v === 'string') {
       data[k] = sanitizeRichText(v);
+    } else if (k === 'blocks') {
+      data[k] = serializeContentBlocks(v);
     } else if (k === 'tags') {
       // Normalise: lowercase, trimmed, de-duplicated, stored as JSON.
       if (v === null) {
