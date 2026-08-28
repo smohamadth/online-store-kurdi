@@ -4,6 +4,21 @@ const nextConfig = {
   // `next build` emits a self-contained server bundle (.next/standalone)
   // that the production Docker image runs with almost no node_modules.
   output: 'standalone',
+
+  async rewrites() {
+    // Same-origin API proxy. Browsers can't reach 127.0.0.1:3001 (the
+    // user's machine has no API there), so when the configured API base
+    // is a loopback URL, client code calls "/api/..." on this origin and
+    // we proxy it to the API process server-side, where loopback works
+    // (see lib/apiBase.ts). Non-loopback deployments never hit this:
+    // the client keeps the absolute base and never requests /api here.
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://127.0.0.1:3001/api/:path*',
+      },
+    ];
+  },
   
   images: {
     remotePatterns: [
