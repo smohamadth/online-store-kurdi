@@ -2,9 +2,11 @@ name: CI
 
 # Runs the test suites on every push and pull request to main.
 #
-# Two jobs:
+# Four jobs:
 #   api-checks  - fast (~2 min). API regression sweep + static audit. No browser.
 #   ui-checks   - slower (~6 min). Builds the frontend and drives a real browser.
+#   api-tests   - fast (~3 min). Vitest unit + integration suites (mocked DB).
+#   web-tests   - fast (~2 min). Vitest lib + component suites (happy-dom).
 #
 # They run in parallel. If either goes red the commit is marked failed on
 # GitHub, so a regression is caught before it is pulled onto a dev machine.
@@ -216,3 +218,62 @@ jobs:
         run: |
           echo "----- API -----"; tail -100 /tmp/api.log || true
           echo "----- WEB -----"; tail -60 /tmp/web.log || true
+
+  api-tests:
+    name: API unit + integration (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # postinstall runs `prisma generate`, so the type-check below runs
+        # against a client that is in step with the schema.
+        run: npm ci
+
+      - name: Type-check API sources
+        working-directory: apps/api
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        working-directory: apps/api
+        run: npm run test:unit
+
+      - name: Integration tests (mocked Prisma)
+        working-directory: apps/api
+        # The single-fork integration suite accumulates in-memory stores;
+        # cap heap so a leak fails the job instead of OOM-killing the runner.
+        run: NODE_OPTIONS=--max-old-space-size=4096 npm run test:integration
+
+  web-tests:
+    name: Web lib + component tests (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # --ignore-scripts: the web tests need no lifecycle scripts (no
+        # postinstall in the web workspace, and the Prisma engine download
+        # is irrelevant to them).
+        run: npm ci --ignore-scripts
+
+      - name: Lib unit tests
+        working-directory: apps/web
+        run: npm run test
+
+      - name: Component tests
+        working-directory: apps/web
+        run: NODE_OPTIONS=--max-old-space-size=4096 npm run test:components
