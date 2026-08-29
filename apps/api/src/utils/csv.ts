@@ -29,28 +29,37 @@ export function parseCsv(text: string): string[][] {
   let inQuotes = false;
   let startedField = false; // saw a quote or a non-quote char this field
 
+  // Flush the current field into the current row and reset the field buffer.
   const pushField = () => {
     row.push(field);
     field = '';
     startedField = false;
   };
+  // Flush the current row (plus its last field) into the rows matrix.
   const pushRow = () => {
     pushField();
     rows.push(row);
     row = [];
   };
 
+  // A small two-state machine: either we're inside a quoted field
+  // (inQuotes) or not. Outside quotes, a quote at the (trimmed) start of a
+  // field opens a quoted field; inside quotes, "" is an escaped quote and a
+  // lone quote closes the field. Commas separate fields, newlines end rows.
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (inQuotes) {
       if (ch === '"') {
         if (text[i + 1] === '"') {
+          // "" inside a quoted field is an escaped literal quote.
           field += '"';
           i++;
         } else {
+          // A lone quote closes the quoted field.
           inQuotes = false;
         }
       } else {
+        // Inside a quoted field, every char (commas, newlines) is literal.
         field += ch;
       }
     } else if (ch === '"' && (!startedField || field.trim() === '')) {

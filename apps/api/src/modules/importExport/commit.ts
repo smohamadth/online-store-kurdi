@@ -148,6 +148,11 @@ async function uniqueProductSlug(
   return candidate;
 }
 
+// Apply every product row in a single Prisma transaction: either every row
+// is created/updated, or (on any RowError) the whole transaction rolls back.
+// Products are matched by SKU; a row whose SKU is new is created, one whose
+// SKU already exists is updated. Each row's category is resolved by name or
+// slug (case-insensitive) from the in-memory index built up front.
 async function executeProducts(
   rawRows: Record<string, unknown>[],
 ): Promise<{ created: number; updated: number }> {
@@ -184,6 +189,8 @@ async function executeProducts(
 
       const existing = bySku.get(plan.sku);
       if (existing) {
+        // UPDATE path: the SKU already exists. Guard against the row
+        // reassigning a slug that belongs to a different product.
         if (plan.data.slug) {
           const clashSlug = plan.data.slug;
           const owner = products.find((p) => p.slug === clashSlug);
@@ -201,7 +208,11 @@ async function executeProducts(
         if (plan.variants !== undefined) await replaceVariants(tx, existing.id, plan.variants);
         if (plan.images !== undefined) await replaceImages(tx, existing.id, plan.images);
       } else {
+        // CREATE path: the SKU is new. Generate a unique slug (preferring the
+        // provided one, then a slugified name, then a -2/-3 suffix if taken).
         const slug = await uniqueProductSlug(tx, plan.name ?? '', plan.data.slug, slugsTaken);
+        // Start from schema defaults, then overlay the validated row data.
+        // sku comes from plan.sku (the match key, not an updatable field).
         const data = {
           type: 'physical' as string,
           status: 'active' as string,
@@ -213,9 +224,6 @@ async function executeProducts(
           metaKeywords: '[]',
           ...plan.data,
           name: plan.name,
-          // sku only lives on plan.sku (it is the match key, not an
-          // updatable field) - without it the create violates the
-          // schema's required, unique column.
           sku: plan.sku,
           slug,
         };
@@ -232,6 +240,11 @@ async function executeProducts(
   return { created, updated };
 }
 
+// Apply every category row in a single Prisma transaction (all-or-nothing,
+// like executeProducts). Categories are matched by slug (if provided) then
+// name (case-insensitive). A row whose slug/name is new is created, one that
+// matches an existing category is updated. The parent (if given) is resolved
+// by name/slug from the in-memory index built up front.
 async function executeCategories(
   rawRows: Record<string, unknown>[],
 ): Promise<{ created: number; updated: number }> {
@@ -239,6 +252,7 @@ async function executeCategories(
   let updated = 0;
 
   await prisma.$transaction(async (tx) => {
+    // Build a case-insensitive index of existing categories for matching.
     const cats = await tx.category.findMany({ select: { id: true, name: true, slug: true } });
     const index = new CiIndex(cats);
 
@@ -249,6 +263,7 @@ async function executeCategories(
         throw new RowError(rowNo, undefined, plan.name, plan.errors);
       }
 
+      // Resolve the parent category (if a parent name/slug was given) to an id.
       let parentId: string | null | undefined;
       if (plan.parentRef) {
         const parent = index.find(plan.parentRef, plan.parentRef);
@@ -277,10 +292,9 @@ async function executeCategories(
         // Refresh the in-memory index so later rows match the new value.
         index.add({ id: existing.id, name: plan.data.name ?? existing.name, slug: plan.data.slug ?? existing.slug });
       } else {
-        if (parentId !== undefined) {
-          // parent check for a brand-new category: parentId can't equal an
-          // id that doesn't exist yet, so nothing extra to guard.
-        }
+        // CREATE path: the category is new. Use the provided slug, or slugify
+        // the name, or a timestamp slug; if that slug is already taken, append
+        // -2, -3, ... until it is free.
         let slug = plan.data.slug || slugify(plan.name ?? 'category', { lower: true, strict: true }) || `category-${Date.now().toString(36)}`;
         let i2 = 2;
         while (index.bySlug(slug)) {
@@ -306,6 +320,11 @@ async function executeCategories(
   return { created, updated };
 }
 
+// Apply an import file all-or-nothing. First re-run the preview to classify
+// every row; if any row is an error, nothing is written and the error rows
+// are returned so the admin can fix the file. Otherwise execute the rows in
+// one transaction - either every row lands, or (on a RowError) the whole
+// transaction rolls back and nothing is applied.
 export async function commitImport(
   entity: Entity,
   format: ImportFormat,

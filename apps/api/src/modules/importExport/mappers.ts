@@ -63,8 +63,11 @@ const BOOL_FALSE = new Set(['false', '0', 'no', 'n', 'off']);
  * caller treats that as "not provided") and throws for garbage.
  */
 export function parseBool(v: unknown, field: string): boolean | undefined {
+  // Already a boolean (JSON import) - use it as-is.
   if (v === true || v === false) return v;
+  // Empty cell means "not provided" - the caller leaves the field as-is.
   if (v === null || v === undefined || v === '') return undefined;
+  // Accept the common spreadsheet spellings (true/1/yes/y/on, ...).
   const s = String(v).trim().toLowerCase();
   if (BOOL_TRUE.has(s)) return true;
   if (BOOL_FALSE.has(s)) return false;
@@ -73,11 +76,14 @@ export function parseBool(v: unknown, field: string): boolean | undefined {
 
 /** Coerce a cell to a finite number or undefined for empty cells. */
 export function parseNumber(v: unknown, field: string): number | undefined {
+  // Empty cell means "not provided" - the caller leaves the field as-is.
   if (v === null || v === undefined || v === '') return undefined;
+  // Already a number (JSON import) - must be finite to be usable.
   if (typeof v === 'number') {
     if (!Number.isFinite(v)) throw new Error(`${field}: not a number`);
     return v;
   }
+  // CSV cells are strings; trim and parse. NaN (e.g. "12abc") is rejected.
   const s = String(v).trim();
   if (s === '') return undefined;
   const n = Number(s);
@@ -87,11 +93,14 @@ export function parseNumber(v: unknown, field: string): number | undefined {
 
 /** Parse an ISO date string or Date; empty -> undefined. */
 export function parseDate(v: unknown, field: string): Date | undefined {
+  // Empty cell means "not provided" - the caller leaves the field as-is.
   if (v === null || v === undefined || v === '') return undefined;
+  // A real Date (JSON import) - accept it if it's a valid timestamp.
   if (v instanceof Date) {
     if (Number.isNaN(v.getTime())) throw new Error(`${field}: invalid date`);
     return v;
   }
+  // CSV cell: parse as a date string; NaN means it wasn't a valid date.
   const d = new Date(String(v).trim());
   if (Number.isNaN(d.getTime())) throw new Error(`${field}: expected a date (e.g. 2026-12-01), got "${v}"`);
   return d;
@@ -99,8 +108,11 @@ export function parseDate(v: unknown, field: string): Date | undefined {
 
 /** Parse a JSON cell (object/array) or pass through an object; empty -> undefined. */
 export function parseJsonCell(v: unknown, field: string): any {
+  // Empty cell means "not provided" - the caller leaves the field as-is.
   if (v === null || v === undefined || v === '') return undefined;
+  // Already an object/array (JSON import) - use it directly.
   if (typeof v === 'object') return v;
+  // CSV cell: a JSON-encoded string (e.g. the variants/images columns).
   const s = String(v).trim();
   if (s === '') return undefined;
   try {
@@ -117,7 +129,9 @@ export function parseJsonCell(v: unknown, field: string): any {
  * caller records it as a row error.
  */
 export function parseKeywords(v: unknown): string[] | undefined {
+  // Empty cell means "not provided" - the caller leaves the field as-is.
   if (v === null || v === undefined || v === '') return undefined;
+  // Already an array (JSON import) - normalise each entry to a trimmed string.
   if (Array.isArray(v)) {
     return v.map((x) => String(x).trim()).filter(Boolean);
   }
@@ -126,6 +140,8 @@ export function parseKeywords(v: unknown): string[] | undefined {
   }
   const s = String(v).trim();
   if (s === '') return undefined;
+  // Starts with '[' -> treat as a JSON array string; otherwise fall back to a
+  // plain comma-separated list (what a spreadsheet column usually holds).
   if (s.startsWith('[')) {
     try {
       const parsed = JSON.parse(s);
@@ -137,6 +153,7 @@ export function parseKeywords(v: unknown): string[] | undefined {
     }
     throw new Error('metaKeywords: expected a JSON array like ["a","b"]');
   }
+  // Plain comma-separated string (the common spreadsheet case).
   return s.split(',').map((x) => x.trim()).filter(Boolean);
 }
 
@@ -208,9 +225,13 @@ export function mapProductRow(raw: Record<string, unknown>, existing: { sku: str
   return plan;
 }
 
+// Fill `plan` by reading/validating each cell of `raw`. Throws on a
+// malformed cell (the parseNumber/parseBool/... helpers throw on garbage);
+// mapProductRow catches it and records it as a row error instead of a 500.
 function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void {
   const err = (msg: string) => plan.errors.push(msg);
 
+  // Read a cell as a trimmed string; empty/missing -> undefined ("not provided").
   const str = (k: string): string | undefined => {
     const v = raw[k];
     if (v === null || v === undefined) return undefined;
@@ -329,18 +350,22 @@ function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void
   if (category !== undefined) plan.data.__category = category;
 
   // --- variants ------------------------------------------------------------
+  // The variants column holds a JSON array (as a string in CSV, a native
+  // array in JSON). When present it REPLACES the product's variants; when
+  // absent the product's existing variants are left untouched.
   const variantsRaw = parseJsonCell(raw['variants'], 'variants');
   if (variantsRaw !== undefined) {
     if (!Array.isArray(variantsRaw)) {
       err('variants: expected a JSON array');
     } else {
-      const seen = new Set<string>();
+      const seen = new Set<string>(); // catch duplicate variant SKUs in this row
       const variants: VariantInput[] = [];
       for (let i = 0; i < variantsRaw.length; i++) {
         const v = variantsRaw[i] as Record<string, unknown>;
         const name2 = v?.name != null ? String(v.name).trim() : '';
         const sku2 = v?.sku != null ? String(v.sku).trim() : '';
         const price2 = parseNumber(v?.price, `variants[${i}].price`);
+        // A variant is identified by name + sku + a positive price.
         if (!name2) { err(`variants[${i}]: name is required`); continue; }
         if (!sku2) { err(`variants[${i}]: sku is required (variant match key)`); continue; }
         if (seen.has(sku2)) { err(`variants[${i}]: duplicate variant sku "${sku2}"`); continue; }
@@ -350,6 +375,7 @@ function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void
           continue;
         }
         const item: VariantInput = { name: name2, sku: sku2, price: price2 };
+        // Optional variant fields - only set when provided.
         const vslug = v?.slug != null && String(v.slug).trim() !== '' ? String(v.slug).trim() : null;
         if (vslug) item.slug = vslug;
         const vprice = parseNumber(v?.compareAtPrice, `variants[${i}].compareAtPrice`);
@@ -372,6 +398,9 @@ function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void
   }
 
   // --- images ---------------------------------------------------------------
+  // The images column holds a JSON array (string in CSV, array in JSON).
+  // When present it REPLACES the product's images; when absent the product's
+  // existing images are left untouched. Each entry needs a url.
   const imagesRaw = parseJsonCell(raw['images'], 'images');
   if (imagesRaw !== undefined) {
     if (!Array.isArray(imagesRaw)) {
@@ -383,6 +412,7 @@ function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void
         const url = im?.url != null ? String(im.url).trim() : '';
         if (!url) { err(`images[${i}]: url is required`); continue; }
         const item: ImageInput = { url };
+        // Optional alt text and primary flag - only set when provided.
         if (im.alt != null && String(im.alt).trim() !== '') item.alt = String(im.alt).trim();
         const primary = parseBool(im?.isPrimary, `images[${i}].isPrimary`);
         if (primary !== undefined) item.isPrimary = primary;
@@ -424,8 +454,12 @@ export function mapCategoryRow(raw: Record<string, unknown>): CategoryPlan {
   return plan;
 }
 
+// Fill `plan` by reading/validating each cell of `raw`. Like
+// buildProductPlan this throws on a malformed cell; mapCategoryRow catches
+// it and records it as a row error instead of a 500.
 function buildCategoryPlan(plan: CategoryPlan, raw: Record<string, unknown>): void {
   const err = (msg: string) => plan.errors.push(msg);
+  // Read a cell as a trimmed string; empty/missing -> undefined ("not provided").
   const str = (k: string): string | undefined => {
     const v = raw[k];
     if (v === null || v === undefined) return undefined;
@@ -472,16 +506,24 @@ function buildCategoryPlan(plan: CategoryPlan, raw: Record<string, unknown>): vo
 // file -> rows
 // ---------------------------------------------------------------------------
 
+// Turn the raw file text into an array of row objects (keyed by the header
+// row for CSV, or the native object for JSON). Throws a ValidationError for
+// a file that is too large / too many rows / malformed - the route catches
+// it and returns a 400.
 export function extractRows(
   entity: Entity,
   format: ImportFormat,
   text: string,
 ): Record<string, unknown>[] {
+  // Reject oversized files up front (a 10 MB JSON body can still be a
+  // manageable amount of rows, but a 1 MB CSV is already a lot).
   if (text.length > MAX_INPUT_CHARS) {
     throw new ValidationError(`File is too large (max ${MAX_INPUT_CHARS} characters)`);
   }
   let rows: Record<string, unknown>[];
   if (format === 'csv') {
+    // First row is the header (the column keys); the rest are data rows.
+    // Each data row becomes an object keyed by the (trimmed) header cells.
     const matrix = parseCsv(text);
     if (matrix.length === 0) throw new ValidationError('CSV file is empty');
     const [header, ...data] = matrix;
@@ -495,6 +537,8 @@ export function extractRows(
       return row;
     });
   } else {
+    // JSON import: either a bare array of rows, or an object wrapping the
+    // array under the entity key (e.g. { "products": [ ... ] }).
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
@@ -549,8 +593,12 @@ export async function previewImport(
     }
   }
 
-  const seenSkus = new Set<string>(); // duplicate SKUs within the file
+  const seenSkus = new Set<string>(); // catch duplicate SKUs within the file
 
+  // Classify each row: a row with validation errors is an "error";
+  // otherwise a product is an "update" if its SKU already exists, else a
+  // "create". A category is an "update" if its slug/name already exists,
+  // else a "create". Nothing is written - this is a pure dry run.
   rows.forEach((raw, i) => {
     const rowNo = i + 1;
     let row: PreviewRow;

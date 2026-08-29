@@ -37,6 +37,9 @@ router.use(authenticate, authorize('admin', 'manager'));
 const ENTITIES: Entity[] = ['products', 'categories'];
 const FORMATS: ImportFormat[] = ['csv', 'json'];
 
+// Validate the preview/commit request body. The file contents are sent as a
+// JSON `text` field (not a multipart upload) because the file is parsed, not
+// stored - the admin pastes/uploads in the browser, the API never keeps a copy.
 function parseBody(body: any): { entity: Entity; format: ImportFormat; text: string } {
   const entity = body?.entity;
   const format = body?.format;
@@ -53,6 +56,10 @@ function parseBody(body: any): { entity: Entity; format: ImportFormat; text: str
 
 const nullIfEmpty = (v: unknown) => (v === null || v === undefined || v === '' ? null : v);
 
+// Fetch every product (oldest first) with its category name, variants and
+// images, and shape each into a flat export row. Nested collections
+// (variants, images) become native arrays in JSON exports and JSON-encoded
+// strings in CSV (the importer accepts both).
 async function exportProductsRows(): Promise<Record<string, any>[]> {
   const products = await prisma.product.findMany({
     orderBy: [{ createdAt: 'asc' }],
@@ -110,6 +117,8 @@ async function exportProductsRows(): Promise<Record<string, any>[]> {
   }));
 }
 
+// Fetch every category (by sort order, then name) with its parent's name,
+// and shape each into a flat export row.
 async function exportCategoriesRows(): Promise<Record<string, any>[]> {
   const categories = await prisma.category.findMany({
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -167,6 +176,8 @@ const SAMPLE_CATEGORY: Record<string, any> = {
   sortOrder: 0,
 };
 
+// Download an entity's data as a file (CSV or JSON). `?sample=1` returns a
+// one-row template instead of the full data, so the admin can fill it in.
 router.get('/export/:entity', async (req, res, next) => {
   try {
     const entity = req.params.entity as Entity;
@@ -190,6 +201,8 @@ router.get('/export/:entity', async (req, res, next) => {
     const suffix = sample ? 'template' : 'export';
 
     if (format === 'json') {
+      // Wrap the rows in a small envelope (entity + timestamp + count) so the
+      // importer can tell which entity the array is and when it was exported.
       const payload = {
         entity,
         exportedAt: new Date().toISOString(),
@@ -203,7 +216,9 @@ router.get('/export/:entity', async (req, res, next) => {
     }
 
     const headers = entity === 'products' ? PRODUCT_CSV_HEADERS : CATEGORY_CSV_HEADERS;
-    // Objects/arrays -> JSON strings inside CSV cells.
+    // Build a header row + one row per record. Null/undefined cells become
+    // empty strings; objects/arrays (variants, images, dimensions) are
+    // JSON-encoded into a single CSV cell (the importer decodes them back).
     const matrix = [
       headers,
       ...rows.map((row) =>
@@ -227,6 +242,9 @@ router.get('/export/:entity', async (req, res, next) => {
 // preview + commit
 // ---------------------------------------------------------------------------
 
+// Dry run: parse + validate the file and classify each row as create /
+// update / error. Writes nothing - the admin reviews the result before
+// committing. Returns a 400 (not 500) for a malformed file.
 router.post('/preview', async (req, res, next) => {
   try {
     const { entity, format, text } = parseBody(req.body);
@@ -241,6 +259,9 @@ router.post('/preview', async (req, res, next) => {
   }
 });
 
+// Apply the file for real (all-or-nothing). The server re-validates the raw
+// text - the client's preview is a convenience, not a contract. Logs a
+// summary of what was created/updated/failed.
 router.post('/commit', async (req, res, next) => {
   try {
     const { entity, format, text } = parseBody(req.body);

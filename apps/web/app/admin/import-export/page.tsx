@@ -77,6 +77,9 @@ const secondaryBtn: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+// Small pill used in the preview table to show a row's classification
+// (create / update / error). Colours are defined once in STATUS_STYLE so
+// the preview table and the summary chips stay visually in sync.
 function Badge({ status }: { status: PreviewRow['status'] }) {
   const s = STATUS_STYLE[status];
   return (
@@ -109,6 +112,9 @@ export default function AdminImportExportPage() {
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Switching entity (products <-> categories) invalidates any preview or
+  // commit result for the previous entity, so clear them to avoid showing
+  // stale results for the wrong entity.
   const switchEntity = (e: Entity) => {
     setEntity(e);
     setPreview(null);
@@ -116,6 +122,9 @@ export default function AdminImportExportPage() {
     setError('');
   };
 
+  // Read the chosen file's text into the textarea (the API parses the raw
+  // text, not a multipart upload). Reading as text means the same textarea
+  // works for both "pick a file" and "paste contents" flows.
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -191,6 +200,9 @@ export default function AdminImportExportPage() {
     }
   };
 
+  // Dry run: ask the server to parse + validate the file and classify each
+  // row as create / update / error. Writes nothing - the admin reviews the
+  // result before committing.
   const runPreview = async () => {
     setPreviewBusy(true);
     setError('');
@@ -206,6 +218,10 @@ export default function AdminImportExportPage() {
     }
   };
 
+  // Apply the file for real. The server re-validates the raw text (the
+  // preview is a convenience, not a contract) and applies all rows in one
+  // all-or-nothing transaction. On success the editor is cleared so the
+  // same file can't be re-imported by accident.
   const runCommit = async () => {
     setCommitBusy(true);
     setError('');
