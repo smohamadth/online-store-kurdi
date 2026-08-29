@@ -1,10 +1,10 @@
 # Online Store — Self-hosted E-commerce Platform
 
-**Platform karbaziyar ya xerikariya înternetî ya xwe-xweşker.** A full-featured,
+**پلاتفۆرمی بازرگانی میزبانی خۆیی —** A full-featured,
 self-hosted e-commerce platform. Built for small and medium businesses —
 install it on your own server, own your data, extend it freely.
 
-> **Documentation languages / Zimanê belgeyên / زوانەکانی بەڵگەنووسین:**
+> **Documentation languages / Zimanên belgeyan / زوانەکانی بەڵگەنووسین:**
 > [🇬🇧 English (this file)](README.md) ·
 > [🏴 Kurdî (Soranî)](docs/README-ku.md) ·
 > [🇮🇷 فارسی](docs/README-fa.md) ·
@@ -125,7 +125,9 @@ npm run dev
 | Customer | `customer@example.com` | `customer123` |
 
 The seed also creates a demo catalog (5 categories incl. `General`,
-5 products, reviews, coupons, shipping methods, banners).
+5 products, reviews, coupons, shipping methods, banners) and 50
+synthetic `UserEvent` rows so the analytics dashboard shows sample
+data — demo rows, not collected visitor data.
 
 ### Running without Docker
 
@@ -182,7 +184,7 @@ the database.
 │   │       │   #   auth, products, variant, orders, payments, analytics,
 │   │       │   #   recommendations, inventory, categories, users, reviews,
 │   │       │   #   coupons, gift-cards, shipping, tax, pages, blog, banners,
-│   │       │   #   menus, newsletter, pages-cms, settings, theme, importExport,
+│   │       │   #   menus, newsletter, pages, settings, theme, importExport,
 │   │       │   #   downloads, currency, storage, …
 │   │       ├── services/      # email, payment helpers
 │   │       ├── utils/         # logger, csv, content blocks
@@ -228,7 +230,7 @@ Warehouses + inventory models, Pages/BlogPosts (content blocks), Banners,
 Menus, StoreSettings, ThemeSettings, UserEvents (analytics).
 
 **Resilience rules used throughout:** optional services (Redis/MinIO/SMTP)
-fail closed per-feature but never crash the request; analytics tracking
+degrade per-feature (the feature is simply off) but never crash the request; analytics tracking
 never fails a request; admin writes are validated before touching the DB.
 
 ## 8. Storefront guide (merchant operations)
@@ -343,7 +345,7 @@ REST, JSON, JWT-protected where needed. Base: `/api`.
 - **Auth**: register, login, refresh, logout, me, forgot/reset password
 - **Products**: list (faceted filter + search), featured, `search`, by
   id/slug, related, CRUD (admin), variants & options
-- **Orders**: list, create, status updates (admin), cancel, receipts,
+- **Orders**: list, create, status updates (admin, manager), cancel, receipts,
   tracking, per-item download tokens
 - **Payments**: process (staff settlement), Stripe Checkout + webhook
 - **Users / Customers**: CRUD (admin), per-user orders & wishlist
@@ -389,11 +391,12 @@ DB, `db:reset`/`prisma db push` + seed is the reliable path.
 | Feature verifiers | `python3 scripts/verify-*.py` | running API (+ storefront for browser ones) |
 
 CI (`.github/workflows/ci.yml`) runs two parallel jobs on every push to
-`main`: **api-checks** (migrate, seed, start API, `regression.sh`,
-`verify-import-export.py`, commerce/theme/users/404/dashboard verifiers)
-and **ui-checks** (`next build` + browser suites: page sweep, home
-builder, banners, 404s, users, dashboard, pages, blog, sidebar geometry,
-Unicode slugs).
+`main`: **api-checks** — env-template check, migrations, seed, start
+API, `regression.sh`, `audit-silent-writes.py`, `verify-commerce.py`
+and `verify-import-export.py` — and **ui-checks** — `next build`, start
+API + storefront, then the Playwright suites: page sweep, home builder,
+banners, gallery, 404 status codes, user privilege guards, dashboard
+figures, pages + sidebar, blog, sidebar rail geometry, Unicode slugs.
 
 ## 15. Deployment
 
