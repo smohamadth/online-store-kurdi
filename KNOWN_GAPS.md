@@ -309,6 +309,11 @@ CI and any deployment built from a clean checkout cannot be trusted.
   between preview and commit, the commit re-validates and may classify
   differently (or roll back). All three are natural follow-ups, not bugs.
 
-Covered by `tests/integration/importExport.test.ts` (29 tests) and
+Covered by `tests/integration/importExport.test.ts` (29 tests),
 `tests/unit/csv.test.ts` (parser edge cases: Excel `value, "quoted"`
-cells, CRLF, blank lines).
+cells, CRLF, blank lines) and the live CI check
+`scripts/verify-import-export.py` (30 checks against a real Prisma
+database in the api-checks job — the one place real transaction
+rollback and unique constraints are actually exercised). The seed
+creates a `General` category so the product-import default works on a
+fresh install.
