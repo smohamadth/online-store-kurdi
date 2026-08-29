@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { SITE } from '@/lib/seo';
+import { buildItemListJsonLd, asGraph } from '@/lib/structured-data';
+import StoreImage from '@/components/StoreImage';
 
 export default function DealsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -35,6 +38,30 @@ export default function DealsPage() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+      {/* Structured data: ItemList of the visible deals so the page can
+          earn rich results (same pattern as /products). */}
+      {products.length > 0 && (
+        <script
+          type="application/ld+json"
+          data-testid="json-ld-deals"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              asGraph([
+                buildItemListJsonLd(
+                  'Deals & Sales',
+                  products.slice(0, 50).map((p, i) => ({
+                    url: `${SITE}/products/${p.slug}`,
+                    name: p.name,
+                    image: p.images?.[0] ? getImageUrl(p.images[0].url) : undefined,
+                    position: i + 1,
+                  })),
+                  `${SITE}/deals`,
+                ),
+              ]),
+            ),
+          }}
+        />
+      )}
       {/* Hero */}
       <div style={{
         background: 'linear-gradient(135deg, #ef4444, #f97316)',
@@ -108,6 +135,7 @@ export default function DealsPage() {
 
               {/* Product Image */}
               <div style={{
+                position: 'relative',
                 aspectRatio: '1',
                 backgroundColor: '#f5f5f5',
                 display: 'flex',
@@ -116,7 +144,7 @@ export default function DealsPage() {
                 overflow: 'hidden',
               }}>
                 {product.images && product.images.length > 0 && product.images[0]?.url ? (
-                  <img src={getImageUrl(product.images[0].url)} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <StoreImage src={getImageUrl(product.images[0].url)} alt={product.name} fill style={{ objectFit: 'cover' }} />
                 ) : (
                   <span style={{ fontSize: '64px' }}>{getCategoryEmoji(product.category?.name)}</span>
                 )}

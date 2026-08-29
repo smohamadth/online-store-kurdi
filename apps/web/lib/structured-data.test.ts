@@ -24,6 +24,7 @@ import {
   buildWebSiteJsonLd,
   buildBlogPostingJsonLd,
   buildDigitalDocumentJsonLd,
+  buildFaqJsonLd,
   type JsonLdObject,
 } from './structured-data';
 
@@ -434,6 +435,35 @@ describe('buildDigitalDocumentJsonLd', () => {
 
   it('serialises to valid JSON', () => {
     const out = buildDigitalDocumentJsonLd(base);
+    expect(() => JSON.parse(JSON.stringify(out))).not.toThrow();
+  });
+});
+
+describe('buildFaqJsonLd', () => {
+  it('builds a FAQPage with a Question/AcceptedAnswer per item', () => {
+    const out = buildFaqJsonLd([
+      { question: 'How long does shipping take?', answer: '3-7 business days.' },
+      { question: 'What is your return policy?', answer: '30 days.' },
+    ]);
+    expect(out['@context']).toBe('https://schema.org');
+    expect(out['@type']).toBe('FAQPage');
+    const main = out.mainEntity as any[];
+    expect(main).toHaveLength(2);
+    expect(main[0]['@type']).toBe('Question');
+    expect(main[0].name).toBe('How long does shipping take?');
+    expect(main[0].acceptedAnswer['@type']).toBe('Answer');
+    expect(main[0].acceptedAnswer.text).toBe('3-7 business days.');
+    expect(main[1].name).toBe('What is your return policy?');
+  });
+
+  it('emits an empty mainEntity array for no FAQs', () => {
+    const out = buildFaqJsonLd([]);
+    expect(out['@type']).toBe('FAQPage');
+    expect(out.mainEntity).toEqual([]);
+  });
+
+  it('serialises to valid JSON (the script tag stringifies it)', () => {
+    const out = buildFaqJsonLd([{ question: 'Q', answer: 'A' }]);
     expect(() => JSON.parse(JSON.stringify(out))).not.toThrow();
   });
 });

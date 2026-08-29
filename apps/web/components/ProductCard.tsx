@@ -6,6 +6,7 @@ import { Product, getImageUrl, getCategoryEmoji } from '@/lib/api';
 import { formatPrice } from '@/lib/settings';
 import { useCart } from '@/lib/store';
 import { useCompare } from '@/lib/compare';
+import StoreImage from '@/components/StoreImage';
 
 interface Props {
   product: Product;
@@ -102,14 +103,12 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
       >
         {showImage ? (
           <>
-            <img
+            <StoreImage
               src={getImageUrl(primary)}
               alt={product.images?.[0]?.alt || product.name}
-              loading="lazy"
+              fill
               onError={() => setImgFailed(true)}
               style={{
-                width: '100%',
-                height: '100%',
                 objectFit: 'cover',
                 transition: 'transform 500ms ease, opacity 300ms ease',
                 transform: hovered ? 'scale(1.06)' : 'scale(1)',
@@ -117,16 +116,12 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
               }}
             />
             {secondary && (
-              <img
+              <StoreImage
                 src={getImageUrl(secondary)}
                 alt=""
                 aria-hidden="true"
-                loading="lazy"
+                fill
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
                   objectFit: 'cover',
                   opacity: hovered ? 1 : 0,
                   transition: 'opacity 300ms ease',

@@ -9,6 +9,7 @@ import { trackRecentlyViewed } from '@/lib/recentlyViewed';
 import { trackEvent } from '@/lib/tracking';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
+import StoreImage from '@/components/StoreImage';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
 import { API_BASE } from '@/lib/http';
@@ -372,8 +373,10 @@ export default function ProductView() {
       }}>
         {/* Product Images */}
         <div>
-          {/* Main Image */}
+          {/* Main Image - the LCP element, so it loads with
+              fetchpriority=high (next/image `priority`). */}
           <div style={{
+            position: 'relative',
             aspectRatio: '1',
             backgroundColor: '#f5f5f5',
             borderRadius: '8px',
@@ -384,10 +387,12 @@ export default function ProductView() {
             marginBottom: '12px',
           }}>
             {allImages[selectedImageIndex]?.url ? (
-              <img 
-                src={getProductImage(allImages[selectedImageIndex], 'detail')} 
+              <StoreImage
+                src={getProductImage(allImages[selectedImageIndex], 'detail')}
                 alt={product.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                fill
+                priority
+                style={{ objectFit: 'cover' }}
               />
             ) : (
               <span style={{ fontSize: '80px' }}>{getCategoryEmoji(product.category?.name)}</span>
@@ -402,6 +407,7 @@ export default function ProductView() {
                   key={img.id || i}
                   onClick={() => setSelectedImageIndex(i)}
                   style={{
+                    position: 'relative',
                     width: '60px',
                     height: '60px',
                     backgroundColor: '#f5f5f5',
@@ -416,7 +422,7 @@ export default function ProductView() {
                   }}
                 >
                   {img.url ? (
-                    <img src={getProductImage(img, 'thumbnail')} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <StoreImage src={getProductImage(img, 'thumbnail')} alt="" fill style={{ objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: '24px' }}>{getCategoryEmoji(product.category?.name)}</span>
                   )}

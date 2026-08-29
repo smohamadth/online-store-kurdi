@@ -42,6 +42,12 @@ const nextConfig = {
         port: '9000',
         pathname: '/store-files/**',
       },
+      // Merchants can paste arbitrary external image URLs into product
+      // data; StoreImage renders those as plain <img>, but absolute
+      // same-deployment URLs (e.g. an external API origin) go through
+      // next/image and need an allowlist entry to render at all.
+      { protocol: 'https', hostname: '**' },
+      { protocol: 'http', hostname: '**' },
     ],
     unoptimized: true,
   },

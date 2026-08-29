@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
+import { JsonLdScript } from '@/components/JsonLdScript';
+import { buildFaqJsonLd } from '@/lib/structured-data';
+import { faqs } from './faqData';
 import FaqView from './FaqView';
 
 /**
@@ -22,5 +25,16 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function FaqPage() {
-  return <FaqView />;
+  // Flatten every category's items into one FAQPage entity —
+  // Google wants all Q&As in a single mainEntity array.
+  const flatFaqs = faqs.flatMap((section) =>
+    section.items.map((item) => ({ question: item.q, answer: item.a })),
+  );
+
+  return (
+    <>
+      <JsonLdScript data={buildFaqJsonLd(flatFaqs)} testId="json-ld-faq" />
+      <FaqView />
+    </>
+  );
 }

@@ -386,6 +386,38 @@ export function buildDigitalDocumentJsonLd(
 }
 
 // ============================================================
+// FAQPage
+// ============================================================
+
+export interface FaqJsonLdItem {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Build the FAQPage entity for the /faq page. Google's FAQ rich
+ * result is the main long-tail traffic source for a store's FAQ
+ * ("how do I return an item?"), which is exactly why the /faq page
+ * exists with its own title + description. The entity is rendered
+ * server-side in app/faq/page.tsx (a client effect would be too
+ * late for crawlers).
+ */
+export function buildFaqJsonLd(faqs: FaqJsonLdItem[]): JsonLdObject {
+  return {
+    '@context': SCHEMA_CONTEXT,
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((f) => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: f.answer,
+      },
+    })),
+  };
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 

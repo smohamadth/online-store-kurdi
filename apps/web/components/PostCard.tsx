@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { getImageUrl } from '@/lib/api';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import StoreImage from '@/components/StoreImage';
 
 /**
  * One post in the blog grid.
@@ -50,14 +51,12 @@ export default function PostCard({ post }: { post: BlogPost }) {
     >
       <div style={{ position: 'relative', aspectRatio: '16 / 9', overflow: 'hidden' }}>
         {showImage ? (
-          <img
+          <StoreImage
             src={getImageUrl(post.coverImage!)}
             alt={post.title}
-            loading="lazy"
+            fill
             onError={() => setFailed(true)}
             style={{
-              width: '100%',
-              height: '100%',
               objectFit: 'cover',
               transition: 'transform 500ms ease',
               transform: hovered ? 'scale(1.05)' : 'scale(1)',
