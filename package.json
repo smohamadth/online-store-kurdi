@@ -37,7 +37,6 @@
     "test:web": "cd apps/web && npm run test:all",
     "test:web:lib": "cd apps/web && npm run test",
     "test:web:components": "cd apps/web && npm run test:components",
-    "docs:build": "node docs/build-pdf.cjs",
     "db:deploy": "cd apps/api && npm run db:deploy"
   },
   "devDependencies": {

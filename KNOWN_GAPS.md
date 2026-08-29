@@ -211,7 +211,7 @@ Two things had to be fixed before this was worth anything:
 Verified by deliberately reintroducing a fixed bug (disabling the `customCss`
 XSS guard): the suite went red with `exit=1` and named the failing assertion.
 
-Theming has its own suites since the THEME_PLAN.md round:
+Theming has its own suites since the theme-system round (see README section 9):
 `verify-theme.py` (browser: every preset reaches computed styles, dark-theme
 contrast guards, admin isolation) and `verify-theme-tokens.js` (no browser:
 token completeness + a hardcoded-colour ratchet on the swept storefront
