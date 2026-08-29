@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { http, authHttp, errorMessage } from '@/lib/http';
 import { useIsMobile } from '@/lib/hooks';
 
@@ -153,12 +154,28 @@ export default function AdminCategoriesPage() {
           <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Categories</h2>
           <p style={{ color: '#666', fontSize: '14px' }}>{categories.length} categories</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setEditingCategory(null); setShowModal(true); }}
-          style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
-        >
-          + Add Category
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link
+            href="/admin/import-export"
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'white',
+              color: '#000',
+              border: '1px solid #000',
+              borderRadius: '6px',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            ⇅ Import / Export
+          </Link>
+          <button
+            onClick={() => { resetForm(); setEditingCategory(null); setShowModal(true); }}
+            style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            + Add Category
+          </button>
+        </div>
       </div>
 
       {/* Categories Table */}

@@ -345,20 +345,36 @@ export default function AdminProductsPage() {
           <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Products</h2>
           <p style={{ color: '#666', fontSize: '14px' }}>{products.length} total products</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setEditingProduct(null); setShowAddModal(true); }}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#000',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Add Product
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link
+            href="/admin/import-export"
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'white',
+              color: '#000',
+              border: '1px solid #000',
+              borderRadius: '6px',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            ⇅ Import / Export
+          </Link>
+          <button
+            onClick={() => { resetForm(); setEditingProduct(null); setShowAddModal(true); }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#000',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Add Product
+          </button>
+        </div>
       </div>
 
       {/* Search */}

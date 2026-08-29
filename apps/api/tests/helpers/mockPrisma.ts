@@ -530,7 +530,17 @@ function applyInclude(rows: any, include: any, select?: any, parentModel: string
             }
           }
         }
-        if (many.length) out[k] = many;
+        if (many.length) {
+          out[k] = many;
+        } else if (
+          // Real Prisma returns [] (never undefined) for a has-many
+          // include. Detect the has-many convention - at least one child
+          // row carries the parent FK - and emit the empty array.
+          // Belongs-to includes keep their undefined/null value.
+          [...contextualStore.values()].some((row) => fkCandidates.some((fk) => fk in row))
+        ) {
+          out[k] = [];
+        }
       }
     }
   }

@@ -142,6 +142,7 @@ export default function AdminLayout({
         { path: '/admin/variants', label: 'Variants', icon: '🏷️' },
         { path: '/admin/categories', label: 'Categories', icon: '🏷️' },
         { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
+        { path: '/admin/import-export', label: 'Import / Export', icon: '⇅' },
       ],
     },
     {

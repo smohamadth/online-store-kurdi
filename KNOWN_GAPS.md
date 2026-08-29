@@ -282,3 +282,33 @@ The product is pre-release, so the clean fix is a single canonical migration
 set generated from the current `schema.prisma` (drop `prisma/migrations/`,
 `npx prisma migrate dev --name init`, commit the result). Until that lands,
 CI and any deployment built from a clean checkout cannot be trusted.
+
+---
+
+## 10. Bulk import/export — shipped (admin)
+
+**Status:** complete. `apps/api/src/modules/importExport/` mounted at
+`/api/import-export` (admin + manager), UI at `/admin/import-export`
+(linked from the Products and Categories pages and the sidebar).
+
+* **Export** — `GET /export/:entity?format=csv|json&sample=1` for
+  `products` (variants, images and SEO fields included) and `categories`
+  (parent links). `sample=1` returns a one-row template.
+* **Import** — `POST /preview` classifies every row (create / update /
+  error) without writing; `POST /commit` re-validates the raw file and
+  applies it **all-or-nothing** in one Prisma transaction. Products match
+  by SKU, categories by slug then name (case-insensitive). On update,
+  empty cells are ignored; `variants`/`images` columns, when present,
+  replace the existing ones.
+* **Limits** — 1,000,000 characters and 2,000 rows per file
+  (`MAX_INPUT_CHARS` / `MAX_ROWS` in `mappers.ts`); the express body
+  limit is 10 MB.
+* **Not done on purpose** — images are imported as URL strings only (no
+  file upload/migration), orders/customers are not importable, and the
+  preview→commit gap is not a lock: if someone edits the catalogue
+  between preview and commit, the commit re-validates and may classify
+  differently (or roll back). All three are natural follow-ups, not bugs.
+
+Covered by `tests/integration/importExport.test.ts` (29 tests) and
+`tests/unit/csv.test.ts` (parser edge cases: Excel `value, "quoted"`
+cells, CRLF, blank lines).

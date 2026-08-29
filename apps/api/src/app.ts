@@ -46,6 +46,7 @@ import menuRoutes from './modules/menus/menu.routes';
 import bannerRoutes from './modules/banners/banner.routes';
 import dashboardRoutes from './modules/analytics/dashboard.routes';
 import themeRoutes from './modules/theme/theme.routes';
+import importExportRoutes from './modules/importExport/routes';
 import homeSectionRoutes from './modules/home/home.routes';
 import pageRoutes from './modules/pages/page.routes';
 import blogRoutes from './modules/blog/blog.routes';
@@ -243,6 +244,9 @@ app.use('/api/home-sections', homeSectionRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/currencies', currencyRoutes);
+// Bulk import/export (admin). Export is a file download; import is a
+// preview (validate, no write) then an all-or-nothing commit.
+app.use('/api/import-export', importExportRoutes);
 // Digital downloads. Three routers, three mount points - the
 // public token route is at /api/downloads/*, account-scoped
 // routes are at /api/account/downloads, and the per-order-item
