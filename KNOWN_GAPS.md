@@ -58,14 +58,17 @@ For local testing, MailHog on `localhost:1025` works with the defaults.
 
 ---
 
-## 3. Settings that are stored but unused
+## 3. ~~Settings that are stored but unused~~ — FIXED
+
+Both previously-orphaned fields are now consumed:
 
 | Field | State |
 |---|---|
-| `storeAddress` | saved, not displayed anywhere |
-| `googleAnalyticsId` | saved, no tracking script injected |
+| `storeAddress` | Rendered in the storefront footer (`AppShell.tsx`, `📍 {storeAddress}`) when set |
+| `googleAnalyticsId` | Injects the gtag bootstrap + `googletagmanager.com` script in the root layout (`layout.tsx`, via `buildGtagSnippet`) when set |
 
-Both persist correctly; nothing consumes them yet.
+Both persist via `PUT /api/settings` and only take effect when the owner
+actually sets them — an empty value injects/renders nothing.
 
 ---
 
@@ -278,10 +281,20 @@ therefore creates a schema missing those tables, and the seed + new routes hit
 missing tables. Existing dev databases only work because they were built with
 `prisma db push` or an earlier full schema.
 
-The product is pre-release, so the clean fix is a single canonical migration
-set generated from the current `schema.prisma` (drop `prisma/migrations/`,
-`npx prisma migrate dev --name init`, commit the result). Until that lands,
-CI and any deployment built from a clean checkout cannot be trusted.
+The product is pre-release. The fix is automated:
+
+- **`scripts/sync-migrations.sh`** — run once on a machine with network
+  access (the Prisma engine is network-fetched). It applies the committed
+  migrations, detects the drift, generates a `auto_sync_schema` migration
+  that closes the gap, applies it, and verifies the result. Then commit
+  `apps/api/prisma/migrations/`.
+- **`scripts/verify-migrations.sh`** — a read-only drift guard: fails if the
+  migrations and `schema.prisma` have drifted, so a regression can't ship
+  silently. A `api-checks` step for it is staged in `.github/workflows/ci.yml`
+  (before `migrate deploy`), waiting on `workflows` permission to push.
+
+Until the sync migration is generated + committed, CI's drift guard is red
+and any deployment built from a clean checkout cannot be trusted.
 
 ---
 
