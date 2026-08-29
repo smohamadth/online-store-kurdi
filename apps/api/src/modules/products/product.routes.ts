@@ -8,8 +8,10 @@ import { NotFoundError, ConflictError, AppError } from '../../middleware/errorHa
 import slugify from 'slugify';
 import { z } from 'zod';
 import { listProducts, getFacets, parseFilterFromQuery } from './productFilter.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 const router = Router();
+const analyticsService = new AnalyticsService();
 
 // Validation schemas
 const createProductSchema = z.object({
@@ -285,6 +287,21 @@ router.get('/search', async (req, res, next) => {
       },
       take: searchLimit,
     });
+
+    // Track the search (feeds /api/analytics/search). No-op unless the
+    // store opted in with ANALYTICS_TRACKING_ENABLED - off by default,
+    // and the /privacy page says exactly that.
+    if (process.env.ANALYTICS_TRACKING_ENABLED === 'true') {
+      await analyticsService.trackEvent({
+        userId: req.user?.id,
+        sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
+        eventType: 'search',
+        searchQuery: q,
+        metadata: { resultsCount: products.length },
+        userAgent: req.get('User-Agent'),
+        ipAddress: req.ip,
+      });
+    }
 
     res.json({
       status: 'success',

@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
-import { mockPrisma } from '../helpers/mockPrisma';
+import { mockPrisma, peekMockStore } from '../helpers/mockPrisma';
 import { createProduct, createVariant, createAddress, createOrder } from '../helpers/factories';
 import type { Express } from 'express';
 
@@ -354,5 +354,41 @@ describe('GET /api/orders/:id/tracking', () => {
       .get(`/api/orders/${o.id}/tracking`)
       .set('Authorization', `Bearer ${admin}`);
     expect(res.status).toBe(200);
+  });
+});
+
+
+describe('purchase event tracking (server-side)', () => {
+  it('records one purchase event per line item when tracking is enabled', async () => {
+    process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    try {
+      const { token } = await authHeader();
+      const p = await createProduct({ price: 10, quantity: 50 });
+      const res = await request(app)
+        .post('/api/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ items: [{ productId: p.id, quantity: 2 }] });
+      expect(res.status).toBe(201);
+      const events = peekMockStore('userEvent').filter((e: any) => e.eventType === 'purchase');
+      expect(events).toHaveLength(1);
+      expect(events[0].productId).toBe(p.id);
+      const meta = JSON.parse(events[0].metadata);
+      expect(meta.quantity).toBe(2);
+      expect(String(meta.orderId)).toBe(res.body.data.id);
+    } finally {
+      delete process.env.ANALYTICS_TRACKING_ENABLED;
+    }
+  });
+
+  it('records no purchase events when tracking is disabled (default)', async () => {
+    delete process.env.ANALYTICS_TRACKING_ENABLED;
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 1 }] });
+    expect(res.status).toBe(201);
+    expect(peekMockStore('userEvent')).toHaveLength(0);
   });
 });

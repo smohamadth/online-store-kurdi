@@ -6,6 +6,7 @@ import { decrementStock, consumeReservationsForCartItemIds } from '../inventory/
 import { logger } from '../../utils/logger';
 import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
 import { mintDownloadForOrderItem } from '../downloads/downloads.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { env } from '../../config/environment';
 import { getStripe, isStripeConfigured } from '../../config/stripe';
 
@@ -365,6 +366,28 @@ router.post('/', authenticate, async (req, res, next) => {
         shippingAddress: true,
       },
     });
+
+    // Analytics: record a purchase event per line item so the
+    // recommendation engine can learn co-purchases ("customers also
+    // bought"). One event per line keeps productId clean for the
+    // groupBy the recommendations run. Off by default like every
+    // other analytics write - the /privacy page documents it.
+    // (The service swallows its own errors, so tracking can never
+    // fail an order.)
+    if (process.env.ANALYTICS_TRACKING_ENABLED === 'true') {
+      const analyticsService = new AnalyticsService();
+      for (const line of orderItems) {
+        await analyticsService.trackEvent({
+          userId: req.user!.id,
+          sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
+          eventType: 'purchase',
+          productId: line.productId,
+          metadata: { orderId: order.id, orderNumber, quantity: line.quantity },
+          userAgent: req.get('User-Agent'),
+          ipAddress: req.ip,
+        });
+      }
+    }
 
     // Card payment: hand the customer a Stripe Checkout session for
     // this order. The webhook settles the order server-side; the

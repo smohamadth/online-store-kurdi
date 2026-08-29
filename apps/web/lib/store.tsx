@@ -2,6 +2,7 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { api } from './api';
+import { trackEvent } from './tracking';
 
 // Types
 export interface CartItem {
@@ -160,6 +161,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         return [...prev, { ...item, id: uniqueId }];
       }
+    });
+
+    // Analytics: add-to-cart event (feeds view-to-cart conversion).
+    trackEvent({
+      eventType: 'add_to_cart',
+      productId: item.productId,
+      metadata: { quantity: item.quantity },
     });
 
     // Try to save to database

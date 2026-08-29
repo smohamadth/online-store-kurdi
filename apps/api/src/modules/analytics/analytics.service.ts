@@ -120,6 +120,9 @@ export class AnalyticsService {
               name: true,
               slug: true,
               price: true,
+              // Needed by analyzeBehavior's category-preferences pass
+              // (it reads event.product.category.name).
+              category: { select: { name: true } },
               images: {
                 where: { isPrimary: true },
                 take: 1,

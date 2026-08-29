@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { useCompare } from '@/lib/compare';
 import { trackRecentlyViewed } from '@/lib/recentlyViewed';
+import { trackEvent } from '@/lib/tracking';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
@@ -58,6 +59,15 @@ export default function ProductView() {
   useEffect(() => {
     if (product?.id) checkWishlistStatus(product.id);
   }, [product?.id]);
+
+  // Analytics: one view event per product page load (feeds trending,
+  // conversion rates and "based on your browsing history"). No-op
+  // when the store has not enabled analytics.
+  useEffect(() => {
+    if (product?.id) {
+      trackEvent({ eventType: 'view', productId: product.id, metadata: { slug } });
+    }
+  }, [product?.id, slug]);
 
   const fetchProduct = async () => {
     setLoading(true);
@@ -209,6 +219,7 @@ export default function ProductView() {
           body: JSON.stringify({ productId: product.id }),
         });
         setInWishlist(true);
+        trackEvent({ eventType: 'wishlist', productId: product.id });
       }
     } catch (err) {
       console.error('Wishlist error:', err);
