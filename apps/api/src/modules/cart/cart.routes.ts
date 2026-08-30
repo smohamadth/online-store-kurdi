@@ -441,44 +441,36 @@ router.post('/sync', authenticate, async (req, res, next) => {
       where: { userId },
     });
 
-    // Add items from local cart
-    const cartItems = [];
+    // Merge duplicates inside the incoming list in JS, then insert the
+    // merged rows in ONE createMany. The old code did a findFirst +
+    // create/update per incoming row (2N round trips) to handle the only
+    // duplicates that can exist after the delete - rows created earlier
+    // in the same loop. Same end state, 2 queries total.
+    // `quantity || 1` mirrors the old create/update: a zero/missing
+    // quantity meant "one" and still does.
+    const merged = new Map<string, { productId: string; variantId: string | null; quantity: number }>();
     for (const item of items) {
-      // Only useful for duplicates inside the incoming list (see header)
-      const existing = await prisma.cartItem.findFirst({
-        where: {
-          userId,
-          productId: item.productId,
-          variantId: item.variantId || null,
-        },
-      });
+      const key = `${item.productId}|${item.variantId || ''}`;
+      const qty = item.quantity || 1;
+      const existing = merged.get(key);
+      if (existing) existing.quantity += qty;
+      else merged.set(key, { productId: item.productId, variantId: item.variantId || null, quantity: qty });
+    }
+    const rows = [...merged.values()];
 
-      if (existing) {
-        // Duplicate in the local list - add the quantities
-        const updated = await prisma.cartItem.update({
-          where: { id: existing.id },
-          data: { quantity: existing.quantity + (item.quantity || 1) },
-        });
-        cartItems.push(updated);
-      } else {
-        // Create new item
-        const cartItem = await prisma.cartItem.create({
-          data: {
-            userId,
-            productId: item.productId,
-            variantId: item.variantId || null,
-            quantity: item.quantity || 1,
-          },
-        });
-        cartItems.push(cartItem);
-      }
+    if (rows.length > 0) {
+      await prisma.cartItem.createMany({
+        data: rows.map((r) => ({ userId, productId: r.productId, variantId: r.variantId, quantity: r.quantity })),
+      });
     }
 
-    logger.info(`Cart synced for user ${userId}: ${cartItems.length} items`);
+    logger.info(`Cart synced for user ${userId}: ${rows.length} items`);
 
+    // The response rows are the merged inputs (no DB ids) - the client
+    // ignores the body and the cart is re-fetched for display.
     res.json({
       status: 'success',
-      data: cartItems,
+      data: rows,
     });
   } catch (err) {
     next(err);

@@ -418,17 +418,22 @@ router.post('/', authenticate, async (req, res, next) => {
     // fail an order.)
     if (process.env.ANALYTICS_TRACKING_ENABLED === 'true') {
       const analyticsService = new AnalyticsService();
-      for (const line of orderItems) {
-        await analyticsService.trackEvent({
-          userId: req.user!.id,
-          sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
-          eventType: 'purchase',
-          productId: line.productId,
-          metadata: { orderId: order.id, orderNumber, quantity: line.quantity },
-          userAgent: req.get('User-Agent'),
-          ipAddress: req.ip,
-        });
-      }
+      // One event per line, fired in parallel - each trackEvent is
+      // independent (separate rows) and swallows its own errors, so a
+      // tracking failure can never fail the order.
+      await Promise.all(
+        orderItems.map((line) =>
+          analyticsService.trackEvent({
+            userId: req.user!.id,
+            sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
+            eventType: 'purchase',
+            productId: line.productId,
+            metadata: { orderId: order.id, orderNumber, quantity: line.quantity },
+            userAgent: req.get('User-Agent'),
+            ipAddress: req.ip,
+          }),
+        ),
+      );
     }
 
     // Card payment: hand the customer a Stripe Checkout session for
@@ -474,48 +479,53 @@ router.post('/', authenticate, async (req, res, next) => {
     // them. We also keep the legacy product-level URL on
     // OrderItem.downloadUrl for backward compatibility with
     // orders placed before the token system shipped.
-    for (const item of order.items) {
-      const isDigital = item.product?.type === 'digital';
-      if (!isDigital) continue;
-      const sourceUrl = item.downloadUrl || item.product?.downloadUrl;
-      if (!sourceUrl) {
-        // Defensive: a digital product without a download URL
-        // is a config error, not a payment failure. The order
-        // succeeds; we just skip minting a token. Log it so
-        // an admin notices.
-        logger.warn(
-          `Skipped download token for orderItem=${item.id} ` +
-          `product=${item.productId}: no downloadUrl configured`,
-        );
-        continue;
-      }
-      try {
-        await mintDownloadForOrderItem({
-          orderItemId: item.id,
-          sourceUrl,
-          // Schema column is days; the per-order column is a
-          // Date. Read what we snapshoted on the order item.
-          expiryDays: item.downloadExpiry
-            ? Math.max(0, Math.ceil(
-                (item.downloadExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-              ))
-            : null,
-          // Per-token download limit. Copied from the
-          // OrderItem.downloadLimit snapshot (which in turn was
-          // copied from the product). null = unlimited.
-          downloadLimit: item.downloadLimit,
-          purchaseDate: order.createdAt,
-        });
-      } catch (err) {
-        // Don't fail the whole order if the download mint
-        // fails; the order is paid for. We log so an admin
-        // can retry.
-        logger.error(
-          `Failed to mint download for orderItem=${item.id}:`,
-          err as any,
-        );
-      }
-    }
+    // Minted in parallel: every digital line mints its own independent
+    // token row. The per-line try/catch (inside the map) keeps the old
+    // guarantee that one failed mint never fails the paid order.
+    await Promise.all(
+      order.items.map(async (item) => {
+        const isDigital = item.product?.type === 'digital';
+        if (!isDigital) return;
+        const sourceUrl = item.downloadUrl || item.product?.downloadUrl;
+        if (!sourceUrl) {
+          // Defensive: a digital product without a download URL
+          // is a config error, not a payment failure. The order
+          // succeeds; we just skip minting a token. Log it so
+          // an admin notices.
+          logger.warn(
+            `Skipped download token for orderItem=${item.id} ` +
+              `product=${item.productId}: no downloadUrl configured`,
+          );
+          return;
+        }
+        try {
+          await mintDownloadForOrderItem({
+            orderItemId: item.id,
+            sourceUrl,
+            // Schema column is days; the per-order column is a
+            // Date. Read what we snapshoted on the order item.
+            expiryDays: item.downloadExpiry
+              ? Math.max(0, Math.ceil(
+                  (item.downloadExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+                ))
+              : null,
+            // Per-token download limit. Copied from the
+            // OrderItem.downloadLimit snapshot (which in turn was
+            // copied from the product). null = unlimited.
+            downloadLimit: item.downloadLimit,
+            purchaseDate: order.createdAt,
+          });
+        } catch (err) {
+          // Don't fail the whole order if the download mint
+          // fails; the order is paid for. We log so an admin
+          // can retry.
+          logger.error(
+            `Failed to mint download for orderItem=${item.id}:`,
+            err as any,
+          );
+        }
+      }),
+    );
 
     // Re-fetch the order so the email includes the freshly
     // minted download rows.
@@ -536,30 +546,50 @@ router.post('/', authenticate, async (req, res, next) => {
     // handles backorder allowance and writes an InventoryLog entry.
     // We also persist the backorder flag on the OrderItem so the
     // storefront can show "preorder" UI to the customer.
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const result = await decrementStock({
-        productId: item.productId,
-        variantId: item.variantId ?? undefined,
-        quantity: item.quantity,
-        orderId: order.id,
-        userId: req.user!.id,
+    //
+    // Lines for the SAME product read-modify-write the same stock row,
+    // so they must run sequentially; lines for DIFFERENT products touch
+    // disjoint rows and run in parallel (a 5-item cart of 5 products is
+    // now 1 round trip of parallel transactions, not 5 serial ones).
+    const itemsByProduct = new Map<string, typeof items>();
+    for (const item of items) {
+      if (!itemsByProduct.has(item.productId)) itemsByProduct.set(item.productId, []);
+      itemsByProduct.get(item.productId)!.push(item);
+    }
+    const decrementResults = (
+      await Promise.all(
+        [...itemsByProduct.values()].map(async (group) => {
+          const groupResults: { item: (typeof items)[number]; wasBackorder: boolean }[] = [];
+          for (const item of group) {
+            const result = await decrementStock({
+              productId: item.productId,
+              variantId: item.variantId ?? undefined,
+              quantity: item.quantity,
+              orderId: order.id,
+              userId: req.user!.id,
+            });
+            groupResults.push({ item, wasBackorder: result.wasBackorder });
+          }
+          return groupResults;
+        }),
+      )
+    ).flat();
+
+    for (const { item, wasBackorder } of decrementResults) {
+      if (!wasBackorder) continue;
+      // Find the matching OrderItem and patch its isBackorder flag.
+      const orderItem = await prisma.orderItem.findFirst({
+        where: {
+          orderId: order.id,
+          productId: item.productId,
+          ...(item.variantId ? { variantId: item.variantId } : {}),
+        },
       });
-      if (result.wasBackorder) {
-        // Find the matching OrderItem and patch its isBackorder flag.
-        const orderItem = await prisma.orderItem.findFirst({
-          where: {
-            orderId: order.id,
-            productId: item.productId,
-            ...(item.variantId ? { variantId: item.variantId } : {}),
-          },
+      if (orderItem) {
+        await prisma.orderItem.update({
+          where: { id: orderItem.id },
+          data: { isBackorder: true },
         });
-        if (orderItem) {
-          await prisma.orderItem.update({
-            where: { id: orderItem.id },
-            data: { isBackorder: true },
-          });
-        }
       }
     }
 
