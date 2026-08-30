@@ -270,15 +270,35 @@ router.post('/', authenticate, async (req, res, next) => {
     let calculatedSubtotal = 0;
     const orderItems: any[] = [];
 
+    // Load every product (and the referenced variants) in ONE round trip
+    // each, then resolve per line item from the maps. The old code did a
+    // sequential findUnique per cart line - N round trips on the
+    // checkout hot path, which serialised behind each other on a
+    // networked Postgres.
+    const productIds = [...new Set(items.map((i) => i.productId))];
+    const variantIds = [...new Set(items.map((i) => i.variantId).filter(Boolean) as string[])];
+    const [products, variants] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: productIds } } }),
+      variantIds.length
+        ? prisma.variant.findMany({ where: { id: { in: variantIds } } })
+        : Promise.resolve([] as any[]),
+    ]);
+    const productById = new Map(products.map((p: any) => [p.id, p]));
+    const variantById = new Map(variants.map((v: any) => [v.id, v]));
+
     for (const item of items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        include: {
-          variants: item.variantId ? {
-            where: { id: item.variantId },
-          } : undefined,
-        },
-      });
+      const product = productById.get(item.productId);
+      // Same shape as the old per-item include: at most one variant row,
+      // only when the line item referenced one. A stale variantId (the
+      // admin deleted it) resolves to nothing; a variantId that belongs
+      // to a DIFFERENT product is ignored too (the old per-product
+      // include could never return it) - falling back to the product
+      // price/stock, exactly as before.
+      const matchedVariant = item.variantId ? variantById.get(item.variantId) : undefined;
+      const variant = matchedVariant && matchedVariant.productId === item.productId
+        ? matchedVariant
+        : undefined;
+      const productVariants = variant ? [variant] : [];
 
       if (!product) {
         throw new AppError(`Product not found: ${item.productId}`, 400);
@@ -294,7 +314,7 @@ router.post('/', authenticate, async (req, res, next) => {
       // non-tracked-inventory mismatch on a non-existent variant.
       if (product.trackInventory) {
         const availableQuantity = item.variantId
-          ? product.variants[0]?.quantity || 0
+          ? productVariants[0]?.quantity || 0
           : product.quantity;
         // Only reject if neither backorder nor a sufficient pool.
         if (availableQuantity < item.quantity && !product.allowBackorder) {
@@ -302,8 +322,8 @@ router.post('/', authenticate, async (req, res, next) => {
         }
       }
 
-      const unitPrice = item.variantId && product.variants[0]
-        ? Number(product.variants[0].price)
+      const unitPrice = item.variantId && productVariants[0]
+        ? Number(productVariants[0].price)
         : Number(product.price);
 
       const totalPrice = unitPrice * item.quantity;

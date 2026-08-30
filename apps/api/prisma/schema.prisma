@@ -538,6 +538,7 @@ model OrderItem {
   
   @@index([orderId])
   @@index([productId])
+  @@index([variantId])
 }
 
 // Per-purchase download token.
@@ -1033,6 +1034,8 @@ model InventoryLog {
   @@index([productId])
   @@index([createdAt])
   @@index([reason])
+  @@index([variantId])
+  @@index([orderId])
 }
 
 // Per-product low-stock notification config (the admin's Stock alerts
@@ -1218,6 +1221,7 @@ model StockTakeItem {
   warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
 
   @@index([stockTakeId])
+  @@index([productId])
 }
 
 // Auto-reorder rules. When a product's effective stock drops below
@@ -1361,6 +1365,7 @@ model ShippingZone {
   updatedAt     DateTime  @updatedAt
 
   methods       ShippingMethod[]
+  @@index([isActive])
 }
 
 // A priced shipping option belonging to a zone. `type` selects the

@@ -293,16 +293,91 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     optionValueIds: filter.optionValueId?.length ? filter.optionValueId : undefined,
   });
 
+  // All of the facet data below is independent of the other (every where
+  // clause is computed up front), so fire the whole set in ONE parallel
+  // batch instead of ~10 sequential round trips. On a networked Postgres
+  // this is the difference between ~10x latency and 1x for the hottest
+  // page in the storefront. The per-type counts (formerly one
+  // product.count per type in a loop) collapse into a single groupBy.
+  const inStockWhere = { ...baseWhere, status: 'active' };
+  const [
+    categories,
+    categoryCounts,
+    typeCounts,
+    priceAgg,
+    inStockCount,
+    totalActive,
+    onSaleCandidates,
+    reviews,
+    variants,
+    optionRows,
+  ] = await Promise.all([
+    prisma.category.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
+    prisma.product.groupBy({
+      by: ['categoryId'],
+      where: { ...candidate('category'), status: 'active' },
+      _count: { _all: true },
+    }),
+    prisma.product.groupBy({
+      by: ['type'],
+      where: { ...candidate('type'), status: 'active' },
+      _count: { _all: true },
+    }),
+    prisma.product.aggregate({
+      where: { ...baseWhere, status: 'active' },
+      _min: { price: true },
+      _max: { price: true },
+    }),
+    prisma.product.count({
+      where: {
+        ...inStockWhere,
+        OR: [{ quantity: { gt: 0 } }, { trackInventory: false }],
+      },
+    }),
+    prisma.product.count({ where: { ...inStockWhere, status: 'active' } }),
+    // We can't express compareAtPrice > price in Prisma where, so we
+    // approximate the count with the candidate set and a post-filter.
+    prisma.product.findMany({
+      where: {
+        ...baseWhere,
+        status: 'active',
+        compareAtPrice: { not: null },
+      },
+      select: { price: true, compareAtPrice: true },
+    }),
+    prisma.review.findMany({
+      where: {
+        product: { ...baseWhere, status: 'active' },
+        isApproved: true,
+      },
+      select: { productId: true, rating: true },
+    }),
+    prisma.variant.findMany({
+      where: { isActive: true, product: { ...baseWhere, status: 'active' } },
+      select: { attributes: true },
+    }),
+    prisma.option.findMany({
+      where: { product: { ...baseWhere, status: 'active' } },
+      include: {
+        values: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            // The VariantOptionValue rows are the join between a
+            // Variant and an OptionValue. We need the count of
+            // DISTINCT products that have a variant pointing at this
+            // option value (under the current filter).
+            variantValues: {
+              where: { variant: { isActive: true, product: { ...candidate('optionValueId'), status: 'active' } } },
+              select: { variant: { select: { productId: true } } },
+            },
+          },
+        },
+      },
+      orderBy: { sortOrder: 'asc' },
+    }),
+  ]);
+
   // Categories
-  const categories = await prisma.category.findMany({
-    where: { isActive: true },
-    orderBy: { name: 'asc' },
-  });
-  const categoryCounts = await prisma.product.groupBy({
-    by: ['categoryId'],
-    where: { ...candidate('category'), status: 'active' },
-    _count: { _all: true },
-  });
   const catCountMap = new Map<string, number>();
   for (const row of categoryCounts as any[]) {
     catCountMap.set(String(row.categoryId), Number(row._count?._all ?? 0));
@@ -317,63 +392,23 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     // current candidate set.
     .filter((f) => f.count > 0 || f.selected);
 
-  // Types
-  const allTypes: ('physical' | 'digital')[] = ['physical', 'digital'];
-  const typeFacets: FacetBucket<'physical' | 'digital'>[] = [];
-  for (const t of allTypes) {
-    const count = await prisma.product.count({
-      where: { ...candidate('type'), type: t, status: 'active' },
-    });
-    typeFacets.push({ value: t, count, selected: (filter.type || []).includes(t) });
+  // Types (from the groupBy above - one row per type that exists)
+  const typeCountMap = new Map<string, number>();
+  for (const row of typeCounts as any[]) {
+    typeCountMap.set(String(row.type), Number(row._count?._all ?? 0));
   }
+  const allTypes: ('physical' | 'digital')[] = ['physical', 'digital'];
+  const typeFacets: FacetBucket<'physical' | 'digital'>[] = allTypes.map((t) => ({
+    value: t,
+    count: typeCountMap.get(t) ?? 0,
+    selected: (filter.type || []).includes(t),
+  }));
 
-  // Price range (over the base set)
-  const priceAgg = await prisma.product.aggregate({
-    where: { ...baseWhere, status: 'active' },
-    _min: { price: true },
-    _max: { price: true },
-  });
-
-  // In stock
-  const inStockWhere = { ...baseWhere, status: 'active' };
-  const inStockCount = await prisma.product.count({
-    where: {
-      ...inStockWhere,
-      OR: [{ quantity: { gt: 0 } }, { trackInventory: false }],
-    },
-  });
-  const totalActive = await prisma.product.count({ where: { ...inStockWhere, status: 'active' } });
-
-  // On sale
-  const onSaleCount = await prisma.product.count({
-    where: {
-      ...baseWhere,
-      status: 'active',
-      compareAtPrice: { not: null },
-    },
-  });
-  // We can't express compareAtPrice > price in Prisma where, so we
-  // approximate the count with the candidate set and a post-filter.
-  const onSaleCandidates = await prisma.product.findMany({
-    where: {
-      ...baseWhere,
-      status: 'active',
-      compareAtPrice: { not: null },
-    },
-    select: { price: true, compareAtPrice: true },
-  });
+  // (onSale count = the candidate rows; the returned count is the
+  // post-filtered "really on sale" number, onSaleReal, below.)
   const onSaleReal = onSaleCandidates.filter(
     (p) => Number(p.compareAtPrice) > Number(p.price),
   ).length;
-
-  // Rating buckets
-  const reviews = await prisma.review.findMany({
-    where: {
-      product: { ...baseWhere, status: 'active' },
-      isApproved: true,
-    },
-    select: { productId: true, rating: true },
-  });
   const byProduct = new Map<string, number[]>();
   for (const r of reviews) {
     if (!byProduct.has(r.productId)) byProduct.set(r.productId, []);
@@ -397,11 +432,8 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
   };
 
   // Attributes: enumerate distinct (key, value) pairs across all
-  // variants of the base candidate set.
-  const variants = await prisma.variant.findMany({
-    where: { isActive: true, product: { ...baseWhere, status: 'active' } },
-    select: { attributes: true },
-  });
+  // variants of the base candidate set (variants came from the batch
+  // above).
   const attrTally = new Map<string, Map<string, number>>();
   for (const v of variants) {
     const parsed = parseAttributes(v.attributes);
@@ -435,29 +467,10 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     attributes[key] = entries;
   }
 
-  // Typed options. Pull every Option across the candidate products
-  // and bucket the OptionValues. We group by (optionId) so a single
+  // Typed options. optionRows came from the batch above; every Option
+  // across the candidate products is bucketed by name so a single
   // "Color" option on a product shows up once with the union of
   // values across all products that use it.
-  const optionRows = await prisma.option.findMany({
-    where: { product: { ...baseWhere, status: 'active' } },
-    include: {
-      values: {
-        orderBy: { sortOrder: 'asc' },
-        include: {
-          // The VariantOptionValue rows are the join between a
-          // Variant and an OptionValue. We need the count of
-          // DISTINCT products that have a variant pointing at this
-          // option value (under the current filter).
-          variantValues: {
-            where: { variant: { isActive: true, product: { ...candidate('optionValueId'), status: 'active' } } },
-            select: { variant: { select: { productId: true } } },
-          },
-        },
-      },
-    },
-    orderBy: { sortOrder: 'asc' },
-  });
   // Reduce to one entry per (option name); tally per-value products.
   const optionTally = new Map<string, { id: string; name: string; values: Map<string, { id: string; value: string; swatch: string | null; products: Set<string> }> }>();
   for (const o of optionRows) {
