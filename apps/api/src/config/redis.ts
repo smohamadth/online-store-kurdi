@@ -1,3 +1,11 @@
+// ---------------------------------------------------------------------------
+// Optional Redis client + a thin JSON cache on top of it.
+//
+// Redis is NEVER a hard dependency: connectRedis() swallows failures ("caching
+// disabled") and every cache method fails soft (returns null / logs). A
+// deployment without Redis runs the store at full speed, just without the
+// cache layer.
+// ---------------------------------------------------------------------------
 import { createClient, RedisClientType } from 'redis';
 import { env, isDevelopment } from './environment';
 import { logger } from '../utils/logger';
@@ -10,10 +18,16 @@ declare global {
 }
 
 if (isDevelopment) {
+  // Same global-instance trick as config/database.ts: tsx watch reloads
+  // this module on every change and each reload would otherwise create a
+  // new client (new socket, new reconnect loop).
   if (!global.__redis) {
     global.__redis = createClient({
       url: env.REDIS_URL,
       socket: {
+        // Back off 100ms, 200ms, ... capped at 3s, and give up after 10
+        // tries - at that point we'd rather be "Redis down, caching
+        // disabled" than hammer a server that is clearly gone.
         reconnectStrategy: (retries) => {
           if (retries > 10) {
             logger.error('❌ Redis reconnection failed after 10 attempts');
@@ -53,7 +67,8 @@ redis.on('reconnecting', () => {
   logger.warn('⚠️ Redis reconnecting...');
 });
 
-// Connect to Redis
+// Connect to Redis - called at boot WITHOUT await, so a missing Redis
+// never delays startup.
 export async function connectRedis(): Promise<void> {
   try {
     // Try to connect with a short timeout
@@ -91,7 +106,9 @@ export async function checkRedisHealth(): Promise<boolean> {
   }
 }
 
-// Cache operations
+// Cache operations - a JSON-serialising wrapper over the raw client.
+// Every method catches its own errors and degrades (null / no-op / []),
+// so callers never need their own try/catch around caching.
 export const cache = {
   // Get value from cache
   async get<T>(key: string): Promise<T | null> {

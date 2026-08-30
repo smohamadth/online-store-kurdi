@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Optional S3-compatible (MinIO) object storage.
+//
+// This is an add-on, not the primary store: the always-available image
+// pipeline is services/storage.service.ts (local /uploads directory). These
+// helpers exist for deployments that want large objects in MinIO, and
+// initializeMinIO() is called at boot in a try/catch that degrades to
+// "file storage disabled" when MinIO is unreachable - the API never refuses
+// to start because of it.
+// ---------------------------------------------------------------------------
 import { Client as MinioClient } from 'minio';
 import { env } from './environment';
 import { logger } from '../utils/logger';
@@ -14,18 +24,23 @@ export const minioClient = new MinioClient({
 // Bucket name
 export const BUCKET_NAME = env.MINIO_BUCKET;
 
-// Initialize MinIO bucket
+// Initialize MinIO bucket - idempotent: an existing bucket is left alone,
+// so reboots are cheap. Throws on failure; the caller (server.ts) treats
+// that as "storage disabled" rather than a fatal error.
 export async function initializeMinIO(): Promise<void> {
   try {
     // Check if bucket exists
     const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
-    
+
     if (!bucketExists) {
-      // Create bucket
+      // Create bucket ('us-east-1' is a no-op region label for MinIO, which
+      // ignores region on create)
       await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
       logger.info(`✅ MinIO bucket "${BUCKET_NAME}" created successfully`);
       
-      // Set bucket policy for public read access to certain folders
+      // Set bucket policy: only objects under public/ are anonymously
+      // readable; everything else requires a presigned URL (see
+      // getPresignedUrl below).
       const policy = {
         Version: '2012-10-17',
         Statement: [
@@ -109,7 +124,8 @@ export async function deleteFile(objectName: string): Promise<void> {
   }
 }
 
-// Get presigned URL for file
+// Get presigned URL for file - the way gated objects (e.g. digital
+// downloads) are served without exposing the bucket. expiry is seconds.
 export async function getPresignedUrl(
   objectName: string,
   expiry: number = 3600

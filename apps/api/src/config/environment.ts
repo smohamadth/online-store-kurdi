@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Environment loading + validation (Zod).
+//
+// This is the single gate between "someone's .env" and the running server:
+// a missing/invalid variable makes the process EXIT AT IMPORT TIME with the
+// field names, instead of surfacing later as a confusing 500. .env.ci in
+// apps/api is the canonical set of values that must keep passing here -
+// scripts/verify-env-config.py checks the templates against this schema.
+// ---------------------------------------------------------------------------
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -69,7 +78,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string(),
 });
 
-// Validate environment variables
+// Validate environment variables. console (not the logger) is deliberate:
+// the logger itself depends on validated env (LOG_LEVEL), so using it here
+// would be circular.
 const envParse = envSchema.safeParse(process.env);
 
 if (!envParse.success) {

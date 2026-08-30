@@ -1,7 +1,18 @@
+// ---------------------------------------------------------------------------
+// Winston logger: the app's single logging surface.
+//
+// JSON to console + rolling files (logs/app.log, logs/error.log), each
+// file capped at 5MB x 5 rotations. Level comes from LOG_LEVEL. The
+// `log.*` helpers below are thin structured wrappers used by the services
+// (auth, business, performance events); everything else calls logger.*
+// directly. Import { logger } from here - never create a second winston
+// instance, or the two streams will interleave confusingly in the files.
+// ---------------------------------------------------------------------------
 import winston from 'winston';
 import { env, isDevelopment } from '../config/environment';
 
-// Custom log format
+// JSON line format - machine-parseable for log shippers; humans read the
+// dev console format below instead.
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.errors({ stack: true }),
@@ -49,7 +60,8 @@ export const logger = winston.createLogger({
   ],
 });
 
-// Stream for Morgan middleware
+// Stream adapter so morgan's HTTP access log flows into winston (one
+// place to filter/rotate) instead of its own console output.
 export const loggerStream = {
   write: (message: string) => {
     logger.info(message.trim());

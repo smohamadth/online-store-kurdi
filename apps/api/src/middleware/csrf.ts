@@ -1,7 +1,19 @@
+// ---------------------------------------------------------------------------
+// CSRF protection (double-submit token, in-memory).
+//
+// CURRENT STATE: only the token-issuing route is mounted (app.ts:
+// GET /api/csrf-token -> csrfTokenRoute). csrfProtection itself is NOT
+// mounted on the app, so this file is a ready-to-enable guard, not an
+// active one. The API's real cross-site protection today is the JWT
+// Authorization header (a browser form cannot forge it) plus the CORS
+// origin allowlist in app.ts. If csrfProtection is ever mounted, mount it
+// BEFORE the auth middleware.
+// ---------------------------------------------------------------------------
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 
-// Simple CSRF token implementation
+// Simple CSRF token implementation. In-memory on purpose: tokens are
+// one-hour throwaways, so surviving a restart is not required.
 const csrfTokens = new Map<string, { token: string; expiresAt: number }>();
 
 // Generate a CSRF token
@@ -41,8 +53,9 @@ export function verifyCsrfToken(sessionId: string, token: string): boolean {
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   // Only check for state-changing methods
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
-    // Skip CSRF for API endpoints that use JWT auth
-    // JWT tokens in Authorization header provide sufficient protection
+    // Skip CSRF for API endpoints that use JWT auth:
+    // a cross-site form cannot read or send the Authorization header
+    // (CORS blocks it), so the Bearer token is sufficient protection.
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return next();
@@ -72,7 +85,9 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
-// Route to get CSRF token
+// Route to get CSRF token - the ONLY csrf route mounted in app.ts
+// (GET /api/csrf-token). The browser stores the returned sessionId +
+// csrfToken and echoes them as X-Session-Id / X-Csrf-Token headers.
 export function csrfTokenRoute(req: Request, res: Response) {
   const sessionId = req.headers['x-session-id'] as string || crypto.randomBytes(16).toString('hex');
   const token = generateCsrfToken(sessionId);

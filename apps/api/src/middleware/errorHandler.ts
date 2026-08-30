@@ -1,3 +1,15 @@
+// ---------------------------------------------------------------------------
+// The single error funnel for the whole API.
+//
+// Every route ends in `next(error)` on failure; this middleware (mounted
+// last in app.ts, after notFoundHandler) is where that error becomes an
+// HTTP response. The error classes below are the API's vocabulary for
+// "known, expected" failures (400/401/403/404/409) - anything that is not
+// an AppError is treated as a bug and becomes a 500. The branches for
+// ZodError / Prisma / JWT / multer translate library errors into the same
+// { status, message, code } shape so clients can rely on one contract.
+// Several branches exist because of real outages documented inline.
+// ---------------------------------------------------------------------------
 import { Request, Response, NextFunction } from 'express';
 import { env, isDevelopment } from '../config/environment';
 import { Sentry, isSentryEnabled } from '../config/sentry';
@@ -12,6 +24,9 @@ export class AppError extends Error {
   constructor(message: string, statusCode: number, code?: string) {
     super(message);
     this.statusCode = statusCode;
+    // "Operational" = an expected failure the handler can describe to the
+    // client. The handler responds directly for AppErrors and only 500s
+    // for everything else.
     this.isOperational = true;
     this.code = code;
 

@@ -1,5 +1,12 @@
+// ---------------------------------------------------------------------------
+// Newsletter subscribe/unsubscribe.
+//
+// Subscribers live in an in-memory Set (no model yet), so the list is lost
+// on restart and is per-process. Mounted at /api/newsletter with NO auth -
+// the "admin only" note on GET /subscribers below is the intent, not the
+// current enforcement; treat that endpoint as internal-only.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
-import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
 
@@ -12,7 +19,9 @@ const subscribeSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
 
-// POST /api/newsletter/subscribe
+// POST /api/newsletter/subscribe - Public footer/checkout subscribe box.
+// Re-subscribing is a no-op that still returns success, so the UI can
+// treat "already subscribed" and "subscribed" identically.
 router.post('/subscribe', async (req, res, next) => {
   try {
     const { email } = subscribeSchema.parse(req.body);
@@ -39,7 +48,8 @@ router.post('/subscribe', async (req, res, next) => {
   }
 });
 
-// GET /api/newsletter/subscribers (admin only)
+// GET /api/newsletter/subscribers - Intended for the admin UI.
+// NOTE: the "(admin only)" intent is not enforced - see the header above.
 router.get('/subscribers', async (req, res, next) => {
   try {
     res.json({
