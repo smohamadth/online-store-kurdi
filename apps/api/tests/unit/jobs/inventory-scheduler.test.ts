@@ -24,6 +24,20 @@ vi.mock('../../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// The scheduler now guards each tick with the DB distributed lock, so it
+// imports config/database. Mock it here so the unit test stays independent of
+// a generated Prisma client.
+const { mockLockUpsert, mockLockUpdateMany } = vi.hoisted(() => ({
+  mockLockUpsert: vi.fn(async () => ({})),
+  mockLockUpdateMany: vi.fn(async () => ({ count: 1 })),
+}));
+
+vi.mock('../../../src/config/database', () => ({
+  prisma: {
+    scheduledJobLock: { upsert: mockLockUpsert, updateMany: mockLockUpdateMany },
+  },
+}));
+
 import { runOnce, startScheduler, stopScheduler } from '../../../src/jobs/inventory-scheduler';
 
 describe('inventory-scheduler', () => {

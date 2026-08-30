@@ -8,6 +8,10 @@
  * tick doesn't keep the API alive. Disable with
  * CURRENCY_SCHEDULER=off for tests.
  *
+ * Every tick is guarded by a database-backed distributed lock
+ * (see jobs/distributedLock.ts), so multiple API instances behind a
+ * load balancer still fetch rates exactly once per interval.
+ *
  * Why one tick per day? Open-ER updates rates roughly every
  * hour, but pulling more often wastes egress for what the
  * storefront sees as "USD 10.99". Daily is the right
@@ -16,9 +20,13 @@
  * precision a credit-card processor applies.
  */
 import { refreshRates } from '../modules/currency/currency.routes';
+import { tryAcquireLock } from './distributedLock';
 import { logger } from '../utils/logger';
 
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
+
+const LOCK_NAME = 'currency';
+const LOCK_LEASE_MS = DEFAULT_INTERVAL_MS + 60_000;
 
 let timer: NodeJS.Timeout | null = null;
 let running = false;
@@ -39,6 +47,23 @@ export async function runOnce(): Promise<void> {
   }
 }
 
+/**
+ * One scheduled tick: take the distributed lock and, if we win it, refresh the
+ * rates. Losing the lock means another API instance already ran this tick.
+ */
+async function tick(): Promise<void> {
+  const lock = await tryAcquireLock(LOCK_NAME, LOCK_LEASE_MS);
+  if (!lock) {
+    logger.info('[currency-scheduler] another instance holds the lock; skipping this tick');
+    return;
+  }
+  try {
+    await runOnce();
+  } finally {
+    await lock.release();
+  }
+}
+
 export function startScheduler(intervalMs: number = DEFAULT_INTERVAL_MS): void {
   if (process.env.CURRENCY_SCHEDULER === 'off') {
     logger.info('[currency-scheduler] disabled via CURRENCY_SCHEDULER=off');
@@ -48,8 +73,8 @@ export function startScheduler(intervalMs: number = DEFAULT_INTERVAL_MS): void {
   logger.info(`[currency-scheduler] starting; tick=${intervalMs}ms`);
   // First run on a short delay so the server has time to
   // finish its startup logging before the fetch kicks off.
-  setTimeout(() => { runOnce(); }, 30_000);
-  timer = setInterval(() => { runOnce(); }, intervalMs);
+  setTimeout(() => { tick(); }, 30_000);
+  timer = setInterval(() => { tick(); }, intervalMs);
   if (timer.unref) timer.unref();
 }
 

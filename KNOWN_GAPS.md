@@ -364,10 +364,13 @@ deliberate design choices or niche gaps.
    storefront's unauthenticated POSTs. Enabling it requires a client-side
    change (fetch `/api/csrf-token`, echo the headers) — the token store
    itself is now durable (`CsrfToken` table) so the server side is ready.
-4. **Multi-instance scheduling.** The inventory and currency schedulers
-   are per-process `setInterval` loops. Running N API instances behind a
-   load balancer requires pinning exactly one as the "worker" (or moving
-   the schedules to cron). Documented in `SCALING.md`.
+4. **Multi-instance scheduling (resolved).** The inventory and currency
+   schedulers are per-process `setInterval` loops, but each tick is now
+   guarded by a database-backed distributed lease (`jobs/distributedLock.ts`,
+   `ScheduledJobLock` table) so only one API instance runs each job even when
+   N replicas sit behind a load balancer. Lease expiry also covers a crashed
+   owner. (Design note: a future operator could still move the schedules to
+   cron instead.)
 5. **Existing stores need a one-time attribute-index backfill.** The
    `VariantAttribute` index (which makes `/products` attribute filtering
    and facets SQL-indexed instead of O(catalog) in JS) is maintained on

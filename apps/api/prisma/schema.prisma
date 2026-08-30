@@ -1821,3 +1821,16 @@ model CsrfToken {
 
   @@index([expiresAt])
 }
+
+// Distributed lock (DB lease) guarding the in-process schedulers so only one
+// API instance runs each job when the API is scaled behind a load balancer.
+// One row per job name; a row is "held" while its heldUntil is in the future.
+// See jobs/distributedLock.ts.
+model ScheduledJobLock {
+  name      String   @id
+  token     String
+  heldUntil DateTime
+  updatedAt DateTime @updatedAt
+
+  @@map("scheduled_job_lock")
+}
