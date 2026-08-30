@@ -17,6 +17,7 @@ import { api, Product } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useCompare } from '@/lib/compare';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import StoreImage from '@/components/StoreImage';
 
 export default function ComparePage() {
   const { items, remove, clear } = useCompare();
@@ -223,8 +224,7 @@ export default function ComparePage() {
                       ) : (
                         <div>
                           {p.images?.[0]?.url && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <StoreImage
                               src={p.images[0].url}
                               alt={p.name}
                               width={80}

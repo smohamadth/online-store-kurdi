@@ -240,6 +240,7 @@ export default function MyReviewsPage() {
                             src={photo.thumbnail || photo.url}
                             alt="Review photo"
                             loading="lazy"
+                            decoding="async"
                             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                           />
                         </a>

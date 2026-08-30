@@ -20,6 +20,7 @@ import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { useIsMobile } from '@/lib/hooks';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
+import StoreImage from '@/components/StoreImage';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
 import PromoGrid from '@/components/PromoGrid';
 import BannerStrip from '@/components/BannerStrip';
@@ -483,10 +484,9 @@ function CategoryTile({
         }}
       >
         {showImage ? (
-          <img
+          <StoreImage
             src={getImageUrl(category.image!)}
             alt={category.name}
-            loading="lazy"
             onError={() => setImgFailed(true)}
             style={{
               width: '100%',

@@ -26,6 +26,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
+import StoreImage from './StoreImage';
 import type { Banner } from './HeroGallery';
 
 const CONTAINER = 'var(--container, 1200px)';
@@ -109,7 +110,10 @@ export default function BannerStrip({ banners }: { banners: Banner[] }) {
               {/* Photo background + scrim so text stays legible on any image */}
               {shown && (
                 <>
-                  <img
+                  {/* StoreImage: same-origin banner photos get lazy
+                      loading + async decode (no LCP impact - they sit
+                      behind the scrim and are decorative). */}
+                  <StoreImage
                     src={shown}
                     alt=""
                     aria-hidden="true"

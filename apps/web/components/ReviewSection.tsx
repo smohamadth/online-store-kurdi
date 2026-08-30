@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { API_BASE } from '@/lib/http';
 import type { Review, ReviewPhoto } from '@/lib/types';
+import StoreImage from '@/components/StoreImage';
 
 interface ReviewSectionProps {
   productId: string;
@@ -617,7 +618,7 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                         backgroundColor: '#f5f5f5',
                       }}
                     >
-                      <img
+                      <StoreImage
                         src={src}
                         alt={`Selected photo ${i + 1}`}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -805,10 +806,9 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                         cursor: 'zoom-in',
                       }}
                     >
-                      <img
+                      <StoreImage
                         src={photo.thumbnail || photo.url}
                         alt={`Review photo ${i + 1}`}
-                        loading="lazy"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       />
                     </button>
@@ -924,7 +924,7 @@ function ReviewLightbox({
             ‹
           </button>
         )}
-        <img
+        <StoreImage
           src={current.url}
           alt={`Review photo ${index + 1} of ${photos.length}`}
           data-testid="review-lightbox-image"

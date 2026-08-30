@@ -96,7 +96,7 @@ export function PageBlocks({ blocks }: { blocks: PageBlock[] }) {
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={b.config.url} alt={b.config.alt || ''} style={imgStyle} />
+                <img src={b.config.url} alt={b.config.alt || ''} loading="lazy" decoding="async" style={imgStyle} />
                 {b.config.caption && (
                   <figcaption
                     style={{
@@ -206,6 +206,8 @@ export function PageBlocks({ blocks }: { blocks: PageBlock[] }) {
                     <img
                       src={im.url}
                       alt={im.alt || im.caption || ''}
+                      loading="lazy"
+                      decoding="async"
                       style={{
                         width: '100%',
                         display: 'block',

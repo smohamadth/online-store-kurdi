@@ -256,9 +256,13 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
             maxHeight: '520px',
           }}
         >
+          {/* Article hero: eager (it is the LCP candidate on article
+              pages), but decode async so it never blocks first paint. */}
           <img
             src={image}
             alt={post.title}
+            loading="eager"
+            decoding="async"
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         </div>

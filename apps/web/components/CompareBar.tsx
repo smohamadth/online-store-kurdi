@@ -10,6 +10,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useCompare, MAX_COMPARE_ITEMS } from '@/lib/compare';
+import StoreImage from './StoreImage';
 
 export default function CompareBar() {
   const { items, remove, clear } = useCompare();
@@ -65,8 +66,7 @@ export default function CompareBar() {
               }}
             >
               {item.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <StoreImage
                   src={item.image}
                   alt=""
                   width={22}

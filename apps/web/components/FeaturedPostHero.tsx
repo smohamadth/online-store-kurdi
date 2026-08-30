@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { getImageUrl } from '@/lib/api';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import StoreImage from '@/components/StoreImage';
 
 /**
  * Featured-post hero for the blog index.
@@ -52,7 +53,7 @@ export default function FeaturedPostHero({ post }: { post: BlogPost }) {
         }}
       >
         {image ? (
-          <img
+          <StoreImage
             src={image}
             alt={post.title}
             onError={() => setFailed(true)}
