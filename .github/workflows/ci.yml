@@ -92,6 +92,54 @@ jobs:
         if: always()
         run: tail -100 /tmp/api.log || true
 
+  es-search:
+    name: Elasticsearch live search
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Boot a real Elasticsearch 8.11.0 (the same image as docker-compose.yml)
+    # as a service container. The live test talks to it over localhost:9200.
+    services:
+      elasticsearch:
+        image: elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        # Mark the service ready only once the cluster is actually up, so the
+        # test step doesn't race a half-started node. ES 8.11's image ships
+        # curl, so a health probe is reliable here.
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow >/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Elasticsearch live search suite
+        working-directory: apps/api
+        env:
+          # localhost resolves to the service container via the mapped port.
+          ELASTICSEARCH_URL: http://localhost:9200
+          ELASTICSEARCH_INDEX: products-ci-live
+        # The suite seeds products via the in-memory mock prisma, indexes them
+        # into the real cluster, and verifies search + index maintenance. It is
+        # gated on a reachability probe, so it runs for real here (ES is up)
+        # and skips on machines without a cluster.
+        run: npx vitest run --config vitest.integration.config.ts tests/integration/elasticsearch.live.test.ts
+
   ui-checks:
     name: Browser regression
     runs-on: ubuntu-latest
