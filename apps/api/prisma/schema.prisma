@@ -192,6 +192,7 @@ model Product {
   orderItems    OrderItem[]
   inventoryLogs InventoryLog[]
   stockAlerts   StockAlert[]
+  stockAlertSubscriptions StockAlertSubscription[]
   warehouseStocks WarehouseStock[]
   channelStocks ChannelStock[]
   reorderRules   ReorderRule[]
@@ -1054,6 +1055,28 @@ model StockAlert {
   product               Product   @relation(fields: [productId], references: [id])
 }
 
+// "Notify me when back in stock" subscriptions.
+//
+// Was an in-memory Map in modules/stock-alerts (lost on restart,
+// per-process - a second API instance or a deploy silently wiped every
+// subscription and the "N people want this" counters). Now a real table
+// so the data survives and the endpoint scales out with the API.
+// userId is 'anonymous' for guests; email carries the guest address.
+// The (product, variant) key mirrors the old in-memory key.
+model StockAlertSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  email     String
+  productId String
+  variantId String?
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([variantId])
+}
+
 // ============================================
 // INVENTORY EXTENSIONS
 // ============================================
@@ -1722,4 +1745,30 @@ model BlogPost {
   @@index([status])
   @@index([slug])
   @@index([publishedAt])
+}
+
+// ============================================
+// STOREFRONT FORMS (formerly in-memory)
+// ============================================
+//
+// Contact messages and newsletter subscribers used to live in module-level
+// arrays/Sets (modules/contact, modules/newsletter): lost on every restart
+// and invisible to a second API instance. These tables make both durable;
+// the routes' request/response contracts are unchanged.
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
 }

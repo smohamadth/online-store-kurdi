@@ -20,8 +20,8 @@ process is stateless *except* for the in-memory stores listed in
 
 ## What was optimized (and why)
 
-These are the changes from the performance pass, each verified by the
-existing test suites (669 integration + 265 API unit + 819 web tests):
+These are the changes from the two performance passes, each verified by
+the test suites (712 integration + 265 API unit + 819 web tests):
 
 ### 1. Checkout no longer round-trips per cart line
 `POST /api/orders` used to do one sequential `product.findUnique` per line
@@ -40,6 +40,12 @@ variants, options. All of them are independent (every where-clause is
 computed up front), so they now fire as a single `Promise.all` batch, and
 the per-type count loop collapsed into one `groupBy`. Same numbers,
 ~1/10th of the sequential latency.
+
+Pass two then parallelised the remaining checkout loops (analytics
+events, per-line download mints, stock decrements grouped per product),
+collapsed `POST /api/cart/sync` from 2N queries to 2, and moved the
+three durable-by-need stores (contact / newsletter / stock alerts) from
+module-level memory into the database - see limits 1 and 4 below.
 
 ### 3. Five missing indexes (migration `20260830000000`)
 The schema was already well indexed (160+), but five hot lookup paths
@@ -99,24 +105,25 @@ state is moved to the database** (Known limit 1). Concretely:
    that calls the existing `/api/inventory/jobs/run`-style endpoints.
    The Socket.IO instance for real-time features needs an adapter
    (e.g. `@socket.io/redis-adapter`) if it is ever used across instances.
-4. **Move the in-memory stores to the DB** (Known limit 1).
+4. ~~Move the in-memory stores to the DB~~ — done (contact, stock
+   alerts, newsletter). Only the dormant CSRF token map remains
+   (Known limit 1); move it if that guard is ever enabled.
 
 ## Known limits (honest list)
 
-### 1. Four in-memory stores do not survive a restart or scale out
-Deliberate, documented in each file — but they bound horizontal scale:
+### 1. One in-memory store remains (dormant): CSRF tokens
+Contact messages, stock-alert subscriptions, and newsletter
+subscribers are now database rows (migration `20260830010000`):
+`ContactMessage`, `StockAlertSubscription`, `NewsletterSubscriber`.
+Their request/response contracts are unchanged; durability and
+multi-instance safety came for free.
 
-| Store | Where | Effect of a restart / second instance |
-|---|---|---|
-| CSRF tokens | `middleware/csrf.ts` | tokens invalidated (and CSRF protection is not mounted anyway — JWT + CORS are the real guard) |
-| Contact messages | `modules/contact/contact.routes.ts` | messages lost |
-| Stock-alert subscriptions | `modules/stock-alerts/stock-alert.routes.ts` | subscriptions lost, "N people want this" resets |
-| Newsletter subscribers | `modules/newsletter/newsletter.routes.ts` | subscribers lost |
-
-Fix path (when a store needs to scale): add a small model for each
-(the schema already has the migration machinery + drift guard), swap the
-Map/Set for Prisma calls, and the endpoints' contracts don't change.
-Until then: run one API instance, or accept the data loss on restart.
+The one remaining in-memory store is the CSRF token map in
+`middleware/csrf.ts` — and it is DORMANT: `csrfProtection` is never
+mounted, and the API's real cross-site protection is the JWT
+Authorization header (a cross-site form can't forge it) plus the CORS
+origin allowlist. If a CSRF guard is ever enabled, that map should move
+to the DB (or Redis) first.
 
 ### 2. SQLite is a single-writer database
 Fine for the default install. Sustained write-heavy traffic (flash
@@ -131,13 +138,15 @@ tens of ms on Postgres; beyond that, attribute filtering should move to
 a relational `product_variant_attributes` table. Same story for
 `getFacets`'s review/variant scans.
 
-### 4. Order placement is a long sequential chain
-After the batched lookups, order creation still runs: create order →
-analytics → Stripe session → mint downloads → re-fetch → decrement stock
-per line → consume reservations → clear cart → coupon bump → email.
-Each step is independently necessary (and the email is already
-fire-and-forget), but the download-mint and analytics loops could be
-parallelised per line if checkout latency ever needs another slice.
+### 4. ~~Order placement is a long sequential chain~~ — batched
+Order creation now runs: create order → **parallel** analytics events →
+Stripe session → **parallel** per-line download mints (each keeping its
+own try/catch) → re-fetch → **parallel** stock decrements (grouped per
+product, since lines for the same product share a stock row) → consume
+reservations → clear cart → coupon bump → email (fire-and-forget). The
+cart migration endpoint (`POST /api/cart/sync`) went from 2N queries
+(delete + per-row findFirst/create) to 2 (deleteMany + one createMany
+with duplicates merged in JS).
 
 ## Measuring
 

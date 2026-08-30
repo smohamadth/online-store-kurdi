@@ -894,6 +894,8 @@ const KNOWN_MODELS = [
   'shippingMethod', 'shippingZone', 'taxClass', 'taxRate', 'storeSettings',
   'themeSettings', 'homeSection', 'menu', 'menuItem', 'banner', 'page',
   'post', 'postTag', 'blogPost', 'stockAlert',
+  // Storefront forms (durable since the in-memory stores moved to the DB)
+  'stockAlertSubscription', 'contactMessage', 'newsletterSubscriber',
   // Variant subsystem (first-class)
   'option', 'optionValue', 'variantOptionValue', 'variantImage',
   // Digital products

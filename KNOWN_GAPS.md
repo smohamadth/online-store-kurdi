@@ -108,10 +108,10 @@ jobs `api-tests` and `web-tests`):
 
 | Suite | Count | What it covers |
 |---|---|---|
-| API unit (`apps/api/tests/unit`) | 238 | middleware (auth, CSRF, error handling), variant/currency/review/download helpers, schedulers |
-| API integration (`apps/api/tests/integration`) | 624 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, …) |
-| Web lib (`apps/web`, vitest) | 255 | filter params, i18n, SEO, structured data, theme config, preview |
-| Web components (React Testing Library + happy-dom) | 413 | PDP, cart, admin pages, filter sidebar, theme picker |
+| API unit (`apps/api/tests/unit`) | 265 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers |
+| API integration (`apps/api/tests/integration`) | 712 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, …) |
+| Web lib (`apps/web`, vitest) | 317 | filter params, i18n, SEO, structured data, theme config, preview, page blocks, home sections |
+| Web components (React Testing Library + happy-dom) | 502 | PDP, cart, admin pages, filter sidebar, theme picker, custom section |
 
 The Playwright browser suites in CI (`regression-ui.py` etc.) still run on top
 of this; they and the Vitest suites are complementary, not duplicates.

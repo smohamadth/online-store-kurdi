@@ -1,15 +1,21 @@
 // ---------------------------------------------------------------------------
 // Stock alerts ("notify me when back in stock").
 //
-// Subscriptions live in an in-memory Map keyed by product (and optionally
-// product+variant), so they are lost on restart and are per-process.
+// Subscriptions are DB rows (StockAlertSubscription), keyed per product
+// and optionally per product+variant (the variant level is stricter: a
+// variant-level alert does not fire for the product as a whole). The
+// data used to live in an in-memory Map - lost on restart, per-process,
+// so a deploy or a second API instance silently wiped every
+// subscription and the "N people want this" counters.
+//
 // Mounted at /api/stock-alerts with NO auth at the route or mount level -
 // the authenticate import below is currently unused (kept for the day a
 // guard is added), which also means any caller can subscribe on a user's
-// behalf. Treat as public-but-ephemeral until a model + guard land.
+// behalf. Treat as public-but-durable until a guard lands.
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
+import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
 
@@ -17,22 +23,19 @@ void authenticate; // imported for the (not-yet-added) auth guard - see header
 
 const router = Router();
 
-// In-memory stock alert subscriptions, keyed by
-// "<productId>" or "<productId>-<variantId>" (the variant level is stricter:
-// a variant-level alert does not fire for the product as a whole).
-const stockAlerts: Map<string, Array<{
-  id: string;
-  userId: string;
-  email: string;
-  productId: string;
-  variantId?: string;
-  createdAt: Date;
-}>> = new Map();
-
 const alertSchema = z.object({
   productId: z.string(),
   variantId: z.string().optional(),
   email: z.string().email().optional(),
+});
+
+// The alert "key" as a prisma where-fragment: a product-level alert has
+// variantId null; a variant-level alert names the variant. Matching
+// variantId: null vs variantId: 'x' keeps the two levels apart, exactly
+// like the old "<productId>" vs "<productId>-<variantId>" string keys.
+const keyWhere = (productId: string, variantId?: string) => ({
+  productId,
+  variantId: variantId || null,
 });
 
 // POST /api/stock-alerts - Subscribe to a stock alert.
@@ -45,16 +48,14 @@ router.post('/', async (req, res, next) => {
     const userId = req.user?.id || 'anonymous';
     const email = data.email || req.user?.email || '';
 
-    const key = data.variantId ? `${data.productId}-${data.variantId}` : data.productId;
-
-    if (!stockAlerts.has(key)) {
-      stockAlerts.set(key, []);
-    }
-
-    const alerts = stockAlerts.get(key)!;
-
-    // Check if already subscribed
-    const existing = alerts.find(a => a.userId === userId || (email && a.email === email));
+    // Check if already subscribed (same key: product + optional variant)
+    const existing = await prisma.stockAlertSubscription.findFirst({
+      where: {
+        ...keyWhere(data.productId, data.variantId),
+        OR: [{ userId }, ...(email ? [{ email }] : [])],
+      },
+      select: { id: true },
+    });
     if (existing) {
       return res.json({
         status: 'success',
@@ -62,13 +63,13 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    alerts.push({
-      id: Date.now().toString(),
-      userId,
-      email,
-      productId: data.productId,
-      variantId: data.variantId,
-      createdAt: new Date(),
+    await prisma.stockAlertSubscription.create({
+      data: {
+        userId,
+        email,
+        productId: data.productId,
+        variantId: data.variantId || null,
+      },
     });
 
     logger.info(`Stock alert subscription: ${email} for product ${data.productId}`);
@@ -90,14 +91,15 @@ router.get('/check/:productId', async (req, res, next) => {
     const { productId } = req.params;
     const variantId = req.query.variantId as string;
 
-    const key = variantId ? `${productId}-${variantId}` : productId;
-    const alerts = stockAlerts.get(key) || [];
+    const alertCount = await prisma.stockAlertSubscription.count({
+      where: keyWhere(productId, variantId),
+    });
 
     res.json({
       status: 'success',
       data: {
-        hasAlerts: alerts.length > 0,
-        alertCount: alerts.length,
+        hasAlerts: alertCount > 0,
+        alertCount,
       },
     });
   } catch (error) {
@@ -114,16 +116,16 @@ router.delete('/:productId', async (req, res, next) => {
   try {
     const { productId } = req.params;
     const userId = req.user?.id || 'anonymous';
-    const email = req.user?.email || req.query.email as string;
+    const email = req.user?.email || (req.query.email as string) || '';
 
     const variantId = req.query.variantId as string;
-    const key = variantId ? `${productId}-${variantId}` : productId;
 
-    if (stockAlerts.has(key)) {
-      const alerts = stockAlerts.get(key)!;
-      const filtered = alerts.filter(a => a.userId !== userId && a.email !== email);
-      stockAlerts.set(key, filtered);
-    }
+    await prisma.stockAlertSubscription.deleteMany({
+      where: {
+        ...keyWhere(productId, variantId),
+        OR: [{ userId }, { email }],
+      },
+    });
 
     res.json({
       status: 'success',

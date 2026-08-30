@@ -1,19 +1,20 @@
 /**
  * Contact form integration tests.
  *
- * The route stores messages in an in-memory array (not the database),
- * so tests are scoped to validation + the GET listing.
+ * Messages are ContactMessage rows in the database (they used to live in
+ * an in-memory array), so every test starts from a clean database and one
+ * test pins the durability contract (the row actually lands in the DB).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import { getTestApp } from '../helpers/db';
+import { getTestApp, cleanDatabase } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
 import type { Express } from 'express';
 
 let app: Express;
 beforeAll(async () => { app = await getTestApp(); });
 afterAll(async () => { await mockPrisma.$disconnect(); });
-beforeEach(async () => { /* nothing to clean, in-memory */ });
+beforeEach(async () => { await cleanDatabase(); });
 
 describe('POST /api/contact', () => {
   it('accepts a valid submission', async () => {
@@ -25,6 +26,19 @@ describe('POST /api/contact', () => {
     });
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/24 hours/);
+  });
+
+  it('persists the message to the database (survives a restart)', async () => {
+    await request(app).post('/api/contact').send({
+      name: 'Alice',
+      email: 'alice@example.com',
+      subject: 'Hello',
+      message: 'I would like more information about your products, please reply at your convenience.',
+    });
+    const rows = await mockPrisma.contactMessage.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subject).toBe('Hello');
+    expect(rows[0].email).toBe('alice@example.com');
   });
 
   it('400 on missing email', async () => {
@@ -51,8 +65,8 @@ describe('POST /api/contact', () => {
 
 describe('GET /api/contact', () => {
   it('returns the messages newest-first', async () => {
-    // Filter to just this test's messages - the route keeps a module-level
-    // in-memory array that the other tests' fixtures also live in.
+    // cleanDatabase() in beforeEach means the listing holds only this
+    // test's two messages.
     await request(app).post('/api/contact').send({
       name: 'Alice', email: 'a@example.com', subject: 'CCC-FIRST', message: 'This is the first message body.',
     });
