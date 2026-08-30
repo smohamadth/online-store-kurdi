@@ -136,6 +136,24 @@ export default function ProductView() {
     } catch (err) {}
   };
 
+  // The API returns images in insertion order, but the admin orders the
+  // gallery in the product modal (drag-to-reorder = sortOrder, plus a
+  // designated primary). Sort before rendering so the main image is the
+  // primary (first image when none is designated) and the thumbnails
+  // follow the admin's drag order - matching what the product card
+  // already shows (isPrimary), so card and PDP agree on the hero image.
+  // (Must run before the early returns below - hook order.)
+  const allImages = useMemo(() => {
+    const imgs = product?.images && product.images.length > 0
+      ? product.images
+      : [{ id: 'placeholder', url: '', alt: product?.name || '', isPrimary: true, sortOrder: 0 } as any];
+    return [...imgs].sort(
+      (a: any, b: any) =>
+        (Number(b.isPrimary ? 1 : 0) - Number(a.isPrimary ? 1 : 0)) ||
+        (Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0)),
+    );
+  }, [product]);
+
   if (loading) {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
@@ -273,10 +291,6 @@ export default function ProductView() {
       console.error('Stock alert error:', err);
     }
   };
-
-  const allImages = product.images && product.images.length > 0
-    ? product.images
-    : [{ id: 'placeholder', url: '', alt: product.name, isPrimary: true }];
 
   return (
     <>

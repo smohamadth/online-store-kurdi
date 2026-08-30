@@ -415,3 +415,57 @@ describe('ProductView: digital product branch', () => {
     expect(doc.name).toBe('T-Shirt');
   });
 });
+
+describe('ProductView: image gallery ordering', () => {
+  // next/image rewrites src to /_next/image?url=<encoded>&w=...&q=75 -
+  // decode it back to the original URL for assertions.
+  const src = (el: Element) =>
+    decodeURIComponent((el.getAttribute('src') || '').replace(/^\/_next\/image\?url=/, '').split('&')[0]);
+
+  it('shows the primary image as the main image, then the rest in the admin drag order', async () => {
+    // The API returns images in insertion order. The fixture is
+    // deliberately shuffled relative to the admin's sortOrder, with the
+    // designated primary NOT first in the array - the gallery must
+    // re-order: primary first (the main image), then sortOrder.
+    hoisted.getProductBySlug.mockResolvedValue({
+      data: {
+        ...PRODUCT,
+        images: [
+          { id: 'img-c', url: '/img-c.jpg', alt: 'C', isPrimary: false, sortOrder: 2 },
+          { id: 'img-b', url: '/img-b.jpg', alt: 'B', isPrimary: true, sortOrder: 1 },
+          { id: 'img-a', url: '/img-a.jpg', alt: 'A', isPrimary: false, sortOrder: 0 },
+        ],
+      },
+    });
+    const { container } = render(<ProductView />);
+    // Main image (alt = product name) must be the primary image.
+    const main = await screen.findByAltText('T-Shirt');
+    expect(src(main)).toBe('/img-b.jpg');
+    // The thumbnail strip shows ALL images (main included) in the
+    // gallery order: primary first, then the admin's drag order.
+    const srcs = Array.from(container.querySelectorAll('img')).map(src);
+    expect(srcs).toEqual([
+      '/img-b.jpg', // main (the primary)
+      '/img-b.jpg', // thumb 1 (the primary)
+      '/img-a.jpg', // thumb 2 (sortOrder 0)
+      '/img-c.jpg', // thumb 3 (sortOrder 2)
+    ]);
+  });
+
+  it('keeps the API order when no image is designated primary', async () => {
+    hoisted.getProductBySlug.mockResolvedValue({
+      data: {
+        ...PRODUCT,
+        images: [
+          { id: 'img-x', url: '/img-x.jpg', alt: 'X', isPrimary: false, sortOrder: 5 },
+          { id: 'img-y', url: '/img-y.jpg', alt: 'Y', isPrimary: false, sortOrder: 2 },
+        ],
+      },
+    });
+    const { container } = render(<ProductView />);
+    await screen.findByAltText('T-Shirt');
+    const srcs = Array.from(container.querySelectorAll('img')).map(src);
+    // No primary -> pure sortOrder order: y (2) then x (5).
+    expect(srcs).toEqual(['/img-y.jpg', '/img-y.jpg', '/img-x.jpg']);
+  });
+});
