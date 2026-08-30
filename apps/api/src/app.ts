@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Express app assembly (the middleware pipeline + every route mount).
+//
+// Order matters here: helmet/CORS/rate-limit BEFORE the routes; the
+// 404 handler before the error handler; Sentry initialised before any
+// middleware mounts. The inline comments record why each piece is the
+// way it is (the CORS loopback rule, the CORP header, the rate limiter)
+// - most were born from real outages.
+// ---------------------------------------------------------------------------
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

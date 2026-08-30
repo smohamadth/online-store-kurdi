@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// JWT authentication + role authorization - the middleware pair most
+// routes are built from:
+//
+//   authenticate  - Bearer token -> verify -> load user -> req.user.
+//                   Also rejects DEACTIVATED accounts (a revoked user's
+//                   still-valid token must not work).
+//   optionalAuth  - same, but a missing/invalid token is simply ignored
+//                   (routes that personalise when logged in).
+//   authorize     - role gate, used AFTER authenticate.
+//
+// generateTokens/verifyRefreshToken implement the token pair: short
+// stateless access tokens + long-lived refresh tokens with a unique jti
+// (the refresh half is session-backed and rotated - see auth.routes.ts).
+// ---------------------------------------------------------------------------
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';

@@ -1,3 +1,21 @@
+// ---------------------------------------------------------------------------
+// Transactional email (nodemailer/SMTP).
+//
+// LOG-ONLY FALLBACK: if no SMTP server is reachable at startup the
+// transporter stays undefined and sendEmail() logs the email instead of
+// sending - every email in the store must survive a deployment without
+// an SMTP server (CI runs in exactly that mode, using MailHog or
+// nothing). isEmailConfigured() exists so UIs that promise delivery
+// (the admin test-email button) can say the truth.
+//
+// Templates live in the EmailTemplate table (admin-editable under
+// /api/settings/email-templates); the built-in subject/HTML below are
+// the defaults used when no template row is active.
+//
+// All senders below are fire-and-forget at their call sites
+// (`.catch(log)`), so an email failure never fails the order/login it
+// accompanies.
+// ---------------------------------------------------------------------------
 import nodemailer from 'nodemailer';
 import { env } from '../config/environment';
 import { logger } from '../utils/logger';

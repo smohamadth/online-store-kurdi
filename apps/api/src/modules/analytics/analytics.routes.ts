@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Analytics API (mounted at /api/analytics).
+//
+// Two audiences: the storefront's event pipeline (POST /track, /track/batch
+// - gated behind ANALYTICS_TRACKING_ENABLED, see trackingGate) and the
+// admin analytics pages (trending, product/search analytics, real-time
+// stats - admin/manager only). The controller holds no Prisma access;
+// the service does.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { AnalyticsController } from './analytics.controller';
 import { authenticate, authorize } from '../../middleware/auth';

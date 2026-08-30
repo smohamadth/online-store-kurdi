@@ -1,3 +1,17 @@
+// ---------------------------------------------------------------------------
+// Users API (mounted at /api/users).
+//
+// Two audiences with strict separation:
+//   - the admin user list (GET /, GET /:id as admin, PUT /:id as admin,
+//     plus the per-user order/wishlist views) - the admin Users page;
+//   - the customer's own profile (GET /:id and PUT /:id when id ===
+//     req.user.id) - the account page.
+//
+// Self-update is locked to a small allow-list (selfUpdateSchema):
+// role/isActive/isVerified can ONLY come through the admin schema -
+// that split is the privilege-escalation guard. See the doc comments on
+// each route for the regression history.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';

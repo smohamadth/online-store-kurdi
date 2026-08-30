@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// API entry point: startup checks, listen, schedulers, graceful shutdown.
+//
+// The two pre-boot guards (DATABASE_URL/provider mismatch, stale Prisma
+// client) exist because both failure modes used to surface as baffling
+// 500s after a "successful" boot. The dual IPv4/IPv6 loopback bind and
+// the listen-error handling are documented inline - they fix the
+// "my settings don't save" class of Windows/macOS problems.
+// ---------------------------------------------------------------------------
 import { createServer } from 'http';
 import { app, httpServer } from './app';
 import { env } from './config/environment';

@@ -1,3 +1,21 @@
+// ---------------------------------------------------------------------------
+// Storefront theme (mounted at /api/theme).
+//
+// Single-row settings table (id 'default', getOrCreate below). The public
+// GET is what the storefront fetches before first paint - colours, layout
+// toggles, announcement bar, the active theme key, and optional
+// customCss.
+//
+// customCss is a STORED-XSS surface: it is injected into every storefront
+// page, so DANGEROUS_CSS strips script tags / javascript: URLs /
+// expression() even though only admins can write it (a compromised admin
+// account must not become a store-wide RCE).
+//
+// activeTheme is validated against the theme REGISTRY (the list of
+// installed themes in the web app), not against the schema - an unknown
+// theme key is a 400, which is how "theme not found" stops being a
+// broken storefront.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';

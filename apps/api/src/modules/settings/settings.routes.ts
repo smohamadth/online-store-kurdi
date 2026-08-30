@@ -1,3 +1,19 @@
+// ---------------------------------------------------------------------------
+// Store settings (mounted at /api/settings): the single-row 'default'
+// settings object every storefront widget reads (store name, currency,
+// units, social links, maintenance mode, SEO meta), plus the admin
+// email-template editor and a test-email endpoint.
+//
+// The write path is an upsert with a NOT_NULL_SETTINGS allow-list:
+// null/'' on a NOT NULL column means "leave as-is" (the admin form
+// round-trips null for unset fields), while nullable columns accept null
+// as a real clear. See the comments on toSettingsData - the shape of this
+// rule is the reason "Settings saved!" was once a lie.
+//
+// The public GET also embeds the LIVE capability flags (stripeEnabled)
+// rather than stored values, so enabling Stripe in .env shows up in the
+// checkout without any stored flag to update.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';

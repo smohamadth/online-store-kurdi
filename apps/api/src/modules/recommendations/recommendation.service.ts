@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// Recommendation engine: "trending", "new arrivals", "customers also
+// bought", "frequently bought together", and history-based picks.
+//
+// Co-purchase signals come from the UserEvent table's 'purchase' events
+// (recorded per line item in order.routes.ts when tracking is opted in) -
+// with no events yet, the also-bought/bought-together queries fall back
+// to same-category popularity so the storefront is never empty.
+//
+// All list endpoints are Redis-cached ~30 minutes (the prefix is
+// 'recommendations:'); a store with zero events still gets a stable
+// fallback list rather than a flickering one.
+// ---------------------------------------------------------------------------
 import { PrismaClient } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { cache } from '../../config/redis';
