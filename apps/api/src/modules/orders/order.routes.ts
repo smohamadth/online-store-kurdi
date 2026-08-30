@@ -275,8 +275,13 @@ router.post('/', authenticate, async (req, res, next) => {
     // sequential findUnique per cart line - N round trips on the
     // checkout hot path, which serialised behind each other on a
     // networked Postgres.
-    const productIds = [...new Set(items.map((i: any) => i.productId))];
-    const variantIds = [...new Set(items.map((i: any) => i.variantId).filter(Boolean) as string[])];
+    // `items` comes from req.body (untyped `any`), so `items.map(...)` is
+    // `any`; `new Set(any)` infers `Set<unknown>` and the spread becomes
+    // `unknown[]`, which Prisma's `in:` (typed `string[]`) rejects. Cast the
+    // array up front and filter through a type guard so these are `string[]`.
+    const itemsArr = items as any[];
+    const productIds: string[] = [...new Set(itemsArr.map((i) => i.productId).filter((x): x is string => typeof x === 'string'))];
+    const variantIds: string[] = [...new Set(itemsArr.map((i) => i.variantId).filter((x): x is string => typeof x === 'string'))];
     const [products, variants] = await Promise.all([
       prisma.product.findMany({ where: { id: { in: productIds } } }),
       variantIds.length
