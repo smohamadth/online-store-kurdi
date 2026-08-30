@@ -1,3 +1,9 @@
+// /admin/blog/[id]/edit - the blog post editor. Runs on the shared
+// CmsEditor shell (autosave namespace cms.posts.<id>, Edit/Preview
+// tabs, slug-from-title) with the post-specific extras (tags, excerpt,
+// featured flag) and the block layout (PageBlocksEditor). Saving goes
+// through PUT /api/blog/:id; the content HTML is sanitised again by
+// the API on write.
 'use client';
 
 import { useEffect, useState } from 'react';

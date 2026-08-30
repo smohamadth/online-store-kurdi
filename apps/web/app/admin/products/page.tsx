@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// /admin/products - the product table + the add/edit modal (the biggest
+// form in the admin).
+//
+// The modal writes through POST/PUT /api/products (the live routes -
+// NOT the legacy controller/service). It owns: rich-text description
+// (sanitised by the editor AND re-sanitised by the API on write), the
+// SEO panel (meta title/description/keywords, slug), the image gallery
+// (ImageGalleryUpload -> /api/upload, variants come back per size),
+// and the variant quick-add.
+//
+// The table is a plain fetch of the products list with search +
+// category filter; on phones it becomes a horizontal-scroll container
+// (the seven columns overflow at 360px).
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useStoreSettings, formatPrice } from '@/lib/settings';

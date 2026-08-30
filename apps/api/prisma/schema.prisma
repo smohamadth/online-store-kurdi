@@ -727,6 +727,8 @@ model StoreCredit {
   @@index([userId])
 }
 
+// One row per store-credit movement (the append-only ledger behind the
+// Wallet page): positive = credit, negative = debit, per type.
 model StoreCreditTransaction {
   id            String    @id @default(uuid())
   storeCreditId String
@@ -991,6 +993,9 @@ model ExchangeRateSnapshot {
   @@index([code, fetchedAt])
 }
 
+// Admin-editable transactional email templates (settings admin); the
+// senders in services/email.service.ts look the template up by `name`
+// and fall back to built-in defaults when none is active.
 model EmailTemplate {
   id            String    @id @default(uuid())
   name          String    @unique
@@ -1030,6 +1035,8 @@ model InventoryLog {
   @@index([reason])
 }
 
+// Per-product low-stock notification config (the admin's Stock alerts
+// screen; one row per product, threshold + who gets the email).
 model StockAlert {
   id                    String    @id @default(uuid())
   productId             String    @unique
@@ -1191,6 +1198,9 @@ model StockTake {
   @@index([status])
 }
 
+// One row per product (optionally per variant) counted in a StockTake;
+// applying the take adjusts system stock to `counted` and logs the
+// variance.
 model StockTakeItem {
   id            String    @id @default(uuid())
   stockTakeId   String
@@ -1236,6 +1246,9 @@ model ReorderRule {
   @@index([isActive])
 }
 
+// A purchase-order draft created by an auto-reorder rule (or the
+// manual run). DRAFTS ONLY until the admin approves/sends it - the
+// scheduler never creates a real PO behind the admin's back.
 model ReorderDraft {
   id            String    @id @default(uuid())
   ruleId        String?
@@ -1277,6 +1290,8 @@ model Channel {
   @@index([isActive])
 }
 
+// Per-channel stock quantity (3PL / marketplace channel view of a
+// product/variant; unique per channel+product+variant).
 model ChannelStock {
   id            String    @id @default(uuid())
   channelId     String
@@ -1348,6 +1363,10 @@ model ShippingZone {
   methods       ShippingMethod[]
 }
 
+// A priced shipping option belonging to a zone. `type` selects the
+// pricing formula: flat / weight / price (percentage of order) /
+// item_count; the min/max + freeShippingThreshold fields gate when the
+// method is offered (see the API's /api/shipping/calculate).
 model ShippingMethod {
   id                    String    @id @default(uuid())
   zoneId                String    
@@ -1406,6 +1425,9 @@ model TaxRate {
   @@index([taxClass])
 }
 
+// Product tax class (e.g. 'zero' / 'digital' -> 0%). A class can
+// override the location-based rate for its products at calculate time;
+// isDefault marks the class used when a product has none set.
 model TaxClass {
   id            String    @id @default(uuid())
   name          String    @unique
@@ -1435,6 +1457,9 @@ model Menu {
   @@index([isActive])
 }
 
+// One nav item; parentId gives the two-level tree (dropdowns), ordered
+// by sortOrder within its level. The storefront reads active items
+// only, per menu location.
 model MenuItem {
   id            String    @id @default(uuid())
   menuId        String
@@ -1456,6 +1481,9 @@ model MenuItem {
   @@index([parentId])
   @@index([sortOrder])
 }
+// A storefront banner (hero / promo / strip) with an optional
+// schedule; the public API only returns active banners inside their
+// [startsAt, endsAt] window.
 model Banner {
   id            String    @id @default(uuid())
   title         String

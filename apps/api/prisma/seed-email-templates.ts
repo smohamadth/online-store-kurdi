@@ -1,3 +1,14 @@
+// Built-in email templates, seeded by prisma/seed.ts into the
+// EmailTemplate table. These are the DEFAULTS the admin can override
+// in the settings admin (PUT /api/settings/email-templates/:name);
+// seedEmailTemplates() upserts by template `name` - note the update
+// side writes the FULL built-in row, so re-running the seed RESETS a
+// template the admin had edited (the admin re-applies edits after a
+// re-seed, which only matters on a fresh install or explicit reseed).
+//
+// Variables use {{name}} placeholders that the senders in
+// services/email.service.ts substitute (customerName, orderNumber,
+// orderTotal, resetToken, ...).
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
