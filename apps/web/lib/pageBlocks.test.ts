@@ -164,6 +164,18 @@ describe('blocksToLegacyContent', () => {
     expect(out).toBe('');
   });
 
+  it('keeps custom-section content (title + html) in the legacy fallback', () => {
+    const out = blocksToLegacyContent([
+      block('custom', { title: 'Why us', html: '<p>Crafted locally.</p>' }),
+    ]);
+    expect(out).toBe('<h2>Why us</h2>\n<p>Crafted locally.</p>');
+  });
+
+  it('escapes the custom-section title but not its (already sanitised) html', () => {
+    const out = blocksToLegacyContent([block('custom', { title: 'a<b' })]);
+    expect(out).toBe('<h2>a&lt;b</h2>');
+  });
+
   it('returns empty string for no blocks', () => {
     expect(blocksToLegacyContent([])).toBe('');
     expect(blocksToLegacyContent(null)).toBe('');
@@ -182,10 +194,23 @@ describe('PAGE_BLOCK_TYPES', () => {
   it('covers the documented block set', () => {
     expect(PAGE_BLOCK_TYPES.sort()).toEqual(
       [
-        'callout', 'columns', 'cta', 'divider', 'gallery', 'heading',
+        'callout', 'columns', 'cta', 'custom', 'divider', 'gallery', 'heading',
         'image', 'quote', 'richText', 'spacer',
       ].sort(),
     );
+  });
+
+  it('gives the custom section its design defaults', () => {
+    const b = newBlock('custom');
+    expect(b.type).toBe('custom');
+    expect(b.config).toMatchObject({
+      background: 'soft',
+      align: 'left',
+      padding: 'large',
+      width: 'centered',
+    });
+    expect(typeof b.config.html).toBe('string');
+    expect(b.config.html.length).toBeGreaterThan(0);
   });
 
   it('has a label and an icon for every type (the picker renders both)', () => {

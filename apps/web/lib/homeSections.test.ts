@@ -8,7 +8,7 @@
  *     with whatever was last returned
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CREATABLE_TYPES, fetchHomeSections, TYPE_LABELS } from './homeSections';
+import { CREATABLE_TYPES, fetchHomeSections, TYPE_ICONS, TYPE_LABELS } from './homeSections';
 
 describe('homeSections constants', () => {
   it('exposes a non-empty label map', () => {
@@ -21,6 +21,12 @@ describe('homeSections constants', () => {
     // Singletons must NOT be creatable - they are edited in place.
     expect(CREATABLE_TYPES).not.toContain('hero');
     expect(CREATABLE_TYPES).not.toContain('categories');
+  });
+
+  it('lets the admin add a designed custom section on the home page', () => {
+    expect(CREATABLE_TYPES).toContain('custom');
+    expect(TYPE_LABELS['custom']).toBeTruthy();
+    expect(TYPE_ICONS['custom']).toBeTruthy();
   });
 });
 

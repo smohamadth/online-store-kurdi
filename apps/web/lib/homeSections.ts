@@ -52,6 +52,7 @@ export const TYPE_LABELS: Record<string, string> = {
   features: 'Feature icons',
   newsletter: 'Newsletter signup',
   richText: 'Rich text block',
+  custom: 'Custom section (design it)',
 };
 
 export const TYPE_ICONS: Record<string, string> = {
@@ -70,10 +71,11 @@ export const TYPE_ICONS: Record<string, string> = {
   features: '✨',
   newsletter: '✉️',
   richText: '📝',
+  custom: '🎨',
 };
 
 /** Types an admin can add from scratch (the rest are singletons already seeded). */
-export const CREATABLE_TYPES = ['richText', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
+export const CREATABLE_TYPES = ['richText', 'custom', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
 
 export async function fetchHomeSections(): Promise<HomeSection[]> {
   const res = await http.get<HomeSection[]>('/home-sections');

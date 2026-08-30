@@ -300,6 +300,47 @@ function BlockFields({
         </div>
       );
 
+    case 'custom':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <input
+            style={fieldStyle}
+            value={c.title || ''}
+            onChange={(e) => set('title', e.target.value)}
+            placeholder="Section title (optional)"
+            data-testid={`page-block-field-${block.id}-title`}
+          />
+          <RichTextEditor
+            value={c.html || ''}
+            onChange={(html) => set('html', html)}
+            placeholder="Write this section…"
+            minHeight={140}
+          />
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <select style={smallSelectStyle} value={c.background || 'soft'} onChange={(e) => set('background', e.target.value)}>
+              <option value="none">Background: none</option>
+              <option value="soft">Background: soft grey</option>
+              <option value="brand">Background: brand colour</option>
+              <option value="dark">Background: dark</option>
+            </select>
+            <select style={smallSelectStyle} value={c.align || 'left'} onChange={(e) => set('align', e.target.value)}>
+              <option value="left">Align left</option>
+              <option value="center">Center</option>
+              <option value="right">Align right</option>
+            </select>
+            <select style={smallSelectStyle} value={c.padding || 'large'} onChange={(e) => set('padding', e.target.value)}>
+              <option value="none">Padding: none</option>
+              <option value="small">Padding: small</option>
+              <option value="large">Padding: large</option>
+            </select>
+            <select style={smallSelectStyle} value={c.width || 'centered'} onChange={(e) => set('width', e.target.value)}>
+              <option value="centered">Width: centered</option>
+              <option value="full">Width: full</option>
+            </select>
+          </div>
+        </div>
+      );
+
     case 'divider':
       return <p style={{ margin: 0, fontSize: '13px', color: '#888' }}>A thin horizontal line. No settings.</p>;
 

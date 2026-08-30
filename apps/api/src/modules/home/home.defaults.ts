@@ -210,7 +210,7 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
 ];
 
 /** Block types an admin may create from scratch in the admin builder. */
-export const CREATABLE_TYPES = ['richText', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
+export const CREATABLE_TYPES = ['richText', 'custom', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
 
 export const ALL_TYPES = Array.from(
   new Set([...HOME_SECTION_SEED.map((s) => s.type), ...CREATABLE_TYPES])

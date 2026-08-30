@@ -33,7 +33,10 @@ export function serializeContentBlocks(blocks: unknown): string | null {
       const config: Record<string, any> = {
         ...(b.config && typeof b.config === 'object' ? b.config : {}),
       };
-      if (b.type === 'richText' && typeof config.html === 'string') {
+      // richText and the admin-designed `custom` block both carry
+      // config.html rendered with dangerouslySetInnerHTML on the
+      // storefront, so both are sanitised on write.
+      if ((b.type === 'richText' || b.type === 'custom') && typeof config.html === 'string') {
         config.html = sanitizeRichText(config.html);
       }
       if (b.type === 'columns') {

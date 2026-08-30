@@ -35,6 +35,7 @@ import {
   Newsletter,
   RichTextBlock,
   SectionHeading,
+  CustomSection,
 } from '@/components/HomeSections';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { API_BASE } from '@/lib/http';
@@ -378,6 +379,21 @@ export default function HomeView() {
             subtitle={s.subtitle}
             html={cfg.html}
             align={cfg.align === 'center' ? 'center' : 'left'}
+          />
+        );
+
+      // Admin-designed section: rich content in a chosen background /
+      // width / padding (Appearance → Home → "Custom section").
+      case 'custom':
+        return (
+          <CustomSection
+            key={s.id}
+            title={s.title}
+            html={cfg.html}
+            background={cfg.background}
+            align={cfg.align === 'center' ? 'center' : cfg.align === 'right' ? 'right' : 'left'}
+            padding={cfg.padding}
+            width={cfg.width}
           />
         );
 

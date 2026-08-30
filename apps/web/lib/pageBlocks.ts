@@ -25,7 +25,12 @@ export type PageBlockType =
   | 'gallery'
   | 'cta'
   | 'divider'
-  | 'spacer';
+  | 'spacer'
+  /** A fully styleable section the admin designs: rich content inside a
+   *  chosen background/width/padding (see the `custom` case in
+   *  components/PageBlocks.tsx and the CustomSection component in
+   *  components/HomeSections.tsx, which the home page reuses). */
+  | 'custom';
 
 export interface PageBlock {
   /** Stable client-generated id ("blk-..."). */
@@ -46,6 +51,7 @@ export const PAGE_BLOCK_TYPES: PageBlockType[] = [
   'cta',
   'divider',
   'spacer',
+  'custom',
 ];
 
 export const PAGE_BLOCK_LABELS: Record<PageBlockType, string> = {
@@ -59,6 +65,7 @@ export const PAGE_BLOCK_LABELS: Record<PageBlockType, string> = {
   cta: 'Button',
   divider: 'Divider',
   spacer: 'Spacer',
+  custom: 'Custom section (design it)',
 };
 
 /** Icon per block type - the visual add-picker and (optionally) tooling. */
@@ -73,6 +80,7 @@ export const PAGE_BLOCK_ICONS: Record<PageBlockType, string> = {
   cta: '🎯',
   divider: '➖',
   spacer: '↕',
+  custom: '🎨',
 };
 
 /**
@@ -101,6 +109,15 @@ export function defaultBlockConfig(type: PageBlockType): Record<string, any> {
       return { label: 'Learn more', href: '/contact', variant: 'primary' };
     case 'columns':
       return { left: '<p>Left column…</p>', right: '<p>Right column…</p>' };
+    case 'custom':
+      return {
+        title: 'Section title',
+        html: '<p>Design this section - content, background, spacing and width are all yours.</p>',
+        background: 'soft',
+        align: 'left',
+        padding: 'large',
+        width: 'centered',
+      };
     default:
       return {};
   }
@@ -213,6 +230,12 @@ export function blocksToLegacyContent(blocks: PageBlock[] | null | undefined): s
         if (c.label && c.href) {
           parts.push(`<p><a href="${escapeHtml(String(c.href))}">${escapeHtml(String(c.label))}</a></p>`);
         }
+        break;
+      case 'custom':
+        // The styling (background/padding/width) has no single-column
+        // equivalent, but the CONTENT must survive the fallback render.
+        if (c.title) parts.push(`<h2>${escapeHtml(String(c.title))}</h2>`);
+        if (c.html) parts.push(c.html);
         break;
       default:
         // image / columns / divider / spacer: no single-column equivalent.

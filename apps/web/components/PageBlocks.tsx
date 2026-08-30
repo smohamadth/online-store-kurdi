@@ -1,4 +1,5 @@
 import type { PageBlock } from '@/lib/pageBlocks';
+import { CustomSection } from '@/components/HomeSections';
 
 /**
  * Storefront renderer for page layout blocks.
@@ -265,6 +266,19 @@ export function PageBlocks({ blocks }: { blocks: PageBlock[] }) {
                   borderTop: '1px solid var(--border, #e5e5e5)',
                   margin: '28px 0',
                 }}
+              />
+            );
+
+          case 'custom':
+            return (
+              <CustomSection
+                key={b.id}
+                title={b.config.title}
+                html={b.config.html}
+                background={b.config.background}
+                align={b.config.align}
+                padding={b.config.padding}
+                width={b.config.width}
               />
             );
 

@@ -155,4 +155,56 @@ describe('PageBlocks', () => {
     const { container } = render(<PageBlocks blocks={[]} />);
     expect(container.innerHTML).toBe('');
   });
+
+  describe('custom section (admin-designed)', () => {
+    it('renders the title as a heading and the rich content', () => {
+      const { container } = render(
+        <PageBlocks
+          blocks={[b('a', 'custom', { title: 'Why us', html: '<p>Crafted in Kurdistan</p>' })]}
+        />,
+      );
+      expect(container.querySelector('h2')?.textContent).toBe('Why us');
+      expect(container.textContent).toContain('Crafted in Kurdistan');
+    });
+
+    it('applies the chosen width, padding and alignment', () => {
+      // (var()-based backgrounds are not serialised by jsdom's CSSOM, so
+      // the palette itself is pinned in lib/theme tests + the preview page;
+      // here we pin the layout choices, which jsdom does preserve.)
+      const { container } = render(
+        <PageBlocks
+          blocks={[
+            b('a', 'custom', {
+              html: '<p>x</p>',
+              background: 'brand',
+              width: 'full',
+              padding: 'none',
+              align: 'center',
+            }),
+          ]}
+        />,
+      );
+      const section = container.querySelector('section');
+      expect(section).not.toBeNull();
+      // padding "none" -> 0 20px (horizontal breathing room only)
+      expect(section!.getAttribute('style')).toContain('padding: 0px 20px');
+      const inner = section!.querySelector('div')!;
+      const style = inner.getAttribute('style') || '';
+      // width "full" -> no max-width; align center -> centered text
+      expect(style).toContain('max-width: none');
+      expect(style).toContain('text-align: center');
+    });
+
+    it('defaults to large vertical padding when config is minimal', () => {
+      const { container } = render(<PageBlocks blocks={[b('a', 'custom', { html: '<p>x</p>' })]} />);
+      const section = container.querySelector('section');
+      expect(section!.getAttribute('style')).toContain('padding: 56px 20px');
+      expect(section!.querySelector('div')!.getAttribute('style')).toContain('max-width: 860px');
+    });
+
+    it('renders nothing for a custom block with no title and no content', () => {
+      const { container } = render(<PageBlocks blocks={[b('a', 'custom', {})]} />);
+      expect(container.innerHTML).toBe('');
+    });
+  });
 });
