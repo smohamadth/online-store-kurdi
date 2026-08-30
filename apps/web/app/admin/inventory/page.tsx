@@ -1,3 +1,7 @@
+// /admin/inventory - the stock overview: low-stock and out-of-stock
+// lists, quick quantity adjust (POST /api/inventory/adjust), and
+// links into the other inventory sub-pages (warehouses, stock takes,
+// reorder, reservations, channels, import).
 'use client';
 
 import { useState, useEffect } from 'react';

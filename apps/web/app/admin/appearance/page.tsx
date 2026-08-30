@@ -1,3 +1,13 @@
+// /admin/appearance - the look & feel editor, tabbed:
+//   - theme: pick an installed theme (ThemePicker; the registry in
+//     lib/themeRegistry is the source of truth - the server rejects
+//     unknown theme keys)
+//   - colors / typography / layout / sections / announcement: the
+//     Theme fields, saved as one blob via PUT /api/theme (including
+//     the customCss tab, which the server scans for script tags)
+//   - home: the home-page block editor (the HomeSection rows)
+// The live preview at /preview/<key> renders the same theme with
+// sample data.
 'use client';
 
 import { useState, useEffect } from 'react';

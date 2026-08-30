@@ -1,3 +1,7 @@
+// /admin/categories - the category tree editor (name, slug, image,
+// parent for one level of nesting, sort order, active flag). Delete
+// is refused by the API while products reference the category, so the
+// error here is expected behaviour, not a bug.
 'use client';
 
 import React, { useState, useEffect } from 'react';

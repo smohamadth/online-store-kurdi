@@ -1,3 +1,10 @@
+// /admin/shipping - the shipping zones + methods editor. A zone
+// matches countries (plus optional state/zip lists); a method prices
+// by flat / weight / price-percentage / item-count (the same four
+// types the server's calculator implements). The checkout's
+// ShippingSelector queries the public POST /api/shipping/calculate
+// with the customer's address, so a method the admin configures here
+// only appears at checkout if it matches a zone.
 'use client';
 
 import { useStoreSettings, formatPrice } from '@/lib/settings';

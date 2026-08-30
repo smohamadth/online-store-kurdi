@@ -1,3 +1,8 @@
+// HeroGallery - the home page hero slider: cycles the store's active
+// hero banners (from /api/banners?position=hero) with an autoplay
+// interval + arrows/dots. With no active hero it renders nothing
+// (the admin may have scheduled them all off).
+
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';

@@ -1,3 +1,7 @@
+// /admin/blog - the post list (drafts + published, with the featured
+// flag) and the create/edit navigation. Editing itself happens in
+// /admin/blog/[id]/edit on the shared CmsEditor shell; this page is
+// the index + delete + publish-state column.
 'use client';
 
 import { useEffect, useState } from 'react';

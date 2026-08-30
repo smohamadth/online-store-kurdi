@@ -1,3 +1,7 @@
+// ImageUpload - the single-image uploader (banner/modal use):
+// pick a file -> /api/upload -> the parent receives the variant URLs
+// (original + thumbnail/medium/large/zoom).
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';

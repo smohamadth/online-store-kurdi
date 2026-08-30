@@ -1,3 +1,11 @@
+// ---------------------------------------------------------------------------
+// /admin - the admin dashboard (KPI cards, recent orders, top products).
+//
+// All figures come from GET /api/dashboard/stats - real aggregates
+// computed in the database. (The old version summed a 100-product sample
+// in the browser and hardcoded user counts; see the inline comment.)
+// An API failure shows a "disconnected" banner instead of fake zeros.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { LoadingState } from '@/components/Spinner';

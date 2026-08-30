@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// /admin/products/[id]/variants - the per-product variant editor
+// (list + add/edit form).
+//
+// Variant attributes are edited as raw "key=value" lines in the form and
+// parsed to a JSON object on submit (the API stores them as a
+// JSON-string column). Writes go through the product-nested variant
+// routes (/api/products/:id/variants - the live implementation).
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

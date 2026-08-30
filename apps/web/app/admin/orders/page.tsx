@@ -1,3 +1,11 @@
+// ---------------------------------------------------------------------------
+// /admin/orders - the order list (all customers, status filter).
+//
+// The database is the only source of truth here - see the inline note
+// on fetchOrders (browser-local "orders" used to produce phantoms).
+// Rows link to /admin/orders/[id]. Below 640px the seven-column table
+// becomes stacked cards (it is unreadable on a phone otherwise).
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';

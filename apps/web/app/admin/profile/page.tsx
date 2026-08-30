@@ -1,3 +1,7 @@
+// /admin/profile - the admin's own account (name / phone / avatar /
+// password change). Writes through the same self-update endpoint the
+// storefront uses (PUT /api/users/:id - the selfUpdateSchema, so no
+// role changes from here).
 'use client';
 
 import { useState, useEffect } from 'react';

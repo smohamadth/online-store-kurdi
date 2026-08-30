@@ -1,3 +1,8 @@
+// /admin/coupons - the coupon manager (list + create/edit/enable-
+// disable). Uses the lib/coupons client, so the DB is the only source
+// of truth (the old sample-coupon fallback is gone). The three coupon
+// types map to the server's validate logic (percentage / fixed /
+// free_shipping, with min order + usage limits).
 'use client';
 
 import { useStoreSettings, formatPrice } from '@/lib/settings';

@@ -1,3 +1,9 @@
+// Toast - the small toast notifications (success/error/info/warning).
+// Mechanism: a module-level listener store - addToast() updates the
+// shared list and notifies subscribers, so any code can toast without
+// prop-drilling; the single <ToastContainer/> (mounted in AppShell)
+// renders the current list with auto-dismiss.
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

@@ -1,3 +1,8 @@
+// /register - the sign-up form (POST /api/auth/register). On success
+// the token + user go to localStorage and the 'authChange' event
+// fires (the cart provider listens and imports the local cart).
+// Links through to /login; the forgot/reset flows are sibling pages.
+
 'use client';
 
 import { ButtonSpinner } from '@/components/Spinner';

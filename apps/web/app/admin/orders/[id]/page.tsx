@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// /admin/orders/[id] - the order detail: items, address, payment +
+// status, the tracking-number and admin-notes editors, and the status
+// transition buttons (PUT /api/orders/:id/status).
+//
+// The status buttons are the admin's fulfilment workflow: pending ->
+// processing -> shipped (with tracking number, which triggers the
+// customer's shipping email) -> delivered, plus cancel/refund. The
+// server validates each transition.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';

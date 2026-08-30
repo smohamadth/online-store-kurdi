@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// Product detail page (PDP) - the storefront's most important view.
+//
+// Fetches the product by slug (GET /api/products/slug/:slug), its
+// typed option tree (GET /api/products/:id/options), and the
+// "also bought" recommendations. Drives:
+//   - variant selection via pickVariant() (lib/variant-selector)
+//   - add-to-cart / buy-now (useCart)
+//   - wishlist toggle (GET /wishlist/check, POST /wishlist)
+//   - back-in-stock alerts (POST /stock-alerts, the in-memory ones)
+//   - reviews (ReviewSection) and the digital-download box
+// Structured data (Product JSON-LD with offers/reviews) is emitted by
+// the server layout next to this component.
+// ---------------------------------------------------------------------------
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';

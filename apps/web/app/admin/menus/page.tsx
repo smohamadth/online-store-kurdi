@@ -1,3 +1,8 @@
+// /admin/menus - the nav editor for the three menu locations
+// (header / footer / sidebar). Items are a two-level tree (dropdowns
+// from the second level); reordering is one request per level
+// (PUT /api/menus/:id/items/reorder). The storefront reads the public
+// GET /api/menus/location/:location, which returns active items only.
 'use client';
 
 import React, { useState, useEffect } from 'react';

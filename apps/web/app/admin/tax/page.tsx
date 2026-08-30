@@ -1,3 +1,10 @@
+// /admin/tax - the tax rates + tax classes editor. Rates are
+// fractions (10 = 10%) scoped to country/state/city/zip with a
+// priority; the server's calculator walks them priority-first and
+// falls back to the country-level general rate. Tax classes (e.g.
+// 'zero' / 'digital') override the per-item rate at calculate time.
+// The storefront's TaxCalculator calls POST /api/tax/calculate, so
+// what the admin configures here is exactly what checkout charges.
 'use client';
 
 import { useState, useEffect } from 'react';

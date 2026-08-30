@@ -1,3 +1,8 @@
+// /admin/analytics - the analytics dashboard: real-time stats,
+// search analytics, trending products, and the recent-activity feed.
+// All figures come from the /api/analytics/* endpoints (the server
+// aggregates the UserEvent table); if the store has tracking
+// disabled, the pages render empty rather than fake data.
 'use client';
 
 import { useState, useEffect } from 'react';

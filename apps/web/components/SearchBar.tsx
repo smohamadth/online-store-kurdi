@@ -1,3 +1,8 @@
+// SearchBar - the header search box. Typing shows the session's
+// recent searches plus a static "popular searches" list (both
+// client-side); submitting navigates to /search?q=... where the
+// actual GET /api/products/search results render.
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';

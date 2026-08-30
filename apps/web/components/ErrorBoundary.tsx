@@ -1,3 +1,8 @@
+// ErrorBoundary - the React error boundary that keeps one broken
+// widget from blanking the whole storefront page. Catches render
+// errors in the children and shows a fallback instead of crashing
+// the app router.
+
 'use client';
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';

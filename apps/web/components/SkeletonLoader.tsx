@@ -1,3 +1,6 @@
+// SkeletonLoader - the loading placeholders (product grid, cards)
+// shown while listings fetch, so the page doesn't flash empty.
+
 'use client';
 
 export function ProductCardSkeleton() {

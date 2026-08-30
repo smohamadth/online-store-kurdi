@@ -1,3 +1,14 @@
+// ---------------------------------------------------------------------------
+// /products - the main product listing (search box, filter sidebar,
+// sort, pagination).
+//
+// The whole filter state lives in the URL (lib/filterParams encodes/
+// decodes it), so a shopper can share or bookmark a filtered view;
+// every change updates the query string and re-fetches. Facets for the
+// sidebar come from GET /api/products/facets with the same filter, so
+// the counts reflect what's currently selected.
+// ---------------------------------------------------------------------------
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';

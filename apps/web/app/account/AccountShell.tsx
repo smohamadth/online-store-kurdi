@@ -1,3 +1,8 @@
+// AccountShell - the wrapper around the /account sub-pages: the
+// sidebar/tab navigation (profile, orders, addresses, wishlist,
+// reviews, downloads, wallet) + the active-route highlight. The
+// login gate lives in the layout (app/account/layout.tsx).
+
 'use client';
 
 import { LoadingState } from '@/components/Spinner';

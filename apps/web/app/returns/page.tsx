@@ -1,3 +1,6 @@
+// /returns - the static returns/exchanges policy page (plain content,
+// no CMS). Kept as its own route so the footer can deep-link it.
+
 'use client';
 
 import Link from 'next/link';

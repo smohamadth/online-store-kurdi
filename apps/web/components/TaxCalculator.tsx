@@ -1,3 +1,9 @@
+// TaxCalculator - the checkout's tax box. Asks POST /api/tax/
+// calculate with the shipping location + line items and shows the
+// per-item breakdown; the parent uses the total for the order's
+// taxAmount. Falls back to a flat 10% estimate when the API is
+// unreachable (mirroring the server's own fallback).
+
 'use client';
 
 import { useState, useEffect } from 'react';

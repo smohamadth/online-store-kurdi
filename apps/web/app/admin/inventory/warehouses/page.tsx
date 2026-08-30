@@ -1,3 +1,7 @@
+// /admin/inventory/warehouses - the warehouse list (create/edit/
+// delete, set default) + per-warehouse stock. Warehouse transfers
+// live in the same subsystem (the transfer endpoints under
+// /api/inventory/warehouse-transfers).
 'use client';
 
 import { useState, useEffect } from 'react';

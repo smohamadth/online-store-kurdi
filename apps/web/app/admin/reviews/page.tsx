@@ -1,3 +1,8 @@
+// /admin/reviews - the moderation queue (GET /api/reviews): approve /
+// reject / delete pending reviews, and view the photos a review
+// carries. The verified-purchase badge is server-computed (the
+// reviewer must own a non-cancelled order with that product) - the
+// admin can't set it by hand.
 'use client';
 
 import { useState, useEffect } from 'react';

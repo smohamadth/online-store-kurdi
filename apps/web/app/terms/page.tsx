@@ -1,3 +1,7 @@
+// /terms - the terms-of-service page (static content; the legal
+// pages under /legal/* are CMS-driven, this one is shipped with the
+// code).
+
 'use client';
 
 import Link from 'next/link';

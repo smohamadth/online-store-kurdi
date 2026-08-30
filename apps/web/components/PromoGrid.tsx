@@ -1,3 +1,7 @@
+// PromoGrid - the home page promo banner grid: takes the active
+// 'promo' banners and renders up to six in a responsive grid (the
+// banner rows come from /api/banners?position=promo).
+
 'use client';
 
 import Link from 'next/link';

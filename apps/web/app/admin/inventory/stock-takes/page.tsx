@@ -1,3 +1,7 @@
+// /admin/inventory/stock-takes - cycle counts: create a stock take
+// (snapshot the counted quantities), then apply it, which adjusts
+// the system stock to the counted values and writes an InventoryLog
+// row per difference. Cancelling a take leaves stock untouched.
 'use client';
 
 import { useState, useEffect } from 'react';

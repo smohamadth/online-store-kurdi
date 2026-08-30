@@ -1,3 +1,7 @@
+// ProductCarousel - a generic horizontal product row used on the
+// home page (new arrivals / trending feeds). Takes pre-fetched
+// products; no data fetching of its own.
+
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';

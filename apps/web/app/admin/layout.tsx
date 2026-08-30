@@ -1,3 +1,14 @@
+// ---------------------------------------------------------------------------
+// Admin layout: the sidebar shell + the admin AUTH GATE.
+//
+// checkAdminAuth() runs on mount: needs the localStorage token AND a
+// server round-trip to /auth/me proving the role is admin or manager.
+// A customer token (or a demoted user) is cleared and bounced to the
+// storefront. If the API is unreachable it falls back to the locally
+// stored role so the admin keeps working during an API blip - the
+// server-side authorize() middleware is the real boundary either way.
+// Everything under /admin renders inside this gate.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';

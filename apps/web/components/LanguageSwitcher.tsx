@@ -1,3 +1,8 @@
+// LanguageSwitcher - the i18n picker in the header. Switches the
+// active language via lib/i18n (localStorage + document lang/dir);
+// the server layout picks the initial locale from cookie/
+// Accept-Language so first paint is already in the right language.
+
 'use client';
 
 import { useState } from 'react';
