@@ -1,3 +1,5 @@
+// The header cart badge: renders the useCart() item count (hidden
+// at 0). Client-only - the count is per-browser cart state.
 'use client';
 
 import { useCart } from '@/lib/store';
