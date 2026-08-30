@@ -1,0 +1,43 @@
+# API image for the store-builder.
+#
+# Build context: the repository root (the workspaces share one lockfile,
+# so the image must be built from the root, not from apps/api):
+#
+#   docker build -f Dockerfile.api -t store-api .
+#
+# The runtime entrypoint applies pending Prisma migrations before the
+# server starts, so `docker compose up` on a client server converges the
+# database to the schema this build was made from.
+#
+# The full (dev) node_modules from the build stage is carried over on
+# purpose: prisma is a devDependency and the entrypoint needs the CLI at
+# runtime to run `migrate deploy`. The store-builder installs onto
+# client servers, and a working one-command install beats a smaller
+# image.
+
+FROM node:20-alpine AS build
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+RUN npm ci --no-audit --no-fund
+COPY . .
+# Root postinstall already ran prisma generate; run it explicitly so a
+# changed schema can never slip into the image ungenerated.
+RUN cd apps/api && npx prisma generate && npm run build
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app/apps/api
+RUN apk add --no-cache libc6-compat openssl
+# Everything the server needs: compiled dist, the prisma schema + CLI,
+# and the node_modules tree with the GENERATED client inside.
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/api ./
+COPY --from=build /app/apps/web/package.json ./../web/package.json
+COPY --from=build /app/package.json ./../package.json
+COPY --from=build /app/scripts/entrypoint-api.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+EXPOSE 3001
+ENTRYPOINT ["./entrypoint.sh"]

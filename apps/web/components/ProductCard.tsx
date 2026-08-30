@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Product, getImageUrl, getCategoryEmoji } from '@/lib/api';
 import { formatPrice } from '@/lib/settings';
 import { useCart } from '@/lib/store';
+import { useCompare } from '@/lib/compare';
+import StoreImage from '@/components/StoreImage';
 
 interface Props {
   product: Product;
@@ -18,6 +20,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
   const [imgFailed, setImgFailed] = useState(false);
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
+  const { isCompared, toggle: toggleCompare } = useCompare();
 
   const primary =
     product.images?.find((i) => i.isPrimary)?.url || product.images?.[0]?.url || '';
@@ -33,6 +36,19 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
   const outOfStock = product.quantity !== undefined && product.quantity <= 0;
   const lowStock = !outOfStock && product.quantity > 0 && product.quantity <= 5;
   const rating = Number(product.averageRating) || 0;
+
+  const handleCompare = (e: React.MouseEvent) => {
+    // Same card-is-a-link caveat as handleAdd.
+    e.preventDefault();
+    e.stopPropagation();
+    toggleCompare({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price,
+      image: primary,
+    });
+  };
 
   const handleAdd = (e: React.MouseEvent) => {
     // The whole card is a link - don't navigate when using the quick action.
@@ -87,14 +103,12 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
       >
         {showImage ? (
           <>
-            <img
+            <StoreImage
               src={getImageUrl(primary)}
               alt={product.images?.[0]?.alt || product.name}
-              loading="lazy"
+              fill
               onError={() => setImgFailed(true)}
               style={{
-                width: '100%',
-                height: '100%',
                 objectFit: 'cover',
                 transition: 'transform 500ms ease, opacity 300ms ease',
                 transform: hovered ? 'scale(1.06)' : 'scale(1)',
@@ -102,16 +116,12 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
               }}
             />
             {secondary && (
-              <img
+              <StoreImage
                 src={getImageUrl(secondary)}
                 alt=""
                 aria-hidden="true"
-                loading="lazy"
+                fill
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
                   objectFit: 'cover',
                   opacity: hovered ? 1 : 0,
                   transition: 'opacity 300ms ease',
@@ -145,8 +155,20 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
           {hasDiscount && (
             <span style={badge('var(--sale, #dc2626)')}>-{discountPct}%</span>
           )}
-          {outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
-          {lowStock && <span style={badge('var(--warning, #d97706)')}>Only {product.quantity} left</span>}
+          {/* "Digital" badge sits above the sale badge so it's
+              the first thing a shopper sees on a product card.
+              A digital SKU is never "out of stock" - hide that
+              branch and the low-stock warning. */}
+          {product.type === 'digital' && (
+            <span
+              data-testid="product-card-digital"
+              style={badge('var(--success, #16a34a)')}
+            >
+              ⚡ Digital
+            </span>
+          )}
+          {product.type !== 'digital' && outOfStock && <span style={badge('#6b7280')}>Sold out</span>}
+          {product.type !== 'digital' && lowStock && <span style={badge('var(--warning, #d97706)')}>Only {product.quantity} left</span>}
         </div>
 
         {/* Quick add */}
@@ -230,6 +252,29 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
             </span>
           )}
         </div>
+        <label
+          onClick={handleCompare}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            color: 'var(--muted, #666)',
+            cursor: 'pointer',
+            userSelect: 'none',
+            marginTop: '2px',
+            width: 'fit-content',
+          }}
+        >
+          <input
+            type="checkbox"
+            tabIndex={-1}
+            checked={isCompared(product.id)}
+            readOnly
+            style={{ accentColor: 'var(--accent, #2563eb)', margin: 0 }}
+          />
+          Compare
+        </label>
       </div>
     </Link>
   );

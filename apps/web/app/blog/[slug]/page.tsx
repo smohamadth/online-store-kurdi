@@ -6,7 +6,12 @@ import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
+import PostCard from '@/components/PostCard';
+import ReadingProgress from '@/components/ReadingProgress';
+import { DirectionArrow } from '@/components/DirectionArrow';
+import { PageBlocks } from '@/components/PageBlocks';
 import { encodeRouteParam } from '@/lib/routeParam';
+import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 
 /**
  * A single blog post at /blog/<slug>.
@@ -57,6 +62,23 @@ function absolute(url?: string | null): string | undefined {
   return `${API_BASE.replace('/api', '')}${url}`;
 }
 
+/**
+ * Where does a cover URL actually live?
+ *
+ * - http(s)/data URLs: as-is.
+ * - /uploads/*: uploaded through the admin - served by the API (or MinIO),
+ *   so it needs the API origin.
+ * - anything else (e.g. the seeded /images/* assets): a web-app public
+ *   asset - the web origin serves it. Same-origin relative URLs keep
+ *   working in dev, proxied previews and single-origin deployments.
+ */
+function coverUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('http') || url.startsWith('data:')) return url;
+  if (url.startsWith('/uploads/')) return absolute(url);
+  return url;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -95,7 +117,17 @@ export async function generateMetadata({
     storeName: storeInfo.storeName,
   });
 
-  const image = absolute(post.coverImage);
+  // OG/twitter image must be an absolute URL a crawler can fetch: uploaded
+  // covers live on the API origin, web-public assets on the site origin.
+  const cover = post.coverImage;
+  const image =
+    cover && (cover.startsWith('http') || cover.startsWith('data:'))
+      ? cover
+      : cover && cover.startsWith('/uploads/')
+        ? absolute(cover)
+        : cover
+          ? `${SITE}${cover}`
+          : undefined;
 
   return {
     ...meta,
@@ -162,98 +194,176 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   if (!post) notFound();
 
   const store = await getStoreInfo();
-  const image = absolute(post.coverImage);
+  const image = coverUrl(post.coverImage);
 
   // Structured data: lets Google show the headline, date and image directly in
   // results. Cheap to emit and the main reason a blog earns traffic.
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
+  // Built by the shared helper so this page and the unit test
+  // can't drift on the field names.
+  const jsonLd = buildBlogPostingJsonLd({
+    url: `${SITE}/blog/${post.slug}`,
     headline: post.title,
     description: post.excerpt || post.metaDescription || undefined,
-    image: image ? [image] : undefined,
+    image: image || undefined,
     datePublished: post.publishedAt || post.createdAt,
     dateModified: post.updatedAt,
-    author: { '@type': 'Person', name: post.author || store.storeName },
-    publisher: { '@type': 'Organization', name: store.storeName },
-    mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE}/blog/${post.slug}` },
-    keywords: post.tags.join(', ') || undefined,
-  };
+    author: post.author || store.storeName,
+    publisherName: store.storeName,
+    keywords: post.tags.join(', '),
+  });
+  const breadcrumb = buildBreadcrumbJsonLd([
+    { name: 'Home', url: `${SITE}/` },
+    { name: 'Blog', url: `${SITE}/blog` },
+    { name: post.title, url: `${SITE}/blog/${post.slug}` },
+  ]);
 
   return (
-    <article style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 20px 72px' }}>
+    <article style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 20px 80px' }}>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        data-testid="json-ld-post"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(asGraph([jsonLd, breadcrumb])) }}
       />
 
+      <ReadingProgress />
       <PostViewCounter slug={post.slug} />
 
-      <nav style={{ marginBottom: '20px', fontSize: '14px' }}>
-        <Link href="/blog" style={{ color: 'var(--accent, #3b82f6)', textDecoration: 'none' }}>
-          ← All posts
+      <nav style={{ maxWidth: '760px', margin: '0 auto 24px', fontSize: '14px' }}>
+        <Link
+          href="/blog"
+          style={{
+            color: 'var(--accent, #3b82f6)',
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontWeight: 600,
+          }}
+        >
+          <DirectionArrow kind="back" /> All posts
         </Link>
       </nav>
 
-      <header>
+      {/* Cover band - full container width, like a magazine plate. */}
+      {image && (
+        <div
+          style={{
+            width: '100%',
+            aspectRatio: '21 / 9',
+            overflow: 'hidden',
+            borderRadius: 'calc(var(--radius, 12px) + 4px)',
+            margin: '0 auto 32px',
+            maxHeight: '520px',
+          }}
+        >
+          {/* Article hero: eager (it is the LCP candidate on article
+              pages), but decode async so it never blocks first paint. */}
+          <img
+            src={image}
+            alt={post.title}
+            loading="eager"
+            decoding="async"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </div>
+      )}
+
+      <header style={{ maxWidth: '760px', margin: '0 auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap',
+            marginBottom: '14px',
+          }}
+        >
+          {post.isFeatured && (
+            <span
+              style={{
+                padding: '4px 12px',
+                borderRadius: '999px',
+                backgroundColor: 'var(--brand, #111)',
+                color: 'var(--brand-text, #fff)',
+                fontSize: '11px',
+                fontWeight: 800,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Featured
+            </span>
+          )}
+          {post.tags.map((t) => (
+            <Link
+              key={t}
+              href={`/blog?tag=${encodeURIComponent(t)}`}
+              style={{
+                fontSize: '12px',
+                padding: '4px 12px',
+                borderRadius: '999px',
+                textDecoration: 'none',
+                backgroundColor: 'var(--body-bg, #f3f4f6)',
+                border: '1px solid var(--border, #e5e5e5)',
+                color: 'var(--muted, #555)',
+              }}
+            >
+              {t}
+            </Link>
+          ))}
+        </div>
+
         <h1
           style={{
-            fontSize: '38px',
+            fontSize: 'clamp(30px, 5vw, 44px)',
             fontWeight: 'var(--heading-weight, 800)' as any,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.15,
+            letterSpacing: '-0.025em',
+            lineHeight: 1.12,
             color: 'var(--body-text, #111)',
           }}
         >
           {post.title}
         </h1>
 
-        <p style={{ marginTop: '12px', fontSize: '14px', color: 'var(--muted, #666)' }}>
-          {post.author ? `By ${post.author} · ` : ''}
-          {formatPostDate(post.publishedAt || post.createdAt)} · {post.readingMinutes} min read
-        </p>
-
-        {post.tags.length > 0 && (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px' }}>
-            {post.tags.map((t) => (
-              <Link
-                key={t}
-                href={`/blog?tag=${encodeURIComponent(t)}`}
-                style={{
-                  fontSize: '12px',
-                  padding: '4px 12px',
-                  borderRadius: '999px',
-                  textDecoration: 'none',
-                  backgroundColor: 'var(--body-bg, #f3f4f6)',
-                  border: '1px solid var(--border, #e5e5e5)',
-                  color: 'var(--muted, #555)',
-                }}
-              >
-                {t}
-              </Link>
-            ))}
-          </div>
-        )}
-      </header>
-
-      {image && (
-        <img
-          src={image}
-          alt={post.title}
+        {/* Meta bar: author avatar + name, date, reading time. */}
+        <div
           style={{
-            width: '100%',
-            marginTop: '28px',
-            borderRadius: 'var(--radius, 12px)',
-            display: 'block',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+            marginTop: '20px',
+            paddingBottom: '20px',
+            borderBottom: '1px solid var(--border, #e5e5e5)',
+            fontSize: '14px',
+            color: 'var(--muted, #666)',
           }}
-        />
-      )}
+        >
+          {post.author && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+              <AuthorAvatar name={post.author} />
+              <span style={{ color: 'var(--body-text, #111)', fontWeight: 600 }}>{post.author}</span>
+            </span>
+          )}
+          <span aria-hidden="true" style={{ opacity: 0.4 }}>
+            ·
+          </span>
+          <time dateTime={(post.publishedAt || post.createdAt).slice(0, 10)}>
+            {formatPostDate(post.publishedAt || post.createdAt)}
+          </time>
+          <span aria-hidden="true" style={{ opacity: 0.4 }}>
+            ·
+          </span>
+          <span>{post.readingMinutes} min read</span>
+        </div>
+      </header>
 
       {post.excerpt && (
         <p
           style={{
-            marginTop: '24px',
-            fontSize: '18px',
+            maxWidth: '760px',
+            margin: '24px auto 0',
+            fontSize: '19px',
             lineHeight: 1.65,
             color: 'var(--muted, #555)',
             fontWeight: 500,
@@ -264,44 +374,120 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
       )}
 
       <div
-        style={{ marginTop: '24px', fontSize: '17px', lineHeight: 1.8, color: 'var(--body-text, #222)' }}
-        // Sanitised server-side ON WRITE (blog.routes.ts), never on read.
-        dangerouslySetInnerHTML={{ __html: post.content || '' }}
-      />
+        className="post-body"
+        style={{ maxWidth: '760px', margin: '28px auto 0', fontSize: '17px' }}
+      >
+        {/* Scoped article typography: the body HTML is admin-authored, so
+            headings/lists/quotes/links/images get a consistent editorial
+            rhythm here instead of raw browser defaults. */}
+        <style>{`
+          .post-body p { margin: 0 0 1.15em; line-height: 1.8; }
+          .post-body h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.25; margin: 1.6em 0 0.6em; color: var(--body-text, #111); }
+          .post-body h3 { font-size: 20px; font-weight: 700; line-height: 1.3; margin: 1.4em 0 0.5em; color: var(--body-text, #111); }
+          .post-body h4 { font-size: 17px; font-weight: 700; margin: 1.3em 0 0.4em; color: var(--body-text, #111); }
+          .post-body ul, .post-body ol { margin: 0 0 1.15em; padding-inline-start: 1.5em; line-height: 1.8; }
+          .post-body li { margin-bottom: 0.35em; }
+          .post-body a { color: var(--accent, #3b82f6); text-decoration: underline; text-underline-offset: 3px; }
+          .post-body img { border-radius: var(--radius, 12px); margin: 1.2em auto; max-width: 100%; }
+          .post-body blockquote { margin: 1.4em 0; padding: 14px 20px; border-inline-start: 4px solid var(--brand, #111); background: var(--body-bg, #f5f5f7); border-radius: 0 var(--radius, 10px) var(--radius, 10px) 0; color: var(--body-text, #222); font-style: italic; line-height: 1.7; }
+          .post-body blockquote p { margin: 0; }
+          .post-body :first-child { margin-top: 0; }
+        `}</style>
+        {post.blocks && post.blocks.length > 0 ? (
+          // Block layout. The HTML block fields were sanitised server-side
+          // ON WRITE (blog.routes.ts / contentBlocks.ts), never on read -
+          // same contract as the legacy content column below.
+          <PageBlocks blocks={post.blocks} />
+        ) : (
+          // Sanitised server-side ON WRITE (blog.routes.ts), never on read.
+          <div dangerouslySetInnerHTML={{ __html: post.content || '' }} />
+        )}
+      </div>
 
       {post.related && post.related.length > 0 && (
-        <section
-          style={{
-            marginTop: '56px',
-            paddingTop: '28px',
-            borderTop: '1px solid var(--border, #e5e5e5)',
-          }}
-        >
-          <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '16px' }}>Keep reading</h2>
-          <div style={{ display: 'grid', gap: '12px' }}>
+        <section style={{ marginTop: '64px', paddingTop: '32px', borderTop: '1px solid var(--border, #e5e5e5)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: '12px',
+              marginBottom: '20px',
+            }}
+          >
+            <h2
+              style={{
+                fontSize: '22px',
+                fontWeight: 'var(--heading-weight, 800)' as any,
+                letterSpacing: '-0.02em',
+                margin: 0,
+                color: 'var(--body-text, #111)',
+              }}
+            >
+              Keep reading
+            </h2>
+            <Link
+              href="/blog"
+              style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: 'var(--accent, #3b82f6)',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              All posts <DirectionArrow kind="forward" />
+            </Link>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+              gap: '20px',
+            }}
+          >
             {post.related.map((r) => (
-              <Link
-                key={r.id}
-                href={`/blog/${r.slug}`}
-                style={{
-                  display: 'block',
-                  padding: '14px 16px',
-                  borderRadius: 'var(--radius, 10px)',
-                  border: '1px solid var(--border, #e8e8e8)',
-                  backgroundColor: 'var(--card-bg, #fff)',
-                  textDecoration: 'none',
-                  color: 'var(--body-text, #111)',
-                }}
-              >
-                <p style={{ fontWeight: 700, fontSize: '15px' }}>{r.title}</p>
-                <p style={{ fontSize: '13px', color: 'var(--muted, #777)', marginTop: '3px' }}>
-                  {formatPostDate(r.publishedAt || r.createdAt)} · {r.readingMinutes} min read
-                </p>
-              </Link>
+              <PostCard key={r.id} post={r} />
             ))}
           </div>
         </section>
       )}
     </article>
+  );
+}
+
+/** Deterministic author avatar: initials on a coloured disc, derived from
+ *  the name so the same author always gets the same colour. Mirrors the
+ *  deterministic-tile approach PostCard uses for missing cover images. */
+function AuthorAvatar({ name }: { name: string }) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('');
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: '36px',
+        height: '36px',
+        borderRadius: '50%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: `hsl(${h}, 55%, 88%)`,
+        color: `hsl(${h}, 45%, 30%)`,
+        fontSize: '13px',
+        fontWeight: 800,
+        flexShrink: 0,
+      }}
+    >
+      {initials}
+    </span>
   );
 }

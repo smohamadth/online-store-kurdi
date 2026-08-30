@@ -297,18 +297,40 @@ try:
               str(pg.locator("[data-post-row]").count()))
         check("sidebar has a Blog entry", pg.locator('[data-nav-item="/admin/blog"]').count() == 1)
 
-        # Write a post through the real UI.
-        pg.get_by_role("button", name="+ New post").click()
-        pg.wait_for_timeout(800)
+        # Write a post through the real UI. The two-step template flow:
+        # the picker POSTs a draft (with a unique starting slug) and
+        # redirects into the editor, where the admin sets title, slug,
+        # tags and publish.
+        pg.get_by_test_id("admin-blog-new").click()
+        pg.wait_for_timeout(1200)
+        pg.get_by_test_id("new-post-blank").click()
+        pg.wait_for_timeout(2500)
         pg.get_by_label("Title", exact=True).fill("Written In The UI")
         pg.wait_for_timeout(300)
+        # The editor no longer auto-derives the slug from the title - it
+        # is free text, pre-filled when the draft is created. The original
+        # regression (a blank slug 404'ing the post) is now guarded by
+        # the draft arriving with a non-empty slug.
         slug_val = pg.get_by_label("Address (slug)", exact=True).input_value()
-        check("slug auto-derives from the title", slug_val == "written-in-the-ui", slug_val)
+        check("draft arrives with a non-empty slug", bool(slug_val.strip()), repr(slug_val))
 
         pg.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         pg.get_by_label("Tags", exact=True).fill("uitag")
-        pg.get_by_label("Published", exact=True).check()
-        pg.get_by_role("button", name="Create post").click()
+        # Layout blocks: the post editor uses the same block builder as
+        # the page CMS. Add a callout and a quote and confirm both reach
+        # the storefront after publish.
+        pg.get_by_test_id("page-blocks-add-callout").click()
+        pg.wait_for_timeout(300)
+        pg.locator('[data-block-type="callout"]') \
+                .locator('[data-testid$="-text"]').fill("Post block note: shipped from Baku")
+        pg.wait_for_timeout(300)
+        pg.get_by_test_id("page-blocks-add-quote").click()
+        pg.wait_for_timeout(300)
+        pg.locator('[data-block-type="quote"]') \
+                .locator('[data-testid$="-text"]').fill("Post quote: quality first")
+        pg.wait_for_timeout(300)
+        pg.get_by_test_id("cms-publish-checkbox").check()
+        pg.get_by_test_id("cms-save-and-close").click()
         pg.wait_for_timeout(2500)
 
         st, all_posts = call("GET", "/blog/all", admin)
@@ -318,19 +340,25 @@ try:
             created.append(made[0]["id"])
             check("UI post was published", made[0]["status"] == "published")
             check("UI tags were parsed", made[0]["tags"] == ["uitag"], str(made[0]["tags"]))
-            code, _ = web(f"/blog/{PREFIX}ui")
+            code, post_body = web(f"/blog/{PREFIX}ui")
             check("UI post is live on the storefront", code == 200, f"status={code}")
+            check("the post renders its layout blocks",
+                  "Post block note: shipped from Baku" in post_body
+                  and "Post quote: quality first" in post_body)
 
         # A rejected save must show the server's reason, not a fake success.
-        pg.get_by_role("button", name="+ New post").click()
-        pg.wait_for_timeout(800)
+        pg.get_by_test_id("admin-blog-new").click()
+        pg.wait_for_timeout(1200)
+        pg.get_by_test_id("new-post-blank").click()
+        pg.wait_for_timeout(2500)
         pg.get_by_label("Title", exact=True).fill("Duplicate")
         pg.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
-        pg.get_by_role("button", name="Create post").click()
+        pg.get_by_test_id("cms-save-and-close").click()
         pg.wait_for_timeout(2500)
         check("duplicate slug surfaces the server error",
               "already exists" in pg.inner_text("body").lower())
-        pg.get_by_role("button", name="Cancel").click()
+        # Back out of the editor without saving.
+        pg.get_by_role("link", name="Back", exact=True).click()
         pg.wait_for_timeout(500)
 
         check("no unexpected console errors",
@@ -346,7 +374,16 @@ finally:
     leftovers = [p for p in everything.get("data", []) if p["slug"].startswith(PREFIX)]
     for p in leftovers:
         call("DELETE", f"/blog/{p['id']}", admin)
-    print(f"\n(cleanup: removed {len(set(created)) + len(leftovers)} fixture post(s))")
+    # The template picker creates a draft (title "Untitled post") before
+    # the flow renames it in the editor. A rejected save (duplicate slug)
+    # leaves that draft behind; sweep it or drafts accumulate run over run.
+    template_leftovers = [
+        p for p in everything.get("data", [])
+        if p["title"] == "Untitled post" and p["status"] == "draft"
+    ]
+    for p in template_leftovers:
+        call("DELETE", f"/blog/{p['id']}", admin)
+    print(f"\n(cleanup: removed {len(set(created)) + len(leftovers) + len(template_leftovers)} fixture post(s))")
 
 print()
 print(f"{sum(results)}/{len(results)} passed")

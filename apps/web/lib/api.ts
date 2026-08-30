@@ -1,4 +1,22 @@
+// ---------------------------------------------------------------------------
+// Storefront API types + the original ApiClient + image URL helpers.
+//
+// What lives here and who uses it:
+//   - the shared DATA TYPES (Product, Category, ProductVariant, ...) -
+//     imported by most views;
+//   - the ApiClient singleton (`api`) - the FIRST client, still used by
+//     ~39 files. Newer code should use lib/http.ts (http / authHttp),
+//     which centralises auth + ApiError; the two coexist;
+//   - getImageUrl() / getProductImage() / getCategoryEmoji() - used
+//     everywhere images are rendered.
+//
+// NOTE the local API_URL fallback to localhost:3001: it only matters in
+// dev; lib/apiBase.ts is the source of truth for the browser-safe base
+// (loopback bases can't be reached from a user's browser).
+// ---------------------------------------------------------------------------
 'use client';
+
+import { API_BASE, CLIENT_API_BASE } from './apiBase';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -20,6 +38,12 @@ export interface Product {
   variants: ProductVariant[];
   averageRating: number;
   reviewCount: number;
+  /** Digital product fields. Returned by the API for every product;
+   * meaningful only when `type === 'digital'`. */
+  downloadUrl: string | null;
+  downloadLimit: number | null;
+  /** Number of days the per-order link is valid. */
+  downloadExpiry: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,10 +67,13 @@ export interface ProductVariant {
   id: string;
   name: string;
   sku: string;
+  slug?: string | null;
   price: number;
+  compareAtPrice?: number | null;
   quantity: number;
   attributes: string;
   isActive: boolean;
+  sortOrder?: number;
 }
 
 export interface ApiResponse<T> {
@@ -209,6 +236,13 @@ class ApiClient {
     });
   }
 
+  // Customer-facing status timeline for the order detail page.
+  async getOrderTracking(token: string, orderId: string): Promise<ApiResponse<any>> {
+    return this.request(`/orders/${orderId}/tracking`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
   // Analytics
   async trackEvent(event: {
     eventType: string;
@@ -235,8 +269,16 @@ export function getImageUrl(url: string | undefined | null): string {
   if (!url) return '';
   // Already a full URL (http/https) or data URI
   if (url.startsWith('http') || url.startsWith('data:')) return url;
-  // Relative URL - prepend API base
-  const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace('/api', '');
+  // Loopback API base (dev / proxied preview): the browser cannot reach
+  // 127.0.0.1:3001 - that is the SERVER's loopback, not the reader's
+  // machine. Resolve images against the page's own origin instead: the
+  // web app serves /images/* from public/, and /uploads/* (files the
+  // API stores) is proxied to the API by the rewrites in next.config.js.
+  if (CLIENT_API_BASE === '/api') {
+    return url;
+  }
+  // Relative URL on a real deployment - prepend the API base
+  const baseUrl = API_BASE.replace('/api', '');
   return `${baseUrl}${url}`;
 }
 

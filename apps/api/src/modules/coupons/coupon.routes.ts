@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// Coupons: admin CRUD + the public "validate this code" endpoint the
+// checkout calls.
+//
+// Validation (POST /coupons/validate) is where the business rules live:
+// active flag, start/end dates, min-spend, and per-customer usage limits
+// (maxUses / maxUsesPerCustomer). It returns the computed discount so
+// the client renders the savings before placing the order; at order time
+// the client sends the couponId and the server increments usedCount
+// (in order.routes). The store has no re-validation of the code at
+// order time - the discountAmount is trusted from the client, so treat
+// validate as the enforcement point.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';

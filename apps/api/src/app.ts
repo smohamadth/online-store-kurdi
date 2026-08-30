@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Express app assembly (the middleware pipeline + every route mount).
+//
+// Order matters here: helmet/CORS/rate-limit BEFORE the routes; the
+// 404 handler before the error handler; Sentry initialised before any
+// middleware mounts. The inline comments record why each piece is the
+// way it is (the CORS loopback rule, the CORP header, the rate limiter)
+// - most were born from real outages.
+// ---------------------------------------------------------------------------
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,12 +20,14 @@ import { Server as SocketIOServer } from 'socket.io';
 import { env, isDevelopment } from './config/environment';
 import { logger, loggerStream } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
+import { initSentry } from './config/sentry';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import { csrfTokenRoute } from './middleware/csrf';
 
 // Import routes
 import productRoutes from './modules/products/product.routes';
 import variantRoutes from './modules/products/variant.routes';
+import productVariantRoutes from './modules/products/product-variant.routes';
 import orderRoutes from './modules/orders/order.routes';
 import receiptRoutes from './modules/orders/receipt.routes';
 import userRoutes from './modules/users/user.routes';
@@ -44,9 +55,20 @@ import menuRoutes from './modules/menus/menu.routes';
 import bannerRoutes from './modules/banners/banner.routes';
 import dashboardRoutes from './modules/analytics/dashboard.routes';
 import themeRoutes from './modules/theme/theme.routes';
+import importExportRoutes from './modules/importExport/routes';
 import homeSectionRoutes from './modules/home/home.routes';
 import pageRoutes from './modules/pages/page.routes';
 import blogRoutes from './modules/blog/blog.routes';
+import currencyRoutes from './modules/currency/currency.routes';
+import {
+  publicDownloadsRouter,
+  accountDownloadsRouter,
+  orderItemDownloadRouter,
+} from './modules/downloads/downloads.routes';
+
+// Error tracking: initialise BEFORE any middleware mounts. No-op when
+// SENTRY_DSN is unset, so the app runs identically without it.
+initSentry();
 
 // Create Express app
 const app = express();
@@ -123,7 +145,9 @@ const limiter = rateLimit({
   skip: (req) => isDevelopment && req.method === 'GET',
 });
 
-// Apply rate limiting to API routes
+// Request spans are created automatically by Sentry.httpIntegration()
+// (registered in config/sentry.ts, v8+ replacement for the old
+// Handlers.requestHandler).
 app.use('/api/', limiter);
 
 // Body parsing middleware. The 3PL webhook handler needs the raw body
@@ -191,14 +215,14 @@ app.get('/api', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
-// Variant routes are mounted at two prefixes to keep the URL space
-// clean: /api/products/:productId/variants for the nested CRUD
-// (handled by the router's own paths) and /api/variants/:id for the
-// standalone lookup. Mounting variantRoutes twice in the same
-// app.use chain is supported by Express - the router is the same
-// instance and registers its routes on the layer each time.
-app.use('/api/products', variantRoutes);
+// Standalone variant routes (/api/variants/...) - the first-class
+// CRUD that doesn't require a product id in the URL.
 app.use('/api/variants', variantRoutes);
+// Product-nested variant routes (/api/products/:productId/variants,
+// /api/products/:productId/options). Kept in a separate router
+// from the standalone variant routes so /:id/options and
+// /:productId/options don't compete for the same path.
+app.use('/api/products', productVariantRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/orders', receiptRoutes);
 app.use('/api/users', userRoutes);
@@ -228,6 +252,19 @@ app.use('/api/theme', themeRoutes);
 app.use('/api/home-sections', homeSectionRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/blog', blogRoutes);
+app.use('/api/currencies', currencyRoutes);
+// Bulk import/export (admin). Export is a file download; import is a
+// preview (validate, no write) then an all-or-nothing commit.
+app.use('/api/import-export', importExportRoutes);
+// Digital downloads. Three routers, three mount points - the
+// public token route is at /api/downloads/*, account-scoped
+// routes are at /api/account/downloads, and the per-order-item
+// download lookup is at /api/orders/:id/items/:itemId/download.
+app.use('/api/downloads', publicDownloadsRouter);
+app.use('/api/account', accountDownloadsRouter);
+// The order routes already mount at /api/orders; this adds the
+// /:orderId/items/:itemId/download path.
+app.use('/api/orders', orderItemDownloadRouter);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -248,7 +285,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// Error handling middleware
+// Error handling middleware. Every error funnels through errorHandler,
+// which responds without calling next(err) - so a Sentry handler mounted
+// after it would never see anything (the old Sentry.Handlers.errorHandler
+// mount was dead). Sentry capture happens inside errorHandler itself
+// (guarded by isSentryEnabled()), with the request span bound by
+// Sentry.expressIntegration().
 app.use(notFoundHandler);
 app.use(errorHandler);
 

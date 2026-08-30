@@ -1,3 +1,9 @@
+// /account/orders/[id] - order detail: items, totals, shipping
+// address, payment status, and the status timeline (fetched from
+// GET /api/orders/:id/tracking - the server derives it from the
+// order's own timestamps). Digital line items get a download button
+// (the per-order token lives on the order item). Cancel is offered
+// while the order is still pending.
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -5,6 +11,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { DirectionArrow } from '@/components/DirectionArrow';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -26,6 +33,7 @@ export default function OrderDetailPage() {
   
   const [user, setUser] = useState<any>(null);
   const [order, setOrder] = useState<any>(null);
+  const [tracking, setTracking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -65,6 +73,12 @@ export default function OrderDetailPage() {
       // "John Doe / iPhone 15 Pro" demo order as if it were the customer's.
       const response = await api.getOrder(token, id);
       setOrder(response.data);
+      try {
+        const t = await api.getOrderTracking(token, id);
+        setTracking(t.data);
+      } catch {
+        // Non-fatal: the timeline falls back to the order's own fields.
+      }
     } catch (err: any) {
       console.error('Failed to fetch order:', err);
       setError(err?.message || 'We could not load this order.');
@@ -151,7 +165,6 @@ export default function OrderDetailPage() {
     );
   }
 
-  const statusStep = getStatusStep(order.status);
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
@@ -239,72 +252,114 @@ export default function OrderDetailPage() {
         </a>
       </div>
 
-      {/* Order Status Timeline */}
-      {statusStep >= 0 && (
-        <div style={{
-          padding: '24px',
-          backgroundColor: '#f9f9f9',
-          borderRadius: '8px',
-          marginBottom: '32px',
-        }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Status</h2>
-          <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
-            {/* Progress Bar */}
-            <div style={{
-              position: 'absolute',
-              top: '12px',
-              left: '50px',
-              right: '50px',
-              height: '4px',
-              backgroundColor: '#e5e5e5',
-              zIndex: 0,
-            }}>
-              <div style={{
-                width: `${(statusStep / 3) * 100}%`,
-                height: '100%',
-                backgroundColor: '#22c55e',
-                transition: 'width 0.3s',
-              }} />
-            </div>
-            
-            {/* Status Steps */}
-            {['Pending', 'Processing', 'Shipped', 'Delivered'].map((step, index) => (
-              <div key={step} style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
-                <div style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  backgroundColor: index <= statusStep ? '#22c55e' : '#e5e5e5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 8px',
-                  color: index <= statusStep ? 'white' : '#666',
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                }}>
-                  {index <= statusStep ? '✓' : index + 1}
-                </div>
-                <span style={{ fontSize: '12px', color: index <= statusStep ? '#000' : '#666' }}>
-                  {step}
-                </span>
-                {index === 1 && order.shippedAt && (
-                  <p style={{ fontSize: '10px', color: 'var(--muted, #666)', marginTop: '4px' }}>
-                    {new Date(order.shippedAt).toLocaleDateString()}
-                  </p>
-                )}
-                {index === 3 && order.deliveredAt && (
-                  <p style={{ fontSize: '10px', color: 'var(--muted, #666)', marginTop: '4px' }}>
-                    {new Date(order.deliveredAt).toLocaleDateString()}
-                  </p>
+      {/* Order Status Timeline - driven by GET /orders/:id/tracking when
+          available (real timestamps, tracking number, terminal state);
+          falls back to the order's own fields on older API builds. */}
+      {(() => {
+        const steps = tracking?.steps ?? [
+          { key: 'placed', label: 'Order placed', at: order.createdAt, done: true },
+          {
+            key: 'paid',
+            label: 'Payment confirmed',
+            at: order.paymentStatus === 'completed' ? order.updatedAt : null,
+            done: order.paymentStatus === 'completed',
+          },
+          { key: 'shipped', label: 'Shipped', at: order.shippedAt, done: !!order.shippedAt },
+          { key: 'delivered', label: 'Delivered', at: order.deliveredAt, done: !!order.deliveredAt },
+        ];
+        const trackingNumber = tracking?.trackingNumber ?? order.trackingNumber;
+        const terminal = tracking?.terminal ?? (
+          order.status === 'cancelled' || order.status === 'refunded'
+            ? { type: order.status, at: order.cancelledAt }
+            : null
+        );
+        const doneCount = steps.filter((st: any) => st.done).length;
+        return (
+          <div
+            style={{
+              padding: '24px',
+              backgroundColor: '#f9f9f9',
+              borderRadius: '8px',
+              marginBottom: '32px',
+            }}
+          >
+            <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Status</h2>
+            {terminal ? (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: terminal.type === 'refunded' ? '#fef2f2' : '#f3f4f6',
+                  border: `1px solid ${terminal.type === 'refunded' ? '#fecaca' : '#e5e7eb'}`,
+                  color: terminal.type === 'refunded' ? '#b91c1c' : '#374151',
+                  fontSize: '14px',
+                }}
+              >
+                {terminal.type === 'refunded' ? 'This order was refunded.' : 'This order was cancelled.'}
+                {terminal.at && (
+                  <span style={{ color: 'var(--muted, #666)' }}>
+                    {' '}on {new Date(terminal.at).toLocaleDateString()}
+                  </span>
                 )}
               </div>
-            ))}
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                {/* Progress Bar */}
+                <div style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '50px',
+                  right: '50px',
+                  height: '4px',
+                  backgroundColor: '#e5e5e5',
+                  zIndex: 0,
+                }}>
+                  <div style={{
+                    width: `${(doneCount / steps.length) * 100}%`,
+                    height: '100%',
+                    backgroundColor: '#22c55e',
+                    transition: 'width 0.3s',
+                  }} />
+                </div>
+                {steps.map((st: any, index: number) => (
+                  <div key={st.key} style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      backgroundColor: st.done ? '#22c55e' : '#e5e5e5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 8px',
+                      color: st.done ? 'white' : '#666',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                    }}>
+                      {st.done ? '✓' : index + 1}
+                    </div>
+                    <span style={{ fontSize: '12px', color: st.done ? '#000' : '#666' }}>
+                      {st.label}
+                    </span>
+                    {st.done && st.at && (
+                      <p style={{ fontSize: '10px', color: 'var(--muted, #666)', marginTop: '4px' }}>
+                        {new Date(st.at).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {trackingNumber && (
+              <p style={{ fontSize: '13px', color: 'var(--body-text, #333)', marginTop: '16px' }}>
+                📦 Tracking number: <strong>{trackingNumber}</strong>
+              </p>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '32px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '32px' }}>
         {/* Left Column - Order Items */}
         <div>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Order Items</h2>
@@ -349,7 +404,7 @@ export default function OrderDetailPage() {
                 </div>
                 
                 {/* Price */}
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: 'end' }}>
                   <p style={{ fontWeight: 600 }}>{formatPrice(getItemPrice(item) * (item.quantity || 1), settings.currencySymbol)}</p>
                   <p style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>{formatPrice(getItemPrice(item), settings.currencySymbol)} each</p>
                 </div>
@@ -489,7 +544,7 @@ export default function OrderDetailPage() {
               textDecoration: 'none',
               fontWeight: 500,
             }}>
-              ← Back to Orders
+              <DirectionArrow kind="back" /> Back to Orders
             </Link>
           </div>
         </div>

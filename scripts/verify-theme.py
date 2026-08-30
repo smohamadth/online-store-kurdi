@@ -1,6 +1,6 @@
 """Theming end-to-end: every preset must actually reach the rendered UI.
 
-Guards the THEME_PLAN.md work:
+Guards the theme-system work (see README section 9):
 
   - For each of the six admin presets: header/body/card colours, brand
     buttons, hover feedback, and the derived tokens (--surface-2,

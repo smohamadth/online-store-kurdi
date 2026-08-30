@@ -26,6 +26,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
+import StoreImage from './StoreImage';
 import type { Banner } from './HeroGallery';
 
 const CONTAINER = 'var(--container, 1200px)';
@@ -93,13 +94,26 @@ export default function BannerStrip({ banners }: { banners: Banner[] }) {
                 alignItems: isMobile ? 'flex-start' : 'center',
                 justifyContent: 'space-between',
                 gap: isMobile ? '22px' : '32px',
-                textAlign: isMobile ? 'left' : align,
+                // Logical alignment (see HeroGallery): the stored
+                // "left"/"right" mirrors to the reading-start /
+                // reading-end side in RTL instead of staying on the
+                // physical side.
+                textAlign: isMobile
+                  ? 'start'
+                  : align === 'center'
+                    ? 'center'
+                    : align === 'right'
+                      ? 'end'
+                      : 'start',
               }}
             >
               {/* Photo background + scrim so text stays legible on any image */}
               {shown && (
                 <>
-                  <img
+                  {/* StoreImage: same-origin banner photos get lazy
+                      loading + async decode (no LCP impact - they sit
+                      behind the scrim and are decorative). */}
+                  <StoreImage
                     src={shown}
                     alt=""
                     aria-hidden="true"
@@ -128,8 +142,8 @@ export default function BannerStrip({ banners }: { banners: Banner[] }) {
                 style={{
                   position: 'relative',
                   maxWidth: isMobile ? '100%' : '640px',
-                  marginLeft: !isMobile && align === 'center' ? 'auto' : undefined,
-                  marginRight: !isMobile && align === 'center' ? 'auto' : undefined,
+                  marginInlineStart: !isMobile && align === 'center' ? 'auto' : undefined,
+                  marginInlineEnd: !isMobile && align === 'center' ? 'auto' : undefined,
                 }}
               >
                 {b.badge && (

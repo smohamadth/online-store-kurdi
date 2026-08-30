@@ -32,7 +32,19 @@ import { encodeRouteParam } from '@/lib/routeParam';
  * rendering. A flaky API must never turn a real category into a 404.
  */
 
-const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
+const CHECKS: {
+  pattern: RegExp;
+  endpoint: (slug: string) => string;
+  /**
+   * /p/<slug> is a legacy URL: once the API confirms the page exists,
+   * redirect to its type-aware address with a REAL 308. The page-level
+   * dispatcher does the same with permanentRedirect(), but that runs after
+   * the streaming app shell has already committed a 200, so crawlers would
+   * only ever see a 200 + client-side redirect. Here the status is still
+   * ours to choose.
+   */
+  legacyRedirect?: boolean;
+}[] = [
   {
     pattern: /^\/category\/([^/]+)\/?$/,
     endpoint: (slug) => `/categories/${encodeRouteParam(slug)}`,
@@ -47,11 +59,30 @@ const CHECKS: { pattern: RegExp; endpoint: (slug: string) => string }[] = [
     // what we want publicly.
     pattern: /^\/p\/([^/]+)\/?$/,
     endpoint: (slug) => `/pages/slug/${encodeRouteParam(slug)}`,
+    legacyRedirect: true,
   },
   {
     // Blog posts. Same rule: drafts and unknown slugs both 404.
     pattern: /^\/blog\/([^/]+)\/?$/,
     endpoint: (slug) => `/blog/slug/${encodeRouteParam(slug)}`,
+  },
+  {
+    // Type-aware page URLs - the canonical address since pages carry a
+    // pageType (info | legal | help). The by-type endpoint 404s for unknown
+    // slugs, for drafts, and for a type/slug mismatch - all of which must be
+    // real 404s publicly. Without these checks a missing page rendered as a
+    // streamed 200 "Page not found" (the same soft-404 class the /p/ and
+    // /blog/ checks guard against).
+    pattern: /^\/info\/([^/]+)\/?$/,
+    endpoint: (slug) => `/pages/by-type/info/slug/${encodeRouteParam(slug)}`,
+  },
+  {
+    pattern: /^\/legal\/([^/]+)\/?$/,
+    endpoint: (slug) => `/pages/by-type/legal/slug/${encodeRouteParam(slug)}`,
+  },
+  {
+    pattern: /^\/help\/([^/]+)\/?$/,
+    endpoint: (slug) => `/pages/by-type/help/slug/${encodeRouteParam(slug)}`,
   },
 ];
 
@@ -68,7 +99,7 @@ const RESERVED_BY_PREFIX: Record<string, Set<string>> = {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  for (const { pattern, endpoint } of CHECKS) {
+  for (const { pattern, endpoint, legacyRedirect } of CHECKS) {
     const m = pathname.match(pattern);
     if (!m) continue;
 
@@ -116,6 +147,21 @@ export async function middleware(req: NextRequest) {
           },
         });
       }
+
+      if (legacyRedirect && res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          data?: { pageType?: unknown };
+        } | null;
+        const pageType = data?.data?.pageType;
+        if (pageType === 'info' || pageType === 'legal' || pageType === 'help') {
+          return NextResponse.redirect(
+            new URL(`/${pageType}/${slug}`, req.nextUrl.origin),
+            308,
+          );
+        }
+        // Unknown/legacy pageType: fall through and let the page-level
+        // dispatcher handle it (it 308s on the client at worst).
+      }
     } catch {
       // Fail open — see the note above.
     }
@@ -127,8 +173,16 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Only the two dynamic route families need checking. Everything else -
+  // Only the dynamic slug route families need checking. Everything else -
   // static assets, _next internals, the API proxy, images - is skipped so
   // middleware costs nothing on the rest of the site.
-  matcher: ['/category/:path*', '/products/:path*', '/p/:path*', '/blog/:path*'],
+  matcher: [
+    '/category/:path*',
+    '/products/:path*',
+    '/p/:path*',
+    '/blog/:path*',
+    '/info/:path*',
+    '/legal/:path*',
+    '/help/:path*',
+  ],
 };

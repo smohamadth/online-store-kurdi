@@ -1,3 +1,10 @@
+// ---------------------------------------------------------------------------
+// Recommendations API (mounted at /api/recommendations) - the feeds the
+// storefront renders on the PDP and home page: trending, new arrivals,
+// also-bought, bought-together, and (auth) history-based. All public
+// except /history. See recommendation.service.ts for the signal sources
+// and the same-category fallback.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { RecommendationController } from './recommendation.controller';
 import { authenticate, authorize, optionalAuth } from '../../middleware/auth';

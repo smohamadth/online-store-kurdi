@@ -1,3 +1,7 @@
+// ImageUpload - the single-image uploader (banner/modal use):
+// pick a file -> /api/upload -> the parent receives the variant URLs
+// (original + thumbnail/medium/large/zoom).
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -247,7 +251,7 @@ export default function ImageUpload({
                       borderRadius: '6px',
                       backgroundColor: selectedSize === size ? '#f0f0f0' : 'white',
                       cursor: 'pointer',
-                      textAlign: 'left',
+                      textAlign: 'start',
                       transition: 'all 0.2s',
                     }}
                   >

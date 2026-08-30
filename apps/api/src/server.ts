@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// API entry point: startup checks, listen, schedulers, graceful shutdown.
+//
+// The two pre-boot guards (DATABASE_URL/provider mismatch, stale Prisma
+// client) exist because both failure modes used to surface as baffling
+// 500s after a "successful" boot. The dual IPv4/IPv6 loopback bind and
+// the listen-error handling are documented inline - they fix the
+// "my settings don't save" class of Windows/macOS problems.
+// ---------------------------------------------------------------------------
 import { createServer } from 'http';
 import { app, httpServer } from './app';
 import { env } from './config/environment';
@@ -16,15 +25,24 @@ import { connectRedis, disconnectRedis } from './config/redis';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
 import { startScheduler, stopScheduler } from './jobs/inventory-scheduler';
+// Both schedulers export the same startScheduler/stopScheduler names, so
+// alias the currency side. (An unaliased import of a non-existent
+// startCurrencyScheduler made the entry point fail at import time - the
+// API never bound its port and CI's health poll timed out.)
+import {
+  startScheduler as startCurrencyScheduler,
+  stopScheduler as stopCurrencyScheduler,
+} from './jobs/currency.scheduler';
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
   logger.info(`${signal} received. Starting graceful shutdown...`);
   
   try {
-    // Stop the inventory scheduler first so no new ticks fire
+    // Stop the schedulers first so no new ticks fire
     // while we're tearing down.
     stopScheduler();
+    stopCurrencyScheduler();
 
     // Close HTTP server
     httpServer.close(() => {
@@ -138,10 +156,11 @@ async function startServer() {
 
     httpServer.listen(port, host, () => {
       logger.info(`✅ Server running on http://${host}:${port}`);
-      // Start the inventory background jobs (auto-reorder,
-      // reservation release) after the server is accepting traffic
-      // so the first tick doesn't compete with startup.
+      // Start the background jobs (inventory, currency refresh)
+      // after the server is accepting traffic so the first tick
+      // doesn't compete with startup.
       startScheduler();
+      startCurrencyScheduler();
       if (alsoBindIpv6Loopback) {
         // net.Server can only listen once, so open a twin server that feeds
         // the same Express app.

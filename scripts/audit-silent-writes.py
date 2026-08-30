@@ -24,10 +24,18 @@ for f in files:
         if not is_write:
             continue
 
-        # look ahead for how the result is handled
+        # look ahead for how the result is handled. "Surfaces" means the
+        # error reaches the user: a dialog/notification, a re-throw, or a
+        # state setter whose name says message/error and which the page
+        # renders (the admin pages use setMsg/setMessage/setLoadError/...
+        # and display the state as a banner, so match that whole family
+        # rather than an ever-growing list of individual names).
         window = '\n'.join(lines[i:i + 30])
         surfaces = bool(
-            re.search(r"alert\(|setMessage\(|setSaveError\(|setError\(|notify\(|throw ", window)
+            re.search(
+                r"alert\(|notify\(|throw |set[A-Za-z]*(Message|Msg|Error|Errors|Alert)\(",
+                window,
+            )
         )
         checks_ok = bool(re.search(r"res\.ok|response\.ok|!res\.ok|!response\.ok", window))
         uses_client = 'authHttp.' in line

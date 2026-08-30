@@ -39,6 +39,24 @@ const sampleFacets: Facets = {
     ],
     color: [{ value: 'red', count: 3, selected: false }],
   },
+  typedOptions: [
+    {
+      id: 'opt-color',
+      name: 'Color',
+      values: [
+        { id: 'ov-red', value: 'Red', swatch: '#f00', count: 4, selected: false },
+        { id: 'ov-blue', value: 'Blue', swatch: '#00f', count: 2, selected: false },
+      ],
+    },
+    {
+      id: 'opt-size',
+      name: 'Size',
+      values: [
+        { id: 'ov-s', value: 'Small', swatch: null, count: 3, selected: false },
+        { id: 'ov-l', value: 'Large', swatch: null, count: 5, selected: false },
+      ],
+    },
+  ],
   priceRange: { min: 5, max: 200 },
   inStock: { count: 10, total: 16 },
   onSale: { count: 3, total: 16 },
@@ -156,7 +174,10 @@ describe('FilterSidebar - facets rendering', () => {
     renderSidebar();
     expect(screen.getByTestId('filter-attr-size-M')).toBeInTheDocument();
     expect(screen.getByTestId('filter-attr-color-red')).toBeInTheDocument();
-    expect(screen.getByText('(5)')).toBeInTheDocument();
+    // (5) is the count of size M variants. Scoped to the attr row so
+    // it doesn't collide with the typed-option facet count of 5.
+    const row = screen.getByTestId('filter-attr-size-M').parentElement!;
+    expect(row.textContent).toContain('(5)');
   });
 
   it('uses the currency symbol in the price placeholders', () => {
@@ -389,5 +410,51 @@ describe('FilterSidebar - initial checked state', () => {
     renderSidebar({ ...EMPTY_FILTER, minRating: 4 });
     const radio = screen.getByTestId('filter-rating-4') as HTMLInputElement;
     expect(radio.checked).toBe(true);
+  });
+});
+
+describe('FilterSidebar - typed options', () => {
+  it('renders a section per option, with one chip per value', () => {
+    renderSidebar();
+    // Two options -> two sections, with the option id in the testid.
+    expect(screen.getByTestId('filter-section-option-opt-color')).toBeTruthy();
+    expect(screen.getByTestId('filter-section-option-opt-size')).toBeTruthy();
+    // Four value checkboxes (two per option).
+    expect(screen.getByTestId('filter-option-opt-color-ov-red')).toBeTruthy();
+    expect(screen.getByTestId('filter-option-opt-color-ov-blue')).toBeTruthy();
+    expect(screen.getByTestId('filter-option-opt-size-ov-s')).toBeTruthy();
+    expect(screen.getByTestId('filter-option-opt-size-ov-l')).toBeTruthy();
+  });
+
+  it('toggling an option value adds it to optionValueId', () => {
+    const { onChange } = renderSidebar();
+    act(() => {
+      fireEvent.click(screen.getByTestId('filter-option-opt-color-ov-red'));
+    });
+    expect(onChange).toHaveBeenCalled();
+    const arg = onChange.mock.calls.at(-1)?.[0] as ProductFilter;
+    expect(arg.optionValueId).toEqual(['ov-red']);
+  });
+
+  it('toggling a selected option value removes it', () => {
+    const { onChange } = renderSidebar({ ...EMPTY_FILTER, optionValueId: ['ov-red'] });
+    act(() => {
+      fireEvent.click(screen.getByTestId('filter-option-opt-color-ov-red'));
+    });
+    const arg = onChange.mock.calls.at(-1)?.[0] as ProductFilter;
+    expect(arg.optionValueId).toEqual([]);
+  });
+
+  it('marks already-selected option values as checked', () => {
+    renderSidebar({ ...EMPTY_FILTER, optionValueId: ['ov-blue'] });
+    const input = screen.getByTestId('filter-option-opt-color-ov-blue') as HTMLInputElement;
+    expect(input.checked).toBe(true);
+  });
+
+  it('does not render the typed option sections when facets omit them', () => {
+    const facets: Facets = { ...sampleFacets };
+    delete (facets as any).typedOptions;
+    renderSidebar(EMPTY_FILTER, facets);
+    expect(screen.queryByTestId('filter-section-option-opt-color')).toBeNull();
   });
 });

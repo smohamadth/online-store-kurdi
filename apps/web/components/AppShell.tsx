@@ -17,6 +17,8 @@
  */
 
 import { CartProvider, useCart } from '@/lib/store';
+import { CompareProvider } from '@/lib/compare';
+import CompareBar from '@/components/CompareBar';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -29,7 +31,9 @@ import MaintenanceGate from '@/components/MaintenanceGate';
 import { ThemeProvider } from '@/lib/theme';
 import AnnouncementBar from '@/components/AnnouncementBar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import CurrencyPicker from '@/components/CurrencyPicker';
 import { API_BASE } from '@/lib/http';
+import { I18nSeedProvider } from '@/lib/I18nSeedProvider';
 
 // Types
 interface MenuItemData {
@@ -238,7 +242,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
               </Link>
               {/* Children */}
               {item.children && item.children.length > 0 && (
-                <div style={{ paddingLeft: '24px' }}>
+                <div style={{ paddingInlineStart: '24px' }}>
                   {item.children.map((child) => (
                     <Link 
                       key={child.id}
@@ -552,7 +556,7 @@ function Header() {
                   >
                     {item.icon ? `${item.icon} ` : ''}{item.label}
                     {item.children && item.children.length > 0 && (
-                      <span style={{ fontSize: '10px', marginLeft: '2px' }}>▼</span>
+                      <span style={{ fontSize: '10px', marginInlineStart: '2px' }}>▼</span>
                     )}
                   </Link>
                   
@@ -561,7 +565,7 @@ function Header() {
                     <div style={{
                       position: 'absolute',
                       top: '100%',
-                      left: '0',
+                      insetInlineStart: '0',
                       backgroundColor: 'var(--card-bg, white)',
                       border: '1px solid var(--border, #e5e7eb)',
                       borderRadius: '8px',
@@ -608,6 +612,7 @@ function Header() {
             flexShrink: 0,
           }}>
             <LanguageSwitcher />
+            <CurrencyPicker />
             <CartIcon />
             
             {/* Desktop user menu - hidden on mobile */}
@@ -702,8 +707,15 @@ function DynamicFooter() {
   const { settings } = useStoreSettings();
   const footerMenu = useMenu('footer');
 
-  // Admin-authored pages flagged "show in footer".
-  const [footerPages, setFooterPages] = useState<{ slug: string; title: string }[]>([]);
+  // Admin-authored pages flagged "show in footer", grouped by
+  // pageType so each type gets its own URL prefix (info, legal,
+  // help). Pages without a recognised type are skipped - they
+  // should never exist because the API rejects bad values on
+  // create, but a defence-in-depth filter keeps an old / buggy
+  // row from rendering a broken footer link.
+  const [footerPages, setFooterPages] = useState<
+    Array<{ slug: string; title: string; pageType: 'info' | 'legal' | 'help' }>
+  >([]);
 
   useEffect(() => {
     let alive = true;
@@ -713,8 +725,18 @@ function DynamicFooter() {
         if (!alive) return;
         setFooterPages(
           (d.data || [])
-            .filter((p: any) => p.showInFooter)
-            .map((p: any) => ({ slug: p.slug, title: p.title }))
+            .filter(
+              (p: any) =>
+                p.showInFooter &&
+                (p.pageType === 'info' ||
+                  p.pageType === 'legal' ||
+                  p.pageType === 'help'),
+            )
+            .map((p: any) => ({
+              slug: p.slug,
+              title: p.title,
+              pageType: p.pageType as 'info' | 'legal' | 'help',
+            })),
         );
       })
       .catch(() => {
@@ -774,6 +796,11 @@ function DynamicFooter() {
               📞 {settings.storePhone}
             </p>
           )}
+          {settings.storeAddress && (
+            <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', marginTop: '4px' }}>
+              📍 {settings.storeAddress}
+            </p>
+          )}
         </div>
         <div>
           <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
@@ -784,7 +811,7 @@ function DynamicFooter() {
                   {item.icon ? `${item.icon} ` : ''}{item.label}
                 </Link>
                 {item.children?.map((child) => (
-                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: 'var(--muted, #6b7280)', textDecoration: 'none', display: 'block', paddingLeft: '16px', marginTop: '4px' }}>
+                  <Link key={child.id} href={child.url} style={{ fontSize: '13px', color: 'var(--muted, #6b7280)', textDecoration: 'none', display: 'block', paddingInlineStart: '16px', marginTop: '4px' }}>
                     {child.icon ? `${child.icon} ` : ''}{child.label}
                   </Link>
                 ))}
@@ -808,6 +835,18 @@ function DynamicFooter() {
             <Link href="/track-order" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Track Order</Link>
             <Link href="/faq" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>FAQ</Link>
             <Link href="/returns" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Returns</Link>
+            {/* Custom help pages the admin flagged for the footer. */}
+            {footerPages
+              .filter((p) => p.pageType === 'help')
+              .map((p) => (
+                <Link
+                  key={p.slug}
+                  href={`/help/${p.slug}`}
+                  style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}
+                >
+                  {p.title}
+                </Link>
+              ))}
           </div>
         </div>
         <div>
@@ -815,16 +854,36 @@ function DynamicFooter() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <Link href="/privacy" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Privacy Policy</Link>
             <Link href="/terms" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Terms of Service</Link>
-            {/* Custom pages the admin flagged for the footer. */}
-            {footerPages.map((p) => (
-              <Link
-                key={p.slug}
-                href={`/p/${p.slug}`}
-                style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}
-              >
-                {p.title}
-              </Link>
-            ))}
+            {/* Custom legal pages the admin flagged for the footer. */}
+            {footerPages
+              .filter((p) => p.pageType === 'legal')
+              .map((p) => (
+                <Link
+                  key={p.slug}
+                  href={`/legal/${p.slug}`}
+                  style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}
+                >
+                  {p.title}
+                </Link>
+              ))}
+          </div>
+        </div>
+        <div>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Info</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Link href="/blog" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Blog</Link>
+            {/* Custom info pages the admin flagged for the footer. */}
+            {footerPages
+              .filter((p) => p.pageType === 'info')
+              .map((p) => (
+                <Link
+                  key={p.slug}
+                  href={`/info/${p.slug}`}
+                  style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}
+                >
+                  {p.title}
+                </Link>
+              ))}
           </div>
         </div>
         <div>
@@ -875,34 +934,85 @@ function DynamicFooter() {
  * Rendered from the server root layout inside <body>. The provider order and
  * the markup below are unchanged from the original client root layout.
  */
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  initialLang,
+  initialDir,
+}: {
+  children: React.ReactNode;
+  /**
+   * The locale the server already resolved for this request. The i18n hook
+   * still owns the in-app switching UX; this is just the seed so the first
+   * render matches the server-rendered `<html lang dir>` instead of flashing
+   * back to English/LTR before the client mount runs.
+   */
+  initialLang?: string;
+  initialDir?: 'ltr' | 'rtl';
+}) {
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
 
+  // If the server didn't tell us a locale (e.g. an AppShell rendered outside
+  // the production layout in a test fixture), fall back to the i18n defaults
+  // so the first paint is at least self-consistent.
+  const seed = { lang: initialLang ?? 'en', dir: initialDir ?? 'ltr' };
+
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <RouteProgress />
-        <ToastContainer />
-        <CartProvider>
-          <AnnouncementBar />
-          <Header />
+    <I18nSeedProvider value={seed}>
+      {/*
+        Outer flex column: a flex layout lets the <main> region grow to fill
+        any leftover vertical space instead of reserving a magic-number
+        height. Previously <main> used `minHeight: calc(100vh - 64px - 200px)`
+        to keep short pages from looking stranded above the footer, but the
+        200px was a hard-coded guess for footer height and broke on tall
+        footers (lots of menu items, narrow viewports that wrap columns).
+        The flex layout below measures everything: header at its natural
+        height, footer at its natural height, main fills the gap.
+      */}
+      <ErrorBoundary>
+        <ThemeProvider>
+          <RouteProgress />
+          <ToastContainer />
+          <div
+            data-app-shell
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '100vh',
+            }}
+          >
+            <CartProvider>
+              <CompareProvider>
+              <AnnouncementBar />
+              <Header />
 
-          {/* Main Content */}
-          {/* The storefront reserves room for the header and footer so short
-              pages still fill the window. The admin shell is already
-              100vh and renders neither, so that reservation became 264px of
-              dead space below it. */}
-          <main style={isAdminPage ? undefined : { minHeight: 'calc(100vh - 64px - 200px)' }}>
-            <ErrorBoundary>
-              <MaintenanceGate>{children}</MaintenanceGate>
-            </ErrorBoundary>
-          </main>
+              {/* Main Content */}
+              <main
+                style={{
+                  // `flex: 1 0 auto` makes the main region grow to claim
+                  // leftover space, pushing the footer to the bottom of the
+                  // viewport on short pages. On long pages the main
+                  // region is content-height and the page scrolls normally.
+                  flex: '1 0 auto',
+                  // Min-height kept for the case where the user has the
+                  // admin shell nested - admin is already 100vh and we
+                  // don't want a stranded gap.
+                  ...(isAdminPage ? {} : {}),
+                }}
+              >
+                <ErrorBoundary>
+                  <MaintenanceGate>{children}</MaintenanceGate>
+                </ErrorBoundary>
+              </main>
 
-          {/* Footer */}
-          <DynamicFooter />
-        </CartProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+              {/* Footer */}
+              <DynamicFooter />
+              <CompareBar />
+              </CompareProvider>
+            </CartProvider>
+          </div>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </I18nSeedProvider>
   );
 }

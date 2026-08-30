@@ -1,3 +1,6 @@
+// SkeletonLoader - the loading placeholders (product grid, cards)
+// shown while listings fetch, so the page doesn't flash empty.
+
 'use client';
 
 export function ProductCardSkeleton() {
@@ -94,7 +97,7 @@ export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; column
           {Array.from({ length: columns }).map((_, i) => (
             <th key={i} style={{
               padding: '12px 16px',
-              textAlign: 'left',
+              textAlign: 'start',
               borderBottom: '2px solid #e5e5e5',
             }}>
               <div style={{

@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Generic file storage on MinIO (mounted at /api/storage).
+//
+// This is the S3-backed twin of modules/upload (local /uploads directory,
+// image derivatives via sharp): it stores whatever file the admin
+// uploads, as-is, under a uuid name, and serves gated objects through
+// presigned URLs. If MinIO is not running (see config/minio.ts) these
+// routes fail with AppError - the store's image pipeline does NOT depend
+// on them.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import multer from 'multer';
 import sharp from 'sharp';

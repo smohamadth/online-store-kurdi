@@ -1,3 +1,7 @@
+// /admin/inventory/channels - sales-channel stock (3PL / marketplace
+// channel definitions + per-channel stock sync). The sync endpoint
+// pushes/pulls the channel's stock view; the server records each
+// change in the stock-sync log.
 'use client';
 
 import { useState, useEffect } from 'react';

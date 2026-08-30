@@ -1,3 +1,17 @@
+// ---------------------------------------------------------------------------
+// Auth: register / login / refresh / logout / me / password reset.
+//
+// Session model: every login (or register) mints a refresh token with a
+// unique jti and stores it in the Session table (unique on refreshToken).
+// Refresh ROTATES the token (new access + new refresh, old one replaced),
+// so a stolen refresh token is single-use. Access tokens are stateless
+// JWTs checked by the authenticate middleware on every request.
+//
+// Security notes baked in below: login errors never reveal which half
+// failed ("Invalid email or password"), forgot-password never reveals
+// whether an account exists, and a successful password reset kills every
+// existing session for that user.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -40,7 +54,7 @@ router.post('/register', async (req, res, next) => {
       throw new ConflictError('User with this email already exists');
     }
 
-    // Hash password
+    // Hash password (cost 12; CI drops to 10 via BCRYPT_ROUNDS for speed)
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
@@ -137,14 +151,16 @@ router.post('/login', async (req, res, next) => {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    // Generate tokens
+    // Generate tokens (the refresh token's jti makes it unique per login -
+    // see the note in middleware/auth.ts about the P2002 bug that motivated it)
     const tokens = generateTokens({
       id: user.id,
       email: user.email,
       role: user.role,
     });
 
-    // Store refresh token
+    // Store refresh token - Session rows are what let "logout everywhere"
+    // and password-reset kill existing logins.
     await prisma.session.create({
       data: {
         userId: user.id,
@@ -173,7 +189,10 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// POST /api/auth/refresh
+// POST /api/auth/refresh - token ROTATION: the old refresh token is
+// replaced by a new one in the same Session row. A replayed (already
+// rotated) token finds no Session and gets 401, which is how the client
+// knows it must log in again.
 router.post('/refresh', async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
@@ -363,7 +382,9 @@ router.post('/forgot-password', async (req, res, next) => {
     res.json({
       status: 'success',
       message: successMessage,
-      // Include token in development for testing
+      // Include token in development for testing (the email may go to
+      // MailHog, which is slower to check than the response body).
+      // Never present in production.
       ...(process.env.NODE_ENV === 'development' && { resetToken }),
     });
   } catch (error) {
@@ -424,7 +445,8 @@ router.post('/reset-password', async (req, res, next) => {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Update user password and mark token as used
+    // Update user password and mark token as used - one transaction so the
+    // token can never be "used" without the password actually changing.
     await prisma.$transaction([
       prisma.user.update({
         where: { id: resetRecord.userId },

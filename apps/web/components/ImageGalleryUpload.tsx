@@ -1,3 +1,9 @@
+// ImageGalleryUpload - the admin's multi-image uploader for the
+// product modal: drag/pick several images, upload each through
+// /api/upload (the sharp variants come back per size), reorder by
+// drag, mark a primary, remove. Emits the images array the product
+// form saves (the API treats it as a full replace).
+
 'use client';
 
 import { useState, useRef } from 'react';

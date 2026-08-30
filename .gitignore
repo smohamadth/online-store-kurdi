@@ -38,6 +38,10 @@ next-env.d.ts
 # Prisma
 apps/api/prisma/dev.db
 apps/api/prisma/dev.db-journal
+# Local CI database, rebuilt from scratch by `prisma migrate deploy`
+# (DATABASE_URL in .env.ci). Never commit it.
+apps/api/prisma/ci.db
+apps/api/prisma/ci.db-journal
 # NOTE: migrations/ must be COMMITTED. It was ignored here, so a fresh clone
 # received no schema at all - `prisma migrate deploy` had nothing to apply and
 # tables like Banner never existed, making the admin gallery unusable.
@@ -62,3 +66,6 @@ docker/data/
 tmp/
 temp/
 uploads/
+# Python test-script caches
+__pycache__/
+*.pyc

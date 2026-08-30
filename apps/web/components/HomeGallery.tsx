@@ -20,6 +20,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
+import StoreImage from './StoreImage';
 
 export interface GalleryItem {
   image?: string;
@@ -89,10 +90,9 @@ function Tile({
       }}
     >
       {showImage ? (
-        <img
+        <StoreImage
           src={getImageUrl(item.image!)}
           alt={item.caption || ''}
-          loading="lazy"
           onError={() => setFailed(true)}
           style={{
             width: '100%',

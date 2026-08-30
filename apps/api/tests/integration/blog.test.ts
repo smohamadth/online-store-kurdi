@@ -148,3 +148,74 @@ describe('DELETE /api/blog/:id (admin)', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('blog post layout blocks', () => {
+  const blockPost = (over: any = {}) =>
+    postBody({
+      slug: 'blocky-post',
+      blocks: [
+        { id: 'h1', type: 'heading', config: { text: 'Post heading', level: 2 } },
+        { id: 'r1', type: 'richText', config: { html: '<p>Body copy.</p>' } },
+        { id: 'q1', type: 'quote', config: { text: 'A quote.', attribution: 'Someone' } },
+        ...(over.blocks || []),
+      ],
+      ...over,
+    });
+
+  it('stores blocks and returns them parsed as an array', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app).post('/api/blog').set('Authorization', `Bearer ${token}`).send(blockPost({ status: 'published' }));
+    expect(res.status).toBe(201);
+    expect(Array.isArray(res.body.data.blocks)).toBe(true);
+    expect(res.body.data.blocks).toHaveLength(3);
+    expect(res.body.data.blocks[0]).toEqual({ id: 'h1', type: 'heading', config: { text: 'Post heading', level: 2 } });
+
+    // The admin single-fetch also returns blocks parsed.
+    const byId = await request(app).get(`/api/blog/${res.body.data.id}`).set('Authorization', `Bearer ${token}`);
+    expect(Array.isArray(byId.body.data.blocks)).toBe(true);
+    expect(byId.body.data.blocks).toHaveLength(3);
+  });
+
+  it('sanitises HTML inside richText/columns block config on write', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app).post('/api/blog').set('Authorization', `Bearer ${token}`).send(blockPost({
+      blocks: [
+        { id: 'x', type: 'richText', config: { html: '<p>ok</p><script>alert(1)</script>' } },
+        { id: 'y', type: 'columns', config: { left: '<p>L</p><img src="javascript:evil()">', right: '<p>R</p>' } },
+      ],
+    }));
+    expect(res.status).toBe(201);
+    const rt = res.body.data.blocks.find((b: any) => b.id === 'x');
+    const cols = res.body.data.blocks.find((b: any) => b.id === 'y');
+    expect(rt.config.html).not.toContain('<script>');
+    expect(cols.config.left).not.toContain('javascript:');
+  });
+
+  it('updates blocks via PUT', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const created = await request(app).post('/api/blog').set('Authorization', `Bearer ${token}`).send(blockPost({ status: 'published' }));
+    const id = created.body.data.id;
+    const res = await request(app).put(`/api/blog/${id}`).set('Authorization', `Bearer ${token}`).send({
+      blocks: [{ id: 'd1', type: 'divider', config: {} }],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.blocks).toEqual([{ id: 'd1', type: 'divider', config: {} }]);
+  });
+
+  it('clears blocks when the list is empty', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const created = await request(app).post('/api/blog').set('Authorization', `Bearer ${token}`).send(blockPost({ status: 'published' }));
+    const id = created.body.data.id;
+    const res = await request(app).put(`/api/blog/${id}`).set('Authorization', `Bearer ${token}`).send({ blocks: [] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.blocks).toBeNull();
+  });
+
+  it('returns null blocks for posts created without them (legacy fallback)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app).post('/api/blog').set('Authorization', `Bearer ${token}`)
+      .send(postBody({ slug: 'legacy-post', status: 'published' }));
+    expect(res.status).toBe(201);
+    expect(res.body.data.blocks).toBeNull();
+  });
+});

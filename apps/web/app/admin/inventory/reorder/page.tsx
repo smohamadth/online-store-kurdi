@@ -1,3 +1,9 @@
+// /admin/inventory/reorder - the auto-reorder rules + the draft
+// pipeline. Rules say "when stock falls below X, draft a purchase
+// order for Y"; the scheduler (jobs/inventory-scheduler.ts) or the
+// manual "run now" button evaluates them and creates DRAFTS, which
+// the admin then approves/edits here - no purchase order is created
+// behind the admin's back.
 'use client';
 
 import { useState, useEffect } from 'react';

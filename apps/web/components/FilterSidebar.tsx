@@ -37,6 +37,14 @@ export interface Facets {
   categories: FacetBucket<{ id: string; name: string; slug: string }>[];
   types: FacetBucket<'physical' | 'digital'>[];
   attributes: Record<string, { value: string; count: number; selected: boolean }[]>;
+  // Typed option facets. One section per Option (e.g. "Color"),
+  // each with a list of OptionValues. The id field is what the
+  // filter should be applied with (`?optionValueId=...`).
+  typedOptions?: {
+    id: string;
+    name: string;
+    values: { id: string; value: string; swatch: string | null; count: number; selected: boolean }[];
+  }[];
   priceRange: { min: number; max: number };
   inStock: { count: number; total: number };
   onSale: { count: number; total: number };
@@ -60,7 +68,7 @@ function toggleArrayValue<T>(arr: T[] | undefined, value: T): T[] {
   const set = new Set(arr || []);
   if (set.has(value)) set.delete(value);
   else set.add(value);
-  return [...set];
+  return Array.from(set);
 }
 
 export default function FilterSidebar({
@@ -101,6 +109,16 @@ export default function FilterSidebar({
     [filter, onChange],
   );
 
+  const handleOptionValueToggle = useCallback(
+    (optionValueId: string) => {
+      onChange({
+        ...filter,
+        optionValueId: toggleArrayValue(filter.optionValueId, optionValueId),
+      });
+    },
+    [filter, onChange],
+  );
+
   const handlePriceChange = useCallback(
     (field: 'minPrice' | 'maxPrice', raw: string) => {
       // Accept blanks and numbers. Anything non-numeric becomes "absent".
@@ -131,6 +149,7 @@ export default function FilterSidebar({
       (filter.category?.length ?? 0) > 0 ||
       (filter.type?.length ?? 0) > 0 ||
       Object.keys(filter.attr || {}).length > 0 ||
+      (filter.optionValueId?.length ?? 0) > 0 ||
       filter.inStock ||
       filter.onSale ||
       filter.minRating !== undefined ||
@@ -299,6 +318,55 @@ export default function FilterSidebar({
             ))}
           </FilterSection>
         ))}
+
+      {/* Typed options (first-class variant attributes). One section
+          per Option (e.g. "Color", "Size"), with the swatch values
+          underneath. The id is what the filter sends to the API. */}
+      {facets?.typedOptions?.map((opt) => (
+        <FilterSection
+          key={opt.id}
+          title={opt.name}
+          testId={`filter-section-option-${opt.id}`}
+        >
+          {opt.values.map((v) => (
+            <label
+              key={v.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                data-testid={`filter-option-${opt.id}-${v.id}`}
+                checked={(filter.optionValueId || []).includes(v.id)}
+                onChange={() => handleOptionValueToggle(v.id)}
+                style={{ accentColor: 'var(--brand, #111)' }}
+              />
+              {v.swatch && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '50%',
+                    background: v.swatch,
+                    border: '1px solid rgba(0,0,0,0.15)',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <span style={{ flex: 1 }}>{v.value}</span>
+              {typeof v.count === 'number' && (
+                <span style={{ color: 'var(--muted, #6b7280)', fontSize: '12px' }}>({v.count})</span>
+              )}
+            </label>
+          ))}
+        </FilterSection>
+      ))}
     </aside>
   );
 }

@@ -1,3 +1,8 @@
+// /search - the search results page. Reads ?q= (synced with the
+// SearchBar component) and calls GET /api/products/search, which also
+// records the search event for the analytics/search feed when the
+// store has opted in.
+
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';

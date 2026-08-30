@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
-import { getStoreInfo, buildMetadata } from '@/lib/seo';
+import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import HomeView from './HomeView';
+import { JsonLdScript } from '@/components/JsonLdScript';
+import { buildWebSiteJsonLd } from '@/lib/structured-data';
 
 /**
  * Server wrapper for the home page.
@@ -10,6 +12,10 @@ import HomeView from './HomeView';
  * exists purely so generateMetadata can put real SEO tags in the HTML — the
  * previous next/head block was a no-op in the App Router and never reached
  * crawlers.
+ *
+ * The WebSite JSON-LD is repeated here (and in the root layout) because the
+ * root layout's <head> only renders once per response, and pages can
+ * explicitly own their own structured-data to override or extend it.
  */
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -28,6 +34,17 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default function Page() {
-  return <HomeView />;
+export default async function Page() {
+  const store = await getStoreInfo();
+  const site = buildWebSiteJsonLd({
+    name: store.storeName,
+    url: SITE,
+    description: store.storeDescription,
+  });
+  return (
+    <>
+      <JsonLdScript data={site} testId="json-ld-home" />
+      <HomeView />
+    </>
+  );
 }

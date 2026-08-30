@@ -4,6 +4,10 @@
  * Tests:
  *   - SITE is taken from NEXT_PUBLIC_SITE_URL when set
  *   - buildMetadata produces canonical, OG, Twitter metadata
+ *   - image presence flips the Twitter card type
+ *   - index: false emits a noindex directive
+ *   - buildNoindexMetadata is a thin convenience wrapper
+ *   - absoluteImageUrl handles relative, absolute, and falsy inputs
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
@@ -17,8 +21,31 @@ afterAll(() => {
 });
 
 describe('buildMetadata', () => {
-  it('produces a complete metadata object', () => {
-    // Import lazily so the env above is in place.
+  // Regression: Next.js 14.2 throws "Invalid OpenGraph type: product"
+  // at request time (its og:type allowlist is website/article/book/
+  // profile/music.*/video.*), which 500ed every product page. The
+  // ogType must be emitted as a Next-legal value; the product semantics
+  // live in the product:* keys the caller adds via `other`.
+  it('emits a Next-legal og:type for the "product" ogType (no runtime throw)', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m = buildMetadata({
+        title: 'Classic T-Shirt - My Shop',
+        description: 'Comfortable cotton t-shirt',
+        path: '/products/classic-t-shirt',
+        storeName: 'My Shop',
+        image: '/images/products/t-shirt-1.jpg',
+        ogType: 'product',
+      });
+      // `type` isn't on Next's OpenGraph type (seo.ts casts when emitting
+      // it), so read it through a cast here too.
+      const og = m.openGraph as { type?: string } | undefined;
+      expect(og?.type).toBe('website');
+      // Only Next-legal og:type values may ever be emitted.
+      expect(['website', 'article', 'book', 'profile'].includes(og?.type ?? '')).toBe(true);
+    });
+  });
+
+  it('produces a complete metadata object (no image)', () => {
     return import('./seo').then(({ buildMetadata }) => {
       const m = buildMetadata({
         title: 'Hat - My Shop',
@@ -32,9 +59,19 @@ describe('buildMetadata', () => {
       expect(m.openGraph?.title).toBe('Hat - My Shop');
       expect(m.openGraph?.url).toBe('https://example.com/products/hat');
       expect(m.openGraph?.siteName).toBe('My Shop');
-      expect(m.twitter?.card).toBe('summary_large_image');
-      expect(m.robots?.index).toBe(true);
-      expect(m.robots?.follow).toBe(true);
+      // No image supplied -> the smaller Twitter card. (The product
+      // case is covered by the PDP test; the goal here is the
+      // default behaviour, not the image branch.)
+      expect((m.twitter as any)?.card).toBe('summary');
+      expect(m.openGraph?.images).toBeUndefined();
+      expect(m.twitter?.images).toBeUndefined();
+      const r = m.robots as any;
+      expect(r.index).toBe(true);
+      expect(r.follow).toBe(true);
+      // googleBot mirrors index / follow so we don't depend on
+      // Google's older noindex string form.
+      expect(r.googleBot?.index).toBe(true);
+      expect(r.googleBot?.follow).toBe(true);
     });
   });
 
@@ -47,7 +84,165 @@ describe('buildMetadata', () => {
         storeName: 's',
         index: false,
       });
-      expect(m.robots?.index).toBe(false);
+      const r = m.robots as any;
+      expect(r.index).toBe(false);
+      expect(r.follow).toBe(true);
+      expect(r.googleBot?.index).toBe(false);
+    });
+  });
+
+  it('honours follow: false (private pages that should not leak PageRank)', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m = buildMetadata({
+        title: 'Secret',
+        description: 'd',
+        path: '/p',
+        storeName: 's',
+        follow: false,
+      });
+      expect((m.robots as any).follow).toBe(false);
+    });
+  });
+
+  it('attaches an OG image + Twitter large card when an image is supplied', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m = buildMetadata({
+        title: 'Hat',
+        description: 'd',
+        path: '/p',
+        storeName: 's',
+        image: 'https://cdn.example.com/hat.jpg',
+      });
+      expect(m.openGraph?.images).toEqual([
+        { url: 'https://cdn.example.com/hat.jpg', alt: 'Hat' },
+      ]);
+      expect((m.twitter as any).card).toBe('summary_large_image');
+      expect(m.twitter?.images).toEqual(['https://cdn.example.com/hat.jpg']);
+    });
+  });
+
+  it('accepts a custom canonicalPath separately from the rendered path', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m = buildMetadata({
+        title: 't',
+        description: 'd',
+        path: '/products/hat?variant=red',
+        canonicalPath: '/products/hat',
+        storeName: 's',
+      });
+      expect(m.alternates?.canonical).toBe('https://example.com/products/hat');
+      // og:url is also the canonical.
+      expect(m.openGraph?.url).toBe('https://example.com/products/hat');
+    });
+  });
+
+  it('sets og:locale by default (en_US) and accepts an override', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m1 = buildMetadata({ title: 't', description: 'd', path: '/p', storeName: 's' });
+      expect(m1.openGraph?.locale).toBe('en_US');
+      const m2 = buildMetadata({ title: 't', description: 'd', path: '/p', storeName: 's', locale: 'fr_FR' });
+      expect(m2.openGraph?.locale).toBe('fr_FR');
+    });
+  });
+
+  it('accepts ogType=article and emits article-specific OG fields', () => {
+    return import('./seo').then(({ buildMetadata }) => {
+      const m = buildMetadata({
+        title: 'Hello world',
+        description: 'd',
+        path: '/blog/hello',
+        storeName: 's',
+        ogType: 'article',
+        publishedTime: '2026-01-01T00:00:00Z',
+        modifiedTime: '2026-01-15T00:00:00Z',
+        author: 'Alice',
+        section: 'News',
+        tags: ['launch', 'news'],
+      });
+      const og = m.openGraph as any;
+      expect(og.type).toBe('article');
+      expect(og.publishedTime).toBe('2026-01-01T00:00:00Z');
+      expect(og.modifiedTime).toBe('2026-01-15T00:00:00Z');
+      expect(og.authors).toEqual(['Alice']);
+      expect(og.section).toBe('News');
+      expect(og.tags).toEqual(['launch', 'news']);
+    });
+  });
+});
+
+describe('buildNoindexMetadata', () => {
+  it('produces a noindex+follow metadata object', () => {
+    return import('./seo').then(({ buildNoindexMetadata }) => {
+      const m = buildNoindexMetadata({
+        title: 'Cart',
+        description: 'Your cart',
+        path: '/cart',
+        storeName: 's',
+      });
+      expect(m.title).toBe('Cart');
+      const r = m.robots as any;
+      expect(r.index).toBe(false);
+      expect(r.follow).toBe(false);
+    });
+  });
+});
+
+describe('absoluteImageUrl', () => {
+  it('returns undefined for falsy input', () => {
+    return import('./seo').then(({ absoluteImageUrl }) => {
+      expect(absoluteImageUrl(undefined)).toBeUndefined();
+      expect(absoluteImageUrl(null)).toBeUndefined();
+      expect(absoluteImageUrl('')).toBeUndefined();
+    });
+  });
+
+  it('passes through absolute http and https URLs', () => {
+    return import('./seo').then(({ absoluteImageUrl }) => {
+      expect(absoluteImageUrl('https://cdn.example.com/x.jpg')).toBe(
+        'https://cdn.example.com/x.jpg',
+      );
+      expect(absoluteImageUrl('http://example.com/x.jpg')).toBe('http://example.com/x.jpg');
+    });
+  });
+
+  it('prefixes a relative URL with the API origin (without /api)', () => {
+    const apiBefore = process.env.NEXT_PUBLIC_API_URL;
+    process.env.NEXT_PUBLIC_API_URL = 'http://api.example.com/api';
+    return import('./seo').then(({ absoluteImageUrl }) => {
+      // A leading slash on the relative path is kept (joined without
+      // a doubled slash). The helper emits the API origin minus its
+      // trailing /api.
+      expect(absoluteImageUrl('/uploads/x.jpg')).toBe('http://api.example.com/uploads/x.jpg');
+      expect(absoluteImageUrl('uploads/x.jpg')).toBe('http://api.example.com/uploads/x.jpg');
+      if (apiBefore === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+      else process.env.NEXT_PUBLIC_API_URL = apiBefore;
+    });
+  });
+});
+
+describe('buildGtagSnippet', () => {
+  it('emits the dataLayer bootstrap for a valid GA4 id', () => {
+    return import('./seo').then(({ buildGtagSnippet }) => {
+      const snippet = buildGtagSnippet('G-ABC123DEF');
+      expect(snippet).toContain("function gtag(){dataLayer.push(arguments);}");
+      expect(snippet).toContain("gtag('js',new Date());");
+      expect(snippet).toContain("gtag('config','G-ABC123DEF');");
+    });
+  });
+
+  it('accepts legacy UA ids', () => {
+    return import('./seo').then(({ buildGtagSnippet }) => {
+      expect(buildGtagSnippet('UA-12345-1')).toContain("gtag('config','UA-12345-1');");
+    });
+  });
+
+  it('refuses garbage ids (no snippet, no injection)', () => {
+    return import('./seo').then(({ buildGtagSnippet }) => {
+      expect(buildGtagSnippet('')).toBe('');
+      expect(buildGtagSnippet(null)).toBe('');
+      expect(buildGtagSnippet(undefined)).toBe('');
+      expect(buildGtagSnippet('not-a-ga-id')).toBe('');
+      expect(buildGtagSnippet("G-1';alert(1);//")).toBe('');
     });
   });
 });

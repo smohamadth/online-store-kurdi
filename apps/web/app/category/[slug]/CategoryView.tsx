@@ -1,3 +1,15 @@
+// ---------------------------------------------------------------------------
+// /category/[slug] - the category listing page (filter sidebar + grid).
+//
+// Everything the user can do (filter, sort, page) is URL state, so the
+// page is shareable and back-navigable - see setParam below. The sort
+// values must stay in lockstep with the API's sort enum (a mismatch is
+// a 400 from Zod). Structured data (ItemList + BreadcrumbList) is
+// emitted inline for the visible page of products.
+//
+// Data: GET /api/categories/:id for the header, GET /api/products with
+// the category + page/sort params for the grid.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -6,6 +18,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api, Product, Category, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
+import { SITE } from '@/lib/seo';
+import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 import ProductCard from '@/components/ProductCard';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import { API_BASE } from '@/lib/http';
@@ -108,6 +122,35 @@ export default function CategoryView({ slug }: { slug: string }) {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px 64px' }}>
+      {/* Structured data: ItemList of the visible products + the
+          category breadcrumb (same pattern as /products). */}
+      {products.length > 0 && (
+        <script
+          type="application/ld+json"
+          data-testid="json-ld-category"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              asGraph([
+                buildItemListJsonLd(
+                  title,
+                  products.slice(0, 50).map((p, i) => ({
+                    url: `${SITE}/products/${p.slug}`,
+                    name: p.name,
+                    image: p.images?.[0] ? getImageUrl(p.images[0].url) : undefined,
+                    position: i + 1,
+                  })),
+                  `${SITE}/category/${slug}`,
+                ),
+                buildBreadcrumbJsonLd([
+                  { name: 'Home', url: `${SITE}/` },
+                  { name: 'Products', url: `${SITE}/products` },
+                  { name: title, url: `${SITE}/category/${slug}` },
+                ]),
+              ]),
+            ),
+          }}
+        />
+      )}
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted, #666)' }}>
         <Link href="/" style={{ color: 'var(--muted, #666)', textDecoration: 'none' }}>

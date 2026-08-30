@@ -1,11 +1,23 @@
+// /admin/appearance - the look & feel editor, tabbed:
+//   - theme: pick an installed theme (ThemePicker; the registry in
+//     lib/themeRegistry is the source of truth - the server rejects
+//     unknown theme keys)
+//   - colors / typography / layout / sections / announcement: the
+//     Theme fields, saved as one blob via PUT /api/theme (including
+//     the customCss tab, which the server scans for script tags)
+//   - home: the home-page block editor (the HomeSection rows)
+// The live preview at /preview/<key> renders the same theme with
+// sample data.
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
-import { DEFAULT_THEME, FONT_STACKS, Theme } from '@/lib/theme';
+import { DEFAULT_THEME, FONT_LABELS, FONT_STACKS, Theme } from '@/lib/theme';
 import { API_BASE } from '@/lib/http';
 import HomeBuilder from '@/components/HomeBuilder';
+import { ThemePicker } from './ThemePicker';
+import { getTheme, isInstalledTheme, THEMES } from '@/lib/themeRegistry';
 
 const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'primaryColor', label: 'Primary / buttons', hint: 'Buttons, active states, brand accents' },
@@ -69,7 +81,7 @@ const SECTIONS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'showNewsletter', label: 'Newsletter signup', hint: '' },
 ];
 
-type Tab = 'colors' | 'typography' | 'layout' | 'home' | 'sections' | 'announcement' | 'css';
+type Tab = 'theme' | 'colors' | 'typography' | 'layout' | 'home' | 'sections' | 'announcement' | 'css';
 
 export default function AdminAppearancePage() {
   const isMobile = useIsMobile();
@@ -77,7 +89,7 @@ export default function AdminAppearancePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
-  const [tab, setTab] = useState<Tab>('colors');
+  const [tab, setTab] = useState<Tab>('theme');
 
   const token = () => localStorage.getItem('token');
 
@@ -222,6 +234,7 @@ export default function AdminAppearancePage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', marginTop: '22px', flexWrap: 'wrap', borderBottom: '1px solid #e5e5e5', paddingBottom: '10px' }}>
         {([
+          ['theme', '🎨 Theme'],
           ['colors', '🎨 Colours'],
           ['typography', '🔤 Typography'],
           ['layout', '📐 Layout'],
@@ -241,11 +254,39 @@ export default function AdminAppearancePage() {
         ))}
       </div>
 
-      {/* The home page builder needs the full width - its rows are wide and
-          the small colour preview on the right is irrelevant to it. */}
-      {tab === 'home' ? (
+      {/* The home page builder and the theme picker both need the full
+          width - their content is wide and the small colour preview on
+          the right is irrelevant. Other tabs share the width with the
+          preview pane. */}
+      {tab === 'home' || tab === 'theme' ? (
         <div style={{ marginTop: '22px' }}>
-          <HomeBuilder />
+          {tab === 'home' ? (
+            <HomeBuilder />
+          ) : (
+            <ThemeTab
+              activeTheme={(theme as any).activeTheme as string | null}
+              onPick={(key) => {
+                // Picking a theme is a state change: the
+                // store's tokens become the new theme's
+                // defaults, but the merchant's overrides
+                // (e.g. custom announcement text) are
+                // preserved. The activeTheme field is
+                // separate from the tokens.
+                const picked = getTheme(key);
+                // We merge: picked tokens overwrite theme
+                // tokens, but other fields (announcement
+                // text, custom CSS) are preserved. The
+                // `activeTheme` is set to the picked key.
+                setTheme((t) => ({
+                  ...pickedTokensToTheme(picked),
+                  ...(t as any),
+                  activeTheme: key,
+                }));
+                notify('success', `Theme "${picked.name}" selected. Click Save to apply.`);
+              }}
+              disabled={saving}
+            />
+          )}
         </div>
       ) : (
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: '22px', marginTop: '22px', alignItems: 'start' }}>
@@ -305,15 +346,24 @@ export default function AdminAppearancePage() {
                 <div>
                   <label style={label}>Font family</label>
                   <select value={theme.fontFamily} onChange={(e) => set('fontFamily', e.target.value)} style={input}>
-                    <option value="system">System (default)</option>
-                    <option value="inter">Inter / sans-serif</option>
-                    <option value="georgia">Georgia / serif</option>
-                    <option value="rounded">Trebuchet / rounded</option>
-                    <option value="tahoma">Tahoma</option>
-                    <option value="mono">Monospace</option>
+                    {/* Kurdish / Arabic-script faces first: this is a
+                        Kurdish store, and they are what make کوردی text
+                        render professionally. */}
+                    {Object.keys(FONT_STACKS).map((key) => (
+                      <option key={key} value={key}>
+                        {FONT_LABELS[key] || key}
+                      </option>
+                    ))}
                   </select>
-                  <p style={{ marginTop: '10px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily] }}>
+                  {/* Preview in BOTH scripts: the Latin line shows the
+                      face, the Kurdish line shows what the storefront
+                      will actually look like (the Arabic fallback in the
+                      stack is exercised here too). */}
+                  <p dir="ltr" style={{ marginTop: '10px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily] }}>
                     The quick brown fox jumps over the lazy dog — 0123456789
+                  </p>
+                  <p dir="rtl" style={{ marginTop: '8px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily], fontSize: '17px' }}>
+                    دکانی ئۆنلاین — گەشتی خێرای بە ڕێگای لایەنی کەم
                   </p>
                 </div>
                 <div>
@@ -415,7 +465,7 @@ export default function AdminAppearancePage() {
                   <input type="text" value={theme.announcementLink || ''} placeholder="/deals"
                     onChange={(e) => set('announcementLink', e.target.value)} style={input} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
                   <div>
                     <label style={label}>Background</label>
                     <input type="color" value={theme.announcementBg}
@@ -510,4 +560,83 @@ export default function AdminAppearancePage() {
       )}
     </div>
   );
+}
+
+/**
+ * Theme tab content.
+ *
+ * Renders the ThemePicker and the supporting copy. Kept as a
+ * local component so the page's render function doesn't have
+ * to inline 30+ lines of JSX for one tab.
+ *
+ * The `onPick` callback is the parent's responsibility: it
+ * receives the theme key, looks up the new tokens, and
+ * updates the page's theme state. The picker is dumb on
+ * purpose.
+ */
+function ThemeTab({
+  activeTheme,
+  onPick,
+  disabled,
+}: {
+  activeTheme: string | null;
+  onPick: (key: string) => void;
+  disabled: boolean;
+}) {
+  // The page persists `activeTheme` as a separate field on the
+  // theme record (added in the multi-theme migration). The
+  // picker reads it via props; this component is just the
+  // presentation layer.
+  //
+  // Why is the active theme not in local state? Because the
+  // page's `theme` state is the source of truth (it gets
+  // loaded from /theme, saved back to /theme). The picker is
+  // a controlled component: it renders what the parent
+  // tells it, and tells the parent when the user picked
+  // something.
+  return (
+    <div>
+      <div
+        style={{
+          padding: '20px',
+          backgroundColor: '#fff',
+          border: '1px solid #e5e5e5',
+          borderRadius: '10px',
+          marginBottom: '18px',
+        }}
+      >
+        <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Choose your theme</h3>
+        <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
+          Pick a starting point. Each theme sets the design tokens (colours, fonts,
+          layout). You can fine-tune individual values in the other tabs after picking.
+        </p>
+      </div>
+      <ThemePicker activeTheme={activeTheme} onSelect={onPick} disabled={disabled} />
+    </div>
+  );
+}
+
+/**
+ * Convert a ThemeConfig's tokens to a Theme.
+ *
+ * The Theme interface (in lib/theme.tsx) is the runtime shape
+ * the storefront reads. The ThemeConfig (in
+ * lib/themeRegistry.ts) is the on-disk shape from theme.json.
+ * This function flattens the config's tokens into the
+ * runtime Theme, filling in any missing fields from the
+ * shipped default. Used by the theme picker so picking a
+ * theme in the admin updates the page's token state without
+ * losing per-store overrides on non-token fields.
+ */
+function pickedTokensToTheme(picked: ReturnType<typeof getTheme>): Theme {
+  const t = picked.tokens as Record<string, string | number | boolean>;
+  return {
+    ...DEFAULT_THEME,
+    ...t,
+    // activeTheme is a separate field, set by the caller.
+    // (Spread last so it wins over any token named
+    // "activeTheme" — there isn't one today, but the
+    // precedence is explicit.)
+    activeTheme: picked.key,
+  } as Theme;
 }

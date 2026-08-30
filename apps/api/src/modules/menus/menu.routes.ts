@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// Site menus (mounted at /api/menus) - the header/footer/sidebar nav the
+// admin edits.
+//
+// One Menu per location ('header' | 'footer' | 'sidebar'); items form a
+// two-level tree (top-level items + one level of children - the
+// storefront nav renders dropdowns from that). The public read is
+// GET /location/:location, which returns ONLY active items; everything
+// else is admin/manager.
+//
+// A child item's parentId must belong to the same menu (checked on
+// create - a cross-menu parent would make the item invisible to both
+// menus). Items order by sortOrder within their level; the reorder
+// endpoint rewrites the whole level's order in one request.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';

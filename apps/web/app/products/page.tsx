@@ -1,3 +1,14 @@
+// ---------------------------------------------------------------------------
+// /products - the main product listing (search box, filter sidebar,
+// sort, pagination).
+//
+// The whole filter state lives in the URL (lib/filterParams encodes/
+// decodes it), so a shopper can share or bookmark a filtered view;
+// every change updates the query string and re-fetches. Facets for the
+// sidebar come from GET /api/products/facets with the same filter, so
+// the counts reflect what's currently selected.
+// ---------------------------------------------------------------------------
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
@@ -16,6 +27,9 @@ import {
 } from '@/lib/filterParams';
 import type { ProductFilter } from '@/lib/filterParams.types';
 import { API_BASE } from '@/lib/apiBase';
+import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
+import { SITE } from '@/lib/seo';
+import { getImageUrl } from '@/lib/api';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -110,6 +124,35 @@ function ProductsContent() {
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+      {/* Structured data: ItemList of the visible products + a
+          BreadcrumbList. The script is rendered every render
+          because the products list is client-side, but the
+          payload is small and the validator is happy with
+          any well-formed JSON-LD block. */}
+      {products.length > 0 && (() => {
+        const listUrl = `${SITE}/products${typeof window !== 'undefined' && window.location.search ? window.location.search : ''}`;
+        const list = buildItemListJsonLd(
+          'Products',
+          products.slice(0, 50).map((p, i) => ({
+            url: `${SITE}/products/${p.slug}`,
+            name: p.name,
+            image: p.images?.[0] ? getImageUrl(p.images[0].url) : undefined,
+            position: i + 1,
+          })),
+          listUrl,
+        );
+        const breadcrumb = buildBreadcrumbJsonLd([
+          { name: 'Home', url: `${SITE}/` },
+          { name: 'Products', url: `${SITE}/products` },
+        ]);
+        return (
+          <script
+            type="application/ld+json"
+            data-testid="json-ld-list"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(asGraph([list, breadcrumb])) }}
+          />
+        );
+      })()}
       {/* Breadcrumb */}
       <nav
         style={{
@@ -212,7 +255,7 @@ function ProductsContent() {
           {filterCount > 0 && (
             <span
               style={{
-                marginLeft: '6px',
+                marginInlineStart: '6px',
                 backgroundColor: showAdvanced ? 'rgba(255,255,255,0.25)' : 'var(--accent, #2563eb)',
                 color: '#fff',
                 borderRadius: '999px',

@@ -1,12 +1,22 @@
+// /admin/analytics - the analytics dashboard: real-time stats,
+// search analytics, trending products, and the recent-activity feed.
+// All figures come from the /api/analytics/* endpoints (the server
+// aggregates the UserEvent table); if the store has tracking
+// disabled, the pages render empty rather than fake data.
 'use client';
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { API_BASE } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function AdminAnalyticsPage() {
   const { settings } = useStoreSettings();
+  // The 1fr/1fr grid for "Orders by Status" + "Top Products" splits a
+  // narrow viewport in half, leaving each card with a column narrower
+  // than a phone screen. Stack them under 640px.
+  const isMobile = useIsMobile(640);
   const [analytics, setAnalytics] = useState({
     totalProducts: 0,
     totalOrders: 0,
@@ -16,11 +26,44 @@ export default function AdminAnalyticsPage() {
     recentOrders: [] as any[],
     ordersByStatus: {} as Record<string, number>,
   });
+  // Behavioural analytics (the event loop: view / search / add_to_cart /
+  // purchase). Only populated when the store runs the API with
+  // ANALYTICS_TRACKING_ENABLED=true - off by default, and the
+  // /privacy page documents that.
+  const [activity, setActivity] = useState({
+    today: null as null | { views: number; searches: number; addToCarts: number; purchases: number },
+    topSearches: [] as { query: string; count: number }[],
+    trending: [] as any[],
+    loaded: false,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAnalytics();
+    fetchActivity();
   }, []);
+
+  const fetchActivity = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+      const [realtime, search, trending] = await Promise.all([
+        fetch(`${API_BASE}/analytics/realtime`, { headers }).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API_BASE}/analytics/search?days=30`, { headers }).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API_BASE}/analytics/trending?limit=5`).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      setActivity({
+        today: realtime?.data?.metrics || null,
+        topSearches: (search?.data || []).slice(0, 5),
+        trending: trending?.data || [],
+        loaded: true,
+      });
+    } catch (err) {
+      console.error('Failed to fetch activity:', err);
+      setActivity((a) => ({ ...a, loaded: true }));
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
@@ -121,7 +164,67 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+      {/* Store Activity - behavioural data from the analytics event loop */}
+      {activity.loaded && (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+          {/* Today */}
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Today</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {[
+                ['Product views', activity.today?.views ?? 0],
+                ['Searches', activity.today?.searches ?? 0],
+                ['Add to cart', activity.today?.addToCarts ?? 0],
+                ['Purchases', activity.today?.purchases ?? 0],
+              ].map(([label, count]) => (
+                <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '14px', color: '#666' }}>{label}</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>{count as number}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top searches (30 days) */}
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Top Searches (30d)</h3>
+            {activity.topSearches.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#999' }}>
+                No searches recorded. Behavioural data is only collected when the API runs with
+                <code style={{ margin: '0 4px' }}>ANALYTICS_TRACKING_ENABLED=true</code>.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {activity.topSearches.map((s) => (
+                  <div key={s.query} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '14px' }}>{s.query}</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#666' }}>{s.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Trending products (7 days of views) */}
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Trending (7d views)</h3>
+            {activity.trending.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#999' }}>No product views recorded yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {activity.trending.map((p: any, i: number) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '12px', color: '#999', width: '16px' }}>{i + 1}.</span>
+                    <span style={{ fontSize: '14px', flex: 1 }}>{p.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
         {/* Orders by Status */}
         <div style={{
           backgroundColor: 'white',
@@ -229,7 +332,10 @@ export default function AdminAnalyticsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: auto` (was 'hidden'): four columns don't fit a 360px
+        // phone; allow horizontal scroll inside the card instead of
+        // overflowing the document.
+        overflow: 'auto',
       }}>
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e5e5' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Recent Orders</h3>

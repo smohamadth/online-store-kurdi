@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Environment loading + validation (Zod).
+//
+// This is the single gate between "someone's .env" and the running server:
+// a missing/invalid variable makes the process EXIT AT IMPORT TIME with the
+// field names, instead of surfacing later as a confusing 500. .env.ci in
+// apps/api is the canonical set of values that must keep passing here -
+// scripts/verify-env-config.py checks the templates against this schema.
+// ---------------------------------------------------------------------------
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -37,6 +46,12 @@ const envSchema = z.object({
   
   // Frontend
   FRONTEND_URL: z.string().url(),
+
+  // Public base URL of the API (e.g. https://api.example.com/api), used to
+  // build absolute links that leave the server (digital-download links in
+  // order emails). Optional: without it those fall back to localhost,
+  // which is only right for local development.
+  API_URL: z.string().url().optional(),
   
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
@@ -49,6 +64,10 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+  // Error tracking (optional): with no DSN the app runs with Sentry
+  // fully disabled - it is an observability add-on, never a dependency.
+  SENTRY_DSN: z.string().url().optional(),
   
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -59,7 +78,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string(),
 });
 
-// Validate environment variables
+// Validate environment variables. console (not the logger) is deliberate:
+// the logger itself depends on validated env (LOG_LEVEL), so using it here
+// would be circular.
 const envParse = envSchema.safeParse(process.env);
 
 if (!envParse.success) {

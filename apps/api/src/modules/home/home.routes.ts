@@ -74,7 +74,9 @@ const configSchema = z.record(z.any()).optional().nullable();
  * else in `config` is read as data, never as markup.
  */
 function scrubConfig(type: string, config: Record<string, any>): Record<string, any> {
-  if (type === 'richText' && typeof config.html === 'string') {
+  // richText and the admin-designed `custom` section both carry config.html
+  // rendered with dangerouslySetInnerHTML - both are sanitised on write.
+  if ((type === 'richText' || type === 'custom') && typeof config.html === 'string') {
     return { ...config, html: sanitizeRichText(config.html) };
   }
   return config;

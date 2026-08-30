@@ -34,7 +34,7 @@ async function main() {
   await prisma.wishlistItem.deleteMany();
   await prisma.review.deleteMany();
   await prisma.productImage.deleteMany();
-  await prisma.productVariant.deleteMany();
+  await prisma.variant.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
   await prisma.session.deleteMany();
@@ -93,6 +93,18 @@ async function main() {
 
   // Create categories
   const categories = await Promise.all([
+    prisma.category.create({
+      // Default bucket for the bulk import: a product row without a
+      // `category` column lands here (see modules/importExport/commit.ts).
+      // Keep the name/slug in sync with SAMPLE_PRODUCT in
+      // modules/importExport/routes.ts.
+      data: {
+        name: 'General',
+        slug: 'general',
+        description: 'Uncategorised products and import default',
+        sortOrder: 0,
+      },
+    }),
     prisma.category.create({
       data: {
         name: 'Electronics',

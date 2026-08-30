@@ -79,6 +79,19 @@ describe('encodeFilter', () => {
     expect(params.has('minPrice')).toBe(true);
     expect(params.has('maxPrice')).toBe(false);
   });
+
+  it('encodes optionValueId as CSV', () => {
+    const params = encodeFilter({
+      ...EMPTY_FILTER,
+      optionValueId: ['a-1', 'b-2'],
+    });
+    expect(params.get('optionValueId')).toBe('a-1,b-2');
+  });
+
+  it('omits optionValueId when empty', () => {
+    const params = encodeFilter({ ...EMPTY_FILTER, optionValueId: [] });
+    expect(params.has('optionValueId')).toBe(false);
+  });
 });
 
 describe('decodeFilter', () => {
@@ -143,6 +156,11 @@ describe('decodeFilter', () => {
     const f = decodeFilter({ category: ['clothing', 'books'] });
     expect(f.category).toEqual(['clothing', 'books']);
   });
+
+  it('parses optionValueId as a CSV list', () => {
+    const f = decodeFilter(new URLSearchParams('optionValueId=a-1,b-2'));
+    expect(f.optionValueId).toEqual(['a-1', 'b-2']);
+  });
 });
 
 describe('encode/decode round-trip', () => {
@@ -181,6 +199,14 @@ describe('encode/decode round-trip', () => {
     const original = { ...EMPTY_FILTER, search: 'red shoes', sort: 'relevance' as const };
     expect(decodeFilter(encodeFilter(original))).toEqual(original);
   });
+
+  it('preserves a typed-option filter (optionValueId list)', () => {
+    const original = {
+      ...EMPTY_FILTER,
+      optionValueId: ['ov-1', 'ov-2'],
+    };
+    expect(decodeFilter(encodeFilter(original))).toEqual(original);
+  });
 });
 
 describe('isEmptyFilter', () => {
@@ -197,6 +223,7 @@ describe('isEmptyFilter', () => {
     expect(isEmptyFilter({ ...EMPTY_FILTER, maxPrice: 100 })).toBe(false);
     expect(isEmptyFilter({ ...EMPTY_FILTER, search: 'a' })).toBe(false);
     expect(isEmptyFilter({ ...EMPTY_FILTER, sort: 'price_asc' })).toBe(false);
+    expect(isEmptyFilter({ ...EMPTY_FILTER, optionValueId: ['ov-1'] })).toBe(false);
   });
 });
 
@@ -223,6 +250,9 @@ describe('activeFilterCount', () => {
     };
     // 2 + 2 + 3 + 1 + 1 + 1 + 1 + 1 + 1 = 13
     expect(activeFilterCount(f)).toBe(13);
+  });
+  it('counts each optionValueId as one', () => {
+    expect(activeFilterCount({ ...EMPTY_FILTER, optionValueId: ['a', 'b'] })).toBe(2);
   });
 });
 

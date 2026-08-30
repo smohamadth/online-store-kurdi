@@ -1,3 +1,6 @@
+// /account/wishlist - the saved-items list. Each row offers
+// "move to cart" (POST /api/wishlist/move-to-cart - server creates
+// the cart row and drops the wishlist row) and remove.
 'use client';
 
 import { useState, useEffect } from 'react';

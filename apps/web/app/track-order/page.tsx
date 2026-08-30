@@ -1,3 +1,10 @@
+// /track-order - the order-status lookup. The customer enters the
+// order number (the one from the confirmation email) and the page
+// finds it in the logged-in user's own order list (GET /api/orders -
+// login required, and the database is the only source of truth: an
+// order that never reached the server cannot be tracked). Renders the
+// pending -> processing -> shipped -> delivered progress steps.
+
 'use client';
 
 import { useState, useEffect } from 'react';

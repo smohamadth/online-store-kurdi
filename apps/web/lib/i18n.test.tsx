@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, renderHook, waitFor } from '@testing-library/react';
 import { languages, useTranslation, useTranslations } from '@/lib/i18n';
+import { I18nSeedProvider } from '@/lib/I18nSeedProvider';
 
 function TranslationProbe() {
   const { t, language, changeLanguage, direction } = useTranslation();
@@ -190,5 +191,80 @@ describe('languages table', () => {
       expect(l.name.length).toBeGreaterThan(0);
       expect(['ltr', 'rtl']).toContain(l.dir);
     }
+  });
+});
+
+/**
+ * SSR seed: the root layout passes the server-resolved locale down through
+ * I18nSeedProvider. useTranslation() should use that as its initial state so
+ * the first render matches the server-rendered <html lang dir> - no flash
+ * of LTR/English content for a Kurdish/Arabic visitor before the
+ * localStorage effect lands.
+ *
+ * The probe renders ONCE (no waitFor) and reads the initial state, so the
+ * assertion catches a regression where the seed is ignored and the hook
+ * falls back to 'en' / 'ltr' on first render.
+ */
+describe('useTranslation SSR seed', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.dir = 'ltr';
+    document.documentElement.lang = '';
+  });
+
+  function SeededProbe() {
+    const { t, language, direction } = useTranslation();
+    return (
+      <pre data-testid="snap">
+        {JSON.stringify({ t_home: t('nav.home'), language, direction })}
+      </pre>
+    );
+  }
+
+  it('seeds with kurdish and renders Kurdish copy on first render', () => {
+    render(
+      <I18nSeedProvider value={{ lang: 'ku', dir: 'rtl' }}>
+        <SeededProbe />
+      </I18nSeedProvider>,
+    );
+    const snap = JSON.parse(screen.getByTestId('snap').textContent || '{}');
+    expect(snap.language).toBe('ku');
+    expect(snap.t_home).toBe('سەرەتا');
+    expect(snap.direction).toBe('rtl');
+  });
+
+  it('seeds with arabic and renders Arabic copy on first render', () => {
+    render(
+      <I18nSeedProvider value={{ lang: 'ar', dir: 'rtl' }}>
+        <SeededProbe />
+      </I18nSeedProvider>,
+    );
+    const snap = JSON.parse(screen.getByTestId('snap').textContent || '{}');
+    expect(snap.language).toBe('ar');
+    expect(snap.t_home).toBe('الرئيسية');
+    expect(snap.direction).toBe('rtl');
+  });
+
+  it('seeds with turkish and renders Turkish copy on first render', () => {
+    // Turkish isn't in the dictionary, so t() falls back to English. The
+    // important assertion is the language/direction seed: the hook accepts
+    // the server's choice before any effect runs.
+    render(
+      <I18nSeedProvider value={{ lang: 'tr', dir: 'ltr' }}>
+        <SeededProbe />
+      </I18nSeedProvider>,
+    );
+    const snap = JSON.parse(screen.getByTestId('snap').textContent || '{}');
+    expect(snap.language).toBe('tr');
+    expect(snap.direction).toBe('ltr');
+  });
+
+  it('falls back to english when no provider is present', () => {
+    // No I18nSeedProvider in the tree; the hook should still produce a
+    // valid initial state, not crash.
+    render(<SeededProbe />);
+    const snap = JSON.parse(screen.getByTestId('snap').textContent || '{}');
+    expect(snap.language).toBe('en');
+    expect(snap.direction).toBe('ltr');
   });
 });

@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
 import BlogSearch from '@/components/BlogSearch';
 import PostCard from '@/components/PostCard';
+import FeaturedPostHero from '@/components/FeaturedPostHero';
 
 /**
  * Blog index at /blog.
@@ -197,17 +199,27 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
           )}
         </div>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '24px',
-          }}
-        >
-          {posts.map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
-        </div>
+        <>
+          {/* The pinned (featured) post leads as a wide hero card; the API
+              already sorts featured posts first. Kept as a real card
+              (data-post-card) so list counts and scripts see it like any
+              other post. */}
+          {posts[0]?.isFeatured && <FeaturedPostHero post={posts[0]} />}
+          {posts.length > 1 && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: '24px',
+                marginTop: posts[0]?.isFeatured ? '24px' : 0,
+              }}
+            >
+              {posts.slice(posts[0].isFeatured ? 1 : 0).map((p) => (
+                <PostCard key={p.id} post={p} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Pagination */}
@@ -225,7 +237,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
         >
           {pagination.page > 1 && (
             <Link href={pageHref(pagination.page - 1)} style={pagerStyle(false)}>
-              ← Previous
+              <DirectionArrow kind="back" /> Previous
             </Link>
           )}
           {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((n) => (
@@ -240,7 +252,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
           ))}
           {pagination.page < pagination.totalPages && (
             <Link href={pageHref(pagination.page + 1)} style={pagerStyle(false)}>
-              Next →
+              <DirectionArrow kind="forward" /> Next
             </Link>
           )}
         </nav>

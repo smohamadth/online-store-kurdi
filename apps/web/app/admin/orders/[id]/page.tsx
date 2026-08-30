@@ -1,8 +1,19 @@
+// ---------------------------------------------------------------------------
+// /admin/orders/[id] - the order detail: items, address, payment +
+// status, the tracking-number and admin-notes editors, and the status
+// transition buttons (PUT /api/orders/:id/status).
+//
+// The status buttons are the admin's fulfilment workflow: pending ->
+// processing -> shipped (with tracking number, which triggers the
+// customer's shipping email) -> delivered, plus cancel/refund. The
+// server validates each transition.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { API_BASE } from '@/lib/http';
@@ -129,7 +140,7 @@ export default function AdminOrderDetailPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
         <div>
           <Link href="/admin/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none', marginBottom: '8px', display: 'block' }}>
-            ← Back to Orders
+            <DirectionArrow kind="back" /> Back to Orders
           </Link>
           <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Order #{order.orderNumber || order.id}</h2>
           <p style={{ color: '#666', marginTop: '4px' }}>

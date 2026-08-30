@@ -36,6 +36,11 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     variants: [],
     averageRating: 4.5,
     reviewCount: 12,
+    // Digital-product fields. Physical products leave these
+    // null; the API always returns them so the type matches.
+    downloadUrl: null,
+    downloadLimit: null,
+    downloadExpiry: null,
     createdAt: '2024-01-01',
     updatedAt: '2024-01-01',
     ...overrides,
@@ -82,6 +87,35 @@ describe('ProductCard', () => {
 
     rerender(<ProductCard product={makeProduct({ price: 100, compareAtPrice: 50 })} />);
     expect(screen.queryByText(/-\d+%/)).not.toBeInTheDocument();
+  });
+
+  it('shows a "Digital" badge when the product is digital', () => {
+    renderWithProviders(
+      <ProductCard product={makeProduct({ type: 'digital' })} />,
+    );
+    expect(screen.getByTestId('product-card-digital')).toBeInTheDocument();
+    expect(screen.getByTestId('product-card-digital').textContent).toContain('Digital');
+  });
+
+  it('does not show "Sold out" or "Only N left" for a digital product', () => {
+    // Digital products have no stock to track. Even when
+    // quantity is 0 we should never render the sold-out badge
+    // or the low-stock warning (the "Sold out" text inside the
+    // hidden quick-add button is unchanged; the badge in the
+    // top-left of the media tile is the one we care about).
+    renderWithProviders(
+      <ProductCard product={makeProduct({ type: 'digital', quantity: 0 })} />,
+    );
+    expect(screen.queryByTestId('product-card-digital')).toBeInTheDocument();
+    expect(screen.queryByText(/Only \d+ left/)).toBeNull();
+    // The "Sold out" badge is the standalone span (not the
+    // button text, which is the same words but in a button
+    // element). Asserting the badge-style span isn't there.
+    const badges = document.querySelectorAll('span');
+    const soldOutBadge = Array.from(badges).find(
+      (b) => b.textContent === 'Sold out',
+    );
+    expect(soldOutBadge).toBeUndefined();
   });
 
   it('shows "Sold out" when quantity is 0 and disables the quick-add button', () => {

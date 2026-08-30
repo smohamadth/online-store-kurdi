@@ -18,7 +18,14 @@
 // Importing it from here (a client module) hands a server component a
 // client-reference Symbol, not a string - see lib/apiBase.ts for the bug that
 // caused. Re-exported so the ~37 existing client imports are unaffected.
-import { API_BASE } from './apiBase';
+//
+// Note: the re-export is the BROWSER-safe base (CLIENT_API_BASE). It equals
+// the configured base except when that base is a loopback URL, in which case
+// a user's browser can never reach it and same-origin "/api" is used instead
+// (proxied by the server - see next.config.js). Server components keep
+// importing the absolute base from './apiBase'.
+import { CLIENT_API_BASE } from './apiBase';
+const API_BASE = CLIENT_API_BASE;
 export { API_BASE };
 
 /** Error carrying the server's real message plus status and field details. */

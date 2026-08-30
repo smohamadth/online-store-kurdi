@@ -1,3 +1,8 @@
+// /account/profile - edit name / phone / avatar. Saves through
+// PUT /api/users/:id (the self-update allow-list on the server -
+// role/isActive are NOT accepted here, which is the point of that
+// allow-list). The localStorage user object is refreshed on save so
+// the header and dashboard pick up the new name without a reload.
 'use client';
 
 import { useState, useEffect } from 'react';

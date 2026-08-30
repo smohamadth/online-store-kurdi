@@ -1,10 +1,121 @@
+// ---------------------------------------------------------------------------
+// Payments API (mounted at /api/payments).
+//
+//   - POST /webhooks/stripe : the ONLY real payment path. Stripe calls it
+//     (public, HMAC-verified) and markOrderPaidByStripe settles the order
+//     idempotently. Card checkout itself is created in order.routes.ts.
+//   - POST /process          : the OFFLINE settlement endpoint - staff
+//     record a bank transfer / COD collection. It is deliberately NOT a
+//     gateway: by default only staff can call it (the PAYMENTS_ALLOW_MOCK
+//     env flag re-opens it for local demos). See the SECURITY comment on
+//     the route for why.
+//   - GET /, GET /order/:id  : payment ledger (admin / order owner).
+//   - POST /refund           : admin refunds.
+//
+// Gift cards + store credit are their own files (wallet.routes.ts).
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { getStripe } from '../../config/stripe';
+import { env } from '../../config/environment';
+import type Stripe from 'stripe';
 
 const router = Router();
+
+/**
+ * Settle an order from a verified Stripe Checkout completion.
+ * Idempotent: replayed webhooks (Stripe retries on any non-2xx) must
+ * not create duplicate payments.
+ */
+export async function markOrderPaidByStripe(
+  orderId: string,
+  session: Stripe.Checkout.Session
+): Promise<void> {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) {
+    // The webhook can arrive after the order row is cleaned up by a
+    // retention job; nothing to do, but log so a merchant noticing
+    // "paid but not processing" can trace it.
+    logger.warn(`Stripe webhook for unknown order ${orderId} (session ${session.id})`);
+    return;
+  }
+  if (order.paymentStatus === 'completed') return;
+
+  const stripePaymentId =
+    (typeof session.payment_intent === 'string' ? session.payment_intent : null) ?? session.id;
+
+  await prisma.payment.create({
+    data: {
+      orderId,
+      amount: order.totalAmount,
+      currency: (session.currency || 'usd').toUpperCase(),
+      method: 'stripe',
+      status: 'completed',
+      transactionId: stripePaymentId,
+      gatewayResponse: JSON.stringify({
+        source: 'stripe_checkout',
+        sessionId: session.id,
+        paymentIntent: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+        event: 'checkout.session.completed',
+        timestamp: new Date().toISOString(),
+      }),
+    },
+  });
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      paymentStatus: 'completed',
+      paymentIntentId: stripePaymentId,
+      status: 'processing',
+    },
+  });
+
+  logger.info(`Stripe settled order ${order.orderNumber} via checkout session ${session.id}`);
+}
+
+// POST /api/payments/webhooks/stripe - Stripe Checkout webhook
+//
+// Public by design (Stripe calls it), but the payload must carry a
+// valid Stripe-Signature header verified against STRIPE_WEBHOOK_SECRET
+// before any order state changes. We use req.rawBody: the app-level
+// express.json verify hook stashes the exact request bytes before
+// parsing, which is what constructEvent needs.
+router.post('/webhooks/stripe', async (req, res, next) => {
+  try {
+    const stripe = getStripe();
+    if (!stripe) {
+      throw new AppError('Stripe is not configured for this store', 501);
+    }
+    const signature = req.header('Stripe-Signature') || '';
+    const rawBody: string = (req as any).rawBody || '';
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET!);
+    } catch (err) {
+      logger.warn(`Stripe webhook signature verification failed: ${(err as Error).message}`);
+      throw new AppError('Invalid Stripe webhook signature', 400);
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orderId = (session.metadata?.orderId as string) || undefined;
+      if (orderId) {
+        await markOrderPaidByStripe(orderId, session);
+      } else {
+        logger.warn(`Stripe checkout session ${session.id} completed without order metadata`);
+      }
+    }
+    // Every other event type is acknowledged: Stripe retries on non-2xx,
+    // and 4xx/5xx for events we don't handle would just be noise.
+    res.json({ received: true });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // GET /api/payments - Get payments (admin only)
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {

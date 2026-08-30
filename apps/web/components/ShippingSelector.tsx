@@ -1,3 +1,8 @@
+// ShippingSelector - the checkout's shipping-options box. Asks
+// POST /api/shipping/calculate with the customer's address + order
+// values and lists the matching methods (free flag included); the
+// parent uses the selection for the order's shippingAmount.
+
 'use client';
 
 import { useState, useEffect } from 'react';

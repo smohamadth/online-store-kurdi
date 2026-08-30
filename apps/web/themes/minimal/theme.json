@@ -1,0 +1,52 @@
+{
+  "key": "minimal",
+  "name": "Minimal",
+  "description": "A text-first theme for writers, makers, and craft sellers. Generous whitespace, serif headings, no marketing chrome. Lets the products speak.",
+  "version": "1.0.0",
+  "author": "Platform Team",
+  "preview": "/themes/minimal/preview.png",
+  "features": {
+    "rtl": false,
+    "darkMode": false,
+    "paid": true
+  },
+  "tokens": {
+    "primaryColor": "#1a1a1a",
+    "primaryTextColor": "#fafaf7",
+    "accentColor": "#8b6f47",
+    "bodyBg": "#fafaf7",
+    "cardBg": "#fafaf7",
+    "bodyText": "#1a1a1a",
+    "mutedText": "#6b6b65",
+    "borderColor": "#e8e6e0",
+    "headerBg": "#fafaf7",
+    "headerText": "#1a1a1a",
+    "footerBg": "#1a1a1a",
+    "footerText": "#fafaf7",
+    "priceColor": "#1a1a1a",
+    "saleColor": "#8b3a3a",
+    "fontFamily": "georgia",
+    "baseFontSize": 17,
+    "headingWeight": 600,
+    "radius": 2,
+    "buttonRadius": 0,
+    "containerWidth": 960,
+    "cardShadow": "none",
+    "productsPerRow": 3,
+    "showTrustBar": false,
+    "showTestimonials": false,
+    "showStats": false,
+    "showNewsletter": true,
+    "showDealCountdown": false,
+    "showCategories": true,
+    "showFeatured": true,
+    "showNewArrivals": false,
+    "announcementBg": "#1a1a1a",
+    "announcementText2": "#fafaf7"
+  },
+  "sections": {
+    "hero": "@/themes/minimal/sections/Hero",
+    "featured": "@/themes/minimal/sections/Featured",
+    "categories": "@/themes/minimal/sections/Categories"
+  }
+}

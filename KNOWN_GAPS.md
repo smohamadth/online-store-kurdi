@@ -5,27 +5,44 @@ Everything here is deliberate and documented — not silently broken.
 
 ---
 
-## 1. No online card payments
+## 1. ~~No online card payments~~ — Stripe integrated (optional per store)
 
-**Status:** offline payment only.
+**Status:** card payment works when the store configures Stripe; otherwise
+the offline flow remains.
 
-There is no Stripe/PayPal integration. Checkout offers **Cash on Delivery** and
-**Bank Transfer**, and orders are created with `paymentStatus: 'pending'`.
+The store ships **without** a payment gateway on purpose: it installs on the
+client's server, and the merchant decides whether to take cards. Two modes:
 
-`POST /api/payments/process` does *not* contact a gateway — it simply marks an
-order paid. It is therefore restricted to **admin/manager**, so staff can record
-a bank transfer or a COD collection. It previously accepted any authenticated
-customer, which let a buyer mark their own order as paid and receive the goods
-for free.
+* **Offline (default).** No `STRIPE_SECRET_KEY` → checkout offers **Cash on
+  Delivery** and **Bank Transfer**; orders are created `paymentStatus:
+  'pending'` and staff settle them via `POST /api/payments/process`
+  (admin/manager only — a customer can never mark their own order paid).
+  `PAYMENTS_ALLOW_MOCK=true` re-opens it for local demos; **never enable it on
+  a public store.**
 
-`PAYMENTS_ALLOW_MOCK=true` re-opens it to customers for local demos. **Never
-enable this on a public store.**
+* **Stripe (opt-in per store).** Set `STRIPE_SECRET_KEY` +
+  `STRIPE_WEBHOOK_SECRET` (see `.env.example`) and the card option appears in
+  checkout. Order placement creates a **Stripe Checkout** session (hosted
+  page — no card data touches this server); the customer pays and is sent back
+  to `/checkout?paid=true` (or `?canceled=true`). A **verified** webhook
+  (`checkout.session.completed`, signature-checked via
+  `stripe.webhooks.constructEvent` against the raw request body) settles the
+  order idempotently — Stripe retries never create duplicate payments. If the
+  store has no Stripe keys, a card order is rejected with 400 *before* the
+  order row is created, so a customer is never left with an unpayable pending
+  order.
 
-To go live with cards:
-1. Add the Stripe SDK and keys to `apps/api/.env`.
-2. Create a PaymentIntent in `payment.routes.ts` instead of the mock branch.
-3. Verify the webhook signature before setting `paymentStatus: 'completed'`.
-4. Re-add the Credit Card option in `apps/web/app/checkout/page.tsx`.
+To go live with cards on a client store:
+1. Put `STRIPE_SECRET_KEY` (sk_live_…) in `apps/api/.env`.
+2. In the Stripe dashboard add a webhook for
+   `https://<api-host>/api/payments/webhooks/stripe` with event
+   `checkout.session.completed`; put its secret in `STRIPE_WEBHOOK_SECRET`.
+3. Restart the API. The card option appears in checkout on the next load.
+
+Covered by `tests/integration/payments.test.ts` (capability flag, card
+rejection without Stripe, session creation, webhook settling + idempotency)
+and `tests/unit/payments/stripe-webhook.test.ts` (real-SDK signature
+verification: valid secret, wrong secret, tampered payload, missing header).
 
 ---
 
@@ -41,14 +58,17 @@ For local testing, MailHog on `localhost:1025` works with the defaults.
 
 ---
 
-## 3. Settings that are stored but unused
+## 3. ~~Settings that are stored but unused~~ — FIXED
+
+Both previously-orphaned fields are now consumed:
 
 | Field | State |
 |---|---|
-| `storeAddress` | saved, not displayed anywhere |
-| `googleAnalyticsId` | saved, no tracking script injected |
+| `storeAddress` | Rendered in the storefront footer (`AppShell.tsx`, `📍 {storeAddress}`) when set |
+| `googleAnalyticsId` | Injects the gtag bootstrap + `googletagmanager.com` script in the root layout (`layout.tsx`, via `buildGtagSnippet`) when set |
 
-Both persist correctly; nothing consumes them yet.
+Both persist via `PUT /api/settings` and only take effect when the owner
+actually sets them — an empty value injects/renders nothing.
 
 ---
 
@@ -81,25 +101,31 @@ Covered by `scripts/verify-users.py` (21 assertions, API + browser).
 
 ---
 
-## 5. No automated tests
+## 5. ~~No automated tests~~ — FIXED
 
-There is no test suite. Every change in this repo was verified by driving a real
-browser with Playwright and querying the database directly, which catches
-integration bugs but is not a substitute for regression tests.
+A full Vitest suite now exists and runs in CI (`.github/workflows/ci.yml`,
+jobs `api-tests` and `web-tests`):
 
-Highest-value tests to add first:
-- checkout: valid order persists; rejected order shows an error and keeps the cart
-- auth: customer cannot reach admin endpoints (403) or self-approve reviews
-- settings: currency and store name propagate to the storefront
+| Suite | Count | What it covers |
+|---|---|---|
+| API unit (`apps/api/tests/unit`) | 267 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers |
+| API integration (`apps/api/tests/integration`) | 711 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, attribute index, …) |
+| Web lib (`apps/web`, vitest) | 317 | filter params, i18n, SEO, structured data, theme config, preview, page blocks, home sections |
+| Web components (React Testing Library + happy-dom) | 502 | PDP, cart, admin pages, filter sidebar, theme picker, custom section |
+
+The Playwright browser suites in CI (`regression-ui.py` etc.) still run on top
+of this; they and the Vitest suites are complementary, not duplicates.
 
 ---
 
-## 6. Product images are placeholders
+## 6. ~~Product images are placeholders~~ — seeded
 
-Seed products reference `/images/products/*.jpg`, which do not exist on disk and
-return 404. `ProductCard` falls back to a generated gradient tile with the
-product initials, so nothing looks broken. Upload real images via
-**Admin → Products** to replace them.
+The six seed products ship with product photos in
+`apps/web/public/images/products/` (iPhone 15 Pro ×2, MacBook Pro 14",
+Classic T-Shirt, JavaScript: The Good Parts, Web Development Course), so a
+fresh install looks like a store out of the box. Clients replace them via
+**Admin → Products** (uploads go to MinIO/S3, not this folder). `ProductCard`
+still falls back to a generated gradient tile if an image 404s.
 
 
 ---
@@ -188,15 +214,18 @@ Two things had to be fixed before this was worth anything:
 Verified by deliberately reintroducing a fixed bug (disabling the `customCss`
 XSS guard): the suite went red with `exit=1` and named the failing assertion.
 
-Theming has its own suites since the THEME_PLAN.md round:
+Theming has its own suites since the theme-system round (see README section 9):
 `verify-theme.py` (browser: every preset reaches computed styles, dark-theme
 contrast guards, admin isolation) and `verify-theme-tokens.js` (no browser:
 token completeness + a hardcoded-colour ratchet on the swept storefront
 files). The browser suite needs the CI runner; the token suite runs anywhere.
 
-Still missing: unit tests (Vitest is configured but there are no test files),
-Sentry or any error tracking, and CD - nothing deploys automatically because
-there is no server yet.
+Still missing: CD (continuous deployment) - nothing deploys automatically
+because there is no hosting account yet. One-command *install* on a client
+server exists: `scripts/install-store.sh` + `docs/DEPLOYMENT.md` (docker
+compose or plain node). (Unit tests are done - see section 5.) Error
+tracking is done: optional Sentry, no-op without a DSN (`SENTRY_DSN` in
+`apps/api/.env`, `NEXT_PUBLIC_SENTRY_DSN` in the web build).
 
 ---
 
@@ -238,3 +267,144 @@ against the real stack (Express API + Next storefront running together):
    so the page CATCHES the throw and renders the error view itself rather than
    relying on `error.tsx`.
 
+---
+
+## 10. Schema migrations lag behind `schema.prisma`
+
+**Status:** the drift was closed and is now guarded; a residual item
+remains (see below).
+
+The original gap (migrations stopped at `20260821090000_add_blog` while the
+schema had moved on: inventory/warehouse, the variant-first-class rename,
+multi-currency, downloads, review photos, `pageType`, `activeTheme`, …) was
+closed by the committed `20260828000000_sync_session_schema` sync migration
+plus the subsequent feature migrations. Since then the history has grown:
+`20260828120000_add_product_download_limit`,
+`20260829000000_add_page_blocks`, `20260829100000_add_blog_post_blocks`,
+and the performance/scalability round's
+`20260830000000_add_performance_indexes`,
+`20260830010000_durable_storefront_forms`, `20260830020000_csrf_tokens`,
+`20260830030000_variant_attribute_index`.
+
+- **`scripts/sync-migrations.sh`** — the fixer: run on a machine with
+  network access (the Prisma engine is network-fetched). It detects any
+  drift, generates a closing migration, applies it, and verifies.
+- **`scripts/verify-migrations.sh`** — the read-only drift guard: fails
+  if the migrations and `schema.prisma` have drifted. A `api-checks`
+  step for it is staged in `.github/workflows/ci.yml` (before
+  `migrate deploy`), waiting on `workflows` permission to push.
+
+**Residual item:** the four `20260830*` migrations were hand-written
+(the Prisma engine is network-fetched and unavailable in the authoring
+sandbox). They were verified to apply cleanly to a scratch SQLite
+database in order, and follow Prisma's exact column/index naming
+conventions, but the byte-exact `prisma migrate diff` check that the
+drift guard performs could not be run locally. The first CI run (or a
+local `scripts/verify-migrations.sh` on a networked machine) is the
+authority; if it flags a mismatch, `scripts/sync-migrations.sh`
+regenerates the closing migration.
+
+---
+
+## 11. Bulk import/export — shipped (admin)
+
+**Status:** complete. `apps/api/src/modules/importExport/` mounted at
+`/api/import-export` (admin + manager), UI at `/admin/import-export`
+(linked from the Products and Categories pages and the sidebar).
+
+* **Export** — `GET /export/:entity?format=csv|json&sample=1` for
+  `products` (variants, images and SEO fields included) and `categories`
+  (parent links). `sample=1` returns a one-row template.
+* **Import** — `POST /preview` classifies every row (create / update /
+  error) without writing; `POST /commit` re-validates the raw file and
+  applies it **all-or-nothing** in one Prisma transaction. Products match
+  by SKU, categories by slug then name (case-insensitive). On update,
+  empty cells are ignored; `variants`/`images` columns, when present,
+  replace the existing ones.
+* **Limits** — 1,000,000 characters and 2,000 rows per file
+  (`MAX_INPUT_CHARS` / `MAX_ROWS` in `mappers.ts`); the express body
+  limit is 10 MB.
+* **Not done on purpose** — images are imported as URL strings only (no
+  file upload/migration), orders/customers are not importable, and the
+  preview→commit gap is not a lock: if someone edits the catalogue
+  between preview and commit, the commit re-validates and may classify
+  differently (or roll back). All three are natural follow-ups, not bugs.
+
+Covered by `tests/integration/importExport.test.ts` (29 tests),
+`tests/unit/csv.test.ts` (parser edge cases: Excel `value, "quoted"`
+cells, CRLF, blank lines) and the live CI check
+`scripts/verify-import-export.py` (30 checks against a real Prisma
+database in the api-checks job — the one place real transaction
+rollback and unique constraints are actually exercised). The seed
+creates a `General` category so the product-import default works on a
+fresh install.
+
+---
+
+## 12. Remaining incomplete features (complete inventory)
+
+An honest, complete list of what is **not** finished, split by kind.
+Items 1–6 are the ones most likely to matter in production; 7–14 are
+deliberate design choices or niche gaps.
+
+### Likely to matter
+
+1. **Emails are logged, not delivered.** Every transactional email
+   (order confirmation, shipping notification, welcome, password reset)
+   is wired and will send the moment real SMTP credentials are set —
+   but until then they only reach the server log. See §2.
+2. **No Postgres deployment path, yet.** The schema is provider-agnostic,
+   but the committed migrations are SQLite dialect, so a Postgres install
+   needs the migration history regenerated (runbook in `SCALING.md`,
+   Known limit 2). Unverified here because no Postgres instance is
+   available in CI or the sandbox.
+3. **The CSRF guard is not mounted.** Deliberate: the API authenticates
+   with Bearer JWTs (CSRF-immune) and the web client does not use the
+   `x-session-id`/`x-csrf-token` flow, so mounting it would 403 the
+   storefront's unauthenticated POSTs. Enabling it requires a client-side
+   change (fetch `/api/csrf-token`, echo the headers) — the token store
+   itself is now durable (`CsrfToken` table) so the server side is ready.
+4. **Multi-instance scheduling.** The inventory and currency schedulers
+   are per-process `setInterval` loops. Running N API instances behind a
+   load balancer requires pinning exactly one as the "worker" (or moving
+   the schedules to cron). Documented in `SCALING.md`.
+5. **Existing stores need a one-time attribute-index backfill.** The
+   `VariantAttribute` index (which makes `/products` attribute filtering
+   and facets SQL-indexed instead of O(catalog) in JS) is maintained on
+   every new variant write, but pre-existing variants need
+   `apps/api/prisma/backfill-variant-attributes.ts` run once after the
+   `20260830030000` migration. Idempotent.
+6. **Hand-written migrations need the CI drift guard to bless them.** The
+   four `20260830*` migrations were verified to apply to a scratch SQLite
+   DB in order, but the byte-exact `prisma migrate diff` that
+   `scripts/verify-migrations.sh` performs could not be run locally (the
+   Prisma engine is network-fetched). The first CI run is the authority;
+   `scripts/sync-migrations.sh` is the fix if it flags a mismatch. See §10.
+
+### Deliberate design choices / niche gaps
+
+7. **Import/export follow-ups** (see §11): image upload/migration during
+   import (URLs only today), order/customer import, and a preview→commit
+   lock. All natural follow-ups, none a bug.
+8. **`onSale` and `minRating` are still JS post-filters** (bounded by the
+   candidate set, not the catalog) — Prisma can't express the
+   `compareAtPrice > price` column comparison or the rating HAVING
+   aggregate in a `findMany`. Not a practical bottleneck below ~100k
+   products. See `SCALING.md`, Known limit 3.
+9. **3PL integration is inbound-only.** The inventory module accepts
+   signed 3PL webhooks and keeps a sync log, but there is no outbound push
+   to a specific 3PL provider.
+10. **Recommendations depend on opt-in analytics.** The also-bought /
+    bought-together signals come from `ANALYTICS_TRACKING_ENABLED`; with
+    it off (the default) they fall back to same-category popularity.
+11. **Elasticsearch is in `docker-compose.yml` but unused.** It is offered
+    as an optional advanced-search dependency; no code path queries it.
+12. **Socket.IO has no multi-instance adapter.** Fine single-instance; a
+    `@socket.io/redis-adapter` would be needed if real-time features are
+    used across several API instances.
+13. **No continuous deployment.** There is a one-command install
+    (`scripts/install-store.sh` + `docs/DEPLOYMENT.md`) but nothing
+    auto-deploys, because there is no hosting account yet. See §8.
+14. **SQLite remains the default.** Fine for the default install; the
+    single-writer limit is real under sustained write-heavy traffic
+    (flash sales). See §2 and `SCALING.md`.

@@ -700,3 +700,92 @@ export function Newsletter({
     </section>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Custom section (admin-designed)                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A fully styleable section the admin designs from Appearance → Home
+ * (home section type `custom`) or inside the page/post block editors
+ * (page block type `custom` - components/PageBlocks.tsx renders the
+ * same component). The admin controls background, alignment, padding
+ * and content width; `html` is rich text sanitised server-side before
+ * it is stored (home.routes.ts scrubConfig / contentBlocks.ts).
+ */
+// Exported (not private) so the palette is unit tested in
+// components/PageBlocks.test.tsx - a typo here would silently ship an
+// unreadable section (white text on a white band) that only shows up in
+// a browser.
+export const CUSTOM_BACKGROUNDS: Record<string, { bg: string; text: string; heading: string }> = {
+  none: { bg: 'transparent', text: 'var(--body-text, #111)', heading: 'var(--body-text, #111)' },
+  soft: { bg: 'var(--surface-2, #f5f5f7)', text: 'var(--body-text, #111)', heading: 'var(--body-text, #111)' },
+  brand: { bg: 'var(--brand, #111)', text: 'var(--brand-text, #fff)', heading: 'var(--brand-text, #fff)' },
+  dark: { bg: '#111827', text: '#e5e7eb', heading: '#ffffff' },
+};
+
+const CUSTOM_PADDING: Record<string, string> = {
+  none: '0 20px',
+  small: '28px 20px',
+  large: '56px 20px',
+};
+
+export function CustomSection({
+  title,
+  html,
+  background = 'soft',
+  align = 'left',
+  padding = 'large',
+  width = 'centered',
+}: {
+  title?: string | null;
+  html?: string;
+  background?: string;
+  align?: 'left' | 'center' | 'right';
+  padding?: 'none' | 'small' | 'large';
+  width?: 'full' | 'centered';
+}) {
+  if (!title && !html) return null;
+  const palette = CUSTOM_BACKGROUNDS[background] || CUSTOM_BACKGROUNDS.soft;
+  // Logical alignment (start/center/end) so "left"/"right" mirror in RTL,
+  // per the rtl-physical-ratchet convention.
+  const textAlign = align === 'center' ? 'center' : align === 'right' ? 'end' : 'start';
+  return (
+    <section
+      style={{
+        background: palette.bg,
+        padding: CUSTOM_PADDING[padding] ?? CUSTOM_PADDING.large,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: width === 'full' ? 'none' : '860px',
+          margin: '0 auto',
+          textAlign,
+          color: palette.text,
+        }}
+      >
+        {title && (
+          <h2
+            style={{
+              margin: '0 0 14px',
+              fontSize: '26px',
+              fontWeight: 'var(--heading-weight, 800)',
+              color: palette.heading,
+            }}
+          >
+            {title}
+          </h2>
+        )}
+        {html && (
+          <div
+            style={{ lineHeight: 1.75, fontSize: '15px' }}
+            // Sanitised server-side before it is stored; see
+            // home.routes.ts and utils/contentBlocks.ts on the API.
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )}
+      </div>
+    </section>
+  );
+}

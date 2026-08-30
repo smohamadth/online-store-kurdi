@@ -8,7 +8,12 @@
 }
 
 html, body {
-  overflow-x: hidden;
+  /* `width: 100%` keeps flex/grid children from expanding the body past the
+     viewport on phones. We deliberately do NOT set `overflow-x: hidden` on
+     the <html> element: that suppresses the scrollbar that tells you a
+     child is too wide, masking real layout bugs. The <body> still gets
+     `overflow-x: hidden` below so a single rogue child can't horizontally
+     scroll the document, but the <html> will report overflow. */
   width: 100%;
 }
 
@@ -67,6 +72,22 @@ button {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+/* Self-hosted Kurdish/Arabic-script faces (the @fontsource imports in
+   app/layout.tsx define these family names). The theme's font stacks
+   (lib/theme.tsx FONT_STACKS) reference these variables: a store's
+   chosen face, plus a per-glyph fallback so Arabic-script text always
+   lands on a professional face even when the stack's primary fonts are
+   Latin-only. Family names only here - the generic fallback belongs to
+   the stack, and a generic mid-stack would stop font matching. */
+:root {
+  --font-vazirmatn: 'Vazirmatn';
+  --font-noto-naskh-arabic: 'Noto Naskh Arabic';
+  --font-noto-kufi-arabic: 'Noto Kufi Arabic';
+  --font-readex-pro: 'Readex Pro';
+  --font-cairo: 'Cairo';
+  --font-tajawal: 'Tajawal';
 }
 
 /* Selection color */
@@ -174,8 +195,15 @@ a[data-link]:hover {
   to { opacity: 1; }
 }
 
+/* Toast slides in from its anchored edge. The toast container uses
+   insetInlineEnd, so it sits on the right in LTR and the left in RTL;
+   --slide-from mirrors the entry direction to match (custom properties
+   resolve per-element, so the [dir="rtl"] flip on :root is inherited). */
+:root { --slide-from: 100%; }
+:root[dir="rtl"] { --slide-from: -100%; }
+
 @keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
+  from { transform: translateX(var(--slide-from)); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
 

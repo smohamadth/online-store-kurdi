@@ -1,3 +1,6 @@
+// Thin HTTP layer over RecommendationService (mounted by
+// recommendation.routes.ts). Parses limit params, shapes responses; the
+// auth (the /history endpoint) and opt-in semantics live on the routes.
 import { Request, Response, NextFunction } from 'express';
 import { RecommendationService } from './recommendation.service';
 import { logger } from '../../utils/logger';

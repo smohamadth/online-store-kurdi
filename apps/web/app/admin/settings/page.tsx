@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// /admin/settings - the store settings form (identity, currency, units,
+// timezone, social links, SEO meta, maintenance mode).
+//
+// Saves via PUT /api/settings. The server's NOT_NULL round-trip rule
+// (apps/api/.../settings.routes.ts) is what makes this form work:
+// empty optional fields are sent as null and the server maps those to
+// "leave as-is" on NOT NULL columns and "clear" on nullable ones.
+//
+// Also hosts the email-template editor (GET/PUT /api/
+// settings/email-templates) and the test-email button, which reports
+// honestly whether mail was SENT or only LOGGED (isEmailConfigured).
+// ---------------------------------------------------------------------------
 'use client';
 
 // Currency list used by the settings dropdown. Selecting one fills in the
