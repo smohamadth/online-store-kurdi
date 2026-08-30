@@ -275,16 +275,16 @@ router.post('/', authenticate, async (req, res, next) => {
     // sequential findUnique per cart line - N round trips on the
     // checkout hot path, which serialised behind each other on a
     // networked Postgres.
-    const productIds = [...new Set(items.map((i) => i.productId))];
-    const variantIds = [...new Set(items.map((i) => i.variantId).filter(Boolean) as string[])];
+    const productIds = [...new Set(items.map((i: any) => i.productId))];
+    const variantIds = [...new Set(items.map((i: any) => i.variantId).filter(Boolean) as string[])];
     const [products, variants] = await Promise.all([
       prisma.product.findMany({ where: { id: { in: productIds } } }),
       variantIds.length
         ? prisma.variant.findMany({ where: { id: { in: variantIds } } })
         : Promise.resolve([] as any[]),
     ]);
-    const productById = new Map(products.map((p: any) => [p.id, p]));
-    const variantById = new Map(variants.map((v: any) => [v.id, v]));
+    const productById = new Map<string, any>(products.map((p: any): [string, any] => [p.id, p]));
+    const variantById = new Map<string, any>(variants.map((v: any): [string, any] => [v.id, v]));
 
     for (const item of items) {
       const product = productById.get(item.productId);
@@ -483,7 +483,7 @@ router.post('/', authenticate, async (req, res, next) => {
     // token row. The per-line try/catch (inside the map) keeps the old
     // guarantee that one failed mint never fails the paid order.
     await Promise.all(
-      order.items.map(async (item) => {
+      order.items.map(async (item: any) => {
         const isDigital = item.product?.type === 'digital';
         if (!isDigital) return;
         const sourceUrl = item.downloadUrl || item.product?.downloadUrl;

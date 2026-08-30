@@ -67,7 +67,7 @@ router.get('/subscribers', async (req, res, next) => {
         count: subscribers.length,
         // Same shape as before the DB move: a flat list of email
         // addresses.
-        subscribers: subscribers.map((s) => s.email),
+        subscribers: subscribers.map((s: any) => s.email),
       },
     });
   } catch (error) {
