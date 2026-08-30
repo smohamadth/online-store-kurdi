@@ -340,3 +340,56 @@ describe('DELETE /api/products/:id (admin only, soft archive)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+// ---------------------------------------------------------------------------
+// search backend (Postgres default) + reindex
+// ---------------------------------------------------------------------------
+
+describe('search backend (postgres default)', () => {
+  it('GET /api/products/search returns active matches via the configured provider', async () => {
+    await createProduct({ name: 'Kurdish Kurte', slug: 'kurte', description: 'a kurta shirt' });
+    await createProduct({ name: 'Other', slug: 'other' });
+
+    const res = await request(app).get('/api/products/search?q=kurte');
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((p: any) => p.name)).toContain('Kurdish Kurte');
+  });
+
+  it('index maintenance on product writes is a no-op for postgres (create/update/archive still work)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+
+    const created = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Widget', sku: 'SEARCH-W', price: 5, description: 'd' });
+    expect(created.status).toBe(201);
+    const id = created.body.data.id;
+
+    const updated = await request(app)
+      .put(`/api/products/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ price: 9 });
+    expect(updated.status).toBe(200);
+
+    const archived = await request(app)
+      .delete(`/api/products/${id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(archived.status).toBe(200);
+  });
+});
+
+describe('POST /api/products/search/reindex', () => {
+  it('requires admin', async () => {
+    const { token } = await authHeader({ role: 'customer' });
+    const res = await request(app).post('/api/products/search/reindex').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('is a no-op for the postgres backend and reports so', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app).post('/api/products/search/reindex').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.provider).toBe('postgres');
+    expect(res.body.data.indexed).toBe(0);
+  });
+});

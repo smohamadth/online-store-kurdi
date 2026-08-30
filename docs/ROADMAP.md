@@ -73,9 +73,14 @@ and a hands-on inventory/shipping review. Grouped by impact.
    (currently URLs only), plus order/customer import. High value for
    onboarding existing stores.
 
-9. **Elasticsearch is defined but unused** — listed as an optional
-   advanced-search dependency but no code queries it. For large catalogs
-   either wire it up or remove it to reduce confusion.
+9. **Elasticsearch optional search** — [FIXED] product search now runs
+   through a provider that defaults to the Postgres `contains` query
+   (`SEARCH_PROVIDER=postgres`, no extra infra) and can be switched to
+   Elasticsearch (`SEARCH_PROVIDER=elasticsearch`) for Sorani-aware
+   analysis, fuzzy matching and relevance scoring on large catalogs. The
+   index is maintained on product writes and rebuilt via
+   `POST /api/products/search/reindex`; an unreachable cluster fails soft
+   to the Postgres search.
 
 10. **Recommendations** currently depend on opt-in analytics; with
     tracking off they fall back to same-category popularity. Decent, but

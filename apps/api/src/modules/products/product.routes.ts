@@ -26,6 +26,7 @@ import slugify from 'slugify';
 import { z } from 'zod';
 import { listProducts, getFacets, parseFilterFromQuery } from './productFilter.service';
 import { syncVariantAttributes } from './variantAttributeIndex';
+import { getProductSearch } from './productSearch.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 const router = Router();
@@ -292,24 +293,11 @@ router.get('/search', async (req, res, next) => {
       });
     }
 
-    // No `mode: 'insensitive'`: SQLite provider rejects it.
-    const products = await prisma.product.findMany({
-      where: {
-        status: 'active',
-        OR: [
-          { name: { contains: q } },
-          { description: { contains: q } },
-          { sku: { contains: q } },
-        ],
-      },
-      include: {
-        images: true,
-        category: true,
-        variants: true,
-        reviews: { select: { rating: true } },
-      },
-      take: searchLimit,
-    });
+    // Route through the configured search backend (Postgres by default,
+    // Elasticsearch when enabled - and it fails soft to Postgres if the
+    // cluster is unreachable, so this never 500s).
+    const search = getProductSearch();
+    const products = await search.search(q, searchLimit);
 
     // Track the search (feeds /api/analytics/search). No-op unless the
     // store opted in with ANALYTICS_TRACKING_ENABLED - off by default,
@@ -330,6 +318,22 @@ router.get('/search', async (req, res, next) => {
       status: 'success',
       data: products.map(formatProduct),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/products/search/reindex - Rebuild the Elasticsearch index
+// (admin only). No-op for the Postgres backend. Returns how many rows were
+// indexed so an operator can confirm a reindex actually ran.
+router.post('/search/reindex', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const search = getProductSearch();
+    if (search.name === 'postgres') {
+      return res.json({ status: 'success', data: { provider: 'postgres', indexed: 0, note: 'Postgres search needs no index' } });
+    }
+    const indexed = await search.reindexAll();
+    res.json({ status: 'success', data: { provider: 'elasticsearch', indexed } });
   } catch (error) {
     next(error);
   }
@@ -529,6 +533,9 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
 
     logger.info(`Product created: ${product.name} (${product.id})`);
 
+    // Keep the Elasticsearch index in step (no-op for the Postgres backend).
+    await getProductSearch().indexProduct(product.id);
+
     res.status(201).json({
       status: 'success',
       data: formatProduct(product),
@@ -650,6 +657,9 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
 
     logger.info(`Product updated: ${product.name} (${product.id})`);
 
+    // Refresh the Elasticsearch index entry (no-op for the Postgres backend).
+    await getProductSearch().indexProduct(id);
+
     res.json({
       status: 'success',
       data: formatProduct(updatedProduct || product),
@@ -674,6 +684,10 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res, next) =
       where: { id },
       data: { status: 'archived' },
     });
+
+    // Drop the archived product from the Elasticsearch index (no-op for the
+    // Postgres backend).
+    await getProductSearch().deleteProduct(id);
 
     logger.info(`Product archived: ${product.name} (${product.id})`);
 

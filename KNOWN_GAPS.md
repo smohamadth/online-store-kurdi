@@ -397,8 +397,14 @@ deliberate design choices or niche gaps.
 10. **Recommendations depend on opt-in analytics.** The also-bought /
     bought-together signals come from `ANALYTICS_TRACKING_ENABLED`; with
     it off (the default) they fall back to same-category popularity.
-11. **Elasticsearch is in `docker-compose.yml` but unused.** It is offered
-    as an optional advanced-search dependency; no code path queries it.
+11. **Elasticsearch is optional and off by default.** Product search
+    defaults to the Postgres `contains` query (`SEARCH_PROVIDER=postgres`).
+    Set `SEARCH_PROVIDER=elasticsearch` to enable the Elasticsearch backend
+    (Sorani-aware analyzer + fuzzy/relevance scoring), which is kept in step
+    on product writes and rebuilt via `POST /api/products/search/reindex`.
+    If the cluster is unreachable the API logs a warning and falls back to
+    the Postgres search for the affected request, so enabling it is safe
+    before the cluster is up.
 12. **Socket.IO has no multi-instance adapter.** Fine single-instance; a
     `@socket.io/redis-adapter` would be needed if real-time features are
     used across several API instances.

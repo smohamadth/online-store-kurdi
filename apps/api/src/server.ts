@@ -22,6 +22,7 @@ import {
   databaseUrlHelp,
 } from './config/verifyDatabaseUrl';
 import { connectRedis, disconnectRedis } from './config/redis';
+import { connectSearch, disconnectSearch } from './modules/products/productSearch.service';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
 import { startScheduler, stopScheduler } from './jobs/inventory-scheduler';
@@ -52,6 +53,7 @@ async function gracefulShutdown(signal: string) {
     // Disconnect from databases
     await disconnectDatabase();
     await disconnectRedis();
+    await disconnectSearch();
 
     logger.info('✅ Graceful shutdown completed');
     process.exit(0);
@@ -121,6 +123,11 @@ async function startServer() {
     connectRedis().catch(() => {
       // Silently handle Redis connection failure
     });
+
+    // Initialize the search backend (Postgres by default; Elasticsearch when
+    // SEARCH_PROVIDER=elasticsearch. Fail-soft: an unreachable cluster logs a
+    // warning and search falls back to Postgres.)
+    await connectSearch();
 
     // Try to initialize MinIO storage (optional)
     try {

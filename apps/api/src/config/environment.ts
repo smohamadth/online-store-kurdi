@@ -24,6 +24,15 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
   
+  // Search provider. 'postgres' is the default and needs nothing extra:
+  // product search runs a Prisma `contains` query. 'elasticsearch' turns on
+  // the optional Elasticsearch-backed search (index maintained on product
+  // writes); if Elasticsearch is unreachable the server logs and falls back
+  // to the Postgres search for the affected request, it never hard-fails.
+  SEARCH_PROVIDER: z.enum(['postgres', 'elasticsearch']).default('postgres'),
+  ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
+  ELASTICSEARCH_INDEX: z.string().default('products'),
+  
   // JWT
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('7d'),
