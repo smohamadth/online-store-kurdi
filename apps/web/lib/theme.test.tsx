@@ -14,6 +14,9 @@
  * cover all the fields the admin can override.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { createRequire } from 'module';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { ThemeProvider, useTheme, DEFAULT_THEME, FONT_LABELS, FONT_STACKS, themeToCssVars } from '@/lib/theme';
 import {
@@ -256,6 +259,77 @@ describe('themeToCssVars', () => {
 
     it('ships the default theme with a professional Kurdish font', () => {
       expect(DEFAULT_THEME.fontFamily).toBe('vazirmatn');
+    });
+  });
+
+  describe('Kurdish font contract (bundled files ↔ CSS vars ↔ stacks)', () => {
+    // The layout imports @fontsource CSS that declares the family
+    // names, globals.css declares --font-* variables pointing at those
+    // names, and the theme stacks reference the variables. If ANY link
+    // in that chain drifts (a rename in a dependency upgrade, a typo in
+    // a variable), the browser silently falls back to the OS font and
+    // the whole feature quietly does nothing. These tests read the
+    // ACTUAL installed package CSS (same source-scanning technique as
+    // the rtl ratchet) to pin every link.
+
+    const requireFromTest = createRequire(import.meta.url);
+
+    // The @font-face family declared by the installed package's Arabic
+    // subset stylesheet - what the browser will actually register.
+    const declaredFamily = (pkg: string) => {
+      const css = readFileSync(requireFromTest.resolve(`${pkg}/arabic-400.css`), 'utf8');
+      return css.match(/font-family:\s*'([^']+)'/)?.[1] ?? null;
+    };
+
+    it.each([
+      ['@fontsource/vazirmatn', 'Vazirmatn'],
+      ['@fontsource/noto-naskh-arabic', 'Noto Naskh Arabic'],
+      ['@fontsource/noto-kufi-arabic', 'Noto Kufi Arabic'],
+      ['@fontsource/readex-pro', 'Readex Pro'],
+      ['@fontsource/cairo', 'Cairo'],
+      ['@fontsource/tajawal', 'Tajawal'],
+    ])('%s ships the %s face the theme expects', (pkg, name) => {
+      expect(declaredFamily(pkg)).toBe(name);
+    });
+
+    it('globals.css declares one --font-* variable per face with the exact family name', () => {
+      const globals = readFileSync(join(__dirname, '..', 'app', 'globals.css'), 'utf8');
+      const pairs: [string, string][] = [
+        ['--font-vazirmatn', 'Vazirmatn'],
+        ['--font-noto-naskh-arabic', 'Noto Naskh Arabic'],
+        ['--font-noto-kufi-arabic', 'Noto Kufi Arabic'],
+        ['--font-readex-pro', 'Readex Pro'],
+        ['--font-cairo', 'Cairo'],
+        ['--font-tajawal', 'Tajawal'],
+      ];
+      for (const [variable, family] of pairs) {
+        expect(globals, `${variable} must point at the '${family}' face`).toContain(`${variable}: '${family}';`);
+      }
+    });
+
+    it('every var(--font-*) referenced by the theme stacks is declared in globals.css', () => {
+      const globals = readFileSync(join(__dirname, '..', 'app', 'globals.css'), 'utf8');
+      const referenced = new Set<string>();
+      for (const stack of Object.values(FONT_STACKS)) {
+        Array.from(stack.matchAll(/var\((--font-[a-z-]+)\)/g)).forEach((m) => referenced.add(m[1]));
+      }
+      expect(referenced.size).toBeGreaterThan(0); // the stacks really do use the faces
+      Array.from(referenced).forEach((variable) => {
+        expect(globals, `theme stacks reference ${variable} but globals.css never declares it`).toContain(variable);
+      });
+    });
+
+    it('the layout actually imports the fontsource stylesheets it relies on', () => {
+      // A deleted import would leave the variables dangling (declared in
+      // globals.css, never @font-faced). Pin the exact set of imported
+      // packages (compare sorted arrays - arrayContaining needs an array,
+      // not a Set).
+      const layout = readFileSync(join(__dirname, '..', 'app', 'layout.tsx'), 'utf8');
+      const imported = Array.from(layout.matchAll(/@fontsource\/([a-z0-9-]+)\/(arabic|latin)-\d+\.css/g), (m) => m[1]);
+      expect(imported.length).toBeGreaterThan(0);
+      expect(Array.from(new Set(imported)).sort()).toEqual(
+        ['vazirmatn', 'noto-naskh-arabic', 'noto-kufi-arabic', 'readex-pro', 'cairo', 'tajawal'].sort(),
+      );
     });
   });
 

@@ -713,7 +713,11 @@ export function Newsletter({
  * and content width; `html` is rich text sanitised server-side before
  * it is stored (home.routes.ts scrubConfig / contentBlocks.ts).
  */
-const CUSTOM_BACKGROUNDS: Record<string, { bg: string; text: string; heading: string }> = {
+// Exported (not private) so the palette is unit tested in
+// components/PageBlocks.test.tsx - a typo here would silently ship an
+// unreadable section (white text on a white band) that only shows up in
+// a browser.
+export const CUSTOM_BACKGROUNDS: Record<string, { bg: string; text: string; heading: string }> = {
   none: { bg: 'transparent', text: 'var(--body-text, #111)', heading: 'var(--body-text, #111)' },
   soft: { bg: 'var(--surface-2, #f5f5f7)', text: 'var(--body-text, #111)', heading: 'var(--body-text, #111)' },
   brand: { bg: 'var(--brand, #111)', text: 'var(--brand-text, #fff)', heading: 'var(--brand-text, #fff)' },

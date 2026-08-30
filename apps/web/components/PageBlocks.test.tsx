@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { PageBlocks } from './PageBlocks';
+import { CUSTOM_BACKGROUNDS } from './HomeSections';
 import type { PageBlock } from '@/lib/pageBlocks';
 
 const b = (id: string, type: string, config: Record<string, any>): PageBlock =>
@@ -157,6 +158,23 @@ describe('PageBlocks', () => {
   });
 
   describe('custom section (admin-designed)', () => {
+    it('pins the background palette: every option is readable on its own band', () => {
+      // Contract: text/heading colours must contrast their background.
+      // brand/dark invert (light text on the coloured band), none/soft
+      // keep the theme's body text. An unknown value falls back to soft
+      // (never to an unstyled, unreadable band).
+      expect(CUSTOM_BACKGROUNDS.none).toEqual({
+        bg: 'transparent',
+        text: 'var(--body-text, #111)',
+        heading: 'var(--body-text, #111)',
+      });
+      expect(CUSTOM_BACKGROUNDS.soft.bg).toBe('var(--surface-2, #f5f5f7)');
+      expect(CUSTOM_BACKGROUNDS.soft.text).toBe('var(--body-text, #111)');
+      expect(CUSTOM_BACKGROUNDS.brand.bg).toBe('var(--brand, #111)');
+      expect(CUSTOM_BACKGROUNDS.brand.text).toBe('var(--brand-text, #fff)');
+      expect(CUSTOM_BACKGROUNDS.dark).toEqual({ bg: '#111827', text: '#e5e7eb', heading: '#ffffff' });
+    });
+
     it('renders the title as a heading and the rich content', () => {
       const { container } = render(
         <PageBlocks
@@ -169,8 +187,8 @@ describe('PageBlocks', () => {
 
     it('applies the chosen width, padding and alignment', () => {
       // (var()-based backgrounds are not serialised by jsdom's CSSOM, so
-      // the palette itself is pinned in lib/theme tests + the preview page;
-      // here we pin the layout choices, which jsdom does preserve.)
+      // the palette itself is pinned in the "background palette" test
+      // above; here we pin the layout choices, which jsdom preserves.)
       const { container } = render(
         <PageBlocks
           blocks={[

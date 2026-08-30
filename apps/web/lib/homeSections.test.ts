@@ -8,7 +8,7 @@
  *     with whatever was last returned
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CREATABLE_TYPES, fetchHomeSections, TYPE_ICONS, TYPE_LABELS } from './homeSections';
+import { CREATABLE_TYPES, fetchHomeSections, reorderSectionsByDrop, TYPE_ICONS, TYPE_LABELS } from './homeSections';
 
 describe('homeSections constants', () => {
   it('exposes a non-empty label map', () => {
@@ -27,6 +27,71 @@ describe('homeSections constants', () => {
     expect(CREATABLE_TYPES).toContain('custom');
     expect(TYPE_LABELS['custom']).toBeTruthy();
     expect(TYPE_ICONS['custom']).toBeTruthy();
+  });
+});
+
+describe('reorderSectionsByDrop - drag-and-drop position math', () => {
+  const items = [
+    { id: 'a' },
+    { id: 'b' },
+    { id: 'c' },
+    { id: 'd' },
+  ];
+  const ids = (next: { id: string }[]) => next.map((s) => s.id);
+
+  it('drag from above, drop on the top half of the target (before it)', () => {
+    expect(ids(reorderSectionsByDrop(items, 0, 2, false))).toEqual(['b', 'a', 'c', 'd']);
+  });
+
+  it('drag from above, drop on the bottom half of the target (after it)', () => {
+    expect(ids(reorderSectionsByDrop(items, 0, 2, true))).toEqual(['b', 'c', 'a', 'd']);
+  });
+
+  it('drag from below, drop before the target', () => {
+    expect(ids(reorderSectionsByDrop(items, 3, 1, false))).toEqual(['a', 'd', 'b', 'c']);
+  });
+
+  it('drag from below, drop after the target', () => {
+    expect(ids(reorderSectionsByDrop(items, 3, 1, true))).toEqual(['a', 'b', 'd', 'c']);
+  });
+
+  it('adjacent move: from above onto the very next row, top half = no-op', () => {
+    expect(ids(reorderSectionsByDrop(items, 1, 2, false))).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('adjacent move: from above onto the very next row, bottom half = swaps', () => {
+    expect(ids(reorderSectionsByDrop(items, 1, 2, true))).toEqual(['a', 'c', 'b', 'd']);
+  });
+
+  it('adjacent move: from below onto the very previous row, top half = swaps', () => {
+    expect(ids(reorderSectionsByDrop(items, 2, 1, false))).toEqual(['a', 'c', 'b', 'd']);
+  });
+
+  it('adjacent move: from below onto the very previous row, bottom half = no-op', () => {
+    expect(ids(reorderSectionsByDrop(items, 2, 1, true))).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('moves to the very top', () => {
+    expect(ids(reorderSectionsByDrop(items, 3, 0, false))).toEqual(['d', 'a', 'b', 'c']);
+  });
+
+  it('moves to the very bottom', () => {
+    expect(ids(reorderSectionsByDrop(items, 0, 3, true))).toEqual(['b', 'c', 'd', 'a']);
+  });
+
+  it('dropping on the row being dragged is a no-op (same reference)', () => {
+    expect(reorderSectionsByDrop(items, 1, 1, false)).toBe(items);
+  });
+
+  it('always preserves every item exactly once', () => {
+    for (let d = 0; d < items.length; d++) {
+      for (let t = 0; t < items.length; t++) {
+        for (const after of [false, true]) {
+          const out = ids(reorderSectionsByDrop(items, d, t, after));
+          expect(out.slice().sort()).toEqual(['a', 'b', 'c', 'd']);
+        }
+      }
+    }
   });
 });
 

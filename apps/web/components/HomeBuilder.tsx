@@ -22,6 +22,7 @@ import {
   fetchHomeSections,
   updateHomeSection,
   reorderHomeSections,
+  reorderSectionsByDrop,
   createHomeSection,
   deleteHomeSection,
   resetHomeSections,
@@ -170,19 +171,13 @@ export default function HomeBuilder() {
     e.preventDefault();
     const d = dragIndex;
     setDragIndex(null);
+    const hint = dropHint;
     setDropHint(null);
     if (d === null || d === index) return;
-    const after = !!dropHint && dropHint.index === index && dropHint.after;
-    // The hint index refers to the PRE-removal list. After removing the
-    // dragged row d, the row currently at `index` sits at (index - 1) when
-    // d < index, and at `index` when d > index. Insert before/after it
-    // accordingly.
-    const t = d < index ? index - 1 : index;
-    const insertAt = after ? t + 1 : t;
-    const next = [...sections];
-    const [moved] = next.splice(d, 1);
-    next.splice(insertAt, 0, moved);
-    void applyReorder(next);
+    const after = !!hint && hint.index === index && hint.after;
+    // Index math is unit tested: lib/homeSections.test.ts
+    // ("reorderSectionsByDrop - drag-and-drop position math").
+    void applyReorder(reorderSectionsByDrop(sections, d, index, after));
   };
 
   const handleDragEnd = () => {
