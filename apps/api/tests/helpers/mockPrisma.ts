@@ -208,6 +208,21 @@ const RELATION_TO_MODEL: Record<string, string> = {
   productSimilarities: 'ProductSimilarity',
   product1: 'Product',
   product2: 'Product',
+  // ShippingZone.methods -> ShippingMethod (child FK is `zoneId`, see
+  // HAS_MANY_FK below). Both casing forms are needed so the in-memory
+  // include resolver routes `include: { methods }` to the right store.
+  'shippingzone.methods': 'ShippingMethod',
+  'ShippingZone.methods': 'ShippingMethod',
+};
+
+/**
+ * Explicit foreign-key names for has-many relations whose child column
+ * doesn't follow the `<Parent>Id` convention (e.g. `ShippingZone.methods`
+ * -> `ShippingMethod.zoneId`). Without an entry the in-memory include
+ * resolver can't wire the relation up and the field comes back undefined.
+ */
+const HAS_MANY_FK: Record<string, string> = {
+  'ShippingZone.methods': 'zoneId',
 };
 
 /**
@@ -485,8 +500,12 @@ function applyInclude(rows: any, include: any, select?: any, parentModel: string
         const parentFk = `${parentModel}Id`;
         // FK is conventionally camelCase (productId, userId, orderId) but the
         // parent model is plural-cased in different ways. Try the most likely
-        // variants.
+        // variants, plus any explicit per-relation override (a child whose
+        // FK doesn't follow the `<parent>Id` convention, e.g.
+        // `ShippingZone.methods` -> `zoneId`).
+        const explicitFk = HAS_MANY_FK[`${parentModel}.${k}`];
         const fkCandidates = [
+          ...(explicitFk ? [explicitFk] : []),
           parentFk,
           `${parentModel.toLowerCase()}Id`,
           // camelCase: productId, orderId, userId, addressId, cartItemId

@@ -33,6 +33,9 @@ export interface CartItem {
   /** Digital vs physical; stamped at add-to-cart so views can
       * branch (e.g. "all digital" carts) without re-fetching. */
   type?: 'digital' | 'physical';
+  /** Physical-unit weight (grams/kg) from the product, so checkout can
+      * compute weight-based shipping. Absent for digital products. */
+  weight?: number | null;
 }
 
 interface CartStore {

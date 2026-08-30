@@ -62,6 +62,7 @@ export default function ProductCard({ product, currencySymbol = '$', width }: Pr
       price: product.price,
       quantity: 1,
       category: product.category?.name || '',
+      weight: (product as any).weight ?? null,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);

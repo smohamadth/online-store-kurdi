@@ -26,16 +26,28 @@ interface ShippingMethod {
   name: string;
   type: string;
   baseRate: number;
-  freeShippingThreshold: number | null;
+  weightUnitRate?: number | null;
+  minWeight?: number | null;
+  maxWeight?: number | null;
+  pricePercentage?: number | null;
+  itemCountRate?: number | null;
+  minOrderAmount?: number | null;
+  maxOrderAmount?: number | null;
+  freeShippingThreshold?: number | null;
   minDeliveryDays: number;
   maxDeliveryDays: number;
   isActive: boolean;
 }
 
+const METHOD_TYPES: { value: string; label: string }[] = [
+  { value: 'flat', label: 'Flat rate' },
+  { value: 'weight', label: 'Per weight' },
+  { value: 'price', label: 'Percentage of order' },
+  { value: 'item_count', label: 'Per item' },
+];
+
 export default function AdminShippingPage() {
   const { settings } = useStoreSettings();
-  // The shipping form has two 1fr/1fr rows (name/rate, min/max).
-  // Stack under 640px.
   const isMobile = useIsMobile(640);
   const [zones, setZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,10 +64,17 @@ export default function AdminShippingPage() {
   });
 
   // Method form
-  const [methodForm, setMethodForm] = useState({
+  const [methodForm, setMethodForm] = useState<any>({
     name: '',
     type: 'flat',
     baseRate: 0,
+    weightUnitRate: 0,
+    minWeight: 0,
+    maxWeight: 0,
+    pricePercentage: 0,
+    itemCountRate: 0,
+    minOrderAmount: 0,
+    maxOrderAmount: 0,
     freeShippingThreshold: 0,
     minDeliveryDays: 1,
     maxDeliveryDays: 7,
@@ -98,22 +117,71 @@ export default function AdminShippingPage() {
       setShowAddZone(false);
       fetchZones();
     } catch (err) {
-      // A rejected create used to leave the modal open with no explanation.
       console.error('Failed to add zone:', err);
       alert(errorMessage(err, 'Could not create the shipping zone.'));
     }
   };
 
+  const handleDeleteZone = async (id: string) => {
+    if (!confirm('Delete this zone and stop offering its methods?')) return;
+    try {
+      await authHttp.delete(`/shipping/zones/${id}`);
+      fetchZones();
+    } catch (err) {
+      alert(errorMessage(err, 'Could not delete the zone.'));
+    }
+  };
+
+  const setFormNum = (key: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setMethodForm({ ...methodForm, [key]: parseFloat(e.target.value) || 0 });
+
   const handleAddMethod = async () => {
     if (!selectedZone) return;
 
+    // Send only the fields the chosen type needs (plus the common ones),
+    // so a stale value from another type isn't misinterpreted by the
+    // calculator. Empty = absent on the server.
+    const payload: any = {
+      name: methodForm.name,
+      type: methodForm.type,
+      baseRate: methodForm.baseRate,
+      freeShippingThreshold: methodForm.freeShippingThreshold || null,
+      minDeliveryDays: methodForm.minDeliveryDays,
+      maxDeliveryDays: methodForm.maxDeliveryDays,
+      isActive: true,
+      zoneId: selectedZone,
+    };
+    if (methodForm.type === 'weight') {
+      payload.weightUnitRate = methodForm.weightUnitRate;
+      payload.minWeight = methodForm.minWeight || null;
+      payload.maxWeight = methodForm.maxWeight || null;
+    } else if (methodForm.type === 'price') {
+      payload.pricePercentage = methodForm.pricePercentage;
+      payload.minOrderAmount = methodForm.minOrderAmount || null;
+      payload.maxOrderAmount = methodForm.maxOrderAmount || null;
+    } else if (methodForm.type === 'item_count') {
+      payload.itemCountRate = methodForm.itemCountRate;
+      payload.minOrderAmount = methodForm.minOrderAmount || null;
+      payload.maxOrderAmount = methodForm.maxOrderAmount || null;
+    }
+
     try {
-      await authHttp.post('/shipping/methods', { ...methodForm, zoneId: selectedZone });
+      await authHttp.post('/shipping/methods', payload);
       setShowAddMethod(false);
       fetchZones();
     } catch (err) {
       console.error('Failed to add method:', err);
       alert(errorMessage(err, 'Could not create the shipping method.'));
+    }
+  };
+
+  const handleDeleteMethod = async (id: string) => {
+    if (!confirm('Delete this shipping method?')) return;
+    try {
+      await authHttp.delete(`/shipping/methods/${id}`);
+      fetchZones();
+    } catch (err) {
+      alert(errorMessage(err, 'Could not delete the shipping method.'));
     }
   };
 
@@ -162,22 +230,30 @@ export default function AdminShippingPage() {
                 <div>
                   <h3 style={{ fontWeight: 600 }}>{zone.name}</h3>
                   <p style={{ fontSize: '14px', color: '#666' }}>
-                    Countries: {Array.isArray(zone.countries) 
-                      ? zone.countries.join(', ') 
-                      : typeof zone.countries === 'string' 
-                        ? zone.countries 
+                    Countries: {Array.isArray(zone.countries)
+                      ? zone.countries.join(', ')
+                      : typeof zone.countries === 'string'
+                        ? zone.countries
                         : 'None'}
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setSelectedZone(zone.id);
-                    setShowAddMethod(true);
-                  }}
-                  style={{ padding: '8px 16px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                  + Add Method
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      setSelectedZone(zone.id);
+                      setShowAddMethod(true);
+                    }}
+                    style={{ padding: '8px 16px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    + Add Method
+                  </button>
+                  <button
+                    onClick={() => handleDeleteZone(zone.id)}
+                    style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
 
               {/* Methods */}
@@ -195,18 +271,30 @@ export default function AdminShippingPage() {
                       <div>
                         <p style={{ fontWeight: 500 }}>{method.name}</p>
                         <p style={{ fontSize: '12px', color: '#666' }}>
-                          {method.minDeliveryDays}-{method.maxDeliveryDays} days
+                          {formatMethodType(method.type)} · {method.minDeliveryDays}-{method.maxDeliveryDays} days
+                          {method.minWeight != null && method.maxWeight != null
+                            ? ` · ${method.minWeight}-${method.maxWeight}` : ''}
                         </p>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontWeight: 600 }}>
-                          {method.freeShippingThreshold ? 'Free' : formatPrice(method.baseRate, settings.currencySymbol)}
-                        </p>
-                        {method.freeShippingThreshold && (
-                          <p style={{ fontSize: '12px', color: '#666' }}>
-                            Over ${method.freeShippingThreshold}
+                      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div>
+                          <p style={{ fontWeight: 600 }}>
+                            {method.freeShippingThreshold ? 'Free' : formatPrice(method.baseRate, settings.currencySymbol)}
                           </p>
-                        )}
+                          {method.freeShippingThreshold ? (
+                            <p style={{ fontSize: '12px', color: '#666' }}>
+                              Over ${method.freeShippingThreshold}
+                            </p>
+                          ) : (
+                            <p style={{ fontSize: '12px', color: '#666' }}>{methodPricing(method)}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteMethod(method.id)}
+                          style={{ padding: '4px 8px', backgroundColor: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -237,7 +325,7 @@ export default function AdminShippingPage() {
                 value={zoneForm.name}
                 onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
                 placeholder="e.g., Domestic, Europe"
-                style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+                style={inputStyle}
               />
             </div>
             <div style={{ marginBottom: '16px' }}>
@@ -247,22 +335,12 @@ export default function AdminShippingPage() {
                 value={zoneForm.countries}
                 onChange={(e) => setZoneForm({ ...zoneForm, countries: e.target.value })}
                 placeholder="US, CA"
-                style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+                style={inputStyle}
               />
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowAddZone(false)}
-                style={{ padding: '10px 20px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddZone}
-                style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-              >
-                Add Zone
-              </button>
+              <button onClick={() => setShowAddZone(false)} style={btnGhost}>Cancel</button>
+              <button onClick={handleAddZone} style={btnPrimary}>Add Zone</button>
             </div>
           </div>
         </div>
@@ -277,71 +355,78 @@ export default function AdminShippingPage() {
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           zIndex: 1000,
         }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '500px' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '520px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '16px' }}>Add Shipping Method</h3>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Method Name</label>
+              <label style={labelStyle}>Method Name</label>
               <input
                 type="text"
                 value={methodForm.name}
                 onChange={(e) => setMethodForm({ ...methodForm, name: e.target.value })}
                 placeholder="e.g., Standard Shipping"
-                style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+                style={inputStyle}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Rate ($)</label>
-                <input
-                  type="number"
-                  value={methodForm.baseRate}
-                  onChange={(e) => setMethodForm({ ...methodForm, baseRate: parseFloat(e.target.value) || 0 })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Free Over ($)</label>
-                <input
-                  type="number"
-                  value={methodForm.freeShippingThreshold}
-                  onChange={(e) => setMethodForm({ ...methodForm, freeShippingThreshold: parseFloat(e.target.value) || 0 })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
-                />
-              </div>
+
+            {/* Type selector */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={labelStyle}>Pricing type</label>
+              <select
+                value={methodForm.type}
+                onChange={(e) => setMethodForm({ ...methodForm, type: e.target.value })}
+                style={inputStyle}
+              >
+                {METHOD_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Min Days</label>
-                <input
-                  type="number"
-                  value={methodForm.minDeliveryDays}
-                  onChange={(e) => setMethodForm({ ...methodForm, minDeliveryDays: parseInt(e.target.value) || 1 })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Max Days</label>
-                <input
-                  type="number"
-                  value={methodForm.maxDeliveryDays}
-                  onChange={(e) => setMethodForm({ ...methodForm, maxDeliveryDays: parseInt(e.target.value) || 7 })}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
-                />
-              </div>
+
+            {/* Type-specific fields */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              {methodForm.type === 'flat' && (
+                <>
+                  <Field label="Base rate ($)" value={methodForm.baseRate} onChange={setFormNum('baseRate')} />
+                  <Field label="Free over ($, 0 = never)" value={methodForm.freeShippingThreshold} onChange={setFormNum('freeShippingThreshold')} />
+                </>
+              )}
+              {methodForm.type === 'weight' && (
+                <>
+                  <Field label="Base rate ($)" value={methodForm.baseRate} onChange={setFormNum('baseRate')} />
+                  <Field label="Rate per unit ($)" value={methodForm.weightUnitRate} onChange={setFormNum('weightUnitRate')} />
+                  <Field label="Min weight (units)" value={methodForm.minWeight} onChange={setFormNum('minWeight')} />
+                  <Field label="Max weight (units)" value={methodForm.maxWeight} onChange={setFormNum('maxWeight')} />
+                  <Field label="Free over ($, 0 = never)" value={methodForm.freeShippingThreshold} onChange={setFormNum('freeShippingThreshold')} />
+                </>
+              )}
+              {methodForm.type === 'price' && (
+                <>
+                  <Field label="Percent of order (%)" value={methodForm.pricePercentage} onChange={setFormNum('pricePercentage')} />
+                  <Field label="Min order ($)" value={methodForm.minOrderAmount} onChange={setFormNum('minOrderAmount')} />
+                  <Field label="Max order ($)" value={methodForm.maxOrderAmount} onChange={setFormNum('maxOrderAmount')} />
+                  <Field label="Free over ($, 0 = never)" value={methodForm.freeShippingThreshold} onChange={setFormNum('freeShippingThreshold')} />
+                </>
+              )}
+              {methodForm.type === 'item_count' && (
+                <>
+                  <Field label="Base rate ($)" value={methodForm.baseRate} onChange={setFormNum('baseRate')} />
+                  <Field label="Rate per item ($)" value={methodForm.itemCountRate} onChange={setFormNum('itemCountRate')} />
+                  <Field label="Min order ($)" value={methodForm.minOrderAmount} onChange={setFormNum('minOrderAmount')} />
+                  <Field label="Max order ($)" value={methodForm.maxOrderAmount} onChange={setFormNum('maxOrderAmount')} />
+                  <Field label="Free over ($, 0 = never)" value={methodForm.freeShippingThreshold} onChange={setFormNum('freeShippingThreshold')} />
+                </>
+              )}
             </div>
+
+            {/* Delivery window */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <Field label="Min delivery days" value={methodForm.minDeliveryDays} onChange={setFormNum('minDeliveryDays')} />
+              <Field label="Max delivery days" value={methodForm.maxDeliveryDays} onChange={setFormNum('maxDeliveryDays')} />
+            </div>
+
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowAddMethod(false)}
-                style={{ padding: '10px 20px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddMethod}
-                style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-              >
-                Add Method
-              </button>
+              <button onClick={() => setShowAddMethod(false)} style={btnGhost}>Cancel</button>
+              <button onClick={handleAddMethod} style={btnPrimary}>Add Method</button>
             </div>
           </div>
         </div>
@@ -349,3 +434,35 @@ export default function AdminShippingPage() {
     </div>
   );
 }
+
+function Field({ label, value, onChange }: { label: string; value: number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      <input type="number" value={value} onChange={onChange} style={inputStyle} />
+    </div>
+  );
+}
+
+function formatMethodType(type: string): string {
+  const found = METHOD_TYPES.find((t) => t.value === type);
+  return found ? found.label : type;
+}
+
+function methodPricing(method: ShippingMethod): string {
+  switch (method.type) {
+    case 'weight':
+      return method.weightUnitRate != null ? `+ $${method.weightUnitRate}/unit` : '';
+    case 'price':
+      return method.pricePercentage != null ? `${method.pricePercentage}% of order` : '';
+    case 'item_count':
+      return method.itemCountRate != null ? `+ $${method.itemCountRate}/item` : '';
+    default:
+      return 'Flat rate';
+  }
+}
+
+const inputStyle: React.CSSProperties = { width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' };
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' };
+const btnPrimary: React.CSSProperties = { padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' };
+const btnGhost: React.CSSProperties = { padding: '10px 20px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '6px', cursor: 'pointer' };

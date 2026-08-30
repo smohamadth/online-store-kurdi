@@ -76,6 +76,11 @@ export default function CheckoutPage() {
   const [returnState, setReturnState] = useState<'paid' | 'canceled' | null>(null);
 
   const subtotal = getTotal();
+  // Physical cart totals for weight- and item_count-based shipping.
+  // Digital items carry no weight and don't add to the item count.
+  const physicalItems = items.filter((i) => i.type !== 'digital');
+  const itemCount = physicalItems.reduce((n, i) => n + (i.quantity || 1), 0);
+  const totalWeight = physicalItems.reduce((n, i) => n + ((i.weight || 0) * (i.quantity || 1)), 0);
   const shippingCost = selectedShipping?.isFree ? 0 : (selectedShipping?.rate || 0);
   const taxAmount = taxInfo?.taxAmount || subtotal * 0.1;
   const total = subtotal - discount + shippingCost + taxAmount;
@@ -425,6 +430,8 @@ export default function CheckoutPage() {
                 state={shippingInfo.state}
                 zipCode={shippingInfo.zipCode}
                 subtotal={subtotal}
+                itemCount={itemCount}
+                weight={totalWeight}
                 onSelect={setSelectedShipping}
                 selectedMethodId={selectedShipping?.id}
               />

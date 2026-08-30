@@ -224,6 +224,9 @@ export default function ProductView() {
       // Stamp the type on the cart line so CartView can branch on
       // "all digital" without re-fetching the product.
       type: isDigital ? 'digital' : 'physical',
+      // Carry the unit weight so checkout can compute weight-based
+      // shipping (see ShippingSelector).
+      weight: (product as any).weight ?? null,
     });
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);

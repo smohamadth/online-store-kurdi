@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:components": "vitest run --config vitest.components.config.ts",
     "test:components:watch": "vitest --config vitest.components.config.ts",
-    "test:all": "npm run test && npm run test:components"
+    "test:all": "npm run test && npm run test:components",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.71.0",
@@ -23,6 +24,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.6.6",

@@ -294,6 +294,20 @@ router.post('/calculate', async (req, res, next) => {
 
       if (countryMatch && stateMatch && zipMatch) {
         for (const method of zone.methods) {
+          // Availability gates apply to every method type, not just
+          // `price`: a weight method with min/maxWeight is only offered
+          // when the cart's total weight is inside that band, and any
+          // method with min/maxOrderAmount is only offered when the
+          // order subtotal falls in range.
+          const sub = Number(subtotal || 0);
+          const w = Number(weight || 0);
+          const count = Number(itemCount || 0);
+
+          if (method.minOrderAmount != null && sub < Number(method.minOrderAmount)) continue;
+          if (method.maxOrderAmount != null && sub > Number(method.maxOrderAmount)) continue;
+          if (method.minWeight != null && w < Number(method.minWeight)) continue;
+          if (method.maxWeight != null && w > Number(method.maxWeight)) continue;
+
           let rate = Number(method.baseRate);
           let isFree = false;
 
@@ -304,32 +318,26 @@ router.post('/calculate', async (req, res, next) => {
               break;
 
             case 'weight':
-              if (method.weightUnitRate && weight) {
-                rate = Number(method.baseRate) + (weight * Number(method.weightUnitRate));
+              if (method.weightUnitRate && w > 0) {
+                rate = Number(method.baseRate) + (w * Number(method.weightUnitRate));
               }
               break;
 
             case 'price':
-              if (method.pricePercentage && subtotal) {
-                rate = (subtotal * Number(method.pricePercentage)) / 100;
-                if (method.minOrderAmount && subtotal < Number(method.minOrderAmount)) {
-                  continue; // Skip if below minimum
-                }
-                if (method.maxOrderAmount && subtotal > Number(method.maxOrderAmount)) {
-                  continue; // Skip if above maximum
-                }
+              if (method.pricePercentage && sub > 0) {
+                rate = (sub * Number(method.pricePercentage)) / 100;
               }
               break;
 
             case 'item_count':
-              if (method.itemCountRate && itemCount) {
-                rate = Number(method.baseRate) + (itemCount * Number(method.itemCountRate));
+              if (method.itemCountRate && count > 0) {
+                rate = Number(method.baseRate) + (count * Number(method.itemCountRate));
               }
               break;
           }
 
           // Check free shipping threshold
-          if (method.freeShippingThreshold && subtotal >= Number(method.freeShippingThreshold)) {
+          if (method.freeShippingThreshold != null && sub >= Number(method.freeShippingThreshold)) {
             rate = 0;
             isFree = true;
           }

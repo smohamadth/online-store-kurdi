@@ -136,6 +136,11 @@ function formatProduct(product: any) {
     price: Number(product.price),
     compareAtPrice: product.compareAtPrice ? Number(product.compareAtPrice) : null,
     quantity: product.quantity,
+    // Physical-product shipping attributes. Exposed so the storefront
+    // can compute weight-based shipping at checkout (see ShippingSelector).
+    // `null` when the product has no weight configured.
+    weight: product.weight != null ? Number(product.weight) : null,
+    weightUnit: product.weightUnit ?? 'kg',
     images: product.images?.map((img: any) => ({
       id: img.id,
       url: img.url,
