@@ -1,3 +1,15 @@
+// ---------------------------------------------------------------------------
+// Product controller (LEGACY - not imported by any route).
+//
+// STATUS: nothing imports this class. The live product endpoints are
+// written inline in product.routes.ts (which duplicates most of this
+// logic, including the analytics-gating pattern in trackEvent). Kept for
+// reference; if you are adding product behaviour, change product.routes.ts.
+//
+// (For the record) intended layering: validate (Zod, product.types) ->
+// call product.service -> shape the { status, data, pagination } envelope
+// -> fire opt-in analytics events that can never fail the request.
+// ---------------------------------------------------------------------------
 import { Request, Response, NextFunction } from 'express';
 import { ProductService } from './product.service';
 import { AnalyticsService } from '../analytics/analytics.service';
@@ -136,7 +148,7 @@ export class ProductController {
     }
   };
 
-  // Get featured products
+  // Get featured products (home page hero / carousel)
   getFeaturedProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
@@ -167,7 +179,7 @@ export class ProductController {
     }
   };
 
-  // Search products
+  // Search products - the public ?q= endpoint the SearchBar drives.
   searchProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { q } = req.query;

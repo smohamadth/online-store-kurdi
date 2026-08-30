@@ -1,3 +1,9 @@
+// Zod schemas + types for the product controller/service trio.
+// NOTE: product.controller.ts and product.service.ts are legacy (not
+// imported by the live product.routes.ts), so these schemas are not
+// exercised by the API - product.routes.ts defines its own inline
+// create/update/query schemas. Kept in sync with the live shapes where
+// practical, but treat product.routes.ts as the source of truth.
 import { z } from 'zod';
 
 // Product type enum

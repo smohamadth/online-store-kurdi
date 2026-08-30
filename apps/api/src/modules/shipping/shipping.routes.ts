@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// Shipping: admin CRUD for zones + methods, and the public rate
+// calculator the checkout calls.
+//
+// Zones match an address by country (always), then optionally a state
+// list and/or a zip prefix. Methods attach to a zone and price by one of
+// four types: flat (baseRate), weight (base + weightUnitRate x weight),
+// price (base + pricePercentage% of the order), or item_count
+// (base + baseRate per item); min/max weight and min/max order amount
+// act as availability gates.
+//
+// Like tax, calculate is advisory: the client sends its chosen
+// shippingAmount back with the order (order.routes.ts has a $10 /
+// free-over-$100 fallback when it doesn't).
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
@@ -349,7 +364,7 @@ router.post('/calculate', async (req, res, next) => {
   }
 });
 
-// GET /api/shipping/zones/lookup - Find zone for address
+// POST /api/shipping/zones/lookup - Find the zones matching an address
 router.post('/zones/lookup', async (req, res, next) => {
   try {
     const { country, state, zipCode } = req.body;

@@ -1,3 +1,19 @@
+// ---------------------------------------------------------------------------
+// Inventory admin API (mounted at /api/inventory).
+//
+// Almost everything here is admin/manager-gated: stock adjustments,
+// bulk updates, the audit log, low/out-of-stock lists, warehouses +
+// transfers, stock takes, reorder rules + the draft pipeline they feed,
+// sales channels, and manual reservation management.
+//
+// Two public-adjacent pieces: POST /webhooks/3pl (a 3PL pushes stock
+// deltas; authenticity comes from the HMAC in the webhook secret, see
+// verifyWebhookSignature in inventory.helpers) and the reservation
+// endpoints the cart/order flows use internally.
+//
+// Business rules live in inventory.service.ts; this file is input
+// validation + auth + response shaping.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';

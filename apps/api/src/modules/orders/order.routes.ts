@@ -12,6 +12,24 @@ import { getStripe, isStripeConfigured } from '../../config/stripe';
 
 const router = Router();
 
+// ---------------------------------------------------------------------------
+// The order API. POST /api/orders is the single most complex endpoint in
+// the store: it validates stock, snapshots digital-download fields, mints
+// per-order download tokens, creates the Stripe Checkout session for card
+// orders, decrements inventory (backorder-aware), consumes the cart's
+// stock reservations, clears the cart, increments coupon usage, and fires
+// the confirmation email. The inline comments walk through that sequence;
+// read POST / first if you are touching checkout.
+//
+// Totals: the client sends its computed amounts (tax/shipping/discount
+// come from the tax + shipping modules); when it doesn't, the server falls
+// back to a flat 10% tax and $10 shipping (free over $100) - see the
+// "Use provided amounts or calculated ones" block.
+//
+// Read access: customers see their own orders; admin/manager see all
+// (the role check happens inside the list/GET handlers).
+// ---------------------------------------------------------------------------
+
 // GET /api/orders - Get orders (filtered by user or all for admin)
 router.get('/', authenticate, async (req, res, next) => {
   try {
@@ -317,7 +335,11 @@ router.post('/', authenticate, async (req, res, next) => {
       });
     }
 
-    // Use provided amounts or calculated ones
+    // Use provided amounts or calculated ones. The FALLBACKS are crude on
+    // purpose (flat 10% tax; $10 shipping, free over $100): the real
+    // numbers come from the tax/shipping modules on the client, and these
+    // only cover a client that skips them rather than re-implementing tax
+    // rules here.
     const finalSubtotal = subtotal || calculatedSubtotal;
     const finalTaxAmount = taxAmount || (finalSubtotal * 0.10);
     const finalShippingAmount = shippingAmount !== undefined ? shippingAmount : (finalSubtotal >= 100 ? 0 : 10);

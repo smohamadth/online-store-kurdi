@@ -1,3 +1,17 @@
+// ---------------------------------------------------------------------------
+// Product service (LEGACY - not imported by any route).
+//
+// STATUS: nothing imports this class; the live product API is
+// product.routes.ts (inline Prisma) plus productFilter.service.ts for
+// listing/facets. It was the original controller/service split and was
+// kept for reference. The schema-quirk notes below (JSON-string columns,
+// case-sensitive SQLite search, soft delete via 'archived') still describe
+// how the live routes behave, since they share the same conventions.
+//
+// (For the record) Caching design here: read paths were Redis-cached for an
+// hour under the 'product:' prefix, cleared on every write. Redis is
+// optional, so with it down the cache methods are no-ops.
+// ---------------------------------------------------------------------------
 import { PrismaClient, Prisma } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { cache } from '../../config/redis';
@@ -199,6 +213,9 @@ export class ProductService {
         ...(category && { category: { slug: category } }),
         ...(type && { type }),
         ...(status && { status }),
+        // A single `price` key can carry both bounds - when maxPrice is set
+        // the spread re-merges the gte from minPrice into the same object
+        // (two `price:` keys would otherwise silently drop one).
         ...(minPrice && { price: { gte: minPrice } }),
         ...(maxPrice && { price: { ...((minPrice && { gte: minPrice }) || {}), lte: maxPrice } }),
         ...(inStock && { quantity: { gt: 0 } }),
@@ -228,6 +245,7 @@ export class ProductService {
         case 'name_desc':
           orderBy = { name: 'desc' };
           break;
+        // "Popular" is proxied by review count (cheaper than an order join).
         case 'popular':
           orderBy = { reviews: { _count: 'desc' } };
           break;
@@ -363,7 +381,7 @@ export class ProductService {
     }
   }
 
-  // Delete product
+      // Delete product (soft - see header)
   async deleteProduct(id: string): Promise<void> {
     try {
       const product = await this.prisma.product.findUnique({
@@ -501,7 +519,10 @@ export class ProductService {
     }
   }
 
-  // Format product response
+  // Format product response: flattens the Prisma row into the API shape.
+  // Prices are Decimal on the schema, hence Number(); averageRating is
+  // computed over the included review ratings (rounded to 1 decimal) so
+  // clients never have to average themselves.
   private formatProductResponse(product: any): ProductResponse {
     const ratings = product.reviews.map((r: any) => r.rating);
     const averageRating = ratings.length > 0
@@ -552,7 +573,9 @@ export class ProductService {
     };
   }
 
-  // Clear product cache
+  // Clear product cache - a prefix sweep (KEYS + DEL) rather than tracking
+  // individual keys; fine at this store's key volume, and it can't leak a
+  // stale by-id entry when a slug changes.
   private async clearProductCache(): Promise<void> {
     try {
       const keys = await cache.keys(`${this.cachePrefix}*`);

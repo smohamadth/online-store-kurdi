@@ -1,3 +1,20 @@
+// ---------------------------------------------------------------------------
+// The product API (the LIVE implementation).
+//
+// Mounted at /api/products. Public read paths (list, facets, featured,
+// search, by id, by slug, related) + admin/manager write paths (create,
+// update, delete-as-archive).
+//
+// Listing/facets go through productFilter.service.ts (multi-select
+// categories, attribute filters, onSale, minRating); everything else is
+// inline Prisma in this file. Note product.controller.ts /
+// product.service.ts are an earlier split that is NOT wired in - this
+// file is what to change.
+//
+// Conventions: description is sanitised on write (stored-XSS guard, see
+// sanitizeDescription), `dimensions`/`metaKeywords` are JSON-string
+// columns on the SQLite schema, and delete is soft (status -> 'archived').
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize, optionalAuth } from '../../middleware/auth';
 import { validate } from '../../middleware/validation';
@@ -432,7 +449,10 @@ router.get('/:id/related', async (req, res, next) => {
   }
 });
 
-// POST /api/products - Create product (admin only)
+// POST /api/products - Create product (admin + manager).
+// A product with no categoryId lands in the default "General" category
+// (created on demand - the seed also guarantees it, so this is belt and
+// braces for stores that deleted it).
 router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const data = createProductSchema.parse(req.body);
@@ -573,7 +593,12 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
       },
     });
 
-    // Update images if provided
+    // Update images if provided - a full REPLACE, not a merge: sending a
+    // new images array wipes the old rows and recreates, so the client
+    // always has to send the complete list it wants. (Two statements, not
+    // a transaction: if the createMany fails after the delete, the
+    // product is left with no images rather than a partial set - a known
+    // trade-off, surfaced here for the next reader.)
     if (images && Array.isArray(images)) {
       // Delete existing images
       await prisma.productImage.deleteMany({

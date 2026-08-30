@@ -1,3 +1,19 @@
+// ---------------------------------------------------------------------------
+// Payments API (mounted at /api/payments).
+//
+//   - POST /webhooks/stripe : the ONLY real payment path. Stripe calls it
+//     (public, HMAC-verified) and markOrderPaidByStripe settles the order
+//     idempotently. Card checkout itself is created in order.routes.ts.
+//   - POST /process          : the OFFLINE settlement endpoint - staff
+//     record a bank transfer / COD collection. It is deliberately NOT a
+//     gateway: by default only staff can call it (the PAYMENTS_ALLOW_MOCK
+//     env flag re-opens it for local demos). See the SECURITY comment on
+//     the route for why.
+//   - GET /, GET /order/:id  : payment ledger (admin / order owner).
+//   - POST /refund           : admin refunds.
+//
+// Gift cards + store credit are their own files (wallet.routes.ts).
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';

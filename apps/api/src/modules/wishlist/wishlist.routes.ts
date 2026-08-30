@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Wishlist (mounted at /api/wishlist) - always logged-in (the account
+// page), one row per (userId, productId) via the composite key.
+//
+// POST /move-to-cart is the "move to cart" button: it creates the cart
+// row and deletes the wishlist row. Like POST /api/cart/sync it does NOT
+// take a stock reservation (a plain cartItem.create), so the hold is only
+// established when the customer re-adds the item through the normal cart
+// flow or places the order.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';

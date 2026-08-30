@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// Server-side cart (login required - there is no guest cart on the API).
+//
+// The storefront keeps a localStorage cart while the customer is signed
+// out and POST /sync replaces the DB cart with it on login; from then on
+// the CartView drives these endpoints directly.
+//
+// Stock holds: adding to the cart creates a StockReservation
+// (reason 'cart_hold', 15-minute TTL) so two carts cannot both grab the
+// last unit; the reservation is extended on every re-add, refreshed on
+// quantity change, and consumed (releasedAt stamped) when the order is
+// placed - see the inventory module for the release/expire side.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';
@@ -398,7 +411,18 @@ router.delete('/', authenticate, async (req, res, next) => {
   }
 });
 
-// POST /api/cart/sync - Sync local cart with database
+// POST /api/cart/sync - replace the DB cart with the client's local cart
+// (called after login, to import the localStorage cart).
+//
+// Semantics: the existing DB cart is DELETED and the local items are
+// recreated - it is a replace, not a merge. The per-item "existing"
+// lookup below can therefore only ever match a row created earlier in
+// THIS loop (duplicate entries in the local list), which is why their
+// quantities add up instead of overwriting.
+//
+// Note: the sync path does not create stock reservations (unlike
+// POST /), so a just-synced cart holds no inventory until the customer
+// re-adds or the order is placed.
 router.post('/sync', authenticate, async (req, res, next) => {
   try {
     const userId = req.user?.id;
@@ -412,7 +436,7 @@ router.post('/sync', authenticate, async (req, res, next) => {
       return res.status(400).json({ status: 'error', message: 'Invalid items' });
     }
 
-    // Clear existing cart
+    // Clear existing cart (replace semantics - see header note)
     await prisma.cartItem.deleteMany({
       where: { userId },
     });
@@ -420,7 +444,7 @@ router.post('/sync', authenticate, async (req, res, next) => {
     // Add items from local cart
     const cartItems = [];
     for (const item of items) {
-      // Check if item already exists
+      // Only useful for duplicates inside the incoming list (see header)
       const existing = await prisma.cartItem.findFirst({
         where: {
           userId,
@@ -430,7 +454,7 @@ router.post('/sync', authenticate, async (req, res, next) => {
       });
 
       if (existing) {
-        // Update quantity
+        // Duplicate in the local list - add the quantities
         const updated = await prisma.cartItem.update({
           where: { id: existing.id },
           data: { quantity: existing.quantity + (item.quantity || 1) },

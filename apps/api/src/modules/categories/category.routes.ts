@@ -1,3 +1,14 @@
+// ---------------------------------------------------------------------------
+// Categories (mounted at /api/categories). Public read (the storefront
+// nav + /category/:slug pages), admin/manager write.
+//
+// Categories form a one-level-deep tree (parentId); product filtering
+// expands a chosen category to its direct children (see
+// productFilter.service.ts). Delete is refused while products still
+// reference the category (no cascade - the storefront links must never
+// dangle), and DELETE accepts a slug as well as a UUID because the admin
+// UI passes what the URL bar shows.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
