@@ -108,8 +108,8 @@ jobs `api-tests` and `web-tests`):
 
 | Suite | Count | What it covers |
 |---|---|---|
-| API unit (`apps/api/tests/unit`) | 265 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers |
-| API integration (`apps/api/tests/integration`) | 712 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, …) |
+| API unit (`apps/api/tests/unit`) | 267 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers |
+| API integration (`apps/api/tests/integration`) | 711 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, attribute index, …) |
 | Web lib (`apps/web`, vitest) | 317 | filter params, i18n, SEO, structured data, theme config, preview, page blocks, home sections |
 | Web components (React Testing Library + happy-dom) | 502 | PDP, cart, admin pages, filter sidebar, theme picker, custom section |
 
@@ -269,36 +269,44 @@ against the real stack (Express API + Next storefront running together):
 
 ---
 
-## 9. Schema migrations lag behind `schema.prisma`
+## 10. Schema migrations lag behind `schema.prisma`
 
-**Status:** known, must be resolved before relying on `migrate deploy`.
+**Status:** the drift was closed and is now guarded; a residual item
+remains (see below).
 
-The committed migrations stop at `20260821090000_add_blog`. Several schema
-changes shipped without migrations (inventory/warehouse models, then the
-variant-first-class rename, multi-currency, downloads, review photos,
-`pageType`, `activeTheme`, …). On a **fresh** database, `prisma migrate deploy`
-therefore creates a schema missing those tables, and the seed + new routes hit
-missing tables. Existing dev databases only work because they were built with
-`prisma db push` or an earlier full schema.
+The original gap (migrations stopped at `20260821090000_add_blog` while the
+schema had moved on: inventory/warehouse, the variant-first-class rename,
+multi-currency, downloads, review photos, `pageType`, `activeTheme`, …) was
+closed by the committed `20260828000000_sync_session_schema` sync migration
+plus the subsequent feature migrations. Since then the history has grown:
+`20260828120000_add_product_download_limit`,
+`20260829000000_add_page_blocks`, `20260829100000_add_blog_post_blocks`,
+and the performance/scalability round's
+`20260830000000_add_performance_indexes`,
+`20260830010000_durable_storefront_forms`, `20260830020000_csrf_tokens`,
+`20260830030000_variant_attribute_index`.
 
-The product is pre-release. The fix is automated:
+- **`scripts/sync-migrations.sh`** — the fixer: run on a machine with
+  network access (the Prisma engine is network-fetched). It detects any
+  drift, generates a closing migration, applies it, and verifies.
+- **`scripts/verify-migrations.sh`** — the read-only drift guard: fails
+  if the migrations and `schema.prisma` have drifted. A `api-checks`
+  step for it is staged in `.github/workflows/ci.yml` (before
+  `migrate deploy`), waiting on `workflows` permission to push.
 
-- **`scripts/sync-migrations.sh`** — run once on a machine with network
-  access (the Prisma engine is network-fetched). It applies the committed
-  migrations, detects the drift, generates a `auto_sync_schema` migration
-  that closes the gap, applies it, and verifies the result. Then commit
-  `apps/api/prisma/migrations/`.
-- **`scripts/verify-migrations.sh`** — a read-only drift guard: fails if the
-  migrations and `schema.prisma` have drifted, so a regression can't ship
-  silently. A `api-checks` step for it is staged in `.github/workflows/ci.yml`
-  (before `migrate deploy`), waiting on `workflows` permission to push.
-
-Until the sync migration is generated + committed, CI's drift guard is red
-and any deployment built from a clean checkout cannot be trusted.
+**Residual item:** the four `20260830*` migrations were hand-written
+(the Prisma engine is network-fetched and unavailable in the authoring
+sandbox). They were verified to apply cleanly to a scratch SQLite
+database in order, and follow Prisma's exact column/index naming
+conventions, but the byte-exact `prisma migrate diff` check that the
+drift guard performs could not be run locally. The first CI run (or a
+local `scripts/verify-migrations.sh` on a networked machine) is the
+authority; if it flags a mismatch, `scripts/sync-migrations.sh`
+regenerates the closing migration.
 
 ---
 
-## 10. Bulk import/export — shipped (admin)
+## 11. Bulk import/export — shipped (admin)
 
 **Status:** complete. `apps/api/src/modules/importExport/` mounted at
 `/api/import-export` (admin + manager), UI at `/admin/import-export`
@@ -330,3 +338,73 @@ database in the api-checks job — the one place real transaction
 rollback and unique constraints are actually exercised). The seed
 creates a `General` category so the product-import default works on a
 fresh install.
+
+---
+
+## 12. Remaining incomplete features (complete inventory)
+
+An honest, complete list of what is **not** finished, split by kind.
+Items 1–6 are the ones most likely to matter in production; 7–14 are
+deliberate design choices or niche gaps.
+
+### Likely to matter
+
+1. **Emails are logged, not delivered.** Every transactional email
+   (order confirmation, shipping notification, welcome, password reset)
+   is wired and will send the moment real SMTP credentials are set —
+   but until then they only reach the server log. See §2.
+2. **No Postgres deployment path, yet.** The schema is provider-agnostic,
+   but the committed migrations are SQLite dialect, so a Postgres install
+   needs the migration history regenerated (runbook in `SCALING.md`,
+   Known limit 2). Unverified here because no Postgres instance is
+   available in CI or the sandbox.
+3. **The CSRF guard is not mounted.** Deliberate: the API authenticates
+   with Bearer JWTs (CSRF-immune) and the web client does not use the
+   `x-session-id`/`x-csrf-token` flow, so mounting it would 403 the
+   storefront's unauthenticated POSTs. Enabling it requires a client-side
+   change (fetch `/api/csrf-token`, echo the headers) — the token store
+   itself is now durable (`CsrfToken` table) so the server side is ready.
+4. **Multi-instance scheduling.** The inventory and currency schedulers
+   are per-process `setInterval` loops. Running N API instances behind a
+   load balancer requires pinning exactly one as the "worker" (or moving
+   the schedules to cron). Documented in `SCALING.md`.
+5. **Existing stores need a one-time attribute-index backfill.** The
+   `VariantAttribute` index (which makes `/products` attribute filtering
+   and facets SQL-indexed instead of O(catalog) in JS) is maintained on
+   every new variant write, but pre-existing variants need
+   `apps/api/prisma/backfill-variant-attributes.ts` run once after the
+   `20260830030000` migration. Idempotent.
+6. **Hand-written migrations need the CI drift guard to bless them.** The
+   four `20260830*` migrations were verified to apply to a scratch SQLite
+   DB in order, but the byte-exact `prisma migrate diff` that
+   `scripts/verify-migrations.sh` performs could not be run locally (the
+   Prisma engine is network-fetched). The first CI run is the authority;
+   `scripts/sync-migrations.sh` is the fix if it flags a mismatch. See §10.
+
+### Deliberate design choices / niche gaps
+
+7. **Import/export follow-ups** (see §11): image upload/migration during
+   import (URLs only today), order/customer import, and a preview→commit
+   lock. All natural follow-ups, none a bug.
+8. **`onSale` and `minRating` are still JS post-filters** (bounded by the
+   candidate set, not the catalog) — Prisma can't express the
+   `compareAtPrice > price` column comparison or the rating HAVING
+   aggregate in a `findMany`. Not a practical bottleneck below ~100k
+   products. See `SCALING.md`, Known limit 3.
+9. **3PL integration is inbound-only.** The inventory module accepts
+   signed 3PL webhooks and keeps a sync log, but there is no outbound push
+   to a specific 3PL provider.
+10. **Recommendations depend on opt-in analytics.** The also-bought /
+    bought-together signals come from `ANALYTICS_TRACKING_ENABLED`; with
+    it off (the default) they fall back to same-category popularity.
+11. **Elasticsearch is in `docker-compose.yml` but unused.** It is offered
+    as an optional advanced-search dependency; no code path queries it.
+12. **Socket.IO has no multi-instance adapter.** Fine single-instance; a
+    `@socket.io/redis-adapter` would be needed if real-time features are
+    used across several API instances.
+13. **No continuous deployment.** There is a one-command install
+    (`scripts/install-store.sh` + `docs/DEPLOYMENT.md`) but nothing
+    auto-deploys, because there is no hosting account yet. See §8.
+14. **SQLite remains the default.** Fine for the default install; the
+    single-writer limit is real under sustained write-heavy traffic
+    (flash sales). See §2 and `SCALING.md`.

@@ -20,8 +20,9 @@ process is stateless *except* for the in-memory stores listed in
 
 ## What was optimized (and why)
 
-These are the changes from the two performance passes, each verified by
-the test suites (712 integration + 265 API unit + 819 web tests):
+These are the changes from the three performance/scalability passes,
+each verified by the test suites (711 API integration + 267 API unit +
+819 web tests, all green):
 
 ### 1. Checkout no longer round-trips per cart line
 `POST /api/orders` used to do one sequential `product.findUnique` per line
@@ -44,8 +45,12 @@ the per-type count loop collapsed into one `groupBy`. Same numbers,
 Pass two then parallelised the remaining checkout loops (analytics
 events, per-line download mints, stock decrements grouped per product),
 collapsed `POST /api/cart/sync` from 2N queries to 2, and moved the
-three durable-by-need stores (contact / newsletter / stock alerts) from
-module-level memory into the database - see limits 1 and 4 below.
+durable-by-need stores (contact / newsletter / stock alerts) from
+module-level memory into the database. Pass three finished the
+statelessness story (the CSRF token store became a table too, so the
+API holds zero per-process state) and replaced the O(catalog)
+in-memory attribute filter/facets with the `VariantAttribute` index -
+see Known limits 1 and 3 below.
 
 ### 3. Five missing indexes (migration `20260830000000`)
 The schema was already well indexed (160+), but five hot lookup paths
@@ -91,46 +96,84 @@ serves a small/medium store because:
 
 ## Scaling out: multiple API instances
 
-The API is safe to run behind a load balancer **once the in-memory
-state is moved to the database** (Known limit 1). Concretely:
+The API now holds **no per-process state** (all form stores and the
+CSRF token store are database rows), so it is safe to run N instances
+behind a load balancer. Concretely:
 
-1. **Switch to Postgres** (the schema is provider-agnostic;
-   `docker/docker-compose.yml` already ships a Postgres profile).
-   Run `prisma migrate deploy` — the migration history is shared.
-2. **Add Redis** for caching and (after step 4) for the stateful stores.
+1. **Switch to Postgres** (runbook in Known limit 2 below — the
+   committed migrations are SQLite dialect, so the migration history
+   must be regenerated for the PG provider).
+2. **Add Redis** for the read cache (product lookups, facets,
+   recommendation lists all route through `cache.*` when it's up).
 3. **Run N API processes** behind the LB. All per-request state is in
-   Postgres; the schedulers (`inventory-scheduler`, `currency.scheduler`)
-   must run on exactly ONE instance (they are `setInterval` loops) —
-   either pin one instance as "worker" or move the schedules to a cron
-   that calls the existing `/api/inventory/jobs/run`-style endpoints.
-   The Socket.IO instance for real-time features needs an adapter
-   (e.g. `@socket.io/redis-adapter`) if it is ever used across instances.
-4. ~~Move the in-memory stores to the DB~~ — done (contact, stock
-   alerts, newsletter). Only the dormant CSRF token map remains
-   (Known limit 1); move it if that guard is ever enabled.
+   Postgres; the schedulers (`inventory-scheduler`,
+   `currency.scheduler`) must run on exactly ONE instance (they are
+   `setInterval` loops) — either pin one instance as "worker" or move
+   the schedules to a cron that calls the existing
+   `/api/inventory/jobs/run`-style endpoints. The Socket.IO instance
+   for real-time features needs an adapter (e.g.
+   `@socket.io/redis-adapter`) if it is ever used across instances.
 
 ## Known limits (honest list)
 
-### 1. One in-memory store remains (dormant): CSRF tokens
-Contact messages, stock-alert subscriptions, and newsletter
-subscribers are now database rows (migration `20260830010000`):
-`ContactMessage`, `StockAlertSubscription`, `NewsletterSubscriber`.
-Their request/response contracts are unchanged; durability and
-multi-instance safety came for free.
-
-The one remaining in-memory store is the CSRF token map in
-`middleware/csrf.ts` — and it is DORMANT: `csrfProtection` is never
-mounted, and the API's real cross-site protection is the JWT
-Authorization header (a cross-site form can't forge it) plus the CORS
-origin allowlist. If a CSRF guard is ever enabled, that map should move
-to the DB (or Redis) first.
+### 1. ~~In-memory form stores~~ — all durable now
+Contact messages, stock-alert subscriptions, newsletter subscribers
+(migration `20260830010000`) and even the CSRF token map
+(`20260830020000`, `CsrfToken` table in `middleware/csrf.ts`) are
+database rows. The API holds **no per-process state** anymore: any
+number of instances agree on all of it, and a deploy no longer wipes
+anything. The CSRF guard itself remains unmounted on purpose — the
+API authenticates with Bearer JWTs (CSRF-immune) and the web client
+does not use the x-session-id/x-csrf-token flow; mounting it today
+would 403 the storefront's unauthenticated POSTs. The header comment
+in `middleware/csrf.ts` documents exactly what enabling it requires.
 
 ### 2. SQLite is a single-writer database
 Fine for the default install. Sustained write-heavy traffic (flash
-sales, high order rates) wants Postgres. The app already supports it —
-only the connection string changes, plus the pool sizing above.
+sales, high order rates) wants Postgres. Note the schema is
+provider-agnostic but the committed migrations are **SQLite dialect**
+(`DATETIME` etc.) — a Postgres deployment cannot reuse them as-is.
+The runbook:
 
-### 3. Some read paths are O(catalog) in memory
+1. Start Postgres (the dev `docker/docker-compose.yml` already has a
+   healthy postgres:16 service; a client server can use any PG).
+2. In `apps/api/prisma/schema.prisma` set
+   `provider = "postgresql"` in the `datasource` block.
+3. Regenerate the migration history for PG:
+   `npx prisma migrate dev --name init_pg` on a throwaway database
+   (the committed SQLite migrations stay in git for SQLite installs;
+   a PG deployment works from its own provider-matched history).
+4. Set `DATABASE_URL=postgresql://user:pass@host:5432/store` and
+   size the pool: append `?connection_limit=<2 × cores + 1 per API
+   instance>` (Prisma's default of 5 is tuned for a laptop, not a
+   load-balanced deployment).
+5. Re-run the test suites against the PG URL — the integration suite
+   is provider-agnostic by construction (it mocks the client), and
+   `scripts/verify-import-export.py` + the CI browser suites exercise
+   the real thing.
+
+### 3. ~~Attribute filtering is O(catalog) in memory~~ — indexed now
+The variant-attribute filter (and the facet tally) used to fetch
+**every variant of every candidate product** and JSON-parse its
+attributes in JS. They now run against the `VariantAttribute`
+index table (migration `20260830030000`): one indexed row per
+(variant, key, value) pair, maintained by
+`syncVariantAttributes()` at every variant write site
+(`variant.service` create/update/delete, the product-create route,
+the import/export commit). The filter intersects per-key variant-id
+lists in SQL and scopes candidates with `variants: { some: ... }` —
+exact semantics preserved (OR within a key, AND across keys,
+inactive variants excluded). Existing stores need a one-time
+`apps/api/prisma/backfill-variant-attributes.ts` run after the
+migration (idempotent).
+
+Still post-filtered in JS (bounded by the candidate set): the
+`onSale` inequality check (compareAtPrice > price is a
+column-to-column comparison Prisma can't express; the SQL pre-filter
+already narrows to `compareAtPrice != null`) and `minRating`
+(a HAVING-style aggregate over reviews). Both are O(candidates),
+not O(catalog), and neither is a practical bottleneck below
+~100k products.
 `listProducts` pulls candidates then post-filters attribute/onSale/
 minRating in JS (Prisma can't express "a variant's JSON attribute
 contains X" efficiently). At ~10k active products this still responds in
