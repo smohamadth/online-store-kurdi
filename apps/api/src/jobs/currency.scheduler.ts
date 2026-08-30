@@ -20,7 +20,7 @@
  * precision a credit-card processor applies.
  */
 import { refreshRates } from '../modules/currency/currency.routes';
-import { tryAcquireLock } from './distributedLock';
+import { runWithLock } from './distributedLock';
 import { logger } from '../utils/logger';
 
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -48,20 +48,12 @@ export async function runOnce(): Promise<void> {
 }
 
 /**
- * One scheduled tick: take the distributed lock and, if we win it, refresh the
- * rates. Losing the lock means another API instance already ran this tick.
+ * One scheduled tick: run the job under the distributed lock. runWithLock
+ * never throws, so a DB outage or job failure is logged rather than crashing
+ * the process, and a lock held by another instance skips this tick.
  */
 async function tick(): Promise<void> {
-  const lock = await tryAcquireLock(LOCK_NAME, LOCK_LEASE_MS);
-  if (!lock) {
-    logger.info('[currency-scheduler] another instance holds the lock; skipping this tick');
-    return;
-  }
-  try {
-    await runOnce();
-  } finally {
-    await lock.release();
-  }
+  await runWithLock(LOCK_NAME, LOCK_LEASE_MS, () => runOnce());
 }
 
 export function startScheduler(intervalMs: number = DEFAULT_INTERVAL_MS): void {

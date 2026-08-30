@@ -18,17 +18,20 @@ vi.mock('../../../src/config/database', () => ({
   },
 }));
 
-vi.mock('../../../src/utils/logger', () => ({
+const { logger } = vi.hoisted(() => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { tryAcquireLock } from '../../../src/jobs/distributedLock';
+vi.mock('../../../src/utils/logger', () => ({ logger }));
+
+import { tryAcquireLock, runWithLock } from '../../../src/jobs/distributedLock';
 
 describe('distributed-lock', () => {
   beforeEach(() => {
     upsert.mockClear();
     updateMany.mockClear();
     updateMany.mockResolvedValue({ count: 1 });
+    logger.error.mockClear();
   });
 
   it('acquires the lease when the row is free', async () => {
@@ -69,5 +72,65 @@ describe('distributed-lock', () => {
     // release writes a past heldUntil (epoch) = free.
     const data = updateMany.mock.calls[1][0].data;
     expect(data.heldUntil.getTime()).toBe(0);
+  });
+});
+
+describe('runWithLock', () => {
+  beforeEach(() => {
+    upsert.mockClear();
+    updateMany.mockClear();
+    updateMany.mockResolvedValue({ count: 1 });
+    logger.error.mockClear();
+  });
+
+  it('runs the job and releases the lease when it wins the lock', async () => {
+    const fn = vi.fn(async () => 42);
+    const ran = await runWithLock('inventory', 300_000, fn);
+    expect(ran).toBe(true);
+    expect(fn).toHaveBeenCalledTimes(1);
+    // The release write must free the lease (epoch heldUntil) with the token.
+    const releaseCall = updateMany.mock.calls[1];
+    expect(releaseCall[0].data.heldUntil.getTime()).toBe(0);
+    expect(releaseCall[0].where.token).toBeTruthy();
+  });
+
+  it('skips (returns false) when another process holds the lease', async () => {
+    updateMany.mockResolvedValueOnce({ count: 0 }); // held -> cannot claim
+    const fn = vi.fn(async () => 42);
+    const ran = await runWithLock('inventory', 300_000, fn);
+    expect(ran).toBe(false);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the acquire query fails (DB outage) - the critical no-crash guard', async () => {
+    // Simulate the DB being down: the lock query rejects.
+    updateMany.mockRejectedValueOnce(new Error('db connection lost'));
+    const fn = vi.fn(async () => 42);
+    await expect(runWithLock('inventory', 300_000, fn)).resolves.toBe(false);
+    // The job must not run and nothing may be released.
+    expect(fn).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('does not throw when the job fails; it logs and still releases', async () => {
+    const fn = vi.fn(async () => {
+      throw new Error('job boom');
+    });
+    const ran = await runWithLock('inventory', 300_000, fn);
+    expect(ran).toBe(false);
+    expect(logger.error).toHaveBeenCalled();
+    // Even on failure the lease must be released.
+    const releaseCall = updateMany.mock.calls[1];
+    expect(releaseCall[0].data.heldUntil.getTime()).toBe(0);
+  });
+
+  it('does not throw when release fails', async () => {
+    // acquire ok, but the release updateMany throws.
+    updateMany.mockResolvedValueOnce({ count: 1 });
+    updateMany.mockRejectedValueOnce(new Error('release boom'));
+    const fn = vi.fn(async () => 42);
+    await expect(runWithLock('inventory', 300_000, fn)).resolves.toBe(true);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalled();
   });
 });

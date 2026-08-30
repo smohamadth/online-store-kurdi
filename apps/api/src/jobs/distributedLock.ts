@@ -91,3 +91,54 @@ export async function tryAcquireLock(name: string, leaseMs: number): Promise<Dis
     },
   };
 }
+
+/**
+ * Run `fn` while holding the named lock, or skip if another instance holds it.
+ *
+ * This is the safe entry point for scheduler ticks: it NEVER throws, so a
+ * transient database outage (or a job failure) logs a warning instead of
+ * turning the setInterval/setTimeout callback into an unhandled rejection
+ * (which would crash the process). The scheduler's self-contained, never-crash
+ * contract is preserved even though a DB round-trip now happens every tick.
+ *
+ * @returns true if this process ran the job, false if it was skipped (lock
+ *   held elsewhere, or an error prevented the run).
+ */
+export async function runWithLock<T>(
+  name: string,
+  leaseMs: number,
+  fn: () => Promise<T>,
+): Promise<boolean> {
+  let lock: DistributedLock | null = null;
+  try {
+    lock = await tryAcquireLock(name, leaseMs);
+  } catch (err) {
+    logger.error(
+      `[distributed-lock] "${name}" acquire failed; skipping tick: ${err instanceof Error ? err.message : err}`,
+    );
+    return false;
+  }
+
+  if (!lock) {
+    // Another process already won this tick.
+    return false;
+  }
+
+  try {
+    await fn();
+    return true;
+  } catch (err) {
+    logger.error(
+      `[distributed-lock] job "${name}" failed: ${err instanceof Error ? err.message : err}`,
+    );
+    return false;
+  } finally {
+    try {
+      await lock.release();
+    } catch (err) {
+      logger.error(
+        `[distributed-lock] "${name}" release failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+}

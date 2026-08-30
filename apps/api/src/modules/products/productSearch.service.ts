@@ -157,40 +157,53 @@ class ElasticsearchSearch implements SearchProvider {
     // down), answer from Postgres so the storefront keeps working.
     if (!this.available) return postgresSearch(query, limit);
 
-    const client = this.getClient();
-    const body = {
-      query: {
-        bool: {
-          filter: [{ term: { status: 'active' } }],
-          must: [
-            {
-              multi_match: {
-                query,
-                fields: ['name^4', 'sku^3', 'categoryName^2', 'description'],
-                fuzziness: 'AUTO',
+    try {
+      const client = this.getClient();
+      const body = {
+        query: {
+          bool: {
+            filter: [{ term: { status: 'active' } }],
+            must: [
+              {
+                multi_match: {
+                  query,
+                  fields: ['name^4', 'sku^3', 'categoryName^2', 'description'],
+                  fuzziness: 'AUTO',
+                },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-      _source: ['id'],
-      size: limit,
-    };
-    const res = await client.search({ index: this.index, body });
-    const ids: string[] = (res.hits.hits as any[])
-      .map((h) => (h._source as any)?.id)
-      .filter((x): x is string => typeof x === 'string');
+        _source: ['id'],
+        size: limit,
+      };
+      const res = await client.search({ index: this.index, body });
+      const ids: string[] = (res.hits.hits as any[])
+        .map((h) => (h._source as any)?.id)
+        .filter((x): x is string => typeof x === 'string');
 
-    if (ids.length === 0) return [];
+      if (ids.length === 0) return [];
 
-    // Re-hydrate the full rows from Postgres (the index stores only the id,
-    // so results always have fresh data). Preserve the ES ranking order.
-    const rows: any[] = await prisma.product.findMany({
-      where: { id: { in: ids } },
-      include: SEARCH_INCLUDE,
-    });
-    const byId = new Map(rows.map((r): [string, any] => [r.id, r]));
-    return ids.map((id) => byId.get(id)).filter(Boolean);
+      // Re-hydrate the full rows from Postgres (the index stores only the id,
+      // so results always have fresh data). Preserve the ES ranking order.
+      const rows: any[] = await prisma.product.findMany({
+        where: { id: { in: ids } },
+        include: SEARCH_INCLUDE,
+      });
+      const byId = new Map(rows.map((r): [string, any] => [r.id, r]));
+      return ids.map((id) => byId.get(id)).filter(Boolean);
+    } catch (err) {
+      // A cluster verified up at boot can still fail/timeout on a request. The
+      // whole point of this provider is "never hard-fail the storefront", so a
+      // mid-request ES outage must NOT surface as a 500: mark the cluster
+      // unavailable (so subsequent calls skip ES and go straight to Postgres
+      // instead of timing out every time) and answer from Postgres.
+      this.available = false;
+      logger.warn(
+        `⚠️ Elasticsearch search failed; falling back to Postgres (${err instanceof Error ? err.message : err})`,
+      );
+      return postgresSearch(query, limit);
+    }
   }
 
   async indexProduct(productId: string): Promise<void> {
@@ -235,22 +248,39 @@ class ElasticsearchSearch implements SearchProvider {
     const products = await prisma.product.findMany({
       select: { id: true, name: true, description: true, sku: true, status: true, category: { select: { name: true } } },
     });
+    // Index each product independently so a single transient failure does not
+    // abort the whole reindex (which would leave a partial index and make the
+    // admin route 500). Return the number of rows actually indexed.
+    let indexed = 0;
+    let failures = 0;
     for (const p of products) {
-      await this.getClient().index({
-        index: this.index,
-        id: p.id,
-        body: {
+      try {
+        await this.getClient().index({
+          index: this.index,
           id: p.id,
-          name: p.name,
-          description: p.description ?? '',
-          sku: p.sku,
-          categoryName: p.category?.name ?? '',
-          status: p.status,
-        },
-      });
+          body: {
+            id: p.id,
+            name: p.name,
+            description: p.description ?? '',
+            sku: p.sku,
+            categoryName: p.category?.name ?? '',
+            status: p.status,
+          },
+        });
+        indexed += 1;
+      } catch (err) {
+        failures += 1;
+        logger.warn(
+          `⚠️ Elasticsearch reindex failed for product ${p.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
-    logger.info(`🔎 Elasticsearch reindexed ${products.length} products`);
-    return products.length;
+    if (failures > 0) {
+      logger.warn(`🔎 Elasticsearch reindex completed with ${failures} failure(s) out of ${products.length}`);
+    } else {
+      logger.info(`🔎 Elasticsearch reindexed ${indexed} products`);
+    }
+    return indexed;
   }
 
   async disconnect(): Promise<void> {

@@ -15,7 +15,7 @@
  * environment before importing this module.
  */
 import { runAutoReorder, releaseExpiredReservations } from '../modules/inventory/inventory.service';
-import { tryAcquireLock } from './distributedLock';
+import { runWithLock } from './distributedLock';
 import { logger } from '../utils/logger';
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -49,21 +49,13 @@ export async function runOnce(): Promise<{ releasedReservations: number; draftsC
 }
 
 /**
- * One scheduled tick: try to take the distributed lock and, if we win it, run
- * the job. Losing the lock means another API instance already ran this tick,
- * so we skip silently.
+ * One scheduled tick: run the job under the distributed lock. runWithLock
+ * never throws - a DB outage or job failure is logged, and a lock held by
+ * another instance skips this tick - so the timer callback can never turn
+ * into an unhandled rejection.
  */
 async function tick(): Promise<void> {
-  const lock = await tryAcquireLock(LOCK_NAME, LOCK_LEASE_MS);
-  if (!lock) {
-    logger.info('[inventory-scheduler] another instance holds the lock; skipping this tick');
-    return;
-  }
-  try {
-    await runOnce();
-  } finally {
-    await lock.release();
-  }
+  await runWithLock(LOCK_NAME, LOCK_LEASE_MS, () => runOnce());
 }
 
 export function startScheduler(intervalMs: number = DEFAULT_INTERVAL_MS): void {

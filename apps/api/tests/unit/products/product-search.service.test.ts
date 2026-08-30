@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { envMock, prismaMock } = vi.hoisted(() => ({
+const { envMock, prismaMock, esClient, logger } = vi.hoisted(() => ({
   envMock: {
     SEARCH_PROVIDER: 'postgres' as 'postgres' | 'elasticsearch',
     ELASTICSEARCH_URL: 'http://localhost:9200',
@@ -29,6 +29,21 @@ const { envMock, prismaMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
     },
   },
+  // A controllable fake of the @elastic/elasticsearch client so we can push
+  // the provider past the "cluster is up" check and exercise the ES search
+  // path (and its fail-soft fallback) without a live cluster.
+  esClient: {
+    ping: vi.fn(async () => true),
+    search: vi.fn(),
+    index: vi.fn(async () => ({})),
+    delete: vi.fn(async () => ({})),
+    close: vi.fn(async () => {}),
+    indices: {
+      exists: vi.fn(async () => true),
+      create: vi.fn(async () => ({})),
+    },
+  },
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock('../../../src/config/environment', () => ({
@@ -39,7 +54,17 @@ vi.mock('../../../src/config/environment', () => ({
 }));
 
 vi.mock('../../../src/config/database', () => ({ prisma: prismaMock }));
-// The service only logs through the real logger; silence nothing, it is fine.
+vi.mock('../../../src/utils/logger', () => ({ logger }));
+vi.mock('@elastic/elasticsearch', () => ({
+  Client: class {
+    ping = esClient.ping;
+    search = esClient.search;
+    index = esClient.index;
+    delete = esClient.delete;
+    close = esClient.close;
+    indices = esClient.indices;
+  },
+}));
 
 import {
   getProductSearch,
@@ -53,6 +78,12 @@ beforeEach(() => {
   resetProductSearch();
   prismaMock.product.findMany.mockReset();
   prismaMock.product.findUnique.mockReset();
+  esClient.search.mockReset();
+  esClient.index.mockReset();
+  esClient.index.mockResolvedValue({});
+  esClient.ping.mockResolvedValue(true);
+  esClient.indices.exists.mockResolvedValue(true);
+  logger.warn.mockClear();
   envMock.SEARCH_PROVIDER = 'postgres';
 });
 
@@ -130,5 +161,90 @@ describe('elasticsearch provider (cluster down)', () => {
 describe('disconnectSearch', () => {
   it('closes the provider client', async () => {
     await expect(disconnectSearch()).resolves.toBeUndefined();
+  });
+});
+
+describe('elasticsearch provider (mid-request failure fails soft)', () => {
+  async function makeAvailableProvider() {
+    envMock.SEARCH_PROVIDER = 'elasticsearch';
+    const s = getProductSearch();
+    // Simulate a cluster verified up at boot.
+    await s.checkConnection();
+    expect(s.available).toBe(true);
+    return s;
+  }
+
+  it('falls back to Postgres and marks the cluster unavailable when ES search throws', async () => {
+    prismaMock.product.findMany.mockResolvedValue([{ id: 'p3', name: 'PG', status: 'active' }]);
+    esClient.search.mockRejectedValueOnce(new Error('connection reset'));
+
+    const s = await makeAvailableProvider();
+    const hits = await s.search('Apple', 5);
+
+    // The whole point: it must NOT 500 / throw, it answers from Postgres.
+    expect(hits).toEqual([{ id: 'p3', name: 'PG', status: 'active' }]);
+    expect(s.available).toBe(false);
+    expect(esClient.search).toHaveBeenCalledTimes(1);
+    expect(prismaMock.product.findMany).toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('skips ES entirely on subsequent calls once marked unavailable', async () => {
+    prismaMock.product.findMany.mockResolvedValue([{ id: 'p3', name: 'PG', status: 'active' }]);
+    esClient.search.mockRejectedValueOnce(new Error('reset'));
+
+    const s = await makeAvailableProvider();
+    await s.search('a', 5); // ES throws -> fallback, available=false
+    await s.search('b', 5); // available=false -> straight to Postgres
+
+    expect(esClient.search).toHaveBeenCalledTimes(1); // only the first tried ES
+    expect(prismaMock.product.findMany).toHaveBeenCalledTimes(2); // both answered from PG
+  });
+
+  it('returns Postgres hits when ES search succeeds but a result is missing from PG', async () => {
+    // ES returns ids [a, missing, b]; only a and b exist in Postgres.
+    esClient.search.mockResolvedValue({
+      hits: {
+        hits: [
+          { _source: { id: 'a' } },
+          { _source: { id: 'missing' } },
+          { _source: { id: 'b' } },
+        ],
+      },
+    });
+    prismaMock.product.findMany.mockResolvedValue([
+      { id: 'a', name: 'A', status: 'active' },
+      { id: 'b', name: 'B', status: 'active' },
+    ]);
+
+    const s = await makeAvailableProvider();
+    const hits = await s.search('Apple', 10);
+    // Ranking order preserved, missing product filtered out, no throw.
+    expect(hits.map((h: any) => h.id)).toEqual(['a', 'b']);
+  });
+
+  it('reindexAll returns the count of products actually indexed, tolerating per-item failures', async () => {
+    prismaMock.product.findMany.mockResolvedValue([
+      { id: 'ok1', name: 'A', description: null, sku: 'a', status: 'active', category: null },
+      { id: 'bad', name: 'B', description: null, sku: 'b', status: 'active', category: null },
+      { id: 'ok2', name: 'C', description: null, sku: 'c', status: 'active', category: null },
+    ]);
+    esClient.index.mockImplementation(async ({ id }: { id: string }) => {
+      if (id === 'bad') throw new Error('boom');
+      return {};
+    });
+
+    const s = await makeAvailableProvider();
+    const indexed = await s.reindexAll();
+    // ok1 and ok2 indexed; the failing row is logged but does not abort.
+    expect(indexed).toBe(2);
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('reindexAll is a no-op (0) when the cluster is unavailable', async () => {
+    envMock.SEARCH_PROVIDER = 'elasticsearch';
+    const s = getProductSearch();
+    expect(s.available).toBe(false);
+    await expect(s.reindexAll()).resolves.toBe(0);
   });
 });
