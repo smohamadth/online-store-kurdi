@@ -2,30 +2,40 @@
  * Bulk import/export routes (admin & manager).
  *
  *   GET  /api/import-export/export/:entity?format=csv|json&sample=1
- *         Entity file download (products | categories). `sample=1`
- *         returns a template: header + one example row.
+ *         Entity file download (products | categories | customers | orders).
+ *         `sample=1` returns a template: header + one example row.
  *   POST /api/import-export/preview   { entity, format, text }
  *         Parse + validate, classify each row (create/update/error).
  *         Writes nothing.
  *   POST /api/import-export/commit    { entity, format, text }
  *         All-or-nothing: if any row fails validation nothing is
  *         written; otherwise every row is applied in one transaction.
+ *   POST /api/import-export/import    (multipart: file + images*, action)
+ *         Same as preview/commit but accepts the data file plus attached
+ *         image files. A product row's `images` column may reference an
+ *         attached file as `@file:<original filename>`, which is uploaded
+ *         and resolved to its served URL before the rows are applied.
  *
- * The raw file text is sent in the JSON body (not multipart) because
- * the file is parsed, not stored - the admin pastes/uploads in the
- * browser, the API never keeps a copy.
+ * For the plain preview/commit endpoints the raw file text is sent in the
+ * JSON body (not multipart) because the file is parsed, not stored - the
+ * admin pastes/uploads in the browser, the API never keeps a copy.
  */
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate, authorize } from '../../middleware/auth';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../config/database';
+import { uploadImage, deleteImage } from '../../services/storage.service';
 import {
   CATEGORY_CSV_HEADERS,
+  CUSTOMER_CSV_HEADERS,
+  ORDER_CSV_HEADERS,
   PRODUCT_CSV_HEADERS,
   ValidationError,
   previewImport,
   serializeCsvFile,
   type Entity,
+  type ImageUrlResolver,
   type ImportFormat,
 } from './mappers';
 import { commitImport } from './commit';
@@ -34,8 +44,27 @@ const router = Router();
 
 router.use(authenticate, authorize('admin', 'manager'));
 
-const ENTITIES: Entity[] = ['products', 'categories'];
+const ENTITIES: Entity[] = ['products', 'categories', 'customers', 'orders'];
 const FORMATS: ImportFormat[] = ['csv', 'json'];
+
+// Multipart parsing for the image-carrying import endpoint below. Image files
+// are held in RAM (memoryStorage), handed to storage.service (sharp -> webp
+// variants), and the `@file:<name>` placeholders in the products file are
+// resolved to the returned URLs before the rows are applied.
+const memory = multer.memoryStorage();
+const multipart = multer({
+  storage: memory,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per image (mirrors upload.routes.ts)
+    files: 20,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (file.fieldname === 'file') return cb(null, true); // the data file
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error(`File type ${file.mimetype} is not allowed`));
+  },
+});
 
 // Validate the preview/commit request body. The file contents are sent as a
 // JSON `text` field (not a multipart upload) because the file is parsed, not
@@ -135,6 +164,76 @@ async function exportCategoriesRows(): Promise<Record<string, any>[]> {
   }));
 }
 
+// Fetch every customer (role: customer) with their addresses, and shape each
+// into a flat export row. Addresses travel as a JSON array (native in JSON
+// exports, JSON-encoded string in CSV).
+async function exportCustomersRows(): Promise<Record<string, any>[]> {
+  const users = await prisma.user.findMany({
+    where: { role: 'customer' },
+    orderBy: { createdAt: 'asc' },
+    include: { addresses: { orderBy: { createdAt: 'asc' } } },
+  });
+  return users.map((u) => ({
+    email: u.email,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    phone: nullIfEmpty(u.phone),
+    isActive: u.isActive,
+    addresses: (u.addresses ?? []).map((a) => ({
+      firstName: a.firstName,
+      lastName: a.lastName,
+      address1: a.address1,
+      city: a.city,
+      state: a.state,
+      postalCode: a.postalCode,
+      country: a.country,
+      phone: a.phone ?? '',
+      type: a.type,
+    })),
+  }));
+}
+
+// Fetch every order with its customer email, line items (by SKU) and shipping
+// address, and shape each into a flat export row.
+async function exportOrdersRows(): Promise<Record<string, any>[]> {
+  const orders = await prisma.order.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: {
+      user: { select: { email: true } },
+      items: { include: { product: { select: { sku: true } }, variant: { select: { sku: true } } } },
+      shippingAddress: true,
+    },
+  });
+  return orders.map((o) => ({
+    orderNumber: o.orderNumber,
+    customerEmail: o.user?.email ?? '',
+    status: o.status,
+    subtotal: o.subtotal,
+    taxAmount: o.taxAmount,
+    shippingAmount: o.shippingAmount,
+    discountAmount: o.discountAmount,
+    totalAmount: o.totalAmount,
+    paymentMethod: nullIfEmpty(o.paymentMethod),
+    paymentStatus: o.paymentStatus,
+    notes: nullIfEmpty(o.notes),
+    items: (o.items ?? []).map((it) => ({
+      sku: it.product?.sku ?? '',
+      variantSku: it.variant?.sku ?? '',
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+    })),
+    shippingFirstName: o.shippingAddress?.firstName ?? '',
+    shippingLastName: o.shippingAddress?.lastName ?? '',
+    shippingAddress1: o.shippingAddress?.address1 ?? '',
+    shippingCity: o.shippingAddress?.city ?? '',
+    shippingState: o.shippingAddress?.state ?? '',
+    shippingPostalCode: o.shippingAddress?.postalCode ?? '',
+    shippingCountry: o.shippingAddress?.country ?? '',
+    shippingPhone: o.shippingAddress?.phone ?? '',
+    createdAt: o.createdAt ? o.createdAt.toISOString() : '',
+  }));
+}
+
 const SAMPLE_PRODUCT: Record<string, any> = {
   name: 'Sample Product',
   sku: 'SKU-0001',
@@ -176,6 +275,39 @@ const SAMPLE_CATEGORY: Record<string, any> = {
   sortOrder: 0,
 };
 
+const SAMPLE_CUSTOMER: Record<string, any> = {
+  email: 'customer@example.com',
+  firstName: 'Jane',
+  lastName: 'Doe',
+  phone: '',
+  isActive: true,
+  addresses: [{ firstName: 'Jane', lastName: 'Doe', address1: '1 Main St', city: 'New York', state: 'NY', postalCode: '10001', country: 'US', phone: '', type: 'shipping' }],
+};
+
+const SAMPLE_ORDER: Record<string, any> = {
+  orderNumber: 'ORD-SAMPLE-1',
+  customerEmail: 'customer@example.com',
+  status: 'delivered',
+  subtotal: 49.99,
+  taxAmount: 5.0,
+  shippingAmount: 0,
+  discountAmount: 0,
+  totalAmount: 54.99,
+  paymentMethod: 'bank_transfer',
+  paymentStatus: 'completed',
+  notes: '',
+  items: [{ sku: 'SKU-0001', variantSku: '', quantity: 1, unitPrice: 49.99 }],
+  shippingFirstName: 'Jane',
+  shippingLastName: 'Doe',
+  shippingAddress1: '1 Main St',
+  shippingCity: 'New York',
+  shippingState: 'NY',
+  shippingPostalCode: '10001',
+  shippingCountry: 'US',
+  shippingPhone: '',
+  createdAt: '',
+};
+
 // Download an entity's data as a file (CSV or JSON). `?sample=1` returns a
 // one-row template instead of the full data, so the admin can fill it in.
 router.get('/export/:entity', async (req, res, next) => {
@@ -195,7 +327,11 @@ router.get('/export/:entity', async (req, res, next) => {
     const rows =
       entity === 'products'
         ? sample ? [SAMPLE_PRODUCT] : await exportProductsRows()
-        : sample ? [SAMPLE_CATEGORY] : await exportCategoriesRows();
+        : entity === 'categories'
+          ? sample ? [SAMPLE_CATEGORY] : await exportCategoriesRows()
+          : entity === 'customers'
+            ? sample ? [SAMPLE_CUSTOMER] : await exportCustomersRows()
+            : sample ? [SAMPLE_ORDER] : await exportOrdersRows();
 
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const suffix = sample ? 'template' : 'export';
@@ -215,7 +351,11 @@ router.get('/export/:entity', async (req, res, next) => {
       return;
     }
 
-    const headers = entity === 'products' ? PRODUCT_CSV_HEADERS : CATEGORY_CSV_HEADERS;
+    const headers =
+      entity === 'products' ? PRODUCT_CSV_HEADERS
+      : entity === 'categories' ? CATEGORY_CSV_HEADERS
+      : entity === 'customers' ? CUSTOMER_CSV_HEADERS
+      : ORDER_CSV_HEADERS;
     // Build a header row + one row per record. Null/undefined cells become
     // empty strings; objects/arrays (variants, images, dimensions) are
     // JSON-encoded into a single CSV cell (the importer decodes them back).
@@ -271,6 +411,97 @@ router.post('/commit', async (req, res, next) => {
     );
     res.json({ status: 'success', data: result });
   } catch (err) {
+    if (err instanceof ValidationError) {
+      res.status(400).json({ status: 'error', message: err.message });
+      return;
+    }
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// import with image uploads (multipart)
+// ---------------------------------------------------------------------------
+//
+// Same as the JSON `preview` / `commit` endpoints, but the admin can attach
+// the actual image files alongside the data file. A product row's `images`
+// column may then reference an attached file as `@file:<original filename>`;
+// the server uploads the image (sharp -> webp variants via storage.service),
+// resolves the placeholder to the served URL, and applies the rows.
+//
+// Form fields:
+//   entity   - products | categories | customers | orders
+//   format   - csv | json
+//   action   - preview | commit
+//   file     - the data file (CSV/JSON text)
+//   images*  - zero or more image files (field name `images`)
+//
+// Image cleanup: uploaded files that are NOT committed (a preview, or a
+// commit that rolled back) are deleted so they don't orphan in /uploads.
+router.post('/import', multipart.fields([{ name: 'file', maxCount: 1 }, { name: 'images', maxCount: 20 }]), async (req, res, next) => {
+  const uploaded: { id: string; folder: string }[] = [];
+  const uploadedNameToUrl = new Map<string, string>(); // originalName -> served URL
+  const folder = 'products';
+  try {
+    const files = (req.files as any) || {};
+    const dataFile = (files.file?.[0] as Express.Multer.File) || undefined;
+    const images = (files.images || []) as Express.Multer.File[];
+
+    const entity = String(req.body?.entity || '') as Entity;
+    const format = String(req.body?.format || '') as ImportFormat;
+    const action = String(req.body?.action || 'commit');
+    if (!ENTITIES.includes(entity)) throw new ValidationError(`entity must be one of ${ENTITIES.join(', ')}`);
+    if (!FORMATS.includes(format)) throw new ValidationError(`format must be one of ${FORMATS.join(', ')}`);
+    if (action !== 'preview' && action !== 'commit') throw new ValidationError(`action must be preview or commit`);
+
+    let text: string;
+    if (dataFile) {
+      text = dataFile.buffer.toString('utf-8');
+    } else if (typeof req.body?.text === 'string' && req.body.text) {
+      text = req.body.text;
+    } else {
+      throw new ValidationError('text is required (paste contents or upload the data file)');
+    }
+
+    // Upload every attached image and build filename -> URL resolver.
+    const resolveImage: ImageUrlResolver = (token) => {
+      const url = uploadedNameToUrl.get(token);
+      return url;
+    };
+    for (const f of images) {
+      const result = await uploadImage(f.buffer, f.originalname, f.mimetype, folder);
+      uploaded.push({ id: result.id, folder });
+      // First occurrence of a filename wins; duplicate names in the file map
+      // to the same upload.
+      if (!uploadedNameToUrl.has(f.originalname)) uploadedNameToUrl.set(f.originalname, result.originalUrl);
+    }
+
+    const preview = action === 'preview';
+    const result =
+      preview
+        ? await previewImport(entity, format, text, { resolveImage })
+        : await commitImport(entity, format, text, { resolveImage });
+
+    // Clean up images that weren't committed (preview, or a commit that
+    // rolled back) so /uploads doesn't fill with orphans.
+    const commit = preview ? undefined : (result as any);
+    if (preview || (commit && commit.failed > 0)) {
+      for (const up of uploaded) {
+        try { await deleteImage(up.folder, up.id); } catch { /* best-effort */ }
+      }
+    }
+
+    if (!preview && commit) {
+      logger.info(
+        `Import ${entity} (${format}, ${images.length} image${images.length === 1 ? '' : 's'}): ${commit.created} created, ${commit.updated} updated, ${commit.failed} failed of ${commit.total}`,
+      );
+    }
+    res.json({ status: 'success', data: result });
+  } catch (err) {
+    // A failed multipart import should not leave its uploaded images behind.
+    for (const up of uploaded) {
+      try { await deleteImage(up.folder, up.id); } catch { /* best-effort */ }
+    }
     if (err instanceof ValidationError) {
       res.status(400).json({ status: 'error', message: err.message });
       return;

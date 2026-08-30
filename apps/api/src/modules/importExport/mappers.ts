@@ -30,9 +30,16 @@ export { serializeCsv as serializeCsvFile } from '../../utils/csv';
 export const MAX_INPUT_CHARS = 1_000_000; // ~1MB of CSV text
 export const MAX_ROWS = 2000;
 
-export type Entity = 'products' | 'categories';
+export type Entity = 'products' | 'categories' | 'customers' | 'orders';
 export type ImportFormat = 'csv' | 'json';
 export type RowStatus = 'create' | 'update' | 'error';
+
+/**
+ * Resolves an uploaded-file token (from a product row's `@file:<name>`
+ * image URL) to a real served URL. Supplied by the multipart import
+ * endpoint, which uploads the attached image files before parsing.
+ */
+export type ImageUrlResolver = (token: string) => string | undefined;
 
 export interface PreviewRow {
   /** 1-based position in the file (data rows only). */
@@ -215,10 +222,14 @@ export const PRODUCT_CSV_HEADERS = [
  * throw on garbage; the wrapper below catches them and turns the
  * message into a row error instead of a 500.
  */
-export function mapProductRow(raw: Record<string, unknown>, existing: { sku: string }[] | null): ProductPlan {
+export function mapProductRow(
+  raw: Record<string, unknown>,
+  existing: { sku: string }[] | null,
+  opts: { resolveImage?: ImageUrlResolver } = {},
+): ProductPlan {
   const plan: ProductPlan = { sku: '', data: {}, errors: [] };
   try {
-    buildProductPlan(plan, raw);
+    buildProductPlan(plan, raw, opts);
   } catch (e) {
     plan.errors.push(e instanceof Error ? e.message : String(e));
   }
@@ -228,7 +239,11 @@ export function mapProductRow(raw: Record<string, unknown>, existing: { sku: str
 // Fill `plan` by reading/validating each cell of `raw`. Throws on a
 // malformed cell (the parseNumber/parseBool/... helpers throw on garbage);
 // mapProductRow catches it and records it as a row error instead of a 500.
-function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void {
+function buildProductPlan(
+  plan: ProductPlan,
+  raw: Record<string, unknown>,
+  opts: { resolveImage?: ImageUrlResolver } = {},
+): void {
   const err = (msg: string) => plan.errors.push(msg);
 
   // Read a cell as a trimmed string; empty/missing -> undefined ("not provided").
@@ -411,7 +426,21 @@ function buildProductPlan(plan: ProductPlan, raw: Record<string, unknown>): void
         const im = imagesRaw[i] as Record<string, unknown>;
         const url = im?.url != null ? String(im.url).trim() : '';
         if (!url) { err(`images[${i}]: url is required`); continue; }
-        const item: ImageInput = { url };
+        let resolvedUrl = url;
+        // `@file:<name>` references an image file attached to the import
+        // (the multipart endpoint uploads them first and passes the map in).
+        // A placeholder that can't be resolved is a hard row error so the
+        // admin sees exactly which file is missing.
+        if (url.startsWith('@file:')) {
+          const token = url.slice(6);
+          const hit = opts.resolveImage ? opts.resolveImage(token) : undefined;
+          if (!hit) {
+            err(`images[${i}]: referenced file "@file:${token}" was not uploaded`);
+            continue;
+          }
+          resolvedUrl = hit;
+        }
+        const item: ImageInput = { url: resolvedUrl };
         // Optional alt text and primary flag - only set when provided.
         if (im.alt != null && String(im.alt).trim() !== '') item.alt = String(im.alt).trim();
         const primary = parseBool(im?.isPrimary, `images[${i}].isPrimary`);
@@ -503,6 +532,279 @@ function buildCategoryPlan(plan: CategoryPlan, raw: Record<string, unknown>): vo
 }
 
 // ---------------------------------------------------------------------------
+// customer row
+// ---------------------------------------------------------------------------
+
+export interface AddressInput {
+  firstName?: string;
+  lastName?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  phone?: string;
+  type?: string;
+}
+
+export interface CustomerPlan {
+  /** Match key: email, lowercased. */
+  email: string;
+  data: Record<string, any>;
+  addresses?: AddressInput[];
+  errors: string[];
+}
+
+export const CUSTOMER_CSV_HEADERS = ['email', 'firstName', 'lastName', 'phone', 'isActive', 'addresses'];
+
+/**
+ * Validate one raw customer row. Customers match by email (case-insensitive);
+ * on create the caller supplies a placeholder password (customer import is
+ * about onboarding account data, not credentials).
+ */
+export function mapCustomerRow(raw: Record<string, unknown>): CustomerPlan {
+  const plan: CustomerPlan = { email: '', data: {}, errors: [] };
+  try {
+    buildCustomerPlan(plan, raw);
+  } catch (e) {
+    plan.errors.push(e instanceof Error ? e.message : String(e));
+  }
+  return plan;
+}
+
+function buildCustomerPlan(plan: CustomerPlan, raw: Record<string, unknown>): void {
+  const err = (msg: string) => plan.errors.push(msg);
+  const str = (k: string): string | undefined => {
+    const v = raw[k];
+    if (v === null || v === undefined) return undefined;
+    const s = String(v).trim();
+    return s === '' ? undefined : s;
+  };
+
+  const email = str('email')?.toLowerCase();
+  if (!email) {
+    err('email is required (it is the import match key)');
+  } else {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) err(`email "${email}" is not a valid address`);
+    if (email.length > 255) err('email is longer than 255 characters');
+    plan.email = email;
+  }
+
+  const firstName = str('firstName');
+  const lastName = str('lastName');
+  if (firstName !== undefined) {
+    if (firstName.length > 100) err('firstName is longer than 100 characters');
+    plan.data.firstName = firstName;
+  }
+  if (lastName !== undefined) {
+    if (lastName.length > 100) err('lastName is longer than 100 characters');
+    plan.data.lastName = lastName;
+  }
+  const phone = str('phone');
+  if (phone !== undefined) {
+    if (phone.length > 50) err('phone is longer than 50 characters');
+    plan.data.phone = phone;
+  }
+  const active = parseBool(raw['isActive'], 'isActive');
+  if (active !== undefined) plan.data.isActive = active;
+
+  // Optional `addresses` column: a JSON array of address objects.
+  const addrsRaw = parseJsonCell(raw['addresses'], 'addresses');
+  if (addrsRaw !== undefined) {
+    if (!Array.isArray(addrsRaw)) {
+      err('addresses: expected a JSON array');
+    } else {
+      const addrs: AddressInput[] = [];
+      for (let i = 0; i < addrsRaw.length; i++) {
+        const a = (addrsRaw[i] || {}) as Record<string, unknown>;
+        const item: AddressInput = {};
+        const f = (k: string) => {
+          const v = a[k];
+          if (v === null || v === undefined || String(v).trim() === '') return undefined;
+          return String(v).trim();
+        };
+        item.firstName = f('firstName');
+        item.lastName = f('lastName');
+        item.address1 = f('address1') ?? f('address');
+        item.city = f('city');
+        item.state = f('state');
+        item.postalCode = f('postalCode') ?? f('zipCode');
+        item.country = f('country');
+        item.phone = f('phone');
+        item.type = f('type');
+        if (!item.address1) { err(`addresses[${i}]: address1 is required`); continue; }
+        addrs.push(item);
+      }
+      plan.addresses = addrs;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// order row
+// ---------------------------------------------------------------------------
+
+export interface OrderItemInput {
+  /** Product match key (exact SKU). */
+  sku: string;
+  /** Optional variant SKU for a specific line. */
+  variantSku?: string;
+  quantity: number;
+  unitPrice?: number;
+}
+
+export interface OrderPlan {
+  orderNumber?: string;
+  /** Customer match key (email). */
+  customerEmail: string;
+  data: Record<string, any>;
+  items?: OrderItemInput[];
+  shippingAddress?: AddressInput;
+  errors: string[];
+}
+
+const ORDER_STATUS_VALUES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+const PAYMENT_STATUS_VALUES = ['pending', 'completed', 'failed', 'refunded'];
+
+export const ORDER_CSV_HEADERS = [
+  'orderNumber', 'customerEmail', 'status', 'subtotal', 'taxAmount',
+  'shippingAmount', 'discountAmount', 'totalAmount', 'paymentMethod',
+  'paymentStatus', 'notes', 'items',
+  'shippingFirstName', 'shippingLastName', 'shippingAddress1', 'shippingCity',
+  'shippingState', 'shippingPostalCode', 'shippingCountry', 'shippingPhone',
+  'createdAt',
+];
+
+/**
+ * Validate one raw order row. Orders match by orderNumber (if present and
+ * found) or are created. The customer email is required and is resolved to
+ * an existing user at execution time (created if missing).
+ */
+export function mapOrderRow(raw: Record<string, unknown>): OrderPlan {
+  const plan: OrderPlan = { customerEmail: '', data: {}, errors: [] };
+  try {
+    buildOrderPlan(plan, raw);
+  } catch (e) {
+    plan.errors.push(e instanceof Error ? e.message : String(e));
+  }
+  return plan;
+}
+
+function buildOrderPlan(plan: OrderPlan, raw: Record<string, unknown>): void {
+  const err = (msg: string) => plan.errors.push(msg);
+  const str = (k: string): string | undefined => {
+    const v = raw[k];
+    if (v === null || v === undefined) return undefined;
+    const s = String(v).trim();
+    return s === '' ? undefined : s;
+  };
+
+  const orderNumber = str('orderNumber');
+  if (orderNumber) {
+    if (orderNumber.length > 64) err('orderNumber is longer than 64 characters');
+    else plan.orderNumber = orderNumber;
+  }
+
+  const customerEmail = str('customerEmail')?.toLowerCase();
+  if (!customerEmail) {
+    err('customerEmail is required (resolved to a customer by email)');
+  } else {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) err(`customerEmail "${customerEmail}" is not a valid address`);
+    plan.customerEmail = customerEmail;
+  }
+
+  const status = str('status')?.toLowerCase();
+  if (status !== undefined) {
+    if (!ORDER_STATUS_VALUES.includes(status)) err(`status must be one of ${ORDER_STATUS_VALUES.join(', ')} - got "${status}"`);
+    else plan.data.status = status;
+  }
+  const paymentStatus = str('paymentStatus')?.toLowerCase();
+  if (paymentStatus !== undefined) {
+    if (!PAYMENT_STATUS_VALUES.includes(paymentStatus)) err(`paymentStatus must be one of ${PAYMENT_STATUS_VALUES.join(', ')} - got "${paymentStatus}"`);
+    else plan.data.paymentStatus = paymentStatus;
+  }
+  const paymentMethod = str('paymentMethod');
+  if (paymentMethod !== undefined) plan.data.paymentMethod = paymentMethod;
+  const notes = str('notes');
+  if (notes !== undefined) plan.data.notes = notes;
+
+  const numField = (k: string, opts: { min?: number } = {}) => {
+    const v = parseNumber(raw[k], k);
+    if (v === undefined) return;
+    if (opts.min !== undefined && v < opts.min) err(`${k} must be >= ${opts.min}, got ${v}`);
+    plan.data[k] = v;
+  };
+  numField('subtotal', { min: 0 });
+  numField('taxAmount', { min: 0 });
+  numField('shippingAmount', { min: 0 });
+  numField('discountAmount', { min: 0 });
+  numField('totalAmount', { min: 0 });
+
+  const createdAt = parseDate(raw['createdAt'], 'createdAt');
+  if (createdAt !== undefined) plan.data.createdAt = createdAt;
+
+  // --- items (JSON array of { sku, variantSku?, quantity, unitPrice? }) ----
+  const itemsRaw = parseJsonCell(raw['items'], 'items');
+  if (itemsRaw !== undefined) {
+    if (!Array.isArray(itemsRaw)) {
+      err('items: expected a JSON array');
+    } else {
+      const items: OrderItemInput[] = [];
+      for (let i = 0; i < itemsRaw.length; i++) {
+        const it = (itemsRaw[i] || {}) as Record<string, unknown>;
+        const sku2 = str_of(it.sku);
+        const qty = parseNumber(it.quantity, `items[${i}].quantity`);
+        if (!sku2) { err(`items[${i}]: sku is required`); continue; }
+        if (qty === undefined || qty <= 0 || !Number.isInteger(qty)) {
+          err(`items[${i}]: quantity must be a positive whole number`);
+          continue;
+        }
+        const item: OrderItemInput = { sku: sku2, quantity: qty };
+        const variantSku = str_of(it.variantSku);
+        if (variantSku) item.variantSku = variantSku;
+        const unitPrice = parseNumber(it.unitPrice, `items[${i}].unitPrice`);
+        if (unitPrice !== undefined && unitPrice >= 0) item.unitPrice = unitPrice;
+        items.push(item);
+      }
+      plan.items = items;
+    }
+  }
+
+  // --- shipping address (individual columns) --------------------------------
+  const ship: AddressInput = {};
+  const ss = (k: string): string | undefined => {
+    const v = str(k);
+    return v;
+  };
+  const fn = ss('shippingFirstName');
+  const ln = ss('shippingLastName');
+  const a1 = ss('shippingAddress1');
+  const city = ss('shippingCity');
+  const state = ss('shippingState');
+  const zip = ss('shippingPostalCode');
+  const country = ss('shippingCountry');
+  const phone = ss('shippingPhone');
+  if (fn) ship.firstName = fn;
+  if (ln) ship.lastName = ln;
+  if (a1) ship.address1 = a1;
+  if (city) ship.city = city;
+  if (state) ship.state = state;
+  if (zip) ship.postalCode = zip;
+  if (country) ship.country = country;
+  if (phone) ship.phone = phone;
+  ship.type = 'shipping';
+  if (Object.keys(ship).some((k) => k !== 'type' && ship[k as keyof AddressInput])) {
+    plan.shippingAddress = ship;
+  }
+}
+
+function str_of(v: unknown): string | undefined {
+  if (v === null || v === undefined) return undefined;
+  const s = String(v).trim();
+  return s === '' ? undefined : s;
+}
+
+// ---------------------------------------------------------------------------
 // file -> rows
 // ---------------------------------------------------------------------------
 
@@ -569,6 +871,7 @@ export async function previewImport(
   entity: Entity,
   format: ImportFormat,
   text: string,
+  opts: { resolveImage?: ImageUrlResolver } = {},
 ): Promise<ImportResult> {
   const rows = extractRows(entity, format, text);
   const result: ImportResult = {
@@ -581,19 +884,28 @@ export async function previewImport(
   // Preload match keys so row N doesn't re-query the DB per field.
   let existingSkus: Set<string> | null = null;
   let existingCategories: Map<string, string> | null = null; // lower(name|slug) -> true
+  let existingEmails: Set<string> | null = null;
+  let existingOrderNumbers: Set<string> | null = null;
   if (entity === 'products') {
     const skus = await prisma.product.findMany({ where: {}, select: { sku: true } });
     existingSkus = new Set(skus.map((s) => s.sku));
-  } else {
+  } else if (entity === 'categories') {
     const cats = await prisma.category.findMany({ select: { name: true, slug: true } });
     existingCategories = new Map<string, string>();
     for (const c of cats) {
       existingCategories.set(c.name.toLowerCase(), 'name');
       existingCategories.set(c.slug.toLowerCase(), 'slug');
     }
+  } else if (entity === 'customers') {
+    const users = await prisma.user.findMany({ where: {}, select: { email: true } });
+    existingEmails = new Set(users.map((u) => u.email.toLowerCase()));
+  } else {
+    const orders = await prisma.order.findMany({ where: {}, select: { orderNumber: true } });
+    existingOrderNumbers = new Set(orders.map((o) => o.orderNumber));
   }
 
-  const seenSkus = new Set<string>(); // catch duplicate SKUs within the file
+  const seenSkus = new Set<string>(); // catch duplicate SKUs / orderNumbers within the file
+  const seenEmails = new Set<string>(); // duplicate emails within the file
 
   // Classify each row: a row with validation errors is an "error";
   // otherwise a product is an "update" if its SKU already exists, else a
@@ -603,7 +915,7 @@ export async function previewImport(
     const rowNo = i + 1;
     let row: PreviewRow;
     if (entity === 'products') {
-      const plan = mapProductRow(raw, null);
+      const plan = mapProductRow(raw, null, opts);
       row = { row: rowNo, status: 'error', errors: plan.errors, sku: plan.sku || undefined, name: plan.name };
       if (plan.errors.length === 0) {
         if (seenSkus.has(plan.sku)) {
@@ -613,12 +925,38 @@ export async function previewImport(
           row.status = existingSkus!.has(plan.sku) ? 'update' : 'create';
         }
       }
-    } else {
+    } else if (entity === 'categories') {
       const plan = mapCategoryRow(raw);
       row = { row: rowNo, status: 'error', errors: plan.errors, name: plan.name };
       if (plan.errors.length === 0) {
         const key = plan.matchKey.toLowerCase();
         row.status = existingCategories!.has(key) ? 'update' : 'create';
+      }
+    } else if (entity === 'customers') {
+      const plan = mapCustomerRow(raw);
+      row = { row: rowNo, status: 'error', errors: plan.errors, name: plan.data.firstName || plan.email, sku: plan.email };
+      if (plan.errors.length === 0) {
+        if (seenEmails.has(plan.email)) {
+          row.errors.push(`duplicate email \"${plan.email}\" in this file`);
+        } else {
+          seenEmails.add(plan.email);
+          row.status = existingEmails!.has(plan.email) ? 'update' : 'create';
+        }
+      }
+    } else {
+      const plan = mapOrderRow(raw);
+      row = { row: rowNo, status: 'error', errors: plan.errors, name: plan.customerEmail, sku: plan.orderNumber };
+      if (plan.errors.length === 0) {
+        if (plan.orderNumber) {
+          if (seenSkus.has(plan.orderNumber)) {
+            row.errors.push(`duplicate orderNumber \"${plan.orderNumber}\" in this file`);
+          } else {
+            seenSkus.add(plan.orderNumber);
+            row.status = existingOrderNumbers!.has(plan.orderNumber) ? 'update' : 'create';
+          }
+        } else {
+          row.status = 'create';
+        }
       }
     }
     result.rows.push(row);

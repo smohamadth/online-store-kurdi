@@ -260,3 +260,87 @@ describe('AdminImportExportPage - file input', () => {
     await waitFor(() => expect((screen.getByTestId('ie-text') as HTMLTextAreaElement).value).toBe(csvText));
   });
 });
+
+describe('AdminImportExportPage - customers & orders', () => {
+  it('renders entity tabs for customers and orders', () => {
+    render(<AdminImportExportPage />);
+    expect(screen.getByTestId('ie-entity-customers')).toBeInTheDocument();
+    expect(screen.getByTestId('ie-entity-orders')).toBeInTheDocument();
+  });
+
+  it('previews customers through the JSON endpoint', async () => {
+    post.mockResolvedValue({
+      status: 'success',
+      data: {
+        entity: 'customers',
+        total: 1,
+        summary: { create: 1, update: 0, error: 0 },
+        rows: [{ row: 1, status: 'create', name: 'Jane', sku: 'jane@example.com', errors: [] }],
+      },
+    });
+    render(<AdminImportExportPage />);
+    fireEvent.click(screen.getByTestId('ie-entity-customers'));
+    fireEvent.change(screen.getByTestId('ie-text'), { target: { value: 'email,firstName\njane@example.com,Jane' } });
+    fireEvent.click(screen.getByTestId('ie-preview'));
+
+    await screen.findByTestId('ie-summary');
+    expect(post).toHaveBeenCalledWith('/import-export/preview', {
+      entity: 'customers',
+      format: 'csv',
+      text: 'email,firstName\njane@example.com,Jane',
+    });
+    // the customer email is shown in the preview table
+    expect(screen.getByTestId('ie-preview-rows')).toHaveTextContent('jane@example.com');
+  });
+
+  it('orders entity hides the image upload (products only)', () => {
+    render(<AdminImportExportPage />);
+    expect(screen.getByTestId('ie-images-label')).toBeInTheDocument(); // products default
+    fireEvent.click(screen.getByTestId('ie-entity-orders'));
+    expect(screen.queryByTestId('ie-images-label')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminImportExportPage - product image upload', () => {
+  it('sends a multipart request to /import-export/import when images are attached', async () => {
+    post.mockResolvedValue({ status: 'success', data: previewData });
+    render(<AdminImportExportPage />);
+    fireEvent.change(screen.getByTestId('ie-text'), { target: { value: csvText } });
+    const file = new File(['img'], 'photo.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByTestId('ie-images'), { target: { files: [file] } });
+    expect(screen.getByTestId('ie-images-count')).toHaveTextContent('1 image attached');
+
+    const imagePreview = {
+      entity: 'products',
+      total: 1,
+      summary: { create: 1, update: 0, error: 0 },
+      rows: [{ row: 1, status: 'create', sku: 'NEW-1', name: 'New One', errors: [] }],
+    };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'success', data: imagePreview }), { status: 200 }));
+    fireEvent.click(screen.getByTestId('ie-preview'));
+
+    await screen.findByTestId('ie-summary');
+    // images attached -> multipart via fetch, not the JSON authHttp path
+    expect(post).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalled();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/import-export/import');
+    expect(init.method).toBe('POST');
+    const fd = init.body as FormData;
+    expect(fd).toBeInstanceOf(FormData);
+    expect(fd.get('entity')).toBe('products');
+    expect(fd.get('action')).toBe('preview');
+    expect(fd.getAll('images')).toHaveLength(1);
+  });
+
+  it('still uses the JSON endpoint for products with no attached images', async () => {
+    post.mockResolvedValue({ status: 'success', data: previewData });
+    render(<AdminImportExportPage />);
+    fireEvent.change(screen.getByTestId('ie-text'), { target: { value: csvText } });
+    fireEvent.click(screen.getByTestId('ie-preview'));
+
+    await screen.findByTestId('ie-summary');
+    expect(post).toHaveBeenCalledWith('/import-export/preview', { entity: 'products', format: 'csv', text: csvText });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

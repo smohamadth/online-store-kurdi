@@ -15,18 +15,31 @@
  * this keeps the behaviour identical on SQLite and PostgreSQL.
  */
 import slugify from 'slugify';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/database';
 import {
   extractRows,
   mapCategoryRow,
+  mapCustomerRow,
+  mapOrderRow,
   mapProductRow,
   previewImport,
   type CategoryPlan,
+  type CustomerPlan,
   type Entity,
+  type ImageUrlResolver,
   type ImportFormat,
+  type OrderPlan,
   type ProductPlan,
 } from './mappers';
 import { syncVariantAttributes } from '../products/variantAttributeIndex';
+
+// Placeholder password hashed onto a customer that is created purely by an
+// import (onboarding order history, not credentials). The admin/customer can
+// reset it via the normal forgot-password flow. Imported customers should not
+// be assumed able to log in with a known secret.
+const IMPORTED_CUSTOMER_PASSWORD = 'Imported-Change-Me-123!';
+const BCRYPT_ROUNDS = 10;
 
 export interface CommitError {
   row: number;
@@ -165,6 +178,7 @@ async function uniqueProductSlug(
 // slug (case-insensitive) from the in-memory index built up front.
 async function executeProducts(
   rawRows: Record<string, unknown>[],
+  opts: { resolveImage?: ImageUrlResolver } = {},
 ): Promise<{ created: number; updated: number }> {
   let created = 0;
   let updated = 0;
@@ -175,11 +189,11 @@ async function executeProducts(
     const catIndex = new CiIndex(cats);
     const products = await tx.product.findMany({ select: { id: true, slug: true, sku: true } });
     const bySku = new Map(products.map((p) => [p.sku, p]));
-    const slugsTaken = new Set(products.map((p) => p.slug));
+    const slugsTaken = new Set<string>(products.map((p) => p.slug));
 
     for (let i = 0; i < rawRows.length; i++) {
       const rowNo = i + 1;
-      const plan = mapProductRow(rawRows[i], null);
+      const plan = mapProductRow(rawRows[i], null, opts);
       // The preview already rejected invalid rows; this is defensive.
       if (plan.errors.length > 0) {
         throw new RowError(rowNo, plan.sku, plan.name, plan.errors);
@@ -330,6 +344,210 @@ async function executeCategories(
   return { created, updated };
 }
 
+// Apply every customer row in a single Prisma transaction. Customers are
+// matched by email (case-insensitive). A new email creates a customer (with a
+// placeholder password - import is about onboarding account data, not
+// credentials); an existing one is updated with the provided fields. When the
+// `addresses` column is present it REPLACES the customer's address rows.
+async function executeCustomers(
+  rawRows: Record<string, unknown>[],
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    const users = await tx.user.findMany({ where: {}, select: { id: true, email: true } });
+    const byEmail = new Map<string, { id: string; email: string }>(users.map((u) => [u.email.toLowerCase(), u]));
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const rowNo = i + 1;
+      const plan: CustomerPlan = mapCustomerRow(rawRows[i]);
+      if (plan.errors.length > 0) throw new RowError(rowNo, plan.email, undefined, plan.errors);
+
+      const existing = byEmail.get(plan.email);
+      if (existing) {
+        const data: Record<string, any> = { ...plan.data };
+        // email is the match key, never updated.
+        delete data.email;
+        await tx.user.update({ where: { id: existing.id }, data: data as any });
+        if (plan.addresses !== undefined) {
+          await tx.address.deleteMany({ where: { userId: existing.id } });
+          for (const a of plan.addresses) {
+            await tx.address.create({ data: { userId: existing.id, ...a } as any });
+          }
+        }
+        updated++;
+      } else {
+        const password = await bcrypt.hash(IMPORTED_CUSTOMER_PASSWORD, BCRYPT_ROUNDS);
+        const user = await tx.user.create({
+          data: {
+            email: plan.email,
+            password,
+            firstName: plan.data.firstName ?? plan.email.split('@')[0],
+            lastName: plan.data.lastName ?? '',
+            phone: plan.data.phone ?? null,
+            isActive: plan.data.isActive ?? true,
+            role: 'customer',
+            isVerified: false,
+          },
+        });
+        byEmail.set(plan.email, { id: user.id, email: plan.email });
+        if (plan.addresses) {
+          for (const a of plan.addresses) {
+            await tx.address.create({ data: { userId: user.id, ...a } as any });
+          }
+        }
+        created++;
+      }
+    }
+  });
+
+  return { created, updated };
+}
+
+// Apply every order row in a single Prisma transaction. Orders match by
+// orderNumber (when provided); a new orderNumber (or no orderNumber) creates
+// the order, an existing one updates it. The customer email is resolved to a
+// user (created with a placeholder password if missing). Line items resolve
+// products by SKU (and optionally a variant SKU); the shipping address is
+// created on the customer and linked to the order. Amounts default to the
+// provided values, falling back to a computed subtotal / total.
+async function executeOrders(rawRows: Record<string, unknown>[]): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    const users = await tx.user.findMany({ where: {}, select: { id: true, email: true } });
+    const userByEmail = new Map<string, { id: string; email: string }>(users.map((u) => [u.email.toLowerCase(), u]));
+    const orders = await tx.order.findMany({ where: {}, select: { id: true, orderNumber: true } });
+    const orderByNumber = new Map(orders.map((o) => [o.orderNumber, o]));
+    const products = await tx.product.findMany({ select: { id: true, sku: true } });
+    const productBySku = new Map(products.map((p) => [p.sku, p]));
+    const variants = await tx.variant.findMany({ select: { id: true, sku: true, productId: true } });
+    const variantBySku = new Map(variants.map((v) => [v.sku, v]));
+
+    const password = await bcrypt.hash(IMPORTED_CUSTOMER_PASSWORD, BCRYPT_ROUNDS);
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const rowNo = i + 1;
+      const plan: OrderPlan = mapOrderRow(rawRows[i]);
+      if (plan.errors.length > 0) throw new RowError(rowNo, plan.orderNumber, plan.customerEmail, plan.errors);
+
+      // Resolve (or create) the customer.
+      let user = userByEmail.get(plan.customerEmail);
+      if (!user) {
+        const createdUser = await tx.user.create({
+          data: {
+            email: plan.customerEmail,
+            password,
+            firstName: plan.customerEmail.split('@')[0],
+            lastName: '',
+            phone: null,
+            isActive: true,
+            role: 'customer',
+            isVerified: false,
+          },
+        });
+        user = { id: createdUser.id, email: plan.customerEmail };
+        userByEmail.set(plan.customerEmail, user);
+      }
+
+      // Resolve line items against product (and variant) SKUs.
+      const items: any[] = [];
+      let subtotal = 0;
+      for (const it of plan.items ?? []) {
+        const product = productBySku.get(it.sku);
+        if (!product) {
+          throw new RowError(rowNo, plan.orderNumber, plan.customerEmail, [`item sku \"${it.sku}\" not found`]);
+        }
+        let variantId: string | null = null;
+        let unitPrice = it.unitPrice;
+        if (it.variantSku) {
+          const variant = variantBySku.get(it.variantSku);
+          if (!variant || variant.productId !== product.id) {
+            throw new RowError(rowNo, plan.orderNumber, plan.customerEmail, [`variant sku \"${it.variantSku}\" not found for product \"${it.sku}\"`]);
+          }
+          variantId = variant.id;
+          if (unitPrice === undefined) {
+            const vRow = await tx.variant.findUnique({ where: { id: variant.id }, select: { price: true } });
+            unitPrice = Number(vRow?.price ?? 0);
+          }
+        } else if (unitPrice === undefined) {
+          const pRow = await tx.product.findUnique({ where: { id: product.id }, select: { price: true } });
+          unitPrice = Number(pRow?.price ?? 0);
+        }
+        const lineTotal = unitPrice! * it.quantity;
+        subtotal += lineTotal;
+        items.push({
+          productId: product.id,
+          variantId,
+          quantity: it.quantity,
+          unitPrice: unitPrice!,
+          totalPrice: lineTotal,
+        });
+      }
+
+      // Shipping address: create on the customer and link to the order.
+      let shippingAddressId: string | null = null;
+      if (plan.shippingAddress) {
+        const addr = await tx.address.create({ data: { userId: user.id, ...plan.shippingAddress } as any });
+        shippingAddressId = addr.id;
+      }
+
+      const subtotalAmount = plan.data.subtotal ?? subtotal;
+      const taxAmount = plan.data.taxAmount ?? 0;
+      const shippingAmount = plan.data.shippingAmount ?? 0;
+      const discountAmount = plan.data.discountAmount ?? 0;
+      const totalAmount = plan.data.totalAmount ?? (subtotalAmount + taxAmount + shippingAmount - discountAmount);
+
+      const existing = plan.orderNumber ? orderByNumber.get(plan.orderNumber) : undefined;
+      if (existing) {
+        await tx.order.update({
+          where: { id: existing.id },
+          data: {
+            ...plan.data,
+            subtotal: subtotalAmount,
+            taxAmount,
+            shippingAmount,
+            discountAmount,
+            totalAmount,
+            shippingAddressId: shippingAddressId ?? undefined,
+          } as any,
+        });
+        await tx.orderItem.deleteMany({ where: { orderId: existing.id } });
+        if (items.length > 0) {
+          await tx.orderItem.createMany({ data: items.map((it) => ({ ...it, orderId: existing.id })) });
+        }
+        updated++;
+      } else {
+        const orderNumber = plan.orderNumber || `IMP-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        const order = await tx.order.create({
+          data: {
+            orderNumber,
+            userId: user.id,
+            status: plan.data.status ?? 'pending',
+            paymentStatus: plan.data.paymentStatus ?? 'pending',
+            paymentMethod: plan.data.paymentMethod ?? null,
+            notes: plan.data.notes ?? null,
+            subtotal: subtotalAmount,
+            taxAmount,
+            shippingAmount,
+            discountAmount,
+            totalAmount,
+            shippingAddressId,
+            createdAt: plan.data.createdAt ?? undefined,
+            items: items.length ? { create: items } : undefined,
+          } as any,
+        });
+        orderByNumber.set(orderNumber, order);
+        created++;
+      }
+    }
+  });
+
+  return { created, updated };
+}
+
 // Apply an import file all-or-nothing. First re-run the preview to classify
 // every row; if any row is an error, nothing is written and the error rows
 // are returned so the admin can fix the file. Otherwise execute the rows in
@@ -339,8 +557,9 @@ export async function commitImport(
   entity: Entity,
   format: ImportFormat,
   text: string,
+  opts: { resolveImage?: ImageUrlResolver } = {},
 ): Promise<CommitResult> {
-  const preview = await previewImport(entity, format, text);
+  const preview = await previewImport(entity, format, text, opts);
 
   // Validation errors block the whole import (all-or-nothing).
   if (preview.summary.error > 0) {
@@ -358,9 +577,12 @@ export async function commitImport(
 
   const rawRows = extractRows(entity, format, text);
   try {
-    const { created, updated } =
-      entity === 'products' ? await executeProducts(rawRows) : await executeCategories(rawRows);
-    return { entity, total: preview.total, created, updated, failed: 0, errors: [] };
+    let result: { created: number; updated: number };
+    if (entity === 'products') result = await executeProducts(rawRows, opts);
+    else if (entity === 'categories') result = await executeCategories(rawRows);
+    else if (entity === 'customers') result = await executeCustomers(rawRows);
+    else result = await executeOrders(rawRows);
+    return { entity, total: preview.total, created: result.created, updated: result.updated, failed: 0, errors: [] };
   } catch (err) {
     if (err instanceof RowError) {
       // The transaction rolled back: NOTHING from this file was applied.

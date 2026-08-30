@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Bulk Import / Export (products & categories).
+ * Bulk Import / Export (products, categories, customers, orders).
  *
  * Export: download the full catalogue (CSV or JSON, nested variants and
  * images included) or a one-row template to fill in.
@@ -9,11 +9,17 @@
  * create / update / error without writing anything -> Commit applies the
  * whole file all-or-nothing. The server re-validates on commit, so the
  * preview is a convenience, not a contract.
+ *
+ * For products you can also attach image files. Reference an attached
+ * image from a row's `images` column as `@file:<original filename>` (e.g.
+ * `{"url":"@file:photo.jpg"}`); the server uploads it and resolves the
+ * placeholder to the served URL. When images are attached the request is
+ * sent as multipart to /import-export/import.
  */
 import { useState, useRef } from 'react';
 import { authHttp, errorMessage, API_BASE, getToken } from '@/lib/http';
 
-type Entity = 'products' | 'categories';
+type Entity = 'products' | 'categories' | 'customers' | 'orders';
 type Format = 'csv' | 'json';
 
 interface PreviewRow {
@@ -21,7 +27,8 @@ interface PreviewRow {
   status: 'create' | 'update' | 'error';
   sku?: string;
   name?: string;
-  category?: string;
+  email?: string;
+  orderNumber?: string;
   errors: string[];
 }
 interface PreviewResult {
@@ -34,6 +41,8 @@ interface CommitRowError {
   row: number;
   sku?: string;
   name?: string;
+  email?: string;
+  orderNumber?: string;
   errors: string[];
 }
 interface CommitResult {
@@ -104,6 +113,8 @@ export default function AdminImportExportPage() {
   const [entity, setEntity] = useState<Entity>('products');
   const [format, setFormat] = useState<Format>('csv');
   const [text, setText] = useState('');
+  // Image files attached for a product import (referenced as @file:<name>).
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -111,14 +122,17 @@ export default function AdminImportExportPage() {
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
 
-  // Switching entity (products <-> categories) invalidates any preview or
-  // commit result for the previous entity, so clear them to avoid showing
-  // stale results for the wrong entity.
+  // Switching entity invalidates any preview or commit result for the
+  // previous entity, so clear them to avoid showing stale results for the
+  // wrong entity. Images only make sense for products, so drop them too.
   const switchEntity = (e: Entity) => {
     setEntity(e);
     setPreview(null);
     setCommitResult(null);
+    setImageFiles([]);
+    if (imageRef.current) imageRef.current.value = '';
     setError('');
   };
 
@@ -137,6 +151,15 @@ export default function AdminImportExportPage() {
     };
     r.onerror = () => setError('Could not read the selected file.');
     r.readAsText(f);
+  };
+
+  // Collect the selected image files (products only). They are sent to the
+  // server as multipart and referenced from the file as @file:<filename>.
+  const onImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageFiles(Array.from(e.target.files ?? []));
+    setPreview(null);
+    setCommitResult(null);
+    setError('');
   };
 
   /** Fetch an export as a blob and trigger a browser download. */
@@ -200,6 +223,47 @@ export default function AdminImportExportPage() {
     }
   };
 
+  /**
+   * Run a preview or commit against the server.
+   *
+   * Plain imports (no attached images, or any non-product entity) post the
+   * raw text as JSON to /import-export/preview|commit. A product import with
+   * attached image files sends a multipart request to /import-export/import
+   * (form fields: entity, format, action, file + one `images` field per file),
+   * which uploads the images and resolves `@file:<name>` placeholders in the
+   * rows. Returns whichever payload the action produced.
+   */
+  const sendImport = async (action: 'preview' | 'commit') => {
+    const usesMultipart = entity === 'products' && imageFiles.length > 0;
+    if (usesMultipart) {
+      const fd = new FormData();
+      fd.append('entity', entity);
+      fd.append('format', format);
+      fd.append('action', action);
+      fd.append('file', new Blob([text], { type: format === 'csv' ? 'text/csv' : 'application/json' }), `import.${format}`);
+      for (const f of imageFiles) fd.append('images', f);
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/import-export/import`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        let msg = `Import failed (${res.status})`;
+        try {
+          msg = (await res.json()).message || msg;
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new Error(msg);
+      }
+      return (await res.json()).data as PreviewResult | CommitResult;
+    }
+    const path = action === 'preview' ? '/import-export/preview' : '/import-export/commit';
+    const res = await authHttp.post<PreviewResult | CommitResult>(path, { entity, format, text });
+    return res.data;
+  };
+
   // Dry run: ask the server to parse + validate the file and classify each
   // row as create / update / error. Writes nothing - the admin reviews the
   // result before committing.
@@ -208,8 +272,8 @@ export default function AdminImportExportPage() {
     setError('');
     setCommitResult(null);
     try {
-      const res = await authHttp.post<PreviewResult>('/import-export/preview', { entity, format, text });
-      setPreview(res.data);
+      const data = await sendImport('preview');
+      setPreview(data as PreviewResult);
     } catch (err) {
       setPreview(null);
       setError(errorMessage(err));
@@ -226,12 +290,14 @@ export default function AdminImportExportPage() {
     setCommitBusy(true);
     setError('');
     try {
-      const res = await authHttp.post<CommitResult>('/import-export/commit', { entity, format, text });
-      setCommitResult(res.data);
-      if (res.data.failed === 0) {
+      const data = await sendImport('commit');
+      setCommitResult(data as CommitResult);
+      if ((data as CommitResult).failed === 0) {
         setPreview(null);
         setText('');
+        setImageFiles([]);
         if (fileRef.current) fileRef.current.value = '';
+        if (imageRef.current) imageRef.current.value = '';
       }
     } catch (err) {
       setCommitResult(null);
@@ -246,21 +312,21 @@ export default function AdminImportExportPage() {
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Import / Export</h2>
         <p style={{ color: '#666', fontSize: '14px' }}>
-          Bulk-manage products and categories with CSV or JSON files.
+          Bulk-manage products, categories, customers and orders with CSV or JSON files.
         </p>
       </div>
 
       {/* Entity + format switcher */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '24px', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {(['products', 'categories'] as Entity[]).map((e) => (
+          {(['products', 'categories', 'customers', 'orders'] as Entity[]).map((e) => (
             <button
               key={e}
               data-testid={`ie-entity-${e}`}
               onClick={() => switchEntity(e)}
               style={entity === e ? { ...primaryBtn, cursor: 'pointer' } : { ...secondaryBtn, cursor: 'pointer' }}
             >
-              {e === 'products' ? 'Products' : 'Categories'}
+              {e === 'products' ? 'Products' : e === 'categories' ? 'Categories' : e === 'customers' ? 'Customers' : 'Orders'}
             </button>
           ))}
         </div>
@@ -284,7 +350,11 @@ export default function AdminImportExportPage() {
         <p style={{ fontSize: '14px', color: '#666', marginBottom: '12px' }}>
           {entity === 'products'
             ? 'Download every product, including variants, images and SEO fields.'
-            : 'Download every category, including parent links.'}
+            : entity === 'categories'
+              ? 'Download every category, including parent links.'
+              : entity === 'customers'
+                ? 'Download every customer account and their addresses.'
+                : 'Download every order with its customer, line items and shipping address.'}
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           <button data-testid="ie-export" onClick={() => downloadFile(false)} disabled={downloadBusy} style={primaryBtn}>
@@ -301,9 +371,13 @@ export default function AdminImportExportPage() {
         <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>Import</h3>
         <p style={{ fontSize: '14px', color: '#666', marginBottom: '12px' }}>
           {entity === 'products'
-            ? 'Products are matched by SKU: a new SKU creates the product, an existing SKU updates it. Categories are matched by slug, then name.'
-            : 'Categories are matched by slug, then name (case-insensitive). The parent column links to an existing category name or slug.'}
-          {format === 'csv' ? ' One row per record; nested data (images, variants) travels as JSON strings in its column.' : ''}
+            ? 'Products are matched by SKU: a new SKU creates the product, an existing SKU updates it.'
+            : entity === 'categories'
+              ? 'Categories are matched by slug, then name (case-insensitive). The parent column links to an existing category name or slug.'
+              : entity === 'customers'
+                ? 'Customers are matched by email (case-insensitive). On create they get a placeholder password to reset later.'
+                : 'Orders are matched by orderNumber; a new one creates the order. Items resolve by product SKU, the customer by email (auto-created if missing).'}
+          {format === 'csv' ? ' One row per record; nested data (images, variants, items, addresses) travels as JSON strings in its column.' : ''}
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
           <input
@@ -317,6 +391,34 @@ export default function AdminImportExportPage() {
             Paste template
           </button>
         </div>
+        {entity === 'products' && (
+          <div style={{ marginBottom: '12px', padding: '12px', border: '1px dashed #d0d0d0', borderRadius: '6px' }}>
+            <label
+              data-testid="ie-images-label"
+              style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '4px', cursor: 'pointer' }}
+            >
+              Attach product images (optional)
+            </label>
+            <p style={{ fontSize: '13px', color: '#666', margin: '0 0 8px' }}>
+              Reference an attached file from the <code>images</code> column as{' '}
+              <code>{'{"url":"@file:photo.jpg"}'}</code> — the server uploads it and fills in the URL. Files are
+              matched by their original filename.
+            </p>
+            <input
+              ref={imageRef}
+              data-testid="ie-images"
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={onImages}
+            />
+            {imageFiles.length > 0 && (
+              <p data-testid="ie-images-count" style={{ fontSize: '13px', color: '#16a34a', margin: '8px 0 0' }}>
+                {imageFiles.length} image{imageFiles.length === 1 ? '' : 's'} attached
+              </p>
+            )}
+          </div>
+        )}
         <textarea
           data-testid="ie-text"
           value={text}
@@ -405,8 +507,10 @@ export default function AdminImportExportPage() {
               <thead>
                 <tr style={{ borderBottom: '1px solid #e5e5e5', textAlign: 'left' }}>
                   <th style={{ padding: '8px 12px 8px 0' }}>Row</th>
-                  <th style={{ padding: '8px 12px' }}>Name</th>
+                  <th style={{ padding: '8px 12px' }}>{entity === 'orders' ? 'Customer' : 'Name'}</th>
                   {entity === 'products' && <th style={{ padding: '8px 12px' }}>SKU</th>}
+                  {entity === 'customers' && <th style={{ padding: '8px 12px' }}>Email</th>}
+                  {entity === 'orders' && <th style={{ padding: '8px 12px' }}>Order #</th>}
                   <th style={{ padding: '8px 12px' }}>Status</th>
                   <th style={{ padding: '8px 12px' }}>Errors</th>
                 </tr>
@@ -417,6 +521,8 @@ export default function AdminImportExportPage() {
                     <td style={{ padding: '8px 12px 8px 0', color: '#666' }}>{r.row}</td>
                     <td style={{ padding: '8px 12px' }}>{r.name || '—'}</td>
                     {entity === 'products' && <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.sku || '—'}</td>}
+                    {entity === 'customers' && <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.sku || '—'}</td>}
+                    {entity === 'orders' && <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.sku || '—'}</td>}
                     <td style={{ padding: '8px 12px' }}>
                       <Badge status={r.status} />
                     </td>
