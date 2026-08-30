@@ -1,3 +1,6 @@
+// /account/orders - the customer's order history. Fetches
+// GET /api/orders (server scopes the list to the logged-in user) and
+// renders status + total per order; rows link to /account/orders/[id].
 'use client';
 
 import { useState, useEffect } from 'react';

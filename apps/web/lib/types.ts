@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Shared web types (the type dictionary for views/components).
+//
+// Covers user, product, cart, order, review, coupon, shipping, settings,
+// and API-envelope shapes. A few types overlap with lib/api.ts (which
+// defines its own Product/CartItem next to its client) - api.ts is the
+// older home; new imports should come from here. Keep the two in sync
+// when the API shape changes, or check which one the caller uses.
+// ---------------------------------------------------------------------------
+
 // User types
 export interface User {
   id: string;

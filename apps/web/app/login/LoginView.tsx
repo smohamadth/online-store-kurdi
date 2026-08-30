@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// /login - the storefront sign-in form (register has its own page).
+//
+// On success the access token + user object go into localStorage and an
+// 'authChange' event is dispatched - the components that react to login
+// (cart sync, header, AppShell) listen for it; see also
+// window.addEventListener('authChange') in lib/store.tsx / AppShell.
+// A visitor arriving already logged in is bounced to /account.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { ButtonSpinner } from '@/components/Spinner';

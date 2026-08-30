@@ -1,3 +1,5 @@
+// /faq - static FAQ accordion (the Q&A live in ./faqData, not the
+// CMS; one item open at a time).
 'use client';
 
 import { useState } from 'react';

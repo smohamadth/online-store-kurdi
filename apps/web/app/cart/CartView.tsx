@@ -1,3 +1,20 @@
+// ---------------------------------------------------------------------------
+// /cart - the shopping cart page.
+//
+// Renders the useCart() state (guest: localStorage, logged-in: mirrored
+// to the server cart) with quantity controls, save-for-later, and a
+// coupon box. "Proceed to checkout" navigates to /checkout, which does
+// the actual order placement.
+//
+// The summary totals here (free shipping over $100, $9.99 below, flat
+// 10% tax, free-shipping coupon) MIRROR the server fallbacks in
+// order.routes.ts on purpose: the checkout page sends these same
+// numbers back with the order, so cart and order always agree. (The
+// server's own fallbacks are the last line of defence.)
+//
+// Note: useIsMobile is re-declared locally (a pre-existing duplicate of
+// lib/hooks.ts) - left as-is to keep this diff comment-only.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';

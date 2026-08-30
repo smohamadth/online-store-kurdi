@@ -1,3 +1,7 @@
+// /account - the account dashboard (welcome card + links to the other
+// account pages). The user object comes from localStorage (written at
+// login) rather than a fresh /api/auth/me call, so it renders
+// instantly; the layout (account/layout.tsx) handles the login gate.
 'use client';
 
 import { useState, useEffect } from 'react';

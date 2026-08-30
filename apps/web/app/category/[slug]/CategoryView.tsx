@@ -1,3 +1,15 @@
+// ---------------------------------------------------------------------------
+// /category/[slug] - the category listing page (filter sidebar + grid).
+//
+// Everything the user can do (filter, sort, page) is URL state, so the
+// page is shareable and back-navigable - see setParam below. The sort
+// values must stay in lockstep with the API's sort enum (a mismatch is
+// a 400 from Zod). Structured data (ItemList + BreadcrumbList) is
+// emitted inline for the visible page of products.
+//
+// Data: GET /api/categories/:id for the header, GET /api/products with
+// the category + page/sort params for the grid.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

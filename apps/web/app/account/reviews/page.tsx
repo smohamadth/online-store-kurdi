@@ -1,3 +1,6 @@
+// /account/reviews - the current user's own reviews (with photos),
+// fetched from GET /api/users/me/reviews. Edit/delete go through the
+// standard review routes.
 'use client';
 
 import { useState, useEffect } from 'react';

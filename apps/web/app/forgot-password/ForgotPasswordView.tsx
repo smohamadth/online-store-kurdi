@@ -1,3 +1,8 @@
+// /forgot-password - the reset-request form. Always shows the same
+// "if an account exists..." message (the server deliberately does not
+// reveal whether the email is registered). In dev mode the API also
+// returns the token in the response, which this form stashes to open
+// the reset flow directly (the real flow is the email link).
 'use client';
 
 import { useState } from 'react';

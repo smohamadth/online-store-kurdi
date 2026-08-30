@@ -1,3 +1,7 @@
+// /account/addresses - the saved-address book (add / edit / delete /
+// set default) behind the checkout's "ship to a saved address"
+// picker. All calls go to /api/addresses, which is scoped to the
+// logged-in user on the server.
 'use client';
 
 import { useState, useEffect } from 'react';

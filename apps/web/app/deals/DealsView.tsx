@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// /deals - "on sale" products: anything with a compareAtPrice above the
+// current price (the classic was/now pair).
+//
+// Implementation note: the API has no on-sale endpoint the storefront
+// relies on here, so this fetches the first 100 products and filters
+// client-side. Good enough at this store's size; if the catalog grows
+// past a few hundred items this should become an API filter.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';

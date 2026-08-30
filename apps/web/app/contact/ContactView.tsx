@@ -1,3 +1,7 @@
+// /contact - the contact form. Posts to the public POST /api/contact
+// (server stores it in-memory and the admin reads the feed there - see
+// the API's contact module for that caveat). The form is the only
+// client state that matters; success just flips to a thank-you note.
 'use client';
 
 import { useState, useEffect } from 'react';

@@ -1,3 +1,9 @@
+// /account/orders/[id] - order detail: items, totals, shipping
+// address, payment status, and the status timeline (fetched from
+// GET /api/orders/:id/tracking - the server derives it from the
+// order's own timestamps). Digital line items get a download button
+// (the per-order token lives on the order item). Cancel is offered
+// while the order is still pending.
 'use client';
 
 import { useState, useEffect } from 'react';

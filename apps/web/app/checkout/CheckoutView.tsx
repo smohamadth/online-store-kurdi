@@ -1,3 +1,21 @@
+// ---------------------------------------------------------------------------
+// /checkout - the order-placement page (also the Stripe return landing).
+//
+// Flow: login check -> fill shipping (prefilled from the profile) ->
+// pick shipping method (ShippingSelector) and tax (TaxCalculator) ->
+// pick payment (cod / bank_transfer / card) -> POST /api/orders.
+//
+// The server is the source of truth: the success screen only renders
+// after the API returns a real orderNumber (the inline comment above
+// handleSubmit records the old fake-success bug). Card orders redirect
+// to the Stripe Checkout session URL and come back on
+// ?paid=true/?canceled=true, where returnState renders the status
+// banner instead of the (now empty) cart.
+//
+// The submitted amounts (subtotal/shipping/tax/total) are computed HERE
+// - with the same fallback rules as CartView and the API - and sent in
+// the order body.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { ButtonSpinner } from '@/components/Spinner';

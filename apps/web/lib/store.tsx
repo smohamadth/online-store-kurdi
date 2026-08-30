@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// Cart context provider (the cart-icon badge, CartView, checkout all read
+// this).
+//
+// Guest flow: the cart lives in localStorage ('cart' + 'savedItems'),
+// so adding items works before login. Logged-in flow: on mount the
+// provider fetches the server cart (GET /api/cart) and REPLACES the
+// local items with it; from then on every mutation is mirrored to the
+// API best-effort (a failed API call never blocks the local cart - see
+// the "Try to ..." comments). syncWithDatabase() is the explicit import
+// used after login (POST /api/cart/sync).
+//
+// The server cart is authoritative for stock holds (see the cart module
+// on the API) - the localStorage copy is the guest UI state.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';

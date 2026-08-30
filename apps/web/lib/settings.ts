@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// Store settings for the storefront (client-side).
+//
+// Read model: localStorage is the cache of record - loadStoreSettings()
+// is synchronous so the very first paint has the store name/currency.
+// useStoreSettings() hydrates from that cache, then silently re-fetches
+// from the API and republishes via a 'settingsChange' event (plus the
+// cross-tab 'storage' event, so the admin editing settings in another
+// tab is reflected live). When the API is unreachable the cached
+// values are used - the store must render without the backend.
+//
+// (This is the STORE's public settings; the admin form talks to
+// /api/settings directly. formatPrice() is the legacy two-argument
+// formatter - multi-currency pages use lib/currency.tsx instead.)
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';

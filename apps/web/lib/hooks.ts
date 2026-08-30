@@ -1,3 +1,7 @@
+// Small shared UI hooks (viewport size). Each starts desktop-default and
+// re-checks on mount + resize, so server-rendered markup (desktop) and the
+// first client check agree - no layout flash from an initial `false`->
+//`true` mismatch on phones.
 'use client';
 
 import { useState, useEffect } from 'react';

@@ -1,3 +1,19 @@
+// ---------------------------------------------------------------------------
+// Storefront API types + the original ApiClient + image URL helpers.
+//
+// What lives here and who uses it:
+//   - the shared DATA TYPES (Product, Category, ProductVariant, ...) -
+//     imported by most views;
+//   - the ApiClient singleton (`api`) - the FIRST client, still used by
+//     ~39 files. Newer code should use lib/http.ts (http / authHttp),
+//     which centralises auth + ApiError; the two coexist;
+//   - getImageUrl() / getProductImage() / getCategoryEmoji() - used
+//     everywhere images are rendered.
+//
+// NOTE the local API_URL fallback to localhost:3001: it only matters in
+// dev; lib/apiBase.ts is the source of truth for the browser-safe base
+// (loopback bases can't be reached from a user's browser).
+// ---------------------------------------------------------------------------
 'use client';
 
 import { API_BASE, CLIENT_API_BASE } from './apiBase';
