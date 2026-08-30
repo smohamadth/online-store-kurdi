@@ -145,7 +145,7 @@ export async function createVariant(productId: string, overrides: Partial<{
       ? overrides.attributes
       : JSON.stringify(overrides.attributes);
   }
-  return p.productVariant.create({
+  const created = await p.productVariant.create({
     data: {
       productId,
       name: overrides.name ?? 'Default',
@@ -156,6 +156,27 @@ export async function createVariant(productId: string, overrides: Partial<{
       isActive: overrides.isActive ?? true,
     },
   });
+  // Mirror the variant's attributes into the (key, value) query index,
+  // the same way the real write sites do (syncVariantAttributes).
+  // Without this, fixture variants would be invisible to the SQL
+  // attribute filter and the facet tally.
+  try {
+    const parsed = JSON.parse(attrs);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const rows = Object.entries(parsed).map(([key, value]) => ({
+        variantId: created.id,
+        key,
+        value: String(value),
+      }));
+      if (rows.length > 0) {
+        await p.variantAttribute.createMany({ data: rows });
+      }
+    }
+  } catch {
+    // attrs was invalid JSON - no index rows (matches syncVariantAttributes'
+    // parseAttributes returning {}).
+  }
+  return created;
 }
 
 export async function createCoupon(overrides: Partial<{

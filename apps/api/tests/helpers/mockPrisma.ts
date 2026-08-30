@@ -896,8 +896,12 @@ const KNOWN_MODELS = [
   'post', 'postTag', 'blogPost', 'stockAlert',
   // Storefront forms (durable since the in-memory stores moved to the DB)
   'stockAlertSubscription', 'contactMessage', 'newsletterSubscriber',
+  // CSRF token store (middleware/csrf.ts - unmounted guard, durable store)
+  'csrfToken',
   // Variant subsystem (first-class)
   'option', 'optionValue', 'variantOptionValue', 'variantImage',
+  // Attribute query index (variantAttributeIndex.ts)
+  'variantAttribute',
   // Digital products
   'productDownload', 'downloadLog',
   // Inventory extensions

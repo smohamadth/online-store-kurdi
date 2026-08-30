@@ -26,6 +26,7 @@ import {
   type ImportFormat,
   type ProductPlan,
 } from './mappers';
+import { syncVariantAttributes } from '../products/variantAttributeIndex';
 
 export interface CommitError {
   row: number;
@@ -89,9 +90,16 @@ class RowError extends Error {
 }
 
 async function replaceVariants(tx: Tx, productId: string, variants: NonNullable<ProductPlan['variants']>) {
+  // Drop the attribute index rows of the variants being replaced (the
+  // real DB cascades via FK; the explicit delete keeps the test mock -
+  // which does not cascade - consistent).
+  const old = await tx.variant.findMany({ where: { productId }, select: { id: true } });
+  if (old.length > 0) {
+    await tx.variantAttribute.deleteMany({ where: { variantId: { in: old.map((o: any) => o.id) } } });
+  }
   await tx.variant.deleteMany({ where: { productId } });
   for (const v of variants) {
-    await tx.variant.create({
+    const created = await tx.variant.create({
       data: {
         productId,
         name: v.name,
@@ -105,6 +113,8 @@ async function replaceVariants(tx: Tx, productId: string, variants: NonNullable<
         sortOrder: v.sortOrder ?? 0,
       },
     });
+    // Keep the (key, value) query index in step (inside the same tx).
+    await syncVariantAttributes(tx, created.id, created.attributes);
   }
 }
 

@@ -25,6 +25,7 @@ import { NotFoundError, ConflictError, AppError } from '../../middleware/errorHa
 import slugify from 'slugify';
 import { z } from 'zod';
 import { listProducts, getFacets, parseFilterFromQuery } from './productFilter.service';
+import { syncVariantAttributes } from './variantAttributeIndex';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 const router = Router();
@@ -508,6 +509,18 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
         reviews: { select: { rating: true } },
       },
     });
+
+    // Keep the (key, value) attribute query index in step with the
+    // variants created above (the /products attribute filter depends on
+    // it). Re-fetched rather than read from the create payload so the
+    // behaviour is identical on the mock and the real client.
+    const createdVariants = await prisma.variant.findMany({
+      where: { productId: product.id },
+      select: { id: true, attributes: true },
+    });
+    for (const v of createdVariants) {
+      await syncVariantAttributes(prisma, v.id, v.attributes);
+    }
 
     logger.info(`Product created: ${product.name} (${product.id})`);
 

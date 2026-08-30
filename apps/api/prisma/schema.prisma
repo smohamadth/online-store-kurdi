@@ -278,6 +278,12 @@ model Variant {
   updatedAt     DateTime  @updatedAt
 
   product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Denormalised attribute index rows (see VariantAttribute) - maintained
+  // by syncVariantAttributes() so the product filter can filter on
+  // (key, value) pairs in SQL instead of scanning + JSON-parsing every
+  // variant in the candidate set.
+  attributesIdx VariantAttribute[]
   images        VariantImage[]
   optionValues  VariantOptionValue[]
   orderItems    OrderItem[]
@@ -297,6 +303,31 @@ model Variant {
   @@index([isActive])
   @@index([productId, isActive])
 }
+
+// One row per (variant, attribute key, attribute value) pair.
+//
+// The Variant.attributes JSON string is the source of truth for display
+// (PDP, admin); this table is a query index maintained in sync by
+// syncVariantAttributes() (products/variant.helpers.ts) at every write
+// site. It lets the /products filter and the facet sidebar find variants
+// by (key, value) in SQL (indexed) instead of fetching + JSON-parsing
+// every variant of the candidate set - the O(catalog) post-filter in
+// listProducts/getFacets.
+//
+// Cascade delete: dropping a variant drops its index rows.
+model VariantAttribute {
+  id        String  @id @default(uuid())
+  variantId String
+  key       String
+  value     String
+
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, key, value])
+  @@index([key, value])
+  @@index([variantId])
+}
+
 
 // A typed "option" - "Color", "Size", "Material", etc. Options
 // are per-product.
@@ -1771,4 +1802,22 @@ model NewsletterSubscriber {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+// CSRF double-submit tokens (see middleware/csrf.ts).
+//
+// The guard itself is not mounted (the API authenticates with Bearer
+// JWTs, which are CSRF-immune, and the web client does not use the
+// x-session-id/x-csrf-token flow). The token store was a module-level
+// Map - now a table, so the middleware is safe to mount later without
+// per-process state: two API instances agree on issued tokens.
+// One row per sessionId; minting refreshes token + expiry.
+model CsrfToken {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }

@@ -16,7 +16,6 @@ import { prisma } from '../../config/database';
 import {
   buildProductWhere,
   buildOrderBy,
-  parseAttributes,
   productFilterSchema,
   relevanceScore,
   type ProductFilter,
@@ -97,6 +96,42 @@ export async function listProducts(
     optionValueIds: filter.optionValueId?.length ? filter.optionValueId : undefined,
   });
 
+  // Attribute filter in SQL (the old way fetched EVERY variant of every
+  // candidate and JSON-parsed them - O(catalog)). The VariantAttribute
+  // index (variantAttributeIndex.ts) mirrors the attributes JSON: for
+  // each requested key, find the active variants carrying any of the
+  // wanted values, then intersect across keys - a variant in the
+  // intersection satisfies every key on ONE variant, exactly the old
+  // post-filter semantics (OR within a key, AND across keys).
+  const attrKeys = filter.attr ? Object.keys(filter.attr) : [];
+  if (attrKeys.length > 0) {
+    // Intersect the per-key variant-id lists (arrays, not Sets: the
+    // project's tsconfig target makes Set spread awkward here).
+    let matchingVariantIds: string[] | null = null;
+    for (const key of attrKeys) {
+      const rows = await prisma.variantAttribute.findMany({
+        where: { key, value: { in: filter.attr![key] }, variant: { isActive: true } },
+        select: { variantId: true },
+      });
+      const ids = new Set<string>(rows.map((r: any) => r.variantId));
+      matchingVariantIds =
+        matchingVariantIds === null
+          ? rows.map((r: any) => r.variantId)
+          : matchingVariantIds.filter((id) => ids.has(id));
+      if (matchingVariantIds.length === 0) break;
+    }
+    if (!matchingVariantIds || matchingVariantIds.length === 0) {
+      // No active variant satisfies the requested attribute combination.
+      return {
+        data: [],
+        pagination: { page: filter.page, limit: filter.limit, total: 0, totalPages: 1 },
+        total: 0,
+        applied: filter,
+      };
+    }
+    where.variants = { some: { id: { in: matchingVariantIds } } };
+  }
+
   const orderBy = buildOrderBy(filter.sort);
 
   // Pull all candidates that match the structural filters. The exact
@@ -128,31 +163,22 @@ export async function listProducts(
     return { ...p, _averageRating: averageRating };
   });
 
-  // Post-filter: onSale (compareAtPrice > price), attribute exact match,
-  // and minRating.
+  // Post-filter: only what SQL cannot express stays here.
+  // (The attribute filter no longer post-filters - it runs against the
+  // VariantAttribute index up top, which is exact and keeps the
+  // candidate set small from the first query.)
   let filtered = enriched;
   if (filter.onSale) {
+    // compareAtPrice > price is a column-to-column comparison Prisma
+    // cannot express; the SQL pre-filter above already narrowed the set
+    // to compareAtPrice != null, so this only confirms the inequality.
     filtered = filtered.filter(
       (p) => p.compareAtPrice !== null && Number(p.compareAtPrice) > Number(p.price),
     );
   }
-  if (filter.attr && Object.keys(filter.attr).length > 0) {
-    filtered = filtered.filter((p) => {
-      // A single variant must satisfy ALL requested (key, value) pairs.
-      // E.g. {size: 'M', color: 'red'} matches the M/red variant, not
-      // the L/red one. We also accept OR within a key (?attr.size=M,L)
-      // which is the only sensible behaviour for a "size picker" UI.
-      const keys = Object.keys(filter.attr!);
-      return (p.variants || []).some((v: any) => {
-        const parsed = parseAttributes(v.attributes);
-        return keys.every((key) => {
-          const wanted = filter.attr![key];
-          return wanted.includes(parsed[key]);
-        });
-      });
-    });
-  }
   if (filter.minRating !== undefined) {
+    // Average rating is a HAVING-style aggregate Prisma findMany cannot
+    // filter on; bounded by the candidate set.
     filtered = filtered.filter((p) => (p as any)._averageRating >= (filter.minRating as number));
   }
 
@@ -165,14 +191,9 @@ export async function listProducts(
   }
 
   const totalAfterPost = filtered.length;
-  // Operator precedence trap: `||` binds tighter than `!==`, so the
-  // original `(onSale || attr || minRating !== undefined)` was effectively
-  // `((onSale || attr || minRating) !== undefined)`, which is always
-  // true once minRating is undefined. Use parens to OR the three.
-  const hasPostFilter =
-    filter.onSale === true ||
-    (filter.attr && Object.keys(filter.attr).length > 0) ||
-    filter.minRating !== undefined;
+  // The attribute filter is SQL-exact (count already reflects it), so
+  // only onSale/minRating post-filtering can make `total` stale.
+  const hasPostFilter = filter.onSale === true || filter.minRating !== undefined;
   const finalTotal = hasPostFilter ? totalAfterPost : total;
 
   // Apply pagination after the post-filter so totals are correct.
@@ -309,7 +330,7 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     totalActive,
     onSaleCandidates,
     reviews,
-    variants,
+    attributeRows,
     optionRows,
   ] = await Promise.all([
     prisma.category.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
@@ -352,9 +373,13 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
       },
       select: { productId: true, rating: true },
     }),
-    prisma.variant.findMany({
-      where: { isActive: true, product: { ...baseWhere, status: 'active' } },
-      select: { attributes: true },
+    // Attribute facets from the (key, value) index table - one indexed
+    // row per (variant, key, value) pair instead of fetching + parsing
+    // every variant's attributes JSON (same candidate-set scoping as
+    // before: active variants of active products in the base set).
+    prisma.variantAttribute.findMany({
+      where: { variant: { isActive: true, product: { ...baseWhere, status: 'active' } } },
+      select: { key: true, value: true },
     }),
     prisma.option.findMany({
       where: { product: { ...baseWhere, status: 'active' } },
@@ -431,17 +456,13 @@ export async function getFacets(filter: ProductFilter): Promise<Facets> {
     buckets,
   };
 
-  // Attributes: enumerate distinct (key, value) pairs across all
-  // variants of the base candidate set (variants came from the batch
-  // above).
+  // Attributes: the batch above returned the candidate variants'
+  // (key, value) index rows directly - no JSON parsing needed.
   const attrTally = new Map<string, Map<string, number>>();
-  for (const v of variants) {
-    const parsed = parseAttributes(v.attributes);
-    for (const [k, val] of Object.entries(parsed)) {
-      if (!attrTally.has(k)) attrTally.set(k, new Map());
-      const inner = attrTally.get(k)!;
-      inner.set(val, (inner.get(val) || 0) + 1);
-    }
+  for (const row of attributeRows as { key: string; value: string }[]) {
+    if (!attrTally.has(row.key)) attrTally.set(row.key, new Map());
+    const inner = attrTally.get(row.key)!;
+    inner.set(row.value, (inner.get(row.value) || 0) + 1);
   }
   // Cap the number of attribute keys to 8 so the response stays small
   // for stores with hundreds of variant attributes.

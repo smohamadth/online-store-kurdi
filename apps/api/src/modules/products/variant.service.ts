@@ -23,6 +23,7 @@
 import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/errorHandler';
 import { serializeAttributes, parseAttributes } from './variant.helpers';
+import { syncVariantAttributes, deleteVariantAttributes } from './variantAttributeIndex';
 
 export { serializeAttributes, parseAttributes };
 
@@ -148,7 +149,7 @@ export async function createVariant(productId: string, input: VariantInput): Pro
     if (slugDup) throw new AppError(`Variant with slug "${input.slug}" already exists`, 409);
   }
   const attrs = serializeAttributes(input.attributes);
-  return prisma.variant.create({
+  const created = await prisma.variant.create({
     data: {
       productId,
       name: input.name.trim(),
@@ -162,6 +163,10 @@ export async function createVariant(productId: string, input: VariantInput): Pro
       sortOrder: input.sortOrder ?? 0,
     },
   });
+  // Keep the (key, value) query index in step with the JSON column so
+  // the /products attribute filter can find this variant in SQL.
+  await syncVariantAttributes(prisma, created.id, attrs);
+  return created;
 }
 
 export async function updateVariant(id: string, input: Partial<VariantInput>): Promise<VariantRow> {
@@ -199,13 +204,21 @@ export async function updateVariant(id: string, input: Partial<VariantInput>): P
   if (input.isActive !== undefined) data.isActive = input.isActive;
   if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder;
   if (input.attributes !== undefined) data.attributes = serializeAttributes(input.attributes);
-  return prisma.variant.update({ where: { id }, data });
+  const updated = await prisma.variant.update({ where: { id }, data });
+  if (input.attributes !== undefined) {
+    // Rebuild the index for the new attribute set (same JSON we just stored).
+    await syncVariantAttributes(prisma, id, data.attributes as string);
+  }
+  return updated;
 }
 
 export async function deleteVariant(id: string, opts: { force?: boolean } = {}): Promise<VariantRow | { id: string; deleted: true }> {
   const existing = await prisma.variant.findUnique({ where: { id } });
   if (!existing) throw new AppError('Variant not found', 404);
   if (opts.force) {
+    // The real database cascades the index rows via FK; the explicit
+    // delete keeps the (non-cascading) test mock consistent too.
+    await deleteVariantAttributes(prisma, id);
     await prisma.variant.delete({ where: { id } });
     return { id, deleted: true };
   }
