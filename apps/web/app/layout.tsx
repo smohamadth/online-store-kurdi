@@ -1,4 +1,54 @@
 import './globals.css';
+// Professional Kurdish (Sorani) web fonts, self-hosted from the
+// @fontsource npm packages (bundled into the store's static assets).
+//
+// Why not next/font/google: this store-builder ships to client servers,
+// and a build-time fetch from Google Fonts would break any build
+// without that route (and the fonts would track Google's CDN forever).
+// Self-hosting means the store renders identically offline, and the
+// woff2 files deploy with the image.
+//
+// Every face covers the full Kurdish letter set (ڵ ڕ ێ ۆ گ چ پ ژ ڤ):
+//   Vazirmatn         - the reference Persian/Kurdish UI face (default)
+//   Noto Naskh Arabic - classic naskh, best for long body text
+//   Noto Kufi Arabic  - modern geometric kufi
+//   Readex Pro        - clean, contemporary
+//   Cairo             - strong in headings
+//   Tajawal           - light and modern
+//
+// The admin picks one in Appearance → Typography (lib/theme.tsx
+// FONT_STACKS). The CSS variables below back the `--font` the theme
+// sets, and the same faces are appended to the non-Kurdish stacks as a
+// per-glyph fallback, so even the "system" choice renders Arabic-script
+// text professionally.
+import '@fontsource/vazirmatn/latin-400.css';
+import '@fontsource/vazirmatn/latin-500.css';
+import '@fontsource/vazirmatn/latin-700.css';
+import '@fontsource/vazirmatn/latin-800.css';
+import '@fontsource/vazirmatn/arabic-400.css';
+import '@fontsource/vazirmatn/arabic-500.css';
+import '@fontsource/vazirmatn/arabic-700.css';
+import '@fontsource/vazirmatn/arabic-800.css';
+import '@fontsource/noto-naskh-arabic/latin-400.css';
+import '@fontsource/noto-naskh-arabic/latin-700.css';
+import '@fontsource/noto-naskh-arabic/arabic-400.css';
+import '@fontsource/noto-naskh-arabic/arabic-700.css';
+import '@fontsource/noto-kufi-arabic/latin-400.css';
+import '@fontsource/noto-kufi-arabic/latin-700.css';
+import '@fontsource/noto-kufi-arabic/arabic-400.css';
+import '@fontsource/noto-kufi-arabic/arabic-700.css';
+import '@fontsource/readex-pro/latin-400.css';
+import '@fontsource/readex-pro/latin-700.css';
+import '@fontsource/readex-pro/arabic-400.css';
+import '@fontsource/readex-pro/arabic-700.css';
+import '@fontsource/cairo/latin-400.css';
+import '@fontsource/cairo/latin-700.css';
+import '@fontsource/cairo/arabic-400.css';
+import '@fontsource/cairo/arabic-700.css';
+import '@fontsource/tajawal/latin-400.css';
+import '@fontsource/tajawal/latin-700.css';
+import '@fontsource/tajawal/arabic-400.css';
+import '@fontsource/tajawal/arabic-700.css';
 import type { Metadata, Viewport } from 'next';
 import { getStoreInfo, SITE, buildGtagSnippet } from '@/lib/seo';
 import AppShell from '@/components/AppShell';
@@ -101,7 +151,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </>
         )}
       </head>
-      <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* No inline fontFamily here on purpose: globals.css sets
+          body { font-family: var(--font) } and an inline style would
+          override the admin's Appearance → Typography choice, making
+          the font picker a no-op. */}
+      <body style={{ margin: 0, padding: 0 }}>
         <AppShell initialLang={lang} initialDir={dir}>{children}</AppShell>
       </body>
     </html>

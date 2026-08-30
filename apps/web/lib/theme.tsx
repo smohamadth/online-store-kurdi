@@ -145,14 +145,48 @@ export function tokensToTheme(activeTheme: ThemeConfig, customizations: Partial<
  */
 export const DEFAULT_THEME: Theme = tokensToTheme(getDefaultTheme());
 
+/**
+ * Arabic-script fallback, appended to every stack.
+ *
+ * font-family is resolved PER GLYPH: Latin text is picked up by the
+ * stack's own fonts, and Arabic-script letters (Kurdish/Arabic) skip
+ * every font that lacks them and land on the first that has them -
+ * so even the "system" choice renders Kurdish professionally, and the
+ * dedicated Kurdish faces below get a consistent second opinion.
+ * The variables are set by next/font in app/layout.tsx.
+ */
+const ARABIC_FALLBACK = 'var(--font-vazirmatn), var(--font-noto-naskh-arabic)';
+
 export const FONT_STACKS: Record<string, string> = {
-  system:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  inter: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  georgia: 'Georgia, Cambria, "Times New Roman", Times, serif',
-  mono: '"SF Mono", ui-monospace, Menlo, Consolas, "Courier New", monospace',
-  rounded: '"Trebuchet MS", "Segoe UI", Verdana, sans-serif',
-  tahoma: 'Tahoma, Verdana, Segoe, sans-serif',
+  system: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, ${ARABIC_FALLBACK}, sans-serif`,
+  inter: `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, ${ARABIC_FALLBACK}, sans-serif`,
+  georgia: `Georgia, Cambria, "Times New Roman", Times, ${ARABIC_FALLBACK}, serif`,
+  mono: `"SF Mono", ui-monospace, Menlo, Consolas, "Courier New", ${ARABIC_FALLBACK}, monospace`,
+  rounded: `"Trebuchet MS", "Segoe UI", Verdana, ${ARABIC_FALLBACK}, sans-serif`,
+  tahoma: `Tahoma, Verdana, Segoe, ${ARABIC_FALLBACK}, sans-serif`,
+  // ----- Kurdish / Arabic-script faces (see app/layout.tsx) ----------
+  vazirmatn: `var(--font-vazirmatn), var(--font-noto-naskh-arabic), sans-serif`,
+  'noto-naskh': `var(--font-noto-naskh-arabic), var(--font-vazirmatn), sans-serif`,
+  'noto-kufi': `var(--font-noto-kufi-arabic), var(--font-vazirmatn), sans-serif`,
+  readex: `var(--font-readex-pro), var(--font-vazirmatn), sans-serif`,
+  cairo: `var(--font-cairo), var(--font-vazirmatn), sans-serif`,
+  tajawal: `var(--font-tajawal), var(--font-vazirmatn), sans-serif`,
+};
+
+/** Human labels for the Appearance → Typography select (FONT_STACKS is the machine map). */
+export const FONT_LABELS: Record<string, string> = {
+  vazirmatn: 'Vazirmatn — کوردی · فارسی · English (recommended for Kurdish)',
+  'noto-naskh': 'Noto Naskh Arabic — کوردی · عربية',
+  'noto-kufi': 'Noto Kufi Arabic — کوردی · عربية',
+  readex: 'Readex Pro — کوردی · عربية',
+  cairo: 'Cairo — کوردی · عربية',
+  tajawal: 'Tajawal — کوردی · عربية',
+  system: 'System',
+  inter: 'Inter',
+  georgia: 'Georgia (serif)',
+  mono: 'Monospace',
+  rounded: 'Rounded (Trebuchet)',
+  tahoma: 'Tahoma',
 };
 
 const SHADOWS: Record<string, string> = {

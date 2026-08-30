@@ -74,6 +74,22 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Self-hosted Kurdish/Arabic-script faces (the @fontsource imports in
+   app/layout.tsx define these family names). The theme's font stacks
+   (lib/theme.tsx FONT_STACKS) reference these variables: a store's
+   chosen face, plus a per-glyph fallback so Arabic-script text always
+   lands on a professional face even when the stack's primary fonts are
+   Latin-only. Family names only here - the generic fallback belongs to
+   the stack, and a generic mid-stack would stop font matching. */
+:root {
+  --font-vazirmatn: 'Vazirmatn';
+  --font-noto-naskh-arabic: 'Noto Naskh Arabic';
+  --font-noto-kufi-arabic: 'Noto Kufi Arabic';
+  --font-readex-pro: 'Readex Pro';
+  --font-cairo: 'Cairo';
+  --font-tajawal: 'Tajawal';
+}
+
 /* Selection color */
 ::selection {
   background: var(--brand, #000);

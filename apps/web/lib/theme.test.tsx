@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import { ThemeProvider, useTheme, DEFAULT_THEME, themeToCssVars } from '@/lib/theme';
+import { ThemeProvider, useTheme, DEFAULT_THEME, FONT_LABELS, FONT_STACKS, themeToCssVars } from '@/lib/theme';
 import {
   THEMES,
   FALLBACK_THEME_KEY,
@@ -231,6 +231,32 @@ describe('themeToCssVars', () => {
     const css = themeToCssVars({ ...DEFAULT_THEME, fontFamily: 'comic-sans' });
     expect(css).toContain('--font:');
     expect(css).toContain('BlinkMacSystemFont');
+  });
+
+  describe('Kurdish fonts', () => {
+    it('offers the professional Kurdish/Arabic-script faces', () => {
+      for (const key of ['vazirmatn', 'noto-naskh', 'noto-kufi', 'readex', 'cairo', 'tajawal']) {
+        expect(FONT_STACKS[key]).toBeTruthy();
+        expect(FONT_LABELS[key]).toBeTruthy();
+      }
+    });
+
+    it('falls back to the Kurdish webfonts for Arabic-script text in EVERY stack', () => {
+      // Per-glyph fallback: even "system" must render کوردی with the
+      // self-hosted Kurdish faces, not the OS substitution.
+      for (const stack of Object.values(FONT_STACKS)) {
+        expect(stack).toContain('var(--font-vazirmatn)');
+      }
+    });
+
+    it('emits the chosen Kurdish font into the --font variable', () => {
+      const css = themeToCssVars({ ...DEFAULT_THEME, fontFamily: 'vazirmatn' });
+      expect(css).toContain('--font: var(--font-vazirmatn)');
+    });
+
+    it('ships the default theme with a professional Kurdish font', () => {
+      expect(DEFAULT_THEME.fontFamily).toBe('vazirmatn');
+    });
   });
 
   it('emits the numeric scales with px units', () => {

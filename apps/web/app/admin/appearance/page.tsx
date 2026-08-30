@@ -13,7 +13,7 @@
 import { useState, useEffect } from 'react';
 import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
-import { DEFAULT_THEME, FONT_STACKS, Theme } from '@/lib/theme';
+import { DEFAULT_THEME, FONT_LABELS, FONT_STACKS, Theme } from '@/lib/theme';
 import { API_BASE } from '@/lib/http';
 import HomeBuilder from '@/components/HomeBuilder';
 import { ThemePicker } from './ThemePicker';
@@ -346,15 +346,24 @@ export default function AdminAppearancePage() {
                 <div>
                   <label style={label}>Font family</label>
                   <select value={theme.fontFamily} onChange={(e) => set('fontFamily', e.target.value)} style={input}>
-                    <option value="system">System (default)</option>
-                    <option value="inter">Inter / sans-serif</option>
-                    <option value="georgia">Georgia / serif</option>
-                    <option value="rounded">Trebuchet / rounded</option>
-                    <option value="tahoma">Tahoma</option>
-                    <option value="mono">Monospace</option>
+                    {/* Kurdish / Arabic-script faces first: this is a
+                        Kurdish store, and they are what make کوردی text
+                        render professionally. */}
+                    {Object.keys(FONT_STACKS).map((key) => (
+                      <option key={key} value={key}>
+                        {FONT_LABELS[key] || key}
+                      </option>
+                    ))}
                   </select>
-                  <p style={{ marginTop: '10px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily] }}>
+                  {/* Preview in BOTH scripts: the Latin line shows the
+                      face, the Kurdish line shows what the storefront
+                      will actually look like (the Arabic fallback in the
+                      stack is exercised here too). */}
+                  <p dir="ltr" style={{ marginTop: '10px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily] }}>
                     The quick brown fox jumps over the lazy dog — 0123456789
+                  </p>
+                  <p dir="rtl" style={{ marginTop: '8px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily], fontSize: '17px' }}>
+                    دکانی ئۆنلاین — گەشتی خێرای بە ڕێگای لایەنی کەم
                   </p>
                 </div>
                 <div>
