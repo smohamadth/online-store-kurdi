@@ -97,4 +97,31 @@ export const zaincash: GatewayDefinition = {
       return { success: false, message: `ZainCash redirect token verification failed: ${(err as Error).message}`, reference: ctx.reference };
     }
   },
+  async refundPayment(ctx, params) {
+    const clientId = String(ctx.config.clientId || '');
+    const clientSecret = String(ctx.config.clientSecret || '');
+    if (!clientId || !clientSecret) return { success: false, message: 'ZainCash client credentials are not configured.' };
+    const base = String(ctx.config.baseUrl || TEST_BASE).replace(/\/$/, '');
+    const transactionId = params.reference;
+    if (!transactionId) return { success: false, message: 'Missing ZainCash transaction id.' };
+
+    const tokenRes = await postForm(ctx.http, `${base}/oauth2/token`,
+      `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&scope=${encodeURIComponent('payment:read payment:write reverse:write reverse:read')}`);
+    const accessToken = tokenRes?.access_token;
+    if (!accessToken) return { success: false, message: 'ZainCash authentication failed.' };
+
+    const res = await postJson(
+      ctx.http,
+      `${base}/api/v2/payment-gateway/transaction/reverse`,
+      { transactionId, reason: params.reason || 'Order refund' },
+      { Authorization: `Bearer ${accessToken}` },
+    );
+    const status = String(res?.status || '');
+    // Reverse request is accepted; the transaction then moves to
+    // REFUNDED / REFUND_COMPLETED. Some sandboxes echo REFUNDED immediately.
+    if (status === 'REFUNDED' || status === 'REFUND_COMPLETED') {
+      return { success: true, transactionId: String(res?.transactionId || transactionId), message: `ZainCash refund ${status}.`, raw: res };
+    }
+    return { success: false, message: `ZainCash refund status: ${status || 'unknown'}.`, raw: res };
+  },
 };

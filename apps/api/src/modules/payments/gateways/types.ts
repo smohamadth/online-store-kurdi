@@ -80,6 +80,25 @@ export interface VerifyPaymentResult {
   raw?: unknown;
 }
 
+/** Input to a gateway refund. `reference` is the gateway-side id captured at
+ * settlement (Stripe payment_intent, PayPal capture id, ZainCash txn id). */
+export interface RefundPaymentParams {
+  /** Original gateway-side reference captured at settlement. */
+  reference?: string | null;
+  /** Amount to refund (defaults to the full original at the call site). */
+  amount?: number;
+  reason?: string;
+  /** Currency the original payment was charged in. */
+  currency?: string;
+}
+
+export interface RefundPaymentResult {
+  success: boolean;
+  transactionId?: string | null;
+  message?: string;
+  raw?: unknown;
+}
+
 export interface GatewayDefinition {
   id: string;
   name: string;
@@ -92,6 +111,12 @@ export interface GatewayDefinition {
   currencyHint?: string;
   createPayment: (ctx: GatewayContext) => Promise<CreatePaymentResult>;
   verifyPayment: (ctx: GatewayContext, params: Record<string, string>) => Promise<VerifyPaymentResult>;
+  /**
+   * Refund a previously-captured payment at the gateway. Optional: gateways
+   * that do not expose an API refund (e.g. IDPay) omit it, and the refund
+   * route refuses to falsely mark such orders refunded.
+   */
+  refundPayment?: (ctx: GatewayContext, params: RefundPaymentParams) => Promise<RefundPaymentResult>;
 }
 
 export type GatewayConfig = Record<string, string | boolean>;

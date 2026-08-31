@@ -305,3 +305,55 @@ describe('zaincash', () => {
     expect(res.success).toBe(false);
   });
 });
+
+describe('gateway refunds', () => {
+  it('paypal refunds a captured payment', async () => {
+    const http = mockHttp({
+      'https://api-m.paypal.com/v1/oauth2/token': { access_token: 'at' },
+      'https://api-m.paypal.com/v2/payments/captures/CAP-9/refund': { status: 'COMPLETED', id: 'REF-1' },
+    });
+    const res = await paypal.refundPayment!(
+      baseCtx({ config: { clientId: 'cid', clientSecret: 'csec' }, http }),
+      { reference: 'CAP-9', amount: 1000, currency: 'USD', reason: 'customer request' },
+    );
+    expect(res.success).toBe(true);
+    expect(res.transactionId).toBe('REF-1');
+    const reverseCall = http.calls.find((c) => c.url.includes('/refund'));
+    expect(reverseCall).toBeTruthy();
+    expect(JSON.parse(String(reverseCall!.init?.body))).toMatchObject({ amount: { value: '1000.00', currency_code: 'USD' }, note_to_payer: 'customer request' });
+  });
+
+  it('paypal reports a failed refund', async () => {
+    const http = mockHttp({
+      'https://api-m.paypal.com/v1/oauth2/token': { access_token: 'at' },
+      'https://api-m.paypal.com/v2/payments/captures/CAP-9/refund': { status: 'FAILED' },
+    });
+    const res = await paypal.refundPayment!(
+      baseCtx({ config: { clientId: 'cid', clientSecret: 'csec' }, http }),
+      { reference: 'CAP-9', amount: 1000, currency: 'USD' },
+    );
+    expect(res.success).toBe(false);
+  });
+
+  it('zaincash reverses a transaction', async () => {
+    const http = mockHttp({
+      'https://pg-api-uat.zaincash.iq/oauth2/token': { access_token: 'at' },
+      'https://pg-api-uat.zaincash.iq/api/v2/payment-gateway/transaction/reverse': { status: 'REFUNDED', transactionId: 'Z-1' },
+    });
+    const res = await zaincash.refundPayment!(
+      baseCtx({
+        config: { clientId: 'cid', clientSecret: 'sec', apiKey: 'jwt-secret', baseUrl: 'https://pg-api-uat.zaincash.iq' },
+        http,
+      }),
+      { reference: 'Z-1', amount: 2500, reason: 'return' },
+    );
+    expect(res.success).toBe(true);
+    expect(res.transactionId).toBe('Z-1');
+    const rev = http.calls.find((c) => c.url.includes('/reverse'));
+    expect(JSON.parse(String(rev!.init?.body))).toMatchObject({ transactionId: 'Z-1', reason: 'return' });
+  });
+
+  it('idpay does not expose a refund API (refuses to fake it)', () => {
+    expect(idpay.refundPayment).toBeUndefined();
+  });
+});

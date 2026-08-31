@@ -14,7 +14,7 @@ import { logger } from '../../utils/logger';
 import { getGatewayById, resolveGatewayId } from './gateways/registry';
 import { getGatewayConfig, isGatewayConfigured } from './gatewayConfig';
 import { defaultHttp } from './gateways/helpers';
-import type { GatewayContext, GatewayOrder } from './gateways/types';
+import type { GatewayContext, GatewayOrder, RefundPaymentResult } from './gateways/types';
 import { autoPostOrder } from '../accounting/accounting.service';
 import { sendPaymentConfirmation } from '../../services/email.service';
 
@@ -191,4 +191,54 @@ export async function settleOrderPaid(args: {
   }
 
   logger.info(`Gateway ${args.method} settled order ${args.orderNumber} (${args.transactionId})`);
+}
+
+/**
+ * Refund a captured payment at the gateway. Throws on gateways that have no
+ * API refund (e.g. IDPay) or are not enabled, so the caller can refuse to
+ * falsely mark an order refunded; otherwise returns the gateway's refund
+ * result (success means the money was actually returned).
+ */
+export async function refundGatewayPayment(args: {
+  gatewayId: string;
+  orderId: string;
+  amount: number;
+  reason?: string;
+}): Promise<RefundPaymentResult> {
+  const def = getGatewayById(args.gatewayId);
+  if (!def) throw new Error('Unknown payment gateway');
+  if (!def.refundPayment) {
+    throw new Error(`${def.name} does not expose an API for refunds; process it in the ${def.name} dashboard.`);
+  }
+  if (!(await isGatewayConfigured(args.gatewayId))) {
+    throw new Error(`${def.name} is not enabled for this store, so it cannot be refunded via the API.`);
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: args.orderId } });
+  if (!order) throw new Error('Order not found');
+
+  const storeCurrency =
+    (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.currency || 'USD';
+  const config = (await getGatewayConfig(args.gatewayId)) || {};
+  const currency = gatewayCurrency(args.gatewayId, config, storeCurrency);
+  const gatewayOrder: GatewayOrder = {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    totalAmount: order.totalAmount,
+    currency,
+  };
+  const ctx: GatewayContext = {
+    order: gatewayOrder,
+    returnUrl: '',
+    cancelUrl: '',
+    config,
+    http: defaultHttp,
+    reference: order.paymentIntentId,
+  };
+  return def.refundPayment(ctx, {
+    reference: order.paymentIntentId,
+    amount: args.amount,
+    reason: args.reason,
+    currency,
+  });
 }

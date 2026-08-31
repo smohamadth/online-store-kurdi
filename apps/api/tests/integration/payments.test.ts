@@ -102,6 +102,36 @@ describe('POST /api/payments/refund (admin)', () => {
       .send({ orderId: o.id });
     expect(res.status).toBe(403);
   });
+
+  it('refuses to mark a gateway order refunded when the gateway is not enabled (400)', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed' });
+    await mockPrisma.order.update({ where: { id: o.id }, data: { paymentMethod: 'paypal' } });
+    const res = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, reason: 'return' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/not enabled/i);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after!.paymentStatus).toBe('completed'); // NOT flipped to refunded
+  });
+
+  it('refuses to refund an IDPay order (no API refund), leaving it completed', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed' });
+    await mockPrisma.order.update({ where: { id: o.id }, data: { paymentMethod: 'idpay' } });
+    const res = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/does not expose an API for refunds/i);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after!.paymentStatus).toBe('completed');
+  });
 });
 
 describe('GET /api/payments/order/:orderId', () => {

@@ -79,4 +79,26 @@ export const stripe: GatewayDefinition = {
       return { success: false, message: `Stripe verify failed: ${(err as Error).message}`, reference: sessionId };
     }
   },
+  async refundPayment(ctx, params) {
+    const secretKey = String(ctx.config.secretKey || '');
+    if (!secretKey) return { success: false, message: 'Stripe secret key is not configured.' };
+    const paymentIntent = params.reference;
+    if (!paymentIntent) return { success: false, message: 'Missing Stripe payment intent id.' };
+    try {
+      const refund = await clientFor(secretKey).refunds.create({
+        payment_intent: paymentIntent,
+        amount: params.amount ? Math.round(params.amount * 100) : undefined,
+        ...(params.reason ? { reason: params.reason as any } : {}),
+      });
+      const ok = refund.status === 'succeeded' || refund.status === 'pending';
+      return {
+        success: ok,
+        transactionId: refund.id,
+        message: ok ? `Stripe refund ${refund.status}.` : `Stripe refund status: ${refund.status}.`,
+        raw: { id: refund.id, status: refund.status },
+      };
+    } catch (err) {
+      return { success: false, message: `Stripe refund failed: ${(err as Error).message}` };
+    }
+  },
 };

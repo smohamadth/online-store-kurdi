@@ -509,17 +509,29 @@ and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
 API and reports are covered by `apps/api/tests/integration/accounting.test.ts`
 and the admin UI by `apps/web/app/admin/accounting/page.test.tsx`.
 
-## 15. Payment gateway refunds do not call the gateway (open)
+## 15. Payment gateway refunds — partially wired
 
-Staff refunds (`POST /api/payments/refund`) record a local `Payment` row with
-`method: 'refund'`, flip the order to `refunded`, and post the accounting entry —
-but they do **not** call the gateway's refund API. So for online payments
-(PayPal, Stripe, Zarinpal, IDPay, ZainCash, FIB) the money is **not actually
-returned** to the customer's wallet/card; the store just marks the order
-refunded in its own database. Staff must issue the refund on the gateway's
-dashboard manually. Implementing a real gateway refund per provider is a
-separate, larger task (needs per-gateway refund endpoints + a settle-on-refund
-callback).
+Staff refunds (`POST /api/payments/refund`) now call the gateway's real refund
+API **when the order was paid through a gateway that exposes one**, and only
+then create the local `Payment` row, flip the order to `refunded`, and post the
+accounting entry. Refunds are **never** recorded locally unless the gateway
+confirms the money moved — otherwise the route returns a 4xx/5xx and leaves the
+order `completed`.
+
+| Gateway   | Refund via API? | Endpoint / call                                  |
+|-----------|-----------------|--------------------------------------------------|
+| Stripe    | ✅              | `stripe.refunds.create({ payment_intent })`      |
+| PayPal    | ✅              | `POST /v2/payments/captures/:id/refund`          |
+| ZainCash  | ✅              | `POST .../transaction/reverse` (`reverse:write`) |
+| Zarinpal  | ⚠️ not wired     | refund API exists but the adapter omits it — refund in the Zarinpal dashboard |
+| FIB       | ⚠️ not wired     | SDK supports refunds but the adapter omits it — refund in the FIB dashboard |
+| IDPay     | ❌              | IDPay exposes no API refund — refund in the IDPay panel |
+
+The gateway adapters that can refund are unit-tested with a stubbed HTTP layer
+(`tests/unit/payments/gateways.test.ts`), and the refund route is covered by
+`tests/integration/payments.test.ts` (refuses to mark a gateway order refunded
+when the gateway is disabled, and refuses to refund IDPay). Wiring the remaining
+Zarinpal/FIB refund adapters is the natural follow-up.
 
 By contrast, the customer **retry-payment** path (abandoned gateway page) is
 fully wired: `POST /api/orders/:id/pay` re-runs the hosted checkout session and

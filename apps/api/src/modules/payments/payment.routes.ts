@@ -22,7 +22,8 @@ import { logger } from '../../utils/logger';
 import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
-import { verifyAndSettleGatewayPayment } from './gateway.service';
+import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
+import { getGatewayById } from './gateways/registry';
 import { sendPaymentConfirmation } from '../../services/email.service';
 import type Stripe from 'stripe';
 
@@ -330,19 +331,54 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       throw new AppError('Order payment not completed', 400);
     }
 
+    // If this order was paid through a hosted gateway, actually move the money
+    // back to the customer before recording anything locally. Only when the
+    // gateway confirms do we mark the order refunded — otherwise the store
+    // would claim a refund it never issued.
+    const refundAmount = amount || order.totalAmount;
+    const gateway = getGatewayById(order.paymentMethod);
+    let gatewayRefund: { success: boolean; transactionId?: string | null; message?: string; raw?: unknown } | null = null;
+
+    if (gateway) {
+      if (!gateway.refundPayment) {
+        throw new AppError(
+          `${gateway.name} does not expose an API for refunds. Please issue this refund in the ${gateway.name} dashboard, then re-run the refund here.`,
+          400,
+        );
+      }
+      try {
+        gatewayRefund = await refundGatewayPayment({
+          gatewayId: gateway.id,
+          orderId,
+          amount: refundAmount,
+          reason,
+        });
+      } catch (err) {
+        throw new AppError((err as Error).message, 400);
+      }
+      if (!gatewayRefund.success) {
+        throw new AppError(
+          `Gateway refund failed: ${gatewayRefund.message || 'unknown error'}. The order was NOT marked refunded.`,
+          502,
+        );
+      }
+    }
+
     // Create refund payment record
     const refund = await prisma.payment.create({
       data: {
         orderId,
-        amount: amount || order.totalAmount,
+        amount: refundAmount,
         currency: 'USD',
         method: 'refund',
         status: 'completed',
-        transactionId: `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        transactionId: gatewayRefund?.transactionId || `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         gatewayResponse: JSON.stringify({
           success: true,
           reason,
           originalTransaction: order.paymentIntentId,
+          gateway: gateway?.id || null,
+          gatewayRefund,
           timestamp: new Date().toISOString(),
         }),
       },
@@ -358,7 +394,7 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
     });
 
     // Best-effort auto-posting of the refund (ACCOUNTING_AUTO_POST=true).
-    await autoPostRefund(orderId, amount || order.totalAmount);
+    await autoPostRefund(orderId, refundAmount);
 
     logger.info(`Refund processed for order ${order.orderNumber}`);
 

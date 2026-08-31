@@ -98,4 +98,39 @@ export const paypal: GatewayDefinition = {
     }
     return { success: false, message: `PayPal capture status: ${status}.`, reference: orderId, raw: res };
   },
+  async refundPayment(ctx, params) {
+    const clientId = String(ctx.config.clientId || '');
+    const clientSecret = String(ctx.config.clientSecret || '');
+    if (!clientId || !clientSecret) return { success: false, message: 'PayPal client credentials are not configured.' };
+    const base = Boolean(ctx.config.sandbox) ? SANDBOX : PROD;
+    const captureId = params.reference;
+    if (!captureId) return { success: false, message: 'Missing PayPal capture id.' };
+
+    const tokenRes = await postForm(
+      ctx.http,
+      `${base}/v1/oauth2/token`,
+      'grant_type=client_credentials',
+      { Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}` },
+    );
+    const accessToken = tokenRes?.access_token;
+    if (!accessToken) return { success: false, message: 'PayPal authentication failed.' };
+
+    const body: Record<string, unknown> = {};
+    if (params.amount != null) {
+      body.amount = { value: formatAmount2(params.amount), currency_code: params.currency || 'USD' };
+    }
+    if (params.reason) body.note_to_payer = params.reason;
+
+    const res = await postJson(
+      ctx.http,
+      `${base}/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
+      body,
+      { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    );
+    const status = String(res?.status || '');
+    if (status === 'COMPLETED' || status === 'PENDING') {
+      return { success: true, transactionId: String(res?.id || ''), message: `PayPal refund ${status}.`, raw: res };
+    }
+    return { success: false, message: `PayPal refund status: ${status}.`, raw: res };
+  },
 };
