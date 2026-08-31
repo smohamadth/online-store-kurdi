@@ -362,6 +362,24 @@ describe('LayoutRenderer responsive grids', () => {
     expect(stats.style.flexWrap).toBe('wrap');
   });
 
+  it('keeps the structural layout grid at layout.columns (blocks are span-positioned)', () => {
+    // The outer scaffold intentionally stays a fixed `repeat(layout.columns,
+    // 1fr)` grid: blocks are absolutely placed by explicit colStart/colSpan
+    // cell coordinates, so collapsing the scaffold would corrupt their spans.
+    // Mobile reflow lives in the per-block content grids (auto-fit), not here.
+    const { container } = render(
+      <LayoutRenderer
+        layout={{
+          columns: 12, gap: 24,
+          blocks: [{ id: 'h', type: 'hero', colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1, config: {} }],
+        }}
+        data={{}}
+      />,
+    );
+    const grid = container.querySelector('div') as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toBe('repeat(12, 1fr)');
+  });
+
   it('every other multi-column block emits a reflowable grid template', () => {
     const products = [
       { id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }, { id: 'p3', name: 'Three' },

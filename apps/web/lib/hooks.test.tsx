@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useDebouncedValue } from './hooks';
+import { useDebouncedValue, useIsMobile } from './hooks';
 
 describe('useDebouncedValue', () => {
   beforeEach(() => {
@@ -60,5 +60,52 @@ describe('useDebouncedValue', () => {
     rerender({ v: 'ab' });
     unmount(); // must not throw / leak a timer
     expect(result.current).toBe('a');
+  });
+});
+
+describe('useIsMobile', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns false when the viewport is wider than the breakpoint', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200);
+    const { result } = renderHook(() => useIsMobile(768));
+    expect(result.current).toBe(false);
+  });
+
+  it('returns true when the viewport is narrower than the breakpoint', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(375);
+    const { result } = renderHook(() => useIsMobile(768));
+    expect(result.current).toBe(true);
+  });
+
+  it('reacts to resize events across the breakpoint boundary', () => {
+    const get = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200);
+    const { result } = renderHook(() => useIsMobile(900));
+    expect(result.current).toBe(false);
+
+    // Narrow the viewport below the breakpoint -> becomes mobile.
+    get.mockReturnValue(600);
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(result.current).toBe(true);
+
+    // Widen it again -> back to desktop, with the resize listener still active.
+    get.mockReturnValue(1200);
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(result.current).toBe(false);
+  });
+
+  it('cleans up the resize listener on unmount', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200);
+    const { unmount } = renderHook(() => useIsMobile(768));
+    expect(removeSpy).not.toHaveBeenCalled();
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 });
