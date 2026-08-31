@@ -508,3 +508,19 @@ The pure engine lives in `apps/api/src/modules/accounting/accountingEngine.ts`
 and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
 API and reports are covered by `apps/api/tests/integration/accounting.test.ts`
 and the admin UI by `apps/web/app/admin/accounting/page.test.tsx`.
+
+## 15. Payment gateway refunds do not call the gateway (open)
+
+Staff refunds (`POST /api/payments/refund`) record a local `Payment` row with
+`method: 'refund'`, flip the order to `refunded`, and post the accounting entry —
+but they do **not** call the gateway's refund API. So for online payments
+(PayPal, Stripe, Zarinpal, IDPay, ZainCash, FIB) the money is **not actually
+returned** to the customer's wallet/card; the store just marks the order
+refunded in its own database. Staff must issue the refund on the gateway's
+dashboard manually. Implementing a real gateway refund per provider is a
+separate, larger task (needs per-gateway refund endpoints + a settle-on-refund
+callback).
+
+By contrast, the customer **retry-payment** path (abandoned gateway page) is
+fully wired: `POST /api/orders/:id/pay` re-runs the hosted checkout session and
+the account order page offers **Pay now**.

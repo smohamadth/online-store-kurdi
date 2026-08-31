@@ -34,6 +34,14 @@ storefront automatically offers them at checkout.
    (creates the `Payment` row, sets `paymentStatus=completed`, moves the order
    to `processing`, and posts the accounting entry if enabled).
 
+**Retry after an abandoned/cancelled gateway page.** If a customer leaves the
+gateway page without paying, the order stays `paymentStatus=pending` and the
+account order page shows a **Pay now** button. `POST /api/orders/:id/pay`
+(owner or admin only) re-runs the hosted checkout-session creation and returns
+a fresh `checkoutUrl` the storefront redirects to — the customer pays without
+re-entering their details. It rejects orders that are already paid/refunded,
+aren't a gateway method, or whose gateway isn't configured.
+
 ## Payment confirmation email
 
 When an order actually becomes **paid**, the customer receives a **Payment
