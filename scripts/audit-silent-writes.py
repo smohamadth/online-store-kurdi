@@ -9,7 +9,16 @@ import sys
 import glob
 import re
 
-files = sorted(glob.glob('apps/web/app/admin/**/*.tsx', recursive=True))
+# Only audit the real admin pages. Skip test/spec files: their
+# `expect.objectContaining({ method: 'POST' })` lines assert what request a
+# page SHOULD make, so they trip the "surfaces/checks" heuristic without being
+# a write operation in production code. The silent-write bug class this script
+# exists to catch lives in the pages themselves.
+files = sorted(
+    f
+    for f in glob.glob('apps/web/app/admin/**/*.tsx', recursive=True)
+    if not re.search(r'(^|/)[^/]*\.(test|spec)\.(tsx|ts|jsx|js)$', f)
+)
 problems = []
 
 for f in files:
