@@ -99,4 +99,32 @@ export const fib: GatewayDefinition = {
     }
     return { success: false, message: `FIB payment status: ${status || 'unknown'}.`, reference: paymentId, raw: res };
   },
+  async refundPayment(ctx, params) {
+    const clientId = String(ctx.config.clientId || '');
+    const clientSecret = String(ctx.config.clientSecret || '');
+    if (!clientId || !clientSecret) return { success: false, message: 'FIB client credentials are not configured.' };
+    const base = String(ctx.config.baseUrl || TEST_BASE).replace(/\/$/, '');
+    const paymentId = params.reference;
+    if (!paymentId) return { success: false, message: 'Missing FIB payment id.' };
+
+    const tokenRes = await postForm(ctx.http, `${base}${TOKEN_PATH}`,
+      `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`);
+    const accessToken = tokenRes?.access_token;
+    if (!accessToken) return { success: false, message: 'FIB authentication failed.' };
+
+    // FIB accepts a refund with HTTP 202 and then moves the payment through
+    // REFUND_REQUESTED -> REFUNDED. postJson resolves on any 2xx and throws a
+    // GatewayHttpError on non-2xx, so a resolved call = refund accepted.
+    try {
+      await postJson(
+        ctx.http,
+        `${base}/protected/v1/payments/${encodeURIComponent(paymentId)}/refund`,
+        {},
+        { Authorization: `Bearer ${accessToken}` },
+      );
+      return { success: true, transactionId: paymentId, message: 'FIB refund accepted (REFUND_REQUESTED).' };
+    } catch (err) {
+      return { success: false, message: `FIB refund failed: ${(err as Error).message}` };
+    }
+  },
 };

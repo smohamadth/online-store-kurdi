@@ -16,11 +16,13 @@ import { postJson, roundAmount } from './helpers';
 const PROD = {
   request: 'https://payment.zarinpal.com/pg/v4/payment/request.json',
   verify: 'https://payment.zarinpal.com/pg/v4/payment/verify.json',
+  refund: 'https://payment.zarinpal.com/pg/v4/payment/refund.json',
   startPay: 'https://payment.zarinpal.com/pg/StartPay/',
 };
 const SANDBOX = {
   request: 'https://sandbox.zarinpal.com/pg/v4/payment/request.json',
   verify: 'https://sandbox.zarinpal.com/pg/v4/payment/verify.json',
+  refund: 'https://sandbox.zarinpal.com/pg/v4/payment/refund.json',
   startPay: 'https://sandbox.zarinpal.com/pg/StartPay/',
 };
 
@@ -110,6 +112,31 @@ export const zarinpal: GatewayDefinition = {
       success: false,
       message: `Zarinpal verification failed (code ${code ?? '?'}).`,
       reference: authority,
+      raw: res?.data,
+    };
+  },
+  async refundPayment(ctx, params) {
+    const merchantId = String(ctx.config.merchantId || '');
+    if (!merchantId) return { success: false, message: 'Zarinpal merchant ID is not configured.' };
+    const authority = params.reference;
+    if (!authority) return { success: false, message: 'Missing Zarinpal authority.' };
+    const eps = endpoints(Boolean(ctx.config.sandbox));
+    const amount = params.amount != null ? roundAmount(params.amount) : roundAmount(ctx.order.totalAmount);
+    const res = await postJson(ctx.http, eps.refund, {
+      merchant_id: merchantId,
+      authority,
+      amount,
+      description: params.reason || `Refund for order ${ctx.order.orderNumber}`,
+    });
+    const code = res?.data?.code;
+    const status = String(res?.data?.status || '');
+    const ok = code === 100 || code === 200 || /refund/i.test(status.toUpperCase());
+    return {
+      success: ok,
+      transactionId: res?.data?.ref_id ? String(res.data.ref_id) : authority,
+      message: ok
+        ? `Zarinpal refund ${status || 'accepted'}.`
+        : `Zarinpal refund failed (code ${code ?? '?'}, status ${status || 'unknown'}).`,
       raw: res?.data,
     };
   },

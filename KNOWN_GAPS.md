@@ -509,7 +509,7 @@ and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
 API and reports are covered by `apps/api/tests/integration/accounting.test.ts`
 and the admin UI by `apps/web/app/admin/accounting/page.test.tsx`.
 
-## 15. Payment gateway refunds — partially wired
+## 15. Payment gateway refunds — wired (except IDPay)
 
 Staff refunds (`POST /api/payments/refund`) now call the gateway's real refund
 API **when the order was paid through a gateway that exposes one**, and only
@@ -523,15 +523,15 @@ order `completed`.
 | Stripe    | ✅              | `stripe.refunds.create({ payment_intent })`      |
 | PayPal    | ✅              | `POST /v2/payments/captures/:id/refund`          |
 | ZainCash  | ✅              | `POST .../transaction/reverse` (`reverse:write`) |
-| Zarinpal  | ⚠️ not wired     | refund API exists but the adapter omits it — refund in the Zarinpal dashboard |
-| FIB       | ⚠️ not wired     | SDK supports refunds but the adapter omits it — refund in the FIB dashboard |
+| Zarinpal  | ✅              | `POST /pg/v4/payment/refund.json`                |
+| FIB       | ✅              | `POST .../payments/:id/refund` (HTTP 202)        |
 | IDPay     | ❌              | IDPay exposes no API refund — refund in the IDPay panel |
 
-The gateway adapters that can refund are unit-tested with a stubbed HTTP layer
+The gateway refund adapters are unit-tested with a stubbed HTTP layer
 (`tests/unit/payments/gateways.test.ts`), and the refund route is covered by
 `tests/integration/payments.test.ts` (refuses to mark a gateway order refunded
-when the gateway is disabled, and refuses to refund IDPay). Wiring the remaining
-Zarinpal/FIB refund adapters is the natural follow-up.
+when the gateway is disabled, and refuses to refund IDPay, which has no API
+refund). Only IDPay still requires a manual refund in its panel.
 
 By contrast, the customer **retry-payment** path (abandoned gateway page) is
 fully wired: `POST /api/orders/:id/pay` re-runs the hosted checkout session and

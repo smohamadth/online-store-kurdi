@@ -357,3 +357,77 @@ describe('gateway refunds', () => {
     expect(idpay.refundPayment).toBeUndefined();
   });
 });
+
+describe('zarinpal refund', () => {
+  it('refunds an authority via the v4 refund endpoint', async () => {
+    const http = mockHttp({
+      'https://payment.zarinpal.com/pg/v4/payment/refund.json': {
+        data: { code: 100, status: 'REFUNDED', ref_id: 77 },
+        errors: [],
+      },
+    });
+    const res = await zarinpal.refundPayment!(
+      baseCtx({ config: { merchantId: 'm-1' }, http }),
+      { reference: 'A0000000000000000000000000000000000000', amount: 5000, reason: 'return' },
+    );
+    expect(res.success).toBe(true);
+    expect(res.transactionId).toBe('77');
+    const call = http.calls.find((c) => c.url.includes('/refund.json'));
+    expect(JSON.parse(String(call!.init?.body))).toMatchObject({
+      merchant_id: 'm-1',
+      authority: 'A0000000000000000000000000000000000000',
+      amount: 5000,
+    });
+  });
+
+  it('reports a rejected zarinpal refund', async () => {
+    const http = mockHttp({
+      'https://payment.zarinpal.com/pg/v4/payment/refund.json': { data: { code: -12, status: 'ERROR' }, errors: [] },
+    });
+    const res = await zarinpal.refundPayment!(
+      baseCtx({ config: { merchantId: 'm-1' }, http }),
+      { reference: 'A0000000000000000000000000000000000000', amount: 5000 },
+    );
+    expect(res.success).toBe(false);
+  });
+});
+
+describe('fib refund', () => {
+  const fibCtx = () =>
+    baseCtx({
+      config: { clientId: 'cid', clientSecret: 'csec', currency: 'IQD', baseUrl: 'https://fib.stage.fib.iq' },
+    });
+
+  it('refunds a payment id (HTTP 202 = accepted)', async () => {
+    const http = mockHttp({
+      'https://fib.stage.fib.iq/auth/realms/fib-online-shop/protocol/openid-connect/token': { access_token: 'at' },
+      'https://fib.stage.fib.iq/protected/v1/payments/PAY-1/refund': { ok: true },
+    });
+    const res = await fib.refundPayment!(baseCtx({ config: fibCtx().config, http }), {
+      reference: 'PAY-1',
+      amount: 2500,
+      reason: 'return',
+    });
+    expect(res.success).toBe(true);
+    expect(res.transactionId).toBe('PAY-1');
+    expect(http.calls.some((c) => c.url.includes('/payments/PAY-1/refund'))).toBe(true);
+  });
+
+  it('reports an FIB refund rejection', async () => {
+    const http = mockHttp({});
+    // Token call succeeds; the refund endpoint is rejected with a non-2xx.
+    http.fetch.mockImplementation(async (input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/token')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ access_token: 'at' }) } as any;
+      }
+      return { ok: false, status: 406, text: async () => 'not accepted' } as any;
+    });
+    const res = await fib.refundPayment!(baseCtx({ config: fibCtx().config, http }), {
+      reference: 'PAY-1',
+      amount: 2500,
+    });
+    expect(res.success).toBe(false);
+    expect(res.message).toMatch(/FIB refund failed/);
+  });
+});
