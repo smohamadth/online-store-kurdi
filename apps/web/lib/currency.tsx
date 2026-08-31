@@ -68,7 +68,7 @@ export interface UseCurrencyResult {
   currencies: DisplayCurrency[];
   /** The base currency code (the one prices are stored in). */
   baseCode: string;
-  /** The current visitor's locale (ku / ar / en / tr). */
+  /** The current visitor's locale (ku / ar / fa / en / tr). */
   locale: string;
   /** Format an amount denominated in the base currency. */
   formatMoney: (amount: number) => string;
@@ -84,6 +84,7 @@ const LOCALE_FOR_LANG: Record<string, string> = {
   en: 'en-US',
   ku: 'ckb-IQ', // Central Kurdish (Iraq); uses Arabic-Indic digits in ar-IQ.
   ar: 'ar-IQ',
+  fa: 'fa-IR', // Persian (Iran): RTL, Persian digits and separators.
   tr: 'tr-TR',
 };
 

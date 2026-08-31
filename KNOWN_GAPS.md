@@ -110,8 +110,8 @@ jobs `api-tests` and `web-tests`):
 |---|---|---|
 | API unit (`apps/api/tests/unit`) | 317 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers, accounting engine |
 | API integration (`apps/api/tests/integration`) | 657 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, attribute index, accounting, …) |
-| Web lib (`apps/web`, vitest) | 317 | filter params, i18n, SEO, structured data, theme config, preview, page blocks, home sections |
-| Web components (React Testing Library + happy-dom) | 587 | PDP, cart, admin pages, filter sidebar, theme picker, custom section, Theme Studio layout renderer + editor UI |
+| Web lib (`apps/web`, vitest) | 350 | filter params, i18n (incl. translation-key completeness across all 5 locales), SEO, structured data, theme config, preview, page blocks, home sections |
+| Web components (React Testing Library + happy-dom) | 589 | PDP, cart, admin pages, filter sidebar, theme picker, custom section, Theme Studio layout renderer + editor UI |
 
 The **Theme Studio** adds dedicated suites on top of these (see
 `docs/THEME_STUDIO.md` §6): `edit.test.ts` (grid-edit invariants + off-grid

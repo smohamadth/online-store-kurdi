@@ -3,7 +3,7 @@
  *
  * - Renders the current language's flag and code.
  * - Toggles the dropdown open/closed.
- * - Lists all four languages.
+ * - Lists all five languages.
  * - Highlights the active language with a checkmark.
  * - Clicking a language calls changeLanguage and closes the dropdown.
  * - Clicking the scrim closes the dropdown without changing language.
@@ -21,7 +21,7 @@ vi.mock('@/lib/i18n', async () => {
       return {
         t: (k: string, fb?: string) => fb || k,
         language: state.language,
-        direction: state.language === 'ar' || state.language === 'ku' ? 'rtl' : 'ltr',
+        direction: state.language === 'ar' || state.language === 'ku' || state.language === 'fa' ? 'rtl' : 'ltr',
         changeLanguage: (code: string) => {
           if ((globalThis as any).__i18nState) {
             (globalThis as any).__i18nState.language = code;
@@ -47,18 +47,19 @@ describe('LanguageSwitcher', () => {
 
   it('does not show the dropdown initially', () => {
     render(<LanguageSwitcher />);
-    // The four language names (English, Kurdish, Arabic, Turkish) are only
-    // visible when the dropdown is open.
+    // The five language names (English, Kurdish, Arabic, Persian, Turkish)
+    // are only visible when the dropdown is open.
     expect(screen.queryByText('English')).not.toBeInTheDocument();
     expect(screen.queryByText('العربية')).not.toBeInTheDocument();
   });
 
-  it('opens the dropdown listing all four languages', () => {
+  it('opens the dropdown listing all five languages', () => {
     render(<LanguageSwitcher />);
     act(() => screen.getByRole('button', { name: /🇬🇧 EN/ }).click());
     expect(screen.getByText('English')).toBeInTheDocument();
     expect(screen.getByText('کوردی')).toBeInTheDocument();
     expect(screen.getByText('العربية')).toBeInTheDocument();
+    expect(screen.getByText('فارسی')).toBeInTheDocument();
     expect(screen.getByText('Türkçe')).toBeInTheDocument();
   });
 

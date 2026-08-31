@@ -30,7 +30,7 @@
 import { cookies, headers } from 'next/headers';
 
 export type LocaleDir = 'ltr' | 'rtl';
-export type LocaleCode = 'en' | 'ku' | 'ar' | 'tr';
+export type LocaleCode = 'en' | 'ku' | 'ar' | 'fa' | 'tr';
 
 interface Locale {
   code: LocaleCode;
@@ -45,6 +45,7 @@ export const SUPPORTED_LOCALES: readonly Locale[] = [
   { code: 'en', dir: 'ltr' },
   { code: 'ku', dir: 'rtl' },
   { code: 'ar', dir: 'rtl' },
+  { code: 'fa', dir: 'rtl' },
   { code: 'tr', dir: 'ltr' },
 ] as const;
 

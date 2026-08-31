@@ -24,8 +24,8 @@ one command runs it in development (`npm run dev`), and one file describes
 every configuration knob (`.env.example`).
 
 **Kurdish-first by design**: the storefront ships in English, Kurdish
-(Sorani), Arabic and Turkish with full RTL support; admin and docs follow
-the same languages.
+(Sorani), Arabic, Persian and Turkish with full RTL support; admin and docs
+follow the same languages.
 
 ## 2. Features
 
@@ -43,7 +43,7 @@ the same languages.
 - Reviews with photos, coupons, gift cards, deals
 - Pages & blog: block-based CMS (headings, images, columns, callouts,
   quotes, galleries, buttons) with draft/publish and Unicode slugs
-- Storefront i18n: en / ku / ar / tr with RTL; currency picker and
+- Storefront i18n: en / ku / ar / fa / tr with RTL; currency picker and
   multi-currency support
 - SEO: server-rendered metadata, JSON-LD structured data (Product,
   Breadcrumb, WebSite, Article), sitemap, robots.txt, Open Graph

@@ -61,6 +61,12 @@ describe('resolveRequestLocale', () => {
     expect(result).toEqual({ code: 'ar', dir: 'rtl' });
   });
 
+  it('handles a Persian tag - "fa-IR" matches fa/rtl', async () => {
+    headerStore['accept-language'] = 'fa-IR,en;q=0.5';
+    const result = await resolveRequestLocale();
+    expect(result).toEqual({ code: 'fa', dir: 'rtl' });
+  });
+
   it('handles quality-value hints by reading the tag regardless of q', async () => {
     // Browsers send `ar;q=0.9` to mean "I accept Arabic with preference 0.9";
     // it should still be treated as "I want Arabic" for locale purposes.
@@ -102,17 +108,18 @@ describe('resolveRequestLocale', () => {
 });
 
 describe('SUPPORTED_LOCALES', () => {
-  it('lists exactly the four supported codes', () => {
+  it('lists exactly the five supported codes', () => {
     expect(SUPPORTED_LOCALES.map((l) => l.code).sort()).toEqual(
-      ['ar', 'en', 'ku', 'tr'].sort(),
+      ['ar', 'en', 'fa', 'ku', 'tr'].sort(),
     );
   });
 
-  it('marks ku and ar as RTL, en and tr as LTR', () => {
+  it('marks ku, ar and fa as RTL, en and tr as LTR', () => {
     const byCode = Object.fromEntries(SUPPORTED_LOCALES.map((l) => [l.code, l.dir]));
     expect(byCode.en).toBe('ltr');
     expect(byCode.tr).toBe('ltr');
     expect(byCode.ku).toBe('rtl');
     expect(byCode.ar).toBe('rtl');
+    expect(byCode.fa).toBe('rtl');
   });
 });
