@@ -15,16 +15,19 @@
 
 import Link from 'next/link';
 import { useTheme } from '@/lib/theme';
-import { useStoreSettings } from '@/lib/settings';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
 export default function MinimalFeatured({ title, subtitle, products, config }: SectionProps) {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const { settings } = useStoreSettings();
   // Default to 4 products if the admin didn't pick a count.
   const limit = (config?.limit as number) ?? 4;
   const list = (products ?? []).slice(0, limit);
+  // The minimal theme declares its own desktop columns-per-row; honor it while
+  // letting the grid reflow to fewer columns on phones/tablets.
+  const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 3));
 
   if (list.length === 0) return null;
 
@@ -58,12 +61,16 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${Math.max(200, Math.floor(960 / perRow))}px), 1fr))`,
           gap: '48px 32px',
         }}
       >
         {list.map((product) => {
           const image = product.images?.[0];
+          const rating = Number(product.averageRating) || 0;
+          const hasSale =
+            typeof product.compareAtPrice === 'number' &&
+            product.compareAtPrice > product.price;
           return (
             <Link
               key={product.id}
@@ -136,6 +143,24 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
               >
                 {product.name}
               </h3>
+              {rating > 0 && (
+                <p
+                  aria-label={`Rated ${rating.toFixed(1)} out of 5`}
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--muted, #6b6b65)',
+                    letterSpacing: '1px',
+                    margin: '0 0 6px',
+                  }}
+                >
+                  <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
+                  <span aria-hidden="true" style={{ opacity: 0.35 }}>
+                    {'★'.repeat(5 - Math.round(rating))}
+                  </span>{' '}
+                  <span>{rating.toFixed(1)}</span>
+                  {product.reviewCount ? ` (${product.reviewCount})` : ''}
+                </p>
+              )}
               <p
                 style={{
                   fontSize: '14px',
@@ -143,8 +168,17 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
                   margin: 0,
                 }}
               >
-                {settings.currencySymbol}
-                {product.price.toFixed(2)}
+                {hasSale && (
+                  <>
+                    <span style={{ textDecoration: 'line-through', marginInlineEnd: '8px', opacity: 0.7 }}>
+                      {formatPrice(product.compareAtPrice!, settings.currencySymbol)}
+                    </span>
+                    <span style={{ color: 'var(--sale, #8b3a3a)', fontWeight: 600 }}>
+                      {formatPrice(product.price, settings.currencySymbol)}
+                    </span>
+                  </>
+                )}
+                {!hasSale && formatPrice(product.price, settings.currencySymbol)}
               </p>
             </Link>
           );

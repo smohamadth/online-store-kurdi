@@ -73,6 +73,10 @@ export interface SectionProps {
     name: string;
     slug: string;
     price: number;
+    compareAtPrice?: number | null;
+    averageRating?: number;
+    reviewCount?: number;
+    type?: string;
     images?: Array<{ url: string; alt?: string | null }>;
     category?: { name: string; slug: string } | null;
   }>;

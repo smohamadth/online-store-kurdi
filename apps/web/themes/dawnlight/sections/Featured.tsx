@@ -17,10 +17,11 @@ import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
 export default function DawnlightFeatured({ title, products, config }: SectionProps) {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const { settings } = useStoreSettings();
   const limit = (config?.limit as number) ?? 4;
   const list = (products ?? []).slice(0, limit);
+  const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
 
   if (list.length === 0) return null;
 
@@ -83,12 +84,16 @@ export default function DawnlightFeatured({ title, products, config }: SectionPr
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${Math.max(220, Math.floor(1200 / perRow))}px), 1fr))`,
           gap: '32px 24px',
         }}
       >
         {list.map((product) => {
           const image = product.images?.[0];
+          const rating = Number(product.averageRating) || 0;
+          const hasSale =
+            typeof product.compareAtPrice === 'number' &&
+            product.compareAtPrice > product.price;
           return (
             <Link
               key={product.id}
@@ -97,6 +102,7 @@ export default function DawnlightFeatured({ title, products, config }: SectionPr
             >
               <div
                 style={{
+                  position: 'relative',
                   aspectRatio: '1 / 1',
                   backgroundColor: '#f7f7f7',
                   border: '1px solid var(--border, #e6e6e6)',
@@ -104,11 +110,53 @@ export default function DawnlightFeatured({ title, products, config }: SectionPr
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 }}
-              />
+              >
+                {hasSale && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      insetInlineStart: '12px',
+                      insetBlockStart: '12px',
+                      backgroundColor: 'var(--sale, #b42318)',
+                      color: '#fff',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      padding: '4px 10px',
+                    }}
+                  >
+                    -{Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100)}%
+                  </span>
+                )}
+              </div>
               <div style={{ paddingTop: '16px' }}>
                 <p style={{ fontSize: '15px', fontWeight: 500, margin: 0 }}>{product.name}</p>
+                {rating > 0 && (
+                  <p
+                    aria-label={`Rated ${rating.toFixed(1)} out of 5`}
+                    style={{ fontSize: '12px', color: 'var(--muted, #5c5c5c)', letterSpacing: '1px', margin: '4px 0 0' }}
+                  >
+                    <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
+                    <span aria-hidden="true" style={{ opacity: 0.3 }}>
+                      {'★'.repeat(5 - Math.round(rating))}
+                    </span>{' '}
+                    <span>{rating.toFixed(1)}</span>
+                    {product.reviewCount ? ` (${product.reviewCount})` : ''}
+                  </p>
+                )}
                 <p style={{ fontSize: '14px', color: 'var(--muted, #5c5c5c)', margin: '6px 0 0' }}>
-                  {formatPrice(product.price, settings.currencySymbol)}
+                  {hasSale && (
+                    <>
+                      <span style={{ textDecoration: 'line-through', marginInlineEnd: '8px', opacity: 0.65 }}>
+                        {formatPrice(product.compareAtPrice!, settings.currencySymbol)}
+                      </span>
+                      <span style={{ color: 'var(--sale, #b42318)', fontWeight: 600 }}>
+                        {formatPrice(product.price, settings.currencySymbol)}
+                      </span>
+                    </>
+                  )}
+                  {!hasSale && formatPrice(product.price, settings.currencySymbol)}
                 </p>
               </div>
             </Link>

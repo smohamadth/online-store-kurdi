@@ -17,10 +17,14 @@ import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
 export default function PulseFeatured({ title, subtitle, products, config }: SectionProps) {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const { settings } = useStoreSettings();
   const limit = (config?.limit as number) ?? 6;
   const list = (products ?? []).slice(0, limit);
+  // Honor the theme's desktop columns-per-row token (falling back to a sane
+  // default when the admin has not set it), while letting auto-fit reflow to
+  // fewer columns on small screens.
+  const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 3));
 
   if (list.length === 0) return null;
 
@@ -59,12 +63,19 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            // auto-fit keeps the grid responsive on phones/tablets, while the
+            // minmax floor derived from productsPerRow makes desktop land on
+            // the theme's declared columns-per-row.
+            gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${Math.max(240, Math.floor(1200 / perRow))}px), 1fr))`,
             gap: '24px',
           }}
         >
           {list.map((product) => {
             const image = product.images?.[0];
+            const rating = Number(product.averageRating) || 0;
+            const hasSale =
+              typeof product.compareAtPrice === 'number' &&
+              product.compareAtPrice > product.price;
             return (
               <Link
                 key={product.id}
@@ -82,26 +93,69 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
               >
                 <div
                   style={{
+                    position: 'relative',
                     aspectRatio: '1 / 1',
                     backgroundColor: '#f1f5f9',
                     backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                   }}
-                />
+                >
+                  {hasSale && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        insetInlineStart: '12px',
+                        insetBlockStart: '12px',
+                        backgroundColor: 'var(--sale, #dc2626)',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                      }}
+                    >
+                      -{Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100)}%
+                    </span>
+                  )}
+                </div>
                 <div style={{ padding: '18px 20px 20px' }}>
                   <p style={{ fontSize: '16px', fontWeight: 600, margin: 0, letterSpacing: '-0.01em' }}>
                     {product.name}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '10px' }}>
+                  {rating > 0 && (
+                    <p
+                      aria-label={`Rated ${rating.toFixed(1)} out of 5`}
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--muted, #64748b)',
+                        margin: '6px 0 0',
+                        letterSpacing: '1px',
+                      }}
+                    >
+                      <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
+                      <span aria-hidden="true" style={{ opacity: 0.3 }}>
+                        {'★'.repeat(5 - Math.round(rating))}
+                      </span>{' '}
+                      <span>{rating.toFixed(1)}</span>
+                      {product.reviewCount ? ` (${product.reviewCount})` : ''}
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '10px', gap: '8px' }}>
                     <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--price, #0f172a)', margin: 0 }}>
                       {formatPrice(product.price, settings.currencySymbol)}
                     </p>
+                    {hasSale && (
+                      <span style={{ fontSize: '14px', color: 'var(--muted, #94a3b8)', textDecoration: 'line-through' }}>
+                        {formatPrice(product.compareAtPrice!, settings.currencySymbol)}
+                      </span>
+                    )}
                     <span
                       style={{
                         fontSize: '13px',
                         fontWeight: 600,
                         color: 'var(--accent, #4f46e5)',
+                        marginInlineStart: 'auto',
                       }}
                     >
                       View →

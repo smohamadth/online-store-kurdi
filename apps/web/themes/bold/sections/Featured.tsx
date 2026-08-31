@@ -23,15 +23,16 @@
 
 import Link from 'next/link';
 import { useTheme } from '@/lib/theme';
-import { useStoreSettings } from '@/lib/settings';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
 export default function BoldFeatured({ title, products, config }: SectionProps) {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const { settings } = useStoreSettings();
   const limit = (config?.limit as number) ?? 4;
   const list = (products ?? []).slice(0, limit);
+  const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 2));
 
   if (list.length === 0) return null;
 
@@ -69,16 +70,18 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
       <div
         style={{
           display: 'grid',
-          // Two columns on desktop, one on mobile. The
-          // auto-fit/minmax pattern means a tablet at the
-          // breakpoint gets one column; that's fine because
-          // the cards are huge.
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          // Honor the theme's desktop columns-per-row (Bold ships 2) while
+          // letting auto-fit reflow to a single column on phones/tablets.
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${Math.max(340, Math.floor(1400 / perRow))}px), 1fr))`,
           gap: '32px',
         }}
       >
         {list.map((product) => {
           const image = product.images?.[0];
+          const rating = Number(product.averageRating) || 0;
+          const hasSale =
+            typeof product.compareAtPrice === 'number' &&
+            product.compareAtPrice > product.price;
           return (
             <Link
               key={product.id}
@@ -152,6 +155,24 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
               >
                 {product.name}
               </h3>
+              {rating > 0 && (
+                <p
+                  aria-label={`Rated ${rating.toFixed(1)} out of 5`}
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--muted, #a1a1aa)',
+                    letterSpacing: '2px',
+                    margin: '0 0 6px',
+                  }}
+                >
+                  <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
+                  <span aria-hidden="true" style={{ opacity: 0.3 }}>
+                    {'★'.repeat(5 - Math.round(rating))}
+                  </span>{' '}
+                  <span>{rating.toFixed(1)}</span>
+                  {product.reviewCount ? ` (${product.reviewCount})` : ''}
+                </p>
+              )}
               <p
                 style={{
                   // The price is the focal point of the meta
@@ -164,8 +185,12 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
                   color: 'var(--price, #facc15)',
                 }}
               >
-                {settings.currencySymbol}
-                {product.price.toFixed(2)}
+                {hasSale && (
+                  <span style={{ fontSize: '15px', textDecoration: 'line-through', marginInlineEnd: '10px', opacity: 0.6 }}>
+                    {formatPrice(product.compareAtPrice!, settings.currencySymbol)}
+                  </span>
+                )}
+                {formatPrice(product.price, settings.currencySymbol)}
               </p>
             </Link>
           );
