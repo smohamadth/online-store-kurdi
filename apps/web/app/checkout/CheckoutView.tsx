@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { api } from '@/lib/api';
+import { authHttp } from '@/lib/http';
 import ShippingSelector from '@/components/ShippingSelector';
 import TaxCalculator from '@/components/TaxCalculator';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
@@ -74,6 +75,10 @@ export default function CheckoutPage() {
   // empty-cart redirect below must not fire and the customer needs
   // an honest status instead of a blank page.
   const [returnState, setReturnState] = useState<'paid' | 'canceled' | null>(null);
+  // Gateway (Zarinpal / IDPay / PayPal / FIB / ZainCash) return: the order is
+  // verified server-side when the customer comes back. Holds the verification
+  // outcome + gateway message for a banner.
+  const [gatewayReturn, setGatewayReturn] = useState<{ status: 'paid' | 'canceled'; message?: string } | null>(null);
 
   const subtotal = getTotal();
   // Physical cart totals for weight- and item_count-based shipping.
@@ -124,8 +129,36 @@ export default function CheckoutPage() {
   // Read the flag once on mount; the order already exists either way.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('paid') === 'true') setReturnState('paid');
-    else if (params.get('canceled') === 'true') setReturnState('canceled');
+    if (params.get('paid') === 'true') {
+      setReturnState('paid');
+      return;
+    }
+    if (params.get('canceled') === 'true') {
+      setReturnState('canceled');
+      return;
+    }
+
+    // Hosted gateway (Zarinpal / IDPay / PayPal / FIB / ZainCash) return:
+    // the gateway redirected here with ?gateway=<id>&order=<orderId> plus its
+    // own params. Ask the server to verify the payment server-to-server.
+    const gateway = params.get('gateway');
+    const order = params.get('order');
+    if (gateway && order) {
+      const callbackParams: Record<string, string> = {};
+      params.forEach((value, key) => {
+        if (key !== 'gateway' && key !== 'order') callbackParams[key] = value;
+      });
+      authHttp
+        .post<{ success: boolean; message?: string }>(`/payments/gateways/${gateway}/verify`, {
+          orderId: order,
+          callbackParams,
+        })
+        .then((res) => {
+          const ok = res?.data?.success === true;
+          setGatewayReturn({ status: ok ? 'paid' : 'canceled', message: res?.data?.message });
+        })
+        .catch(() => setGatewayReturn({ status: 'canceled' }));
+    }
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -179,12 +212,13 @@ export default function CheckoutPage() {
         throw new Error('The server did not confirm the order. Please try again.');
       }
 
-      // Card payment: the API created a Stripe Checkout session for
-      // this order. Hand the customer over to Stripe's hosted
-      // payment page; the webhook settles the order server-side.
+      // Hosted gateway payment: the API created a payment session at the
+      // chosen gateway (Stripe Checkout, PayPal, Zarinpal, IDPay, ZainCash,
+      // FIB) and returned a checkoutUrl. Hand the customer over to the
+      // gateway's hosted page; the return-verify / webhook settles the order.
       // The cart is cleared now - the order is already real.
       const checkoutUrl = response?.data?.checkoutUrl;
-      if (paymentMethod === 'card' && checkoutUrl) {
+      if (checkoutUrl) {
         setOrderNumber(confirmed);
         clearCart();
         localStorage.removeItem('appliedCoupon');
@@ -341,6 +375,16 @@ export default function CheckoutPage() {
           ⚠️ Your card payment was not completed. The order is still pending — the store will contact you, or you can retry from <Link href="/account/orders" style={{ fontWeight: 600 }}>your orders</Link>.
         </div>
       )}
+      {gatewayReturn?.status === 'paid' && (
+        <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', marginBottom: '24px', fontSize: '14px' }}>
+          ✅ Payment confirmed{gatewayReturn.message ? ` — ${gatewayReturn.message}` : ''}. Your order is being processed. <Link href="/account/orders" style={{ fontWeight: 600 }}>View your orders</Link>
+        </div>
+      )}
+      {gatewayReturn?.status === 'canceled' && (
+        <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', marginBottom: '24px', fontSize: '14px' }}>
+          ⚠️ Your payment was not completed{gatewayReturn.message ? ` (${gatewayReturn.message})` : ''}. The order is still pending — you can retry from <Link href="/account/orders" style={{ fontWeight: 600 }}>your orders</Link>.
+        </div>
+      )}
 
       {orderError && (
         <div
@@ -444,14 +488,17 @@ export default function CheckoutPage() {
                 {[
                   { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
                   { id: 'bank_transfer', label: 'Bank Transfer', icon: '🏦' },
-                  // Card payment only exists when the store configured
-                  // Stripe: the server advertises the capability in
-                  // settings, so a store without keys can never show a
-                  // card option it cannot collect (the old UI offered
-                  // "Credit Card" that charged nothing - fake success).
-                  ...(settings.stripeEnabled
-                    ? [{ id: 'card', label: 'Credit / Debit Card', icon: '💳' }]
-                    : []),
+                  // Hosted gateways the admin enabled (from /api/settings'
+                  // secret-free paymentGateways list). A gateway only shows
+                  // when its credentials are filled in - a store without keys
+                  // never offers an option it cannot collect.
+                  ...(settings.paymentGateways || [])
+                    .filter((g) => g.enabled)
+                    .map((g) => ({
+                      id: g.id,
+                      label: g.label,
+                      icon: g.country === 'IR' ? '🕌' : g.country === 'IQ' ? '💠' : '💳',
+                    })),
                 ].map(method => (
                   <label key={method.id} style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '16px',

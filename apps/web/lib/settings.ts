@@ -38,6 +38,19 @@ interface StoreSettings {
   maintenanceMessage: string;
   /** True when the store has Stripe configured (server capability flag). */
   stripeEnabled: boolean;
+  /**
+   * Secret-free payment gateway metadata from /api/settings. `enabled` tells
+   * the checkout which hosted gateways to offer. Never contains credentials.
+   */
+  paymentGateways: {
+    id: string;
+    name: string;
+    label: string;
+    country: 'IR' | 'IQ' | 'global';
+    enabled: boolean;
+    currencyHint?: string;
+    description?: string;
+  }[];
 }
 
 const DEFAULT_SETTINGS: StoreSettings = {
@@ -60,6 +73,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   maintenanceMode: false,
   maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
   stripeEnabled: false,
+  paymentGateways: [],
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -111,6 +125,9 @@ async function fetchSettingsFromAPI(): Promise<StoreSettings | null> {
         maintenanceMode: data.data.maintenanceMode ?? DEFAULT_SETTINGS.maintenanceMode,
         maintenanceMessage: data.data.maintenanceMessage || DEFAULT_SETTINGS.maintenanceMessage,
         stripeEnabled: data.data.stripeEnabled === true,
+        paymentGateways: Array.isArray(data.data.paymentGateways)
+          ? data.data.paymentGateways
+          : DEFAULT_SETTINGS.paymentGateways,
       };
       
       // Update localStorage with API data

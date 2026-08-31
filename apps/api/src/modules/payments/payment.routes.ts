@@ -22,6 +22,7 @@ import { logger } from '../../utils/logger';
 import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
+import { verifyAndSettleGatewayPayment } from './gateway.service';
 import type Stripe from 'stripe';
 
 const router = Router();
@@ -117,6 +118,40 @@ router.post('/webhooks/stripe', async (req, res, next) => {
     // Every other event type is acknowledged: Stripe retries on non-2xx,
     // and 4xx/5xx for events we don't handle would just be noise.
     res.json({ received: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/payments/gateways/:gatewayId/verify - confirm a gateway return.
+//
+// The gateway redirects the customer back to /checkout?gateway=..&order=..
+// and the storefront calls this endpoint with the gateway's callback params
+// (authority, id, token, ...). The gateway is asked server-to-server to
+// confirm the payment; on success the order is settled idempotently. Only
+// the order owner (or an admin) may verify it.
+router.post('/gateways/:gatewayId/verify', authenticate, async (req, res, next) => {
+  try {
+    const { gatewayId } = req.params;
+    const { orderId } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ status: 'error', message: 'orderId is required' });
+    }
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundError('Order');
+    if (order.userId !== req.user?.id && req.user?.role !== 'admin') {
+      throw new AppError('Forbidden', 403);
+    }
+    if (order.paymentStatus === 'completed') {
+      return res.json({ status: 'success', data: { success: true, message: 'Order already paid.' } });
+    }
+
+    const { success, message, transactionId } = await verifyAndSettleGatewayPayment({
+      gatewayId,
+      orderId,
+      callbackParams: req.body.callbackParams || {},
+    });
+    res.json({ status: 'success', data: { success, message, transactionId } });
   } catch (error) {
     next(error);
   }

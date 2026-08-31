@@ -946,6 +946,14 @@ model StoreSettings {
   termsOfServiceUrl     String?   
   returnPolicyUrl       String?   
   
+  // Payment gateways. A JSON string map of gatewayId -> config, e.g.
+  //   { "zarinpal": { "enabled": true, "merchantId": "...", "sandbox": false }, ... }
+  // Each gateway's secret keys live ONLY here (never in the public
+  // settings endpoint). The public endpoint returns a scrubbed
+  // metadata list so the checkout can list enabled gateways without
+  // ever seeing a credential. See modules/payments/gatewayConfig.ts.
+  paymentGateways       String    @default("{}")
+  
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }

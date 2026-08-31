@@ -8,7 +8,9 @@ import { sendOrderConfirmation, sendShippingNotification } from '../../services/
 import { mintDownloadForOrderItem } from '../downloads/downloads.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { env } from '../../config/environment';
-import { getStripe, isStripeConfigured } from '../../config/stripe';
+import { isGatewayMethod, getGatewayById } from '../payments/gateways/registry';
+import { isGatewayConfigured } from '../payments/gatewayConfig';
+import { createGatewayPayment } from '../payments/gateway.service';
 
 const router = Router();
 
@@ -233,13 +235,14 @@ router.post('/', authenticate, async (req, res, next) => {
       throw new AppError('Order must contain at least one item', 400);
     }
 
-    // Card payments go through Stripe Checkout. If the store has not
-    // configured Stripe, refuse BEFORE creating the order so the
-    // customer picks cash on delivery / bank transfer instead of
-    // being left with an unpayable pending order.
-    if (paymentMethod === 'card' && !isStripeConfigured()) {
+    // Gateway payments (Stripe card, PayPal, Zarinpal, IDPay, ZainCash, FIB)
+    // go through a hosted payment page. If the gateway is not configured,
+    // refuse BEFORE creating the order so the customer picks cash on delivery
+    // / bank transfer instead of being left with an unpayable pending order.
+    if (isGatewayMethod(paymentMethod) && !(await isGatewayConfigured(paymentMethod))) {
+      const gw = getGatewayById(paymentMethod);
       throw new AppError(
-        'Card payment is not enabled for this store. Please choose cash on delivery or bank transfer.',
+        `${gw ? gw.name + ' ' : 'This '}payment method is not enabled for this store. Please choose cash on delivery or bank transfer.`,
         400
       );
     }
@@ -447,35 +450,26 @@ router.post('/', authenticate, async (req, res, next) => {
     // customer into Stripe's hosted payment page (no card data ever
     // touches this server).
     let checkoutUrl: string | null = null;
-    if (paymentMethod === 'card') {
-      const stripe = getStripe();
-      if (!stripe) {
-        // Race with a config change between the check above and here
-        // is practically impossible; fail closed if it happens.
-        throw new AppError('Card payment is not enabled for this store.', 500);
-      }
+    if (isGatewayMethod(paymentMethod)) {
+      // Hosted-payment gateway (Stripe card, PayPal, Zarinpal, IDPay,
+      // ZainCash, FIB). Each gateway builds its own payment page for this
+      // order; the response carries checkoutUrl and the storefront redirects
+      // the customer to it. The webhook / return-verify settles the order.
       const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
-      const currency = (settings?.currency || 'USD').toLowerCase();
-      const session = await stripe.checkout.sessions.create({
-        mode: 'payment',
-        // One line item for the order total: the store builder does
-        // not sync per-SKU Stripe Prices, and the merchant settles the
-        // same amount they see in the admin.
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency,
-              unit_amount: Math.round(order.totalAmount * 100),
-              product_data: { name: `Order ${order.orderNumber}` },
-            },
-          },
-        ],
-        metadata: { orderId: order.id, orderNumber: order.orderNumber },
-        success_url: `${env.FRONTEND_URL}/checkout?paid=true`,
-        cancel_url: `${env.FRONTEND_URL}/checkout?canceled=true`,
+      const result = await createGatewayPayment({
+        order: {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          totalAmount: order.totalAmount,
+          currency: settings?.currency || 'USD',
+          customerPhone: (order.shippingAddress as any)?.phone || (req.user as any)?.phone || null,
+          customerEmail: (req.user as any)?.email || null,
+          description: `Order ${order.orderNumber}`,
+        },
+        paymentMethod,
+        storeCurrency: settings?.currency || 'USD',
       });
-      checkoutUrl = session.url ?? null;
+      checkoutUrl = result.checkoutUrl;
     }
 
     // Mint a per-order download token for every digital line

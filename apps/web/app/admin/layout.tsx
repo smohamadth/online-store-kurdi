@@ -170,6 +170,7 @@ export default function AdminLayout({
       heading: 'Finance',
       items: [
         { path: '/admin/accounting', label: 'Accounting', icon: '🧾' },
+        { path: '/admin/payments', label: 'Payment Gateways', icon: '💳' },
       ],
     },
     {

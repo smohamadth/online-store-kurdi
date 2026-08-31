@@ -22,6 +22,13 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { sendEmail, isEmailConfigured } from '../../services/email.service';
 import { isStripeConfigured } from '../../config/stripe';
+import {
+  getEnabledGateways,
+  getGatewayConfigs,
+  saveGatewayConfigs,
+  clearGatewayConfig,
+} from '../payments/gatewayConfig';
+import { GATEWAYS, resolveGatewayId } from '../payments/gateways/registry';
 
 const router = Router();
 
@@ -91,6 +98,10 @@ router.get('/', async (req, res, next) => {
         // reflects the live env so a merchant adding Stripe keys is
         // live on the next page load, no cache to bust.
         stripeEnabled: isStripeConfigured(),
+        // Secret-free list of payment gateways with their enabled status,
+        // so the checkout can offer exactly what the admin configured.
+        // Credentials never leave the server (see gatewayConfig.ts).
+        paymentGateways: await getEnabledGateways(),
       },
     });
   } catch (err) {
@@ -151,6 +162,67 @@ router.put('/', authenticate, authorize('admin'), async (req, res, next) => {
       status: 'success',
       data: settings,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Payment gateway configuration (admin only).
+//
+// GET returns the full config (secret keys included) so the admin form can
+// populate the fields; PUT saves; DELETE clears a single gateway. The public
+// GET /api/settings returns only the scrubbed metadata from getEnabledGateways.
+// ---------------------------------------------------------------------------
+const gatewayWriteSchema = z.object({
+  gateways: z.record(z.any()).optional(),
+});
+
+// GET /api/settings/payment-gateways - full config + field metadata (admin)
+router.get('/payment-gateways', authenticate, authorize('admin'), async (_req, res, next) => {
+  try {
+    const configs = await getGatewayConfigs();
+    res.json({
+      status: 'success',
+      data: {
+        gateways: configs,
+        definitions: GATEWAYS.map((g) => ({
+          id: g.id,
+          name: g.name,
+          label: g.label,
+          country: g.country,
+          description: g.description,
+          currencyHint: g.currencyHint,
+          fields: g.fields,
+        })),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/settings/payment-gateways - save gateway configs (admin)
+router.put('/payment-gateways', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const parsed = gatewayWriteSchema.parse(req.body);
+    const next = await saveGatewayConfigs(parsed.gateways || {});
+    logger.info('Payment gateway configuration updated');
+    res.json({ status: 'success', data: { gateways: next } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/settings/payment-gateways/:gatewayId - clear one gateway (admin)
+router.delete('/payment-gateways/:gatewayId', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const id = resolveGatewayId(req.params.gatewayId);
+    if (!id) {
+      return res.status(400).json({ status: 'error', message: 'Unknown payment gateway.' });
+    }
+    await clearGatewayConfig(id);
+    res.json({ status: 'success', message: 'Gateway configuration cleared.' });
   } catch (err) {
     next(err);
   }
