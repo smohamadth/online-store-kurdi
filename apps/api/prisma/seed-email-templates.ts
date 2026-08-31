@@ -92,6 +92,49 @@ const emailTemplates = [
     isActive: true,
   },
   {
+    name: 'refund_confirmation',
+    subject: 'Refund Issued for Order #{{orderNumber}}',
+    htmlContent: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #dc2626; color: #fff; padding: 20px; text-align: center; }
+          .content { padding: 20px; }
+          .refund-info { background: #fef2f2; padding: 15px; border-radius: 5px; border: 1px solid #fecaca; margin: 15px 0; }
+          .row { display: flex; justify-content: space-between; padding: 6px 0; }
+          .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Refund Issued</h1>
+          </div>
+          <div class="content">
+            <p>Hi {{customerName}},</p>
+            <p>We have issued a refund for order <strong>#{{orderNumber}}</strong>. The money is on its way back to your original payment method.</p>
+            <div class="refund-info">
+              <div class="row"><span>Order</span><span>#{{orderNumber}}</span></div>
+              <div class="row"><span>Refund amount</span><span>${{refundAmount}}</span></div>
+              <div class="row"><span>Reason</span><span>{{reason}}</span></div>
+            </div>
+            <p>Please allow a few business days for your bank or payment provider to process the refund.</p>
+            <p style="text-align: center; margin-top: 30px;">
+              <a href="{{orderUrl}}" class="button">View Order</a>
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    textContent: 'Hi {{customerName}}, Refund issued for order #{{orderNumber}}. Amount: ${{refundAmount}}',
+    variables: JSON.stringify(['customerName', 'orderNumber', 'refundAmount', 'reason', 'orderUrl']),
+    isActive: true,
+  },
+  {
     name: 'shipping_notification',
     subject: 'Your Order #{{orderNumber}} Has Shipped!',
     htmlContent: `

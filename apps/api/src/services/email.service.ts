@@ -317,7 +317,70 @@ export async function sendPaymentConfirmation(order: any, user: any): Promise<vo
   await sendEmail(user.email, subject, html);
 }
 
-// Shipping notification email
+export async function sendRefundConfirmation(order: any, user: any, reason?: string): Promise<void> {
+  const template = await getTemplate('refund_confirmation');
+  // Variables shared by the subject and the HTML body, so a merchant's
+  // custom {{orderNumber}} in the subject renders the real value too.
+  const variables = {
+    customerName: user.firstName,
+    orderNumber: order.orderNumber,
+    refundAmount: Number(order.totalAmount || 0).toFixed(2),
+    reason: reason || order.refundReason || 'Requested by the store',
+    orderUrl: `${env.FRONTEND_URL}/account/orders/${order.id}`,
+    storeName: 'Online Store',
+  };
+  const subject = template
+    ? renderTemplate(template.subject, variables)
+    : `Refund Issued for Order #${order.orderNumber}`;
+
+  const defaultHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #dc2626; color: #fff; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .refund-info { background: #fef2f2; padding: 15px; border-radius: 5px; border: 1px solid #fecaca; margin: 15px 0; }
+        .row { display: flex; justify-content: space-between; padding: 6px 0; }
+        .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Refund Issued</h1>
+        </div>
+        <div class="content">
+          <p>Hi ${user.firstName},</p>
+          <p>We have issued a refund for order <strong>#${order.orderNumber}</strong>. The money is on its way back to your original payment method.</p>
+
+          <div class="refund-info">
+            <div class="row"><span>Order</span><span>#${order.orderNumber}</span></div>
+            <div class="row"><span>Refund amount</span><span>$${Number(order.totalAmount || 0).toFixed(2)}</span></div>
+            <div class="row"><span>Reason</span><span>${variables.reason}</span></div>
+          </div>
+
+          <p>Please allow a few business days for your bank or payment provider to process the refund.</p>
+
+          <p style="text-align: center; margin-top: 30px;">
+            <a href="${env.FRONTEND_URL}/account/orders/${order.id}" class="button">View Order</a>
+          </p>
+
+          <p style="margin-top: 30px; color: #666; font-size: 14px;">
+            If you have any questions, please contact us at ${env.EMAIL_FROM}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const html = template ? renderTemplate(template.htmlContent, variables) : defaultHtml;
+
+  await sendEmail(user.email, subject, html);
+}
 export async function sendShippingNotification(order: any, user: any, trackingNumber: string): Promise<void> {
   const subject = `Your Order #${order.orderNumber} Has Shipped!`;
   

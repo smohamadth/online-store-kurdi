@@ -58,6 +58,12 @@ For Cash on Delivery the order-confirmation email is sent at placement, and the
 payment-confirmation email is the later acknowledgement when staff records that
 the cash/transfer was collected.
 
+When an order is refunded, the customer receives a **Refund Issued** email
+(`refund_confirmation` template, admin-editable like the others). It is sent
+from `POST /api/payments/refund` only after the refund is actually issued (at
+the gateway for online payments), so the customer is never told a refund
+happened before the money moved.
+
 ## Admin API
 
 - `GET  /api/settings/payment-gateways` (admin) — full config + field metadata.

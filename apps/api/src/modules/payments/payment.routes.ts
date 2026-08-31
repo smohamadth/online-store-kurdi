@@ -24,7 +24,7 @@ import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
 import { getGatewayById } from './gateways/registry';
-import { sendPaymentConfirmation } from '../../services/email.service';
+import { sendPaymentConfirmation, sendRefundConfirmation } from '../../services/email.service';
 import type Stripe from 'stripe';
 
 const router = Router();
@@ -106,6 +106,20 @@ async function notifyPaymentReceived(orderId: string): Promise<void> {
   ]);
   if (!order || !orderUser) return;
   await sendPaymentConfirmation(order, orderUser);
+}
+
+/** Fire-and-forget: email the customer that their order was refunded. */
+async function notifyRefundIssued(orderId: string, reason?: string): Promise<void> {
+  const [order, orderUser] = await Promise.all([
+    prisma.order.findUnique({ where: { id: orderId }, include: { shippingAddress: true } }),
+    prisma.order
+      .findUnique({ where: { id: orderId }, select: { userId: true } })
+      .then((o: { userId: string } | null) =>
+        o ? prisma.user.findUnique({ where: { id: o.userId }, select: { firstName: true, email: true } }) : null,
+      ),
+  ]);
+  if (!order || !orderUser) return;
+  await sendRefundConfirmation(order, orderUser, reason);
 }
 
 // POST /api/payments/webhooks/stripe - Stripe Checkout webhook
@@ -395,6 +409,10 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
 
     // Best-effort auto-posting of the refund (ACCOUNTING_AUTO_POST=true).
     await autoPostRefund(orderId, refundAmount);
+
+    // Fire-and-forget: email the customer that their order was refunded.
+    // Never fails the refund.
+    await notifyRefundIssued(orderId, reason).catch(() => {});
 
     logger.info(`Refund processed for order ${order.orderNumber}`);
 
