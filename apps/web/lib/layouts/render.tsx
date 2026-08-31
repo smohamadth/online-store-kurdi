@@ -277,7 +277,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
       <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius)', minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>Image</div>
     );
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(2, 24), gap: 24, alignItems: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(2, 24, 768), gap: 24, alignItems: 'center' }}>
         {right ? (<>{copy}{media}</>) : (<>{media}{copy}</>)}
       </div>
     );
@@ -438,7 +438,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     const p = (d.product ?? null) as any;
     if (!p) return null;
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(2, 24), gap: 24, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(2, 24, 768), gap: 24, alignItems: 'start' }}>
         <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
           {(b.config.label ?? 'Product image') as any}
         </div>

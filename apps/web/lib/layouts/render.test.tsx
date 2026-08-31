@@ -345,7 +345,8 @@ describe('LayoutRenderer responsive grids', () => {
   it('text + image splits stack to one column on narrow screens', () => {
     const { container } = renderBlock('textImage', { heading: 'About', text: 'Hello', image: '/a.jpg' });
     const grid = contentGrid(container, 'textImage');
-    expect(grid?.style.gridTemplateColumns).toBe(responsiveGrid(2, 24));
+    // Side-by-side at tablet/desktop (>=768px container) but stacked on phones.
+    expect(grid?.style.gridTemplateColumns).toBe(responsiveGrid(2, 24, 768));
     expect(grid?.style.gridTemplateColumns).not.toBe('1fr 1fr');
   });
 
@@ -399,7 +400,7 @@ describe('LayoutRenderer responsive grids', () => {
       ['categoryGrid', {}, { products }, responsiveGrid(3)],
       ['newArrivals', {}, { products }, responsiveGrid(4)],
       ['trending', {}, { products }, responsiveGrid(4)],
-      ['productDetail', {}, { product: { name: 'W', price: '1' } }, responsiveGrid(2, 24)],
+      ['productDetail', {}, { product: { name: 'W', price: '1' } }, responsiveGrid(2, 24, 768)],
     ];
     for (const [type, config, data, expected] of cases) {
       const { container } = renderBlock(type, config, data);
