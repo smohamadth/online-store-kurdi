@@ -133,6 +133,11 @@ export async function verifyAndSettleGatewayPayment(params: {
     currency: gatewayCurrency(params.gatewayId, config, storeCurrency),
     method: params.gatewayId,
     transactionId: result.transactionId || result.reference || params.callbackParams.token || '',
+    // The create-time gateway reference (e.g. Zarinpal's authority). The
+    // settle transactionId differs from it for some gateways and both are
+    // needed later: e.g. Zarinpal refunds identify the payment by authority,
+    // not by the ref_id that becomes the order's paymentIntentId.
+    originalReference: result.reference || order.paymentIntentId || null,
     gatewayResponse: {
       gateway: params.gatewayId,
       ...(result.raw || {}),
@@ -153,6 +158,7 @@ export async function settleOrderPaid(args: {
   currency: string;
   method: string;
   transactionId: string;
+  originalReference?: string | null;
   gatewayResponse?: Record<string, unknown>;
 }): Promise<void> {
   const order = await prisma.order.findUnique({ where: { id: args.orderId } });
@@ -167,7 +173,10 @@ export async function settleOrderPaid(args: {
       method: args.method,
       status: 'completed',
       transactionId: args.transactionId,
-      gatewayResponse: JSON.stringify(args.gatewayResponse || {}),
+      gatewayResponse: JSON.stringify({
+        ...(args.gatewayResponse || {}),
+        ...(args.originalReference ? { originalReference: args.originalReference } : {}),
+      }),
     },
   });
   await prisma.order.update({
@@ -217,6 +226,23 @@ export async function refundGatewayPayment(args: {
   const order = await prisma.order.findUnique({ where: { id: args.orderId } });
   if (!order) throw new Error('Order not found');
 
+  // The reference a refund needs is gateway-specific. Most gateways refund by
+  // the settled transaction id (order.paymentIntentId), but Zarinpal identifies
+  // the payment by its create-time authority, which we preserve on the settled
+  // Payment row as gatewayResponse.originalReference. Prefer that for Zarinpal.
+  let refundReference: string | null = order.paymentIntentId;
+  if (def.id === 'zarinpal') {
+    const payment = await prisma.payment.findFirst({
+      where: { orderId: args.orderId, method: 'zarinpal', status: 'completed' },
+    });
+    try {
+      const parsed = payment?.gatewayResponse ? JSON.parse(payment.gatewayResponse) : null;
+      if (parsed?.originalReference) refundReference = String(parsed.originalReference);
+    } catch {
+      // fall back to order.paymentIntentId below
+    }
+  }
+
   const storeCurrency =
     (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.currency || 'USD';
   const config = (await getGatewayConfig(args.gatewayId)) || {};
@@ -233,10 +259,10 @@ export async function refundGatewayPayment(args: {
     cancelUrl: '',
     config,
     http: defaultHttp,
-    reference: order.paymentIntentId,
+    reference: refundReference,
   };
   return def.refundPayment(ctx, {
-    reference: order.paymentIntentId,
+    reference: refundReference,
     amount: args.amount,
     reason: args.reason,
     currency,

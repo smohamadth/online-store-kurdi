@@ -361,7 +361,7 @@ describe('gateway refunds', () => {
 describe('zarinpal refund', () => {
   it('refunds an authority via the v4 refund endpoint', async () => {
     const http = mockHttp({
-      'https://payment.zarinpal.com/pg/v4/payment/refund.json': {
+      'https://api.zarinpal.com/pg/v4/payment/refund.json': {
         data: { code: 100, status: 'REFUNDED', ref_id: 77 },
         errors: [],
       },
@@ -382,7 +382,7 @@ describe('zarinpal refund', () => {
 
   it('reports a rejected zarinpal refund', async () => {
     const http = mockHttp({
-      'https://payment.zarinpal.com/pg/v4/payment/refund.json': { data: { code: -12, status: 'ERROR' }, errors: [] },
+      'https://api.zarinpal.com/pg/v4/payment/refund.json': { data: { code: -12, status: 'ERROR' }, errors: [] },
     });
     const res = await zarinpal.refundPayment!(
       baseCtx({ config: { merchantId: 'm-1' }, http }),

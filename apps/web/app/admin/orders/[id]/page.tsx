@@ -402,7 +402,7 @@ export default function AdminOrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
-            {order.paymentStatus !== 'completed' && (
+            {(order.paymentStatus === 'pending' || order.paymentStatus === 'failed') && (
               <>
                 <button
                   onClick={handleMarkPaid}

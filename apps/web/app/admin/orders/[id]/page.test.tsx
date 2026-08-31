@@ -145,4 +145,14 @@ describe('AdminOrderDetailPage payment settlement', () => {
     expect(hoisted.authHttp.post).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
+
+  it('shows Refund but NOT Mark as paid for a partially_refunded order', async () => {
+    const partiallyRefunded = { ...codOrder, paymentStatus: 'partially_refunded', status: 'processing' };
+    hoisted.api.getOrder.mockResolvedValue({ data: partiallyRefunded });
+    render(<AdminOrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Refund order')).toBeTruthy());
+    // A partially-refunded order is already paid — "Mark as paid" must not show.
+    expect(screen.queryByText('Mark as paid')).toBeNull();
+  });
 });

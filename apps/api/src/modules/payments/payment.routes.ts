@@ -109,7 +109,7 @@ async function notifyPaymentReceived(orderId: string): Promise<void> {
 }
 
 /** Fire-and-forget: email the customer that their order was refunded. */
-async function notifyRefundIssued(orderId: string, reason?: string): Promise<void> {
+async function notifyRefundIssued(orderId: string, reason?: string, refundedAmount?: number): Promise<void> {
   const [order, orderUser] = await Promise.all([
     prisma.order.findUnique({ where: { id: orderId }, include: { shippingAddress: true } }),
     prisma.order
@@ -119,7 +119,7 @@ async function notifyRefundIssued(orderId: string, reason?: string): Promise<voi
       ),
   ]);
   if (!order || !orderUser) return;
-  await sendRefundConfirmation(order, orderUser, reason);
+  await sendRefundConfirmation(order, orderUser, reason, refundedAmount);
 }
 
 // POST /api/payments/webhooks/stripe - Stripe Checkout webhook
@@ -271,7 +271,11 @@ router.post('/process', authenticate, async (req, res, next) => {
       throw new AppError('Forbidden', 403);
     }
 
-    if (order.paymentStatus === 'completed') {
+    if (
+      order.paymentStatus === 'completed' ||
+      order.paymentStatus === 'partially_refunded' ||
+      order.paymentStatus === 'refunded'
+    ) {
       throw new AppError('Order already paid', 400);
     }
 
@@ -353,10 +357,10 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
 
     const remaining = Math.max(0, order.totalAmount - refundedSoFar);
     // Default to the remaining amount (full refund of what is left); a partial
-    // `amount` refunds less.
-    const refundAmount = amount != null ? amount : remaining;
-    if (!(refundAmount > 0)) {
-      throw new AppError('Nothing left to refund for this order.', 400);
+    // `amount` refunds less. Guard against non-numeric/negative/NaN input.
+    const refundAmount = amount == null ? remaining : Number(amount);
+    if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+      throw new AppError('Refund amount must be a positive number.', 400);
     }
     if (refundedSoFar + refundAmount > order.totalAmount + 1e-9) {
       throw new AppError(`Refund amount exceeds the remaining balance (${remaining.toFixed(2)}).`, 400);
@@ -430,8 +434,8 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
     await autoPostRefund(orderId, refundAmount);
 
     // Fire-and-forget: email the customer that their order was refunded.
-    // Never fails the refund.
-    await notifyRefundIssued(orderId, reason).catch(() => {});
+    // Never fails the refund. Reports the actual amount refunded this time.
+    await notifyRefundIssued(orderId, reason, refundAmount).catch(() => {});
 
     logger.info(
       `Refund ${isFullRefund ? 'full' : 'partial'} processed for order ${order.orderNumber} (${refundAmount})`,

@@ -196,6 +196,68 @@ describe('POST /api/payments/refund (admin)', () => {
     const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
     expect(after!.paymentStatus).toBe('refunded');
   });
+
+  it('refunds a Zarinpal order using its authority (not the settle ref_id)', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+
+    // Enable Zarinpal through the DB gateway config so isGatewayConfigured passes.
+    const gwConfig = JSON.stringify({ zarinpal: { enabled: true, merchantId: 'm-1' } });
+    await mockPrisma.storeSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', paymentGateways: gwConfig },
+      update: { paymentGateways: gwConfig },
+    });
+
+    const o = await createOrder(user.id, { paymentStatus: 'completed', totalAmount: 110 });
+    await mockPrisma.order.update({ where: { id: o.id }, data: { paymentMethod: 'zarinpal' } });
+    // The settled Payment row: transactionId = ref_id (what order.paymentIntentId
+    // holds), with the create-time authority preserved in gatewayResponse.
+    await mockPrisma.payment.create({
+      data: {
+        orderId: o.id,
+        amount: 110,
+        currency: 'IRR',
+        method: 'zarinpal',
+        status: 'completed',
+        transactionId: 'ref_id_999',
+        gatewayResponse: JSON.stringify({ originalReference: 'AUTHORITY_X', ref_id: 'ref_id_999' }),
+      },
+    });
+
+    const calls: Array<{ url: string; body: string }> = [];
+    const fetchStub = vi.fn(async (url: any, init?: any) => {
+      calls.push({ url: String(url), body: String(init?.body || '') });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: { code: 100, status: 'REFUNDED', ref_id: 77 }, errors: [] }),
+      } as any;
+    });
+    vi.stubGlobal('fetch', fetchStub);
+
+    try {
+      const res = await request(app)
+        .post('/api/payments/refund')
+        .set('Authorization', `Bearer ${admin}`)
+        .send({ orderId: o.id, reason: 'return' });
+      expect(res.status).toBe(200);
+      const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+      expect(after!.paymentStatus).toBe('refunded');
+      // The refund call went to the Zarinpal refund endpoint...
+      const refundCall = calls.find((c) => c.url.includes('/payment/refund.json'));
+      expect(refundCall).toBeTruthy();
+      // ...and used the create-time authority, not the settle ref_id.
+      expect(refundCall!.url).toContain('api.zarinpal.com');
+      expect(JSON.parse(refundCall!.body)).toMatchObject({
+        merchant_id: 'm-1',
+        authority: 'AUTHORITY_X',
+      });
+      expect(refundCall!.body).not.toContain('ref_id_999');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('GET /api/payments/order/:orderId', () => {

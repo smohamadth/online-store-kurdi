@@ -74,4 +74,26 @@ describe('sendRefundConfirmation', () => {
     const call = infoSpy.mock.calls.find((c) => String(c[0]).includes('📧 Email would be sent'));
     expect(String(call![0])).toContain('Refunded #O2');
   });
+
+  it('reports the actual refunded amount for a partial refund (not the full total)', async () => {
+    const infoSpy = loggerMock.info.mockImplementation(() => {});
+    // Put {{refundAmount}} in the subject so the log-only sendEmail line
+    // (which prints the subject) exposes which amount was reported.
+    (prisma.emailTemplate.findUnique as any).mockResolvedValue({
+      name: 'refund_confirmation',
+      subject: 'Refunded {{refundAmount}} for #{{orderNumber}}',
+      htmlContent: '<p>x</p>',
+      isActive: true,
+    });
+
+    await sendRefundConfirmation(
+      { id: 'ord_3', orderNumber: 'O3', totalAmount: 100 },
+      { firstName: 'Sara', email: 'sara@example.com' },
+      'partial return',
+      5,
+    );
+
+    const call = infoSpy.mock.calls.find((c) => String(c[0]).includes('📧 Email would be sent'));
+    expect(String(call![0])).toContain('Refunded 5.00 for #O3');
+  });
 });

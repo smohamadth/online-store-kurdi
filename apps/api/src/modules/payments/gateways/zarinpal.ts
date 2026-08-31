@@ -16,7 +16,7 @@ import { postJson, roundAmount } from './helpers';
 const PROD = {
   request: 'https://payment.zarinpal.com/pg/v4/payment/request.json',
   verify: 'https://payment.zarinpal.com/pg/v4/payment/verify.json',
-  refund: 'https://payment.zarinpal.com/pg/v4/payment/refund.json',
+  refund: 'https://api.zarinpal.com/pg/v4/payment/refund.json',
   startPay: 'https://payment.zarinpal.com/pg/StartPay/',
 };
 const SANDBOX = {

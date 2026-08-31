@@ -317,14 +317,21 @@ export async function sendPaymentConfirmation(order: any, user: any): Promise<vo
   await sendEmail(user.email, subject, html);
 }
 
-export async function sendRefundConfirmation(order: any, user: any, reason?: string): Promise<void> {
+export async function sendRefundConfirmation(
+  order: any,
+  user: any,
+  reason?: string,
+  refundedAmount?: number,
+): Promise<void> {
   const template = await getTemplate('refund_confirmation');
   // Variables shared by the subject and the HTML body, so a merchant's
   // custom {{orderNumber}} in the subject renders the real value too.
   const variables = {
     customerName: user.firstName,
     orderNumber: order.orderNumber,
-    refundAmount: Number(order.totalAmount || 0).toFixed(2),
+    // The actual amount refunded this time (a partial refund should report
+    // that slice, not the whole order total).
+    refundAmount: Number(refundedAmount ?? order.totalAmount ?? 0).toFixed(2),
     reason: reason || order.refundReason || 'Requested by the store',
     orderUrl: `${env.FRONTEND_URL}/account/orders/${order.id}`,
     storeName: 'Online Store',
@@ -358,7 +365,7 @@ export async function sendRefundConfirmation(order: any, user: any, reason?: str
 
           <div class="refund-info">
             <div class="row"><span>Order</span><span>#${order.orderNumber}</span></div>
-            <div class="row"><span>Refund amount</span><span>$${Number(order.totalAmount || 0).toFixed(2)}</span></div>
+            <div class="row"><span>Refund amount</span><span>$${variables.refundAmount}</span></div>
             <div class="row"><span>Reason</span><span>${variables.reason}</span></div>
           </div>
 
