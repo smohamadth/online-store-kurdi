@@ -167,7 +167,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
 router.post('/:id/pay', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const order = await prisma.order.findUnique({ where: { id } });
+    const order = await prisma.order.findUnique({ where: { id }, include: { shippingAddress: true } });
     if (!order) throw new NotFoundError('Order');
     if (req.user?.role !== 'admin' && req.user?.role !== 'manager' && order.userId !== req.user?.id) {
       throw new AppError('Forbidden', 403);
@@ -196,7 +196,7 @@ router.post('/:id/pay', authenticate, async (req, res, next) => {
         totalAmount: order.totalAmount,
         currency: settings?.currency || 'USD',
         customerEmail: user?.email || null,
-        customerPhone: user?.phone || (order.shippingAddress as any)?.phone || null,
+        customerPhone: user?.phone || order.shippingAddress?.phone || null,
         description: `Order ${order.orderNumber}`,
       },
       paymentMethod: method,
