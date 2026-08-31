@@ -425,4 +425,15 @@ describe('POST /api/orders/:id/pay (retry payment)', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/not payable online/i);
   });
+
+  it('rejects a partially-refunded order (already paid)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    await mockPrisma.order.update({ where: { id: o.id }, data: { paymentStatus: 'partially_refunded' } });
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/pay`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/already been paid/i);
+  });
 });

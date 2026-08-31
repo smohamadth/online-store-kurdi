@@ -172,7 +172,11 @@ router.post('/:id/pay', authenticate, async (req, res, next) => {
     if (req.user?.role !== 'admin' && req.user?.role !== 'manager' && order.userId !== req.user?.id) {
       throw new AppError('Forbidden', 403);
     }
-    if (order.paymentStatus === 'completed' || order.paymentStatus === 'refunded') {
+    if (
+      order.paymentStatus === 'completed' ||
+      order.paymentStatus === 'refunded' ||
+      order.paymentStatus === 'partially_refunded'
+    ) {
       throw new AppError('This order has already been paid.', 400);
     }
     const method = order.paymentMethod || '';
@@ -234,7 +238,7 @@ router.get('/:id/tracking', authenticate, async (req, res, next) => {
       throw new AppError('Forbidden', 403);
     }
 
-    const isPaid = order.paymentStatus === 'completed';
+    const isPaid = order.paymentStatus === 'completed' || order.paymentStatus === 'partially_refunded';
     // paidAt: the completed payment row's timestamp, falling back to
     // the order's own updatedAt (the status flip happened then).
     // (defensive: the in-memory test mock omits include args, so

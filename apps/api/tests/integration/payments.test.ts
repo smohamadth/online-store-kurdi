@@ -132,6 +132,70 @@ describe('POST /api/payments/refund (admin)', () => {
     const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
     expect(after!.paymentStatus).toBe('completed');
   });
+
+  it('a partial refund sets paymentStatus to partially_refunded and keeps status', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed', status: 'processing', totalAmount: 110 });
+    const res = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, amount: 10, reason: 'partial return' });
+    expect(res.status).toBe(200);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after!.paymentStatus).toBe('partially_refunded');
+    expect(after!.status).toBe('processing'); // fulfilment state unchanged
+  });
+
+  it('refunding the remaining balance flips a partially_refunded order to refunded', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed', status: 'processing', totalAmount: 110 });
+    await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, amount: 10 });
+    await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, amount: 100 });
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after!.paymentStatus).toBe('refunded');
+    expect(after!.status).toBe('refunded');
+  });
+
+  it('rejects a refund larger than the remaining balance (400)', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed', totalAmount: 110 });
+    const res = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, amount: 200 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/exceeds/i);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after!.paymentStatus).toBe('completed');
+  });
+
+  it('rejects a second full refund once nothing remains (400)', async () => {
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed', totalAmount: 110 });
+    await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, amount: 110 });
+    const res = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id });
+    // A fully-refunded order is no longer refundable: the route rejects it
+    // (either via the status guard or the nothing-left check).
+    expect(res.status).toBe(400);
+    const after = await mockPrisma.order.findUnique({ where: { id: o.id } });
+    expect(after!.paymentStatus).toBe('refunded');
+  });
 });
 
 describe('GET /api/payments/order/:orderId', () => {

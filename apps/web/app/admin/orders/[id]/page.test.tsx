@@ -9,7 +9,7 @@
  *   - it flips the displayed payment status to completed.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminOrderDetailPage from './page';
 
 const hoisted = vi.hoisted(() => ({
@@ -91,7 +91,12 @@ describe('AdminOrderDetailPage payment settlement', () => {
 
   it('shows Refund order for a completed order and calls POST /payments/refund', async () => {
     const completedOrder = { ...codOrder, paymentStatus: 'completed', status: 'processing' };
-    hoisted.api.getOrder.mockResolvedValue({ data: completedOrder });
+    const refundedOrder = { ...codOrder, paymentStatus: 'refunded', status: 'refunded' };
+    // First load: completed order. After the refund POST, the page reloads the
+    // order and now sees the server's refunded state.
+    hoisted.api.getOrder
+      .mockResolvedValueOnce({ data: completedOrder })
+      .mockResolvedValueOnce({ data: refundedOrder });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<AdminOrderDetailPage />);
 
@@ -105,9 +110,25 @@ describe('AdminOrderDetailPage payment settlement', () => {
     expect(hoisted.authHttp.post.mock.calls[0][0]).toBe('/payments/refund');
     expect(hoisted.authHttp.post.mock.calls[0][1]).toMatchObject({ orderId: 'o-1', reason: 'Admin refund' });
 
-    // Refund button disappears and the order shows refunded.
+    // Refund button disappears and the order shows refunded (after reload).
     await waitFor(() => expect(screen.queryByText('Refund order')).toBeNull());
     expect(screen.getAllByText('refunded').length).toBeGreaterThan(0);
+    confirmSpy.mockRestore();
+  });
+
+  it('sends a partial refund amount when one is entered', async () => {
+    const completedOrder = { ...codOrder, paymentStatus: 'completed', status: 'processing' };
+    hoisted.api.getOrder.mockResolvedValue({ data: completedOrder });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AdminOrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Refund order')).toBeTruthy());
+    const amountInput = screen.getByPlaceholderText(/Refund amount/);
+    fireEvent.change(amountInput, { target: { value: '10.00' } });
+    screen.getByText('Refund order').click();
+
+    await waitFor(() => expect(hoisted.authHttp.post).toHaveBeenCalled());
+    expect(hoisted.authHttp.post.mock.calls[0][1]).toMatchObject({ orderId: 'o-1', amount: 10, reason: 'Admin refund' });
     confirmSpy.mockRestore();
   });
 

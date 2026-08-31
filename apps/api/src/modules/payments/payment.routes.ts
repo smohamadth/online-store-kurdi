@@ -341,15 +341,31 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       throw new NotFoundError('Order');
     }
 
-    if (order.paymentStatus !== 'completed') {
+    if (order.paymentStatus !== 'completed' && order.paymentStatus !== 'partially_refunded') {
       throw new AppError('Order payment not completed', 400);
+    }
+
+    // Cumulative amount already refunded across prior refund rows (this order
+    // can be refunded in parts, each creating its own Payment row).
+    const refundedSoFar = (order.payments || [])
+      .filter((p: any) => p.method === 'refund' && p.status === 'completed')
+      .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+    const remaining = Math.max(0, order.totalAmount - refundedSoFar);
+    // Default to the remaining amount (full refund of what is left); a partial
+    // `amount` refunds less.
+    const refundAmount = amount != null ? amount : remaining;
+    if (!(refundAmount > 0)) {
+      throw new AppError('Nothing left to refund for this order.', 400);
+    }
+    if (refundedSoFar + refundAmount > order.totalAmount + 1e-9) {
+      throw new AppError(`Refund amount exceeds the remaining balance (${remaining.toFixed(2)}).`, 400);
     }
 
     // If this order was paid through a hosted gateway, actually move the money
     // back to the customer before recording anything locally. Only when the
     // gateway confirms do we mark the order refunded — otherwise the store
     // would claim a refund it never issued.
-    const refundAmount = amount || order.totalAmount;
     const gateway = getGatewayById(order.paymentMethod);
     let gatewayRefund: { success: boolean; transactionId?: string | null; message?: string; raw?: unknown } | null = null;
 
@@ -398,13 +414,16 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       },
     });
 
-    // Update order status
+    // Partial vs full refund: only a full refund marks the whole order
+    // refunded; a partial refund flips paymentStatus to partially_refunded
+    // and leaves the fulfilment status unchanged.
+    const newRefundedTotal = refundedSoFar + refundAmount;
+    const isFullRefund = newRefundedTotal + 1e-9 >= order.totalAmount;
     await prisma.order.update({
       where: { id: orderId },
-      data: {
-        paymentStatus: 'refunded',
-        status: 'refunded',
-      },
+      data: isFullRefund
+        ? { paymentStatus: 'refunded', status: 'refunded' }
+        : { paymentStatus: 'partially_refunded' },
     });
 
     // Best-effort auto-posting of the refund (ACCOUNTING_AUTO_POST=true).
@@ -414,7 +433,9 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
     // Never fails the refund.
     await notifyRefundIssued(orderId, reason).catch(() => {});
 
-    logger.info(`Refund processed for order ${order.orderNumber}`);
+    logger.info(
+      `Refund ${isFullRefund ? 'full' : 'partial'} processed for order ${order.orderNumber} (${refundAmount})`,
+    );
 
     res.json({
       status: 'success',

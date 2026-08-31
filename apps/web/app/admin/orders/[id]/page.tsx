@@ -32,6 +32,7 @@ export default function AdminOrderDetailPage() {
   const [refunding, setRefunding] = useState(false);
   const [refundMsg, setRefundMsg] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
 
@@ -133,13 +134,22 @@ export default function AdminOrderDetailPage() {
     if (!window.confirm('Issue a refund for this order? This cannot be undone.')) return;
     setRefunding(true);
     setRefundMsg('');
+    const parsedAmount = refundAmount ? Number(refundAmount) : undefined;
+    if (parsedAmount !== undefined && (isNaN(parsedAmount) || parsedAmount <= 0)) {
+      setRefundMsg('Please enter a valid refund amount (or leave it blank for a full refund).');
+      return;
+    }
     try {
       await authHttp.post('/payments/refund', {
         orderId,
+        ...(parsedAmount !== undefined ? { amount: parsedAmount } : {}),
         reason: refundReason || 'Admin refund',
       });
-      setRefundMsg('Refund issued — the order is now marked refunded.');
-      setOrder((prev: any) => ({ ...prev, paymentStatus: 'refunded', status: 'refunded' }));
+      setRefundMsg('Refund issued.');
+      setRefundAmount('');
+      // A full refund marks the order refunded; a partial one leaves it
+      // partially_refunded — reload to reflect the server's real state.
+      await fetchOrder();
     } catch (err: any) {
       setRefundMsg(errorMessage(err) || 'Could not issue the refund. Please try again.');
     } finally {
@@ -416,9 +426,18 @@ export default function AdminOrderDetailPage() {
                 </p>
               </>
             )}
-            {order.paymentStatus === 'completed' && (
+            {(order.paymentStatus === 'completed' || order.paymentStatus === 'partially_refunded') && (
               <>
                 <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '16px' }}>
+                  <input
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={`Refund amount (default: full ${formatPrice(order.totalAmount)})`}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '13px', marginBottom: '8px' }}
+                  />
                   <input
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
@@ -443,7 +462,7 @@ export default function AdminOrderDetailPage() {
                     {refunding ? 'Refunding…' : 'Refund order'}
                   </button>
                   <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
-                    For online payments this refunds the customer at the gateway before marking the order refunded.
+                    Leave the amount blank to refund the full remaining balance. For online payments this refunds the customer at the gateway before marking the order refunded.
                   </p>
                 </div>
               </>

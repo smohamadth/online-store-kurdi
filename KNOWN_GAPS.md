@@ -513,10 +513,18 @@ and the admin UI by `apps/web/app/admin/accounting/page.test.tsx`.
 
 Staff refunds (`POST /api/payments/refund`) now call the gateway's real refund
 API **when the order was paid through a gateway that exposes one**, and only
-then create the local `Payment` row, flip the order to `refunded`, and post the
-accounting entry. Refunds are **never** recorded locally unless the gateway
-confirms the money moved — otherwise the route returns a 4xx/5xx and leaves the
-order `completed`.
+then create the local `Payment` row, update the order, and post the accounting
+entry. Refunds are **never** recorded locally unless the gateway confirms the
+money moved — otherwise the route returns a 4xx/5xx and leaves the order
+`completed`.
+
+**Partial refunds are supported.** Omit `amount` to refund the full remaining
+balance; pass a smaller `amount` to refund in parts. The order's payment status
+becomes `partially_refunded` after a partial refund (fulfilment status
+unchanged) and `refunded` once the balance is fully returned. Over-refunds and
+second refunds of an already-fully-refunded order are rejected (400). The admin
+order page has a refund-amount field that defaults to the full remaining
+balance.
 
 | Gateway   | Refund via API? | Endpoint / call                                  |
 |-----------|-----------------|--------------------------------------------------|
