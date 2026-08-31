@@ -79,4 +79,15 @@ describe('Account order detail Pay now', () => {
     await waitFor(() => expect(screen.getByText('completed')).toBeTruthy());
     expect(screen.queryByText('Pay now')).toBeNull();
   });
+
+  it('shows Pay now for a failed online-payment order so the customer can retry', async () => {
+    mocks.api.getOrder.mockResolvedValue({ data: makeOrder({ paymentStatus: 'failed' }) });
+    render(<OrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Pay now')).toBeTruthy());
+    screen.getByText('Pay now').click();
+
+    await waitFor(() => expect(mocks.authHttp.post).toHaveBeenCalled());
+    expect(mocks.authHttp.post.mock.calls[0][0]).toBe('/orders/o-1/pay');
+  });
 });

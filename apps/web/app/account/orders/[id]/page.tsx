@@ -460,7 +460,10 @@ export default function OrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
-            {order.paymentStatus === 'pending' && ONLINE_PAYMENT_METHODS.has(order.paymentMethod) && (
+            {/* An unpaid gateway order (pending, or failed/declined at the
+                gateway) can be re-attempted: re-runs the hosted payment page.
+                The retry API accepts both pending and failed. */}
+            {(order.paymentStatus === 'pending' || order.paymentStatus === 'failed') && ONLINE_PAYMENT_METHODS.has(order.paymentMethod) && (
               <>
                 <button
                   onClick={handlePayNow}
@@ -480,7 +483,9 @@ export default function OrderDetailPage() {
                   {paying ? 'Opening payment…' : 'Pay now'}
                 </button>
                 <p style={{ fontSize: '12px', color: 'var(--muted, #888)', marginTop: '8px' }}>
-                  Complete your payment for this order.
+                  {order.paymentStatus === 'failed'
+                    ? 'Your previous payment attempt was not completed. Try again.'
+                    : 'Complete your payment for this order.'}
                 </p>
               </>
             )}
