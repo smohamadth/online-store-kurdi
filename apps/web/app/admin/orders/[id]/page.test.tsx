@@ -88,4 +88,40 @@ describe('AdminOrderDetailPage payment settlement', () => {
     );
     expect(screen.getByText('completed')).toBeTruthy();
   });
+
+  it('shows Refund order for a completed order and calls POST /payments/refund', async () => {
+    const completedOrder = { ...codOrder, paymentStatus: 'completed', status: 'processing' };
+    hoisted.api.getOrder.mockResolvedValue({ data: completedOrder });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AdminOrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Refund order')).toBeTruthy());
+    // Mark as paid must NOT show for an already-completed order.
+    expect(screen.queryByText('Mark as paid')).toBeNull();
+
+    screen.getByText('Refund order').click();
+    await waitFor(() => expect(hoisted.authHttp.post).toHaveBeenCalled());
+
+    expect(hoisted.authHttp.post.mock.calls[0][0]).toBe('/payments/refund');
+    expect(hoisted.authHttp.post.mock.calls[0][1]).toMatchObject({ orderId: 'o-1', reason: 'Admin refund' });
+
+    // Refund button disappears and the order shows refunded.
+    await waitFor(() => expect(screen.queryByText('Refund order')).toBeNull());
+    expect(screen.getAllByText('refunded').length).toBeGreaterThan(0);
+    confirmSpy.mockRestore();
+  });
+
+  it('does not call the refund endpoint when the admin cancels the confirmation', async () => {
+    const completedOrder = { ...codOrder, paymentStatus: 'completed', status: 'processing' };
+    hoisted.api.getOrder.mockResolvedValue({ data: completedOrder });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<AdminOrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Refund order')).toBeTruthy());
+    screen.getByText('Refund order').click();
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(hoisted.authHttp.post).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
 });

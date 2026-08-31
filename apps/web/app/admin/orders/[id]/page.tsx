@@ -29,6 +29,9 @@ export default function AdminOrderDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [settling, setSettling] = useState(false);
   const [settleMsg, setSettleMsg] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const [refundMsg, setRefundMsg] = useState('');
+  const [refundReason, setRefundReason] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
 
@@ -118,6 +121,29 @@ export default function AdminOrderDetailPage() {
       setSettleMsg(errorMessage(err) || 'Could not record the payment. Please try again.');
     } finally {
       setSettling(false);
+    }
+  };
+
+  // Refund a completed payment. Calls the admin-only POST /api/payments/refund.
+  // For gateway payments (Stripe, PayPal, ZainCash, Zarinpal, FIB) the server
+  // actually refunds the money before marking the order refunded; if the
+  // gateway is disabled / has no API refund (IDPay) / rejects it, the server
+  // returns an error and the order stays 'completed' — never falsely refunded.
+  const handleRefund = async () => {
+    if (!window.confirm('Issue a refund for this order? This cannot be undone.')) return;
+    setRefunding(true);
+    setRefundMsg('');
+    try {
+      await authHttp.post('/payments/refund', {
+        orderId,
+        reason: refundReason || 'Admin refund',
+      });
+      setRefundMsg('Refund issued — the order is now marked refunded.');
+      setOrder((prev: any) => ({ ...prev, paymentStatus: 'refunded', status: 'refunded' }));
+    } catch (err: any) {
+      setRefundMsg(errorMessage(err) || 'Could not issue the refund. Please try again.');
+    } finally {
+      setRefunding(false);
     }
   };
 
@@ -389,6 +415,41 @@ export default function AdminOrderDetailPage() {
                   Record cash collected or a bank transfer received for this order.
                 </p>
               </>
+            )}
+            {order.paymentStatus === 'completed' && (
+              <>
+                <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '16px' }}>
+                  <input
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    placeholder="Refund reason (optional)"
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                  <button
+                    onClick={handleRefund}
+                    disabled={refunding}
+                    style={{
+                      marginTop: '10px',
+                      width: '100%',
+                      padding: '10px 20px',
+                      backgroundColor: refunding ? '#ccc' : '#dc2626',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      cursor: refunding ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {refunding ? 'Refunding…' : 'Refund order'}
+                  </button>
+                  <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+                    For online payments this refunds the customer at the gateway before marking the order refunded.
+                  </p>
+                </div>
+              </>
+            )}
+            {refundMsg && (
+              <p style={{ fontSize: '13px', marginTop: '10px', color: '#374151' }}>{refundMsg}</p>
             )}
             {settleMsg && (
               <p style={{ fontSize: '13px', marginTop: '10px', color: '#374151' }}>{settleMsg}</p>
