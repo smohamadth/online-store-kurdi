@@ -22,7 +22,7 @@ import { SITE } from '@/lib/seo';
 import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 import ProductCard from '@/components/ProductCard';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, contentUrl } from '@/lib/http';
 import { encodeRouteParam } from '@/lib/routeParam';
 import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
 import { LayoutRenderer } from '@/lib/layouts/render';
@@ -81,19 +81,25 @@ export default function CategoryView({ slug }: { slug: string }) {
         // Existence is verified by the server component in page.tsx, which
         // returns a real HTTP 404 for unknown slugs. This fetch only needs the
         // display data.
-        const catRes = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`);
+        //
+        // The category and its products are independent, so we fetch them in
+        // parallel instead of serially - a serial pair of round-trips on a slow
+        // connection nearly doubles the perceived load time of a category page.
+        const [catRes, res] = await Promise.all([
+          fetch(contentUrl(`${API_BASE}/categories/${encodeRouteParam(slug)}`)),
+          // Filtering happens on the SERVER. The previous page pulled the first
+          // 100 products and filtered in the browser, so any store with more
+          // than 100 products silently dropped items from category pages.
+          api.getProducts({
+            category: slug,
+            limit: PAGE_SIZE,
+            page,
+            sort: sort === 'newest' ? undefined : sort,
+          } as any),
+        ]);
+
         const catJson = await catRes.json();
         if (!cancelled) setCategory(catJson.data);
-
-        // Filtering happens on the SERVER. The previous page pulled the first
-        // 100 products and filtered in the browser, so any store with more
-        // than 100 products silently dropped items from category pages.
-        const res = await api.getProducts({
-          category: slug,
-          limit: PAGE_SIZE,
-          page,
-          sort: sort === 'newest' ? undefined : sort,
-        } as any);
 
         if (!cancelled) {
           setProducts(res.data || []);

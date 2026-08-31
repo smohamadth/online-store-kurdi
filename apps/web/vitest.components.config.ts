@@ -30,6 +30,7 @@ export default defineConfig({
       'lib/layouts/useActiveLayout.test.{ts,tsx}',
       'lib/previewTheme.test.{ts,tsx}',
       'lib/i18n.test.{ts,tsx}',
+      'lib/hooks.test.{ts,tsx}',
       'app/**/*.test.{ts,tsx}',
     ],
     setupFiles: ['./test/setup-components.tsx'],

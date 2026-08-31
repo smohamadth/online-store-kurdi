@@ -86,3 +86,34 @@ describe('AppShell footer contact details', () => {
     expect(screen.queryByText(/📍/)).not.toBeInTheDocument();
   });
 });
+
+describe('AppShell menu request dedup', () => {
+  it('issues a single /menus/location/header request even though both the header and its sub-nav use it', async () => {
+    // The desktop header and its nested sub-component both call useMenu('header');
+    // the in-flight dedup must collapse them into one network request.
+    const menuCalls: string[] = [];
+    const fetchMock = vi.fn(async (url: any) => {
+      const u = String(url);
+      if (u.includes('/menus/location/header')) {
+        menuCalls.push(u);
+        return {
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              data: { location: 'header', items: [{ id: '1', label: 'Home', url: '/' }] },
+            }),
+        };
+      }
+      return { ok: true, status: 200, json: () => Promise.resolve({ data: null }) };
+    });
+    (global as any).fetch = fetchMock;
+
+    render(<AppShell>content</AppShell>);
+    // Flush the effects + resolved fetch promises.
+    await new Promise((r) => setTimeout(r, 50));
+
+    const headerCalls = menuCalls.filter((u) => u.includes('/menus/location/header'));
+    expect(headerCalls.length).toBe(1);
+  });
+});

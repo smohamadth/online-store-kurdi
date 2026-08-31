@@ -32,7 +32,7 @@ import { ThemeProvider } from '@/lib/theme';
 import AnnouncementBar from '@/components/AnnouncementBar';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import CurrencyPicker from '@/components/CurrencyPicker';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, contentUrl } from '@/lib/http';
 import { I18nSeedProvider } from '@/lib/I18nSeedProvider';
 
 // Types
@@ -69,25 +69,45 @@ function useIsMobile() {
   return isMobile;
 }
 
+// Menus are the same for every visitor (the desktop header, the mobile drawer
+// and the footer all render the same location). Deduplicate in-flight requests
+// per location so rendering both the desktop and mobile headers on one page
+// load issues a single network call instead of two. The promise is discarded
+// on completion, so an admin edit is picked up on the next load.
+const menuRequestCache = new Map<string, Promise<MenuData | null>>();
+
 // Fetch menu by location from API
 function useMenu(location: string) {
   const [menu, setMenu] = useState<MenuData | null>(null);
 
   useEffect(() => {
-    const fetchMenu = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/menus/location/${location}`);
-        if (response.ok) {
+    let cancelled = false;
+    let promise = menuRequestCache.get(location);
+    if (!promise) {
+      promise = (async (): Promise<MenuData | null> => {
+        try {
+          const response = await fetch(`${API_BASE}/menus/location/${location}`);
+          if (!response.ok) return null;
           const data = await response.json();
-          if (data.data) {
-            setMenu(data.data);
-          }
+          return data?.data ?? null;
+        } catch (err) {
+          // API not available, use defaults
+          return null;
         }
-      } catch (err) {
-        // API not available, use defaults
-      }
+      })();
+      menuRequestCache.set(location, promise);
+      // Drop the cached promise once it settles so the next mount refetches
+      // (an admin menu edit must show on the next page load).
+      promise.finally(() => {
+        if (menuRequestCache.get(location) === promise) menuRequestCache.delete(location);
+      });
+    }
+    promise.then((data) => {
+      if (!cancelled) setMenu(data);
+    });
+    return () => {
+      cancelled = true;
     };
-    fetchMenu();
   }, [location]);
 
   return menu;
@@ -719,7 +739,7 @@ function DynamicFooter() {
 
   useEffect(() => {
     let alive = true;
-    fetch(`${API_BASE}/pages`, { cache: 'no-store' })
+    fetch(contentUrl(`${API_BASE}/pages`), { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((d) => {
         if (!alive) return;
