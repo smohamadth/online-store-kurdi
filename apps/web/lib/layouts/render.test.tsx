@@ -317,6 +317,13 @@ describe('LayoutRenderer responsive grids', () => {
     expect(responsiveGrid(99)).toBe('repeat(auto-fit, minmax(min(100%, 120px), 1fr))');
   });
 
+  it('honours custom gap and design-container widths', () => {
+    // 3 cols / 16px gap over a 1024px design width: min = (1024-32)/3 = 330.
+    expect(responsiveGrid(3, 16, 1024)).toBe('repeat(auto-fit, minmax(min(100%, 330px), 1fr))');
+    // Wider gaps shave the per-column minimum so the desktop row still fits.
+    expect(responsiveGrid(2, 48)).toBe('repeat(auto-fit, minmax(min(100%, 616px), 1fr))');
+  });
+
   it('product grids collapse to a single column on narrow screens', () => {
     const products = [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }, { id: 'p3', name: 'Three' }, { id: 'p4', name: 'Four' }];
     const { container } = renderBlock('featured', { perRow: 4, limit: 8 }, { products });
@@ -353,5 +360,29 @@ describe('LayoutRenderer responsive grids', () => {
     const { container } = renderBlock('stats', { items });
     const stats = container.querySelector('[data-block-type="stats"] > div') as HTMLElement;
     expect(stats.style.flexWrap).toBe('wrap');
+  });
+
+  it('every other multi-column block emits a reflowable grid template', () => {
+    const products = [
+      { id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }, { id: 'p3', name: 'Three' },
+    ];
+    const cases: Array<[BlockType, Record<string, unknown>, LayoutData, string]> = [
+      ['features', { items: [{ title: 'A' }, { title: 'B' }, { title: 'C' }] }, {}, responsiveGrid(3)],
+      ['testimonials', { items: [{ text: 'x' }, { text: 'y' }, { text: 'z' }] }, {}, responsiveGrid(3)],
+      ['gallery', { items: [{ src: '/a.jpg' }, { src: '/b.jpg' }, { src: '/c.jpg' }] }, {}, responsiveGrid(3, 12)],
+      ['steps', { items: [{ title: 'A' }, { title: 'B' }, { title: 'C' }, { title: 'D' }] }, {}, responsiveGrid(4)],
+      ['iconsGrid', { items: [{ icon: 'x', title: 'A' }, { icon: 'y', title: 'B' }, { icon: 'z', title: 'C' }, { icon: 'w', title: 'D' }] }, {}, responsiveGrid(4)],
+      ['productList', { title: 'Shop' }, { products }, responsiveGrid(4)],
+      ['categoryGrid', {}, { products }, responsiveGrid(3)],
+      ['newArrivals', {}, { products }, responsiveGrid(4)],
+      ['trending', {}, { products }, responsiveGrid(4)],
+      ['productDetail', {}, { product: { name: 'W', price: '1' } }, responsiveGrid(2, 24)],
+    ];
+    for (const [type, config, data, expected] of cases) {
+      const { container } = renderBlock(type, config, data);
+      const grid = contentGrid(container, type);
+      expect(grid, `expected a responsive grid for ${type}`).toBeTruthy();
+      expect(grid?.style.gridTemplateColumns).toBe(expected);
+    }
   });
 });

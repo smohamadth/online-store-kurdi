@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ThemeStudioPage from './page';
 import { useIsMobile } from '@/lib/hooks';
+import { responsiveGrid } from '@/lib/layouts/render';
 
 vi.mock('@/lib/hooks', async () => {
   const actual = await vi.importActual<typeof import('@/lib/hooks')>('@/lib/hooks');
@@ -224,5 +225,49 @@ describe('ThemeStudioPage', () => {
     expect(previewFrame()?.style.maxWidth).toBe('768px');
     fireEvent.click(phoneBtn);
     expect(previewFrame()?.style.maxWidth).toBe('375px');
+  });
+
+  it('renders the builder preview collapsed to a single column at phone width', async () => {
+    // Stack the whole admin to one column (phone) AND set the preview frame to
+    // "Phone" so the builder output must reflow its multi-column grids.
+    (useIsMobile as any).mockReturnValue(true);
+    const themeWithGrid = {
+      ...theme,
+      layouts: {
+        home: {
+          columns: 12, gap: 24,
+          blocks: [
+            { id: 'feat', type: 'features', colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1, config: { items: [{ title: 'A' }, { title: 'B' }, { title: 'C' }] } },
+          ],
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (url: string, opts?: any) => {
+      const u = String(url);
+      if (u.includes('/theme-studio/themes') && u.endsWith('/themes')) return okJson(['my-brand']);
+      if (u.includes('/theme-studio/themes/my-brand')) return okJson(themeWithGrid);
+      return okJson({});
+    });
+    (global.fetch as any) = fetchMock;
+
+    render(<ThemeStudioPage />);
+    await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
+    fireEvent.click(screen.getByText('My Brand'));
+    await waitFor(() => expect(screen.getByText('Features')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Phone' }));
+
+    // The preview frame is the maxWidth:375 container; its features grid must
+    // use the reflowable auto-fit template (collapses to one column on a phone)
+    // instead of a fixed 3-column grid.
+    const frame = Array.from(document.querySelectorAll('div[style]')).find(
+      (d) => (d as HTMLElement).style.maxWidth === '375px'
+    ) as HTMLElement;
+    expect(frame).toBeTruthy();
+    const grid = Array.from(frame.querySelectorAll('div')).find(
+      (d) => (d as HTMLElement).style.gridTemplateColumns.includes('auto-fit')
+    ) as HTMLElement;
+    expect(grid).toBeTruthy();
+    expect(grid.style.gridTemplateColumns).toBe(responsiveGrid(3));
+    expect(grid.style.gridTemplateColumns).not.toBe('repeat(3, 1fr)');
   });
 });
