@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { LayoutRenderer, LayoutData } from './render';
+import { LayoutRenderer, LayoutData, responsiveGrid } from './render';
 import { PageLayout, BLOCK_TYPES, BlockType } from './types';
 
 function sampleLayout(overrides: Partial<PageLayout> = {}): PageLayout {
@@ -293,5 +293,65 @@ describe('LayoutRenderer marketing blocks', () => {
     expect(screen.getByText(/FAQ items go here/)).toBeTruthy();
     renderBlock('pricing', {});
     expect(screen.getByText(/Pricing tiers go here/)).toBeTruthy();
+  });
+});
+
+describe('LayoutRenderer responsive grids', () => {
+  /** Find the first inner content grid (auto-fit based) inside a block cell. */
+  function contentGrid(container: HTMLElement, type: BlockType): HTMLElement | undefined {
+    const cell = container.querySelector(`[data-block-type="${type}"]`);
+    return Array.from(cell?.querySelectorAll('div') ?? []).find(
+      (d) => (d as HTMLElement).style.gridTemplateColumns.includes('auto-fit'),
+    ) as HTMLElement | undefined;
+  }
+
+  it('derives a reflowable auto-fit column template for N desktop columns', () => {
+    // 4 cols / 16px gap over a 1280px design width: min width = (1280-48)/4 = 308.
+    expect(responsiveGrid(4)).toBe('repeat(auto-fit, minmax(min(100%, 308px), 1fr))');
+    // 2 cols / 24px gap stacks to a single column on narrow phones: min = (1280-24)/2.
+    expect(responsiveGrid(2, 24)).toBe('repeat(auto-fit, minmax(min(100%, 628px), 1fr))');
+  });
+
+  it('clamps per-row counts to a sane range and never produces a zero width', () => {
+    expect(responsiveGrid(0)).toContain('repeat(auto-fit');
+    expect(responsiveGrid(99)).toBe('repeat(auto-fit, minmax(min(100%, 120px), 1fr))');
+  });
+
+  it('product grids collapse to a single column on narrow screens', () => {
+    const products = [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }, { id: 'p3', name: 'Three' }, { id: 'p4', name: 'Four' }];
+    const { container } = renderBlock('featured', { perRow: 4, limit: 8 }, { products });
+    const grid = contentGrid(container, 'featured');
+    expect(grid).toBeTruthy();
+    expect(grid?.style.gridTemplateColumns).toBe(responsiveGrid(4));
+    // A 360px phone cell (min 308px) is narrower than 2×308+gaps, so auto-fit
+    // renders a single column instead of four cramped ones.
+    expect(grid?.style.gridTemplateColumns).not.toContain('repeat(4, 1fr)');
+  });
+
+  it('category and blog grids use the responsive template too', () => {
+    const { container: c1 } = renderBlock('categories', { perRow: 4 }, { categories: [{ slug: 'a', name: 'A' }] });
+    expect(contentGrid(c1, 'categories')?.style.gridTemplateColumns).toBe(responsiveGrid(4));
+    const { container: c2 } = renderBlock('blogList', { perRow: 3 }, { posts: [{ slug: 'p', title: 'Post' }] });
+    expect(contentGrid(c2, 'blogList')?.style.gridTemplateColumns).toBe(responsiveGrid(3));
+  });
+
+  it('text + image splits stack to one column on narrow screens', () => {
+    const { container } = renderBlock('textImage', { heading: 'About', text: 'Hello', image: '/a.jpg' });
+    const grid = contentGrid(container, 'textImage');
+    expect(grid?.style.gridTemplateColumns).toBe(responsiveGrid(2, 24));
+    expect(grid?.style.gridTemplateColumns).not.toBe('1fr 1fr');
+  });
+
+  it('pricing tiers collapse so cards no longer sit four-across on a phone', () => {
+    const tiers = [1, 2, 3].map((i) => ({ name: `Tier ${i}`, price: i }));
+    const { container } = renderBlock('pricing', { items: tiers });
+    expect(contentGrid(container, 'pricing')?.style.gridTemplateColumns).toBe(responsiveGrid(3));
+  });
+
+  it('stats wrap instead of overflowing horizontally on narrow screens', () => {
+    const items = Array.from({ length: 5 }, (_, i) => ({ value: i, label: `L${i}` }));
+    const { container } = renderBlock('stats', { items });
+    const stats = container.querySelector('[data-block-type="stats"] > div') as HTMLElement;
+    expect(stats.style.flexWrap).toBe('wrap');
   });
 });

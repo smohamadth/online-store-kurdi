@@ -105,6 +105,13 @@ export default function ThemeStudioPage() {
   const [msg, setMsg] = useState<{ type: string; text: string }>({ type: '', text: '' });
   const [newName, setNewName] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  // Preview viewport for checking the builder output at different displays.
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'phone'>('desktop');
+  const PREVIEW_WIDTHS: Record<'desktop' | 'tablet' | 'phone', number> = {
+    desktop: 1280,
+    tablet: 768,
+    phone: 375,
+  };
 
   const token = () => localStorage.getItem('token');
   const notify = (type: string, text: string) => {
@@ -432,9 +439,33 @@ export default function ThemeStudioPage() {
           <TokenEditor tokens={current?.tokens ?? {}} onTokenChange={setToken} />
 
           <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Preview</h3>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+            {(['desktop', 'tablet', 'phone'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setPreviewMode(mode)}
+                style={{
+                  ...previewModeButton,
+                  ...(previewMode === mode ? previewModeButtonActive : {}),
+                }}
+              >
+                {mode === 'desktop' ? 'Desktop' : mode === 'tablet' ? 'Tablet' : 'Phone'}
+              </button>
+            ))}
+          </div>
           <div style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: 12, background: '#fff' }}>
-            <div style={tokenCssVars(current?.tokens ?? {})}>
-              <LayoutRenderer layout={layout} data={{}} />
+            <div
+              style={{
+                margin: '0 auto',
+                width: '100%',
+                maxWidth: PREVIEW_WIDTHS[previewMode],
+                overflowX: 'hidden',
+              }}
+            >
+              <div style={tokenCssVars(current?.tokens ?? {})}>
+                <LayoutRenderer layout={layout} data={{}} />
+              </div>
             </div>
           </div>
         </div>
@@ -583,3 +614,10 @@ const card: React.CSSProperties = { border: '1px solid #e5e5e5', borderRadius: 1
 const btnPrimary: React.CSSProperties = { padding: '9px 16px', border: 'none', borderRadius: 8, background: '#111', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 };
 const btnGhost: React.CSSProperties = { padding: '4px 8px', border: '1px solid #d4d4d4', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 };
 const inputField: React.CSSProperties = { padding: '7px 9px', border: '1px solid #d4d4d4', borderRadius: 6, fontSize: 13 };
+const previewModeButton: React.CSSProperties = {
+  padding: '6px 12px', border: '1px solid #d4d4d4', borderRadius: 6, fontSize: 13,
+  background: '#fff', color: '#333', cursor: 'pointer',
+};
+const previewModeButtonActive: React.CSSProperties = {
+  background: 'var(--primary, #111)', color: '#fff', border: '1px solid transparent',
+};

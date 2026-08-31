@@ -30,6 +30,22 @@ export interface LayoutData {
 /** A block renderer receives its config merged over the page data. */
 export type BlockRenderer = (block: LayoutBlock, data: LayoutData) => ReactNode;
 
+/**
+ * Build a responsive `gridTemplateColumns` value for a multi-column block.
+ *
+ * Uses `auto-fit` + `minmax(min(100%, MINpx), 1fr)` so the grid shows up to
+ * `perRow` columns on a wide cell and reflows down to a single column on a
+ * narrow (phone) cell — no separate media query needed, and it matches the
+ * shipped themes (see bold/sections/Featured.tsx). `container` is the design
+ * width at which all `perRow` columns fit side by side; MIN is derived from it
+ * minus the gutters.
+ */
+export function responsiveGrid(perRow: number, gap = 16, container = 1280): string {
+  const cols = Math.max(1, Math.min(12, Math.round(perRow) || 4));
+  const min = Math.max(120, Math.floor((container - gap * (cols - 1)) / cols));
+  return `repeat(auto-fit, minmax(min(100%, ${min}px), 1fr))`;
+}
+
 /** A shared product-grid renderer used by newArrivals / trending. */
 function productGrid(b: LayoutBlock, d: LayoutData, fallbackTitle: string) {
   const items = (d.products ?? []) as any[];
@@ -39,7 +55,7 @@ function productGrid(b: LayoutBlock, d: LayoutData, fallbackTitle: string) {
   return (
     <div>
       <h2 style={{ margin: '0 0 16px' }}>{title}</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 4) || 4}, 1fr)`, gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
         {shown.map((p) => (
           <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
             <div style={{ fontWeight: 600 }}>{p.name}</div>
@@ -71,7 +87,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
   },
   newsletter: () => <div style={{ padding: '20px', background: 'var(--surface-2, #f4f4f5)', borderRadius: 'var(--radius)' }}>Newsletter</div>,
   stats: (b) => (
-    <div style={{ display: 'flex', gap: 16 }}>
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
       {(Array.isArray(b.config.items) ? b.config.items : []).map((s: any, i: number) => (
         <div key={i} style={{ flex: 1, textAlign: 'center' }}>
           <div style={{ fontSize: 26, fontWeight: 700 }}>{s?.value ?? ''}</div>
@@ -91,7 +107,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     const cats = (d.categories ?? []) as any[];
     if (!cats.length) return null;
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 4) || 4}, 1fr)`, gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
         {cats.slice(0, Number(b.config.limit ?? 8) || 8).map((c) => (
           <div key={c.slug} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
             <div style={{ fontSize: 26 }}>{c.emoji ?? '📦'}</div>
@@ -109,7 +125,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
         {(b.config.title || d.title) && (
           <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 4) || 4}, 1fr)`, gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
           {items.slice(0, Number(b.config.limit ?? 8) || 8).map((p) => (
             <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
               <div style={{ fontWeight: 600 }}>{p.name}</div>
@@ -138,7 +154,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     const items = itemsOf(b.config);
     if (!items.length) return <div style={{ color: 'var(--muted)' }}>Features go here.</div>;
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 3) || 3}, 1fr)`, gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3), gap: 16 }}>
         {items.map((it, i) => (
           <div key={i} style={{ textAlign: 'center', padding: 16 }}>
             <div style={{ fontSize: 28 }}>{String(it.icon ?? '✨')}</div>
@@ -166,7 +182,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     const items = itemsOf(b.config);
     if (!items.length) return <div style={{ color: 'var(--muted)' }}>Testimonials go here.</div>;
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, 1fr)`, gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Math.min(items.length, 3)), gap: 16 }}>
         {items.map((t, i) => (
           <div key={i} style={{ padding: 20, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface-2, #fafafa)' }}>
             <div>“{String(t.text ?? '')}”</div>
@@ -180,7 +196,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     const items = itemsOf(b.config).map((it) => String(it.src ?? it.url ?? '')).filter(Boolean);
     if (!items.length) return <div style={{ color: 'var(--muted)' }}>Gallery images go here.</div>;
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 3) || 3}, 1fr)`, gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3, 12), gap: 12 }}>
         {items.map((src, i) => (
           <img key={i} src={src} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 'var(--radius)' }} />
         ))}
@@ -261,7 +277,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
       <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius)', minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>Image</div>
     );
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(2, 24), gap: 24, alignItems: 'center' }}>
         {right ? (<>{copy}{media}</>) : (<>{media}{copy}</>)}
       </div>
     );
@@ -291,7 +307,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     return (
       <div>
         {String(b.config.title ?? '') && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title)}</h2>}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(cols), gap: 16 }}>
           {items.map((it, i) => (
             <div key={i} style={{ textAlign: 'center', padding: 16 }}>
               <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--primary, #111)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, margin: '0 auto 10px' }}>{i + 1}</div>
@@ -324,7 +340,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     return (
       <div>
         {String(b.config.title ?? '') && <h2 style={{ margin: '0 0 20px', textAlign: 'center' }}>{String(b.config.title)}</h2>}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16, alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(cols), gap: 16, alignItems: 'stretch' }}>
           {items.map((tier, i) => (
             <div key={i} style={{ border: `2px solid ${tier.highlighted ? 'var(--primary, #111)' : 'var(--border)'}`, borderRadius: 'var(--radius)', padding: 24, background: 'var(--surface-2, #fafafa)' }}>
               <div style={{ fontWeight: 700 }}>{String(tier.name ?? '')}</div>
@@ -368,7 +384,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     return (
       <div>
         {String(b.config.title ?? '') && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title)}</h2>}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(cols), gap: 16 }}>
           {items.map((it, i) => (
             <div key={i} style={{ padding: 20, border: '1px solid var(--border)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
               <div style={{ fontSize: 30 }}>{String(it.icon ?? '✨')}</div>
@@ -392,7 +408,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
         {(b.config.title || d.title) && (
           <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 4) || 4}, 1fr)`, gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
           {items.map((p) => (
             <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
               <div style={{ fontWeight: 600 }}>{p.name}</div>
@@ -408,7 +424,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     return (
       <div>
         {(b.config.title || d.title) && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 3) || 3}, 1fr)`, gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3), gap: 16 }}>
           {items.map((p) => (
             <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
               <div style={{ fontWeight: 600 }}>{p.name}</div>
@@ -422,7 +438,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     const p = (d.product ?? null) as any;
     if (!p) return null;
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(2, 24), gap: 24, alignItems: 'start' }}>
         <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
           {(b.config.label ?? 'Product image') as any}
         </div>
@@ -442,7 +458,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     return (
       <div>
         {(b.config.title || d.title) && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(b.config.perRow ?? 3) || 3}, 1fr)`, gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3), gap: 16 }}>
           {posts.map((post) => (
             <div key={post.slug ?? post.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
               <div style={{ fontWeight: 600 }}>{post.title}</div>

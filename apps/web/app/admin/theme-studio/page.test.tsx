@@ -190,4 +190,39 @@ describe('ThemeStudioPage', () => {
     );
     expect(grid).toBeTruthy();
   });
+
+  it('lets the admin preview the builder output at desktop/tablet/phone widths', async () => {
+    (useIsMobile as any).mockReturnValue(false);
+    const fetchMock = vi.fn(async (url: string, opts?: any) => {
+      const u = String(url);
+      if (u.includes('/theme-studio/themes') && u.endsWith('/themes')) return okJson(['my-brand']);
+      if (u.includes('/theme-studio/themes/my-brand')) return okJson(theme);
+      return okJson({});
+    });
+    (global.fetch as any) = fetchMock;
+
+    render(<ThemeStudioPage />);
+    await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
+    fireEvent.click(screen.getByText('My Brand'));
+    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
+
+    // Three preview width toggles are offered.
+    const desktopBtn = screen.getByRole('button', { name: 'Desktop' });
+    const tabletBtn = screen.getByRole('button', { name: 'Tablet' });
+    const phoneBtn = screen.getByRole('button', { name: 'Phone' });
+    expect(desktopBtn).toBeTruthy();
+    expect(tabletBtn).toBeTruthy();
+    expect(phoneBtn).toBeTruthy();
+
+    const previewFrame = () =>
+      Array.from(document.querySelectorAll('div[style]')).find(
+        (d) => ((d as HTMLElement).style.maxWidth === '1280px' || (d as HTMLElement).style.maxWidth === '768px' || (d as HTMLElement).style.maxWidth === '375px')
+      ) as HTMLElement | undefined;
+
+    expect(previewFrame()?.style.maxWidth).toBe('1280px');
+    fireEvent.click(tabletBtn);
+    expect(previewFrame()?.style.maxWidth).toBe('768px');
+    fireEvent.click(phoneBtn);
+    expect(previewFrame()?.style.maxWidth).toBe('375px');
+  });
 });
