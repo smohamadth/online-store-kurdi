@@ -217,14 +217,14 @@ describe('ThemeStudioPage', () => {
 
     const previewFrame = () =>
       Array.from(document.querySelectorAll('div[style]')).find(
-        (d) => ((d as HTMLElement).style.maxWidth === '1280px' || (d as HTMLElement).style.maxWidth === '768px' || (d as HTMLElement).style.maxWidth === '375px')
+        (d) => ((d as HTMLElement).style.width === '1280px' || (d as HTMLElement).style.width === '768px' || (d as HTMLElement).style.width === '375px')
       ) as HTMLElement | undefined;
 
-    expect(previewFrame()?.style.maxWidth).toBe('1280px');
+    expect(previewFrame()?.style.width).toBe('1280px');
     fireEvent.click(tabletBtn);
-    expect(previewFrame()?.style.maxWidth).toBe('768px');
+    expect(previewFrame()?.style.width).toBe('768px');
     fireEvent.click(phoneBtn);
-    expect(previewFrame()?.style.maxWidth).toBe('375px');
+    expect(previewFrame()?.style.width).toBe('375px');
   });
 
   it('renders the builder preview collapsed to a single column at phone width', async () => {
@@ -256,11 +256,11 @@ describe('ThemeStudioPage', () => {
     await waitFor(() => expect(screen.getByText('Features')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Phone' }));
 
-    // The preview frame is the maxWidth:375 container; its features grid must
-    // use the reflowable auto-fit template (collapses to one column on a phone)
+    // The preview frame is the width:375 container; its features grid must use
+    // the reflowable auto-fit template (collapses to one column on a phone)
     // instead of a fixed 3-column grid.
     const frame = Array.from(document.querySelectorAll('div[style]')).find(
-      (d) => (d as HTMLElement).style.maxWidth === '375px'
+      (d) => (d as HTMLElement).style.width === '375px'
     ) as HTMLElement;
     expect(frame).toBeTruthy();
     const grid = Array.from(frame.querySelectorAll('div')).find(

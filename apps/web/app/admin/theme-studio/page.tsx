@@ -454,13 +454,16 @@ export default function ThemeStudioPage() {
               </button>
             ))}
           </div>
-          <div style={{ border: '1px solid #e5e5e5', borderRadius: 10, padding: 12, background: '#fff' }}>
+          <div style={{ border: '1px solid #e5e5e5', borderRadius: 10, background: '#fff', overflowX: 'auto' }}>
+            {/* The preview renders at the chosen device width (fixed), scrollable
+                horizontally inside this narrow panel so each mode genuinely shows
+                that width — otherwise the ~296px panel would force phone-width
+                everywhere and the container-query stacking would always fire. */}
             <div
               style={{
-                margin: '0 auto',
-                width: '100%',
-                maxWidth: PREVIEW_WIDTHS[previewMode],
-                overflowX: 'hidden',
+                width: PREVIEW_WIDTHS[previewMode],
+                minWidth: '100%',
+                padding: 12,
               }}
             >
               <div style={tokenCssVars(current?.tokens ?? {})}>
