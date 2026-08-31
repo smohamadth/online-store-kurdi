@@ -28,6 +28,8 @@ import { listProducts, getFacets, parseFilterFromQuery } from './productFilter.s
 import { syncVariantAttributes } from './variantAttributeIndex';
 import { getProductSearch } from './productSearch.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { localizeRows } from '../contentTranslations/localize.helpers';
+import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
 
 const router = Router();
 const analyticsService = new AnalyticsService();
@@ -177,6 +179,17 @@ function formatProduct(product: any) {
   };
 }
 
+/**
+ * Resolve `?lang=` and overlay translations onto already-formatted products.
+ * `formatProduct` runs first (so the response shape is unchanged); this
+ * returns a NEW array with the localized name/description/shortDescription
+ * when a supported locale is requested, and the same array otherwise.
+ */
+async function localizeProducts(formatted: any[], lang: unknown): Promise<any[]> {
+  const map = await localizedMapFor('product', formatted.map((p) => p.id), lang);
+  return localizeRows(formatted, map, 'product', typeof lang === 'string' ? lang.toLowerCase() : 'en');
+}
+
 // GET /api/products - Get products with filtering and pagination
 //
 // The original implementation accepted a single category string, a single
@@ -214,7 +227,7 @@ router.get('/', async (req, res, next) => {
     const result = await listProducts(filter);
     res.json({
       status: 'success',
-      data: result.data.map(formatProduct),
+      data: await localizeProducts(result.data.map(formatProduct), req.query.lang),
       pagination: result.pagination,
       applied: {
         category: result.applied.category,
@@ -273,7 +286,7 @@ router.get('/featured', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: products.map(formatProduct),
+      data: await localizeProducts(products.map(formatProduct), req.query.lang),
     });
   } catch (error) {
     next(error);
@@ -316,7 +329,7 @@ router.get('/search', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: products.map(formatProduct),
+      data: await localizeProducts(products.map(formatProduct), req.query.lang),
     });
   } catch (error) {
     next(error);
@@ -372,7 +385,7 @@ router.get('/:id', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: formatProduct(product),
+      data: (await localizeProducts([formatProduct(product)], req.query.lang))[0],
     });
   } catch (error) {
     next(error);
@@ -412,7 +425,7 @@ router.get('/slug/:slug', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: formatProduct(product),
+      data: (await localizeProducts([formatProduct(product)], req.query.lang))[0],
     });
   } catch (error) {
     next(error);
@@ -452,7 +465,7 @@ router.get('/:id/related', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: products.map(formatProduct),
+      data: await localizeProducts(products.map(formatProduct), req.query.lang),
     });
   } catch (error) {
     next(error);

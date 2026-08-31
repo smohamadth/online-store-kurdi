@@ -1834,3 +1834,40 @@ model ScheduledJobLock {
 
   @@map("scheduled_job_lock")
 }
+
+// ---------------------------------------------------------------------------
+// Per-locale content translations.
+//
+// The storefront ships in en / ku / ar / fa / tr (see apps/web/lib/i18n.ts).
+// Product, Category, Page and BlogPost rows carry a single default-language
+// set of content columns (name, description, title, content, ...). Those
+// columns are the store's default language (the fallback when a translation
+// is missing). This table holds optional per-locale overrides for the SAME
+// fields, keyed by entity type + entity id + locale, with the translated
+// fields stored as a JSON string (matching the dimensions/metaKeywords/blocks
+// JSON-string pattern on the SQLite provider).
+//
+// entityType is one of 'product' | 'category' | 'page' | 'blogPost'. The set
+// of translatable fields per entity is fixed in the API (see
+// modules/contentTranslations/translatableFields.ts), so a rogue row cannot
+// smuggle arbitrary keys into responses - the writer strips unknowns.
+//
+// A product with no Kurdish row simply renders its default-language columns;
+// a product with one gets the Kurdish name/description overlaid. Because a
+// row is (entityType, entityId, locale), adding a sixth language later is
+// purely new rows - no schema change.
+// ---------------------------------------------------------------------------
+model ContentTranslation {
+  id         String   @id @default(uuid())
+  entityType String // 'product' | 'category' | 'page' | 'blogPost'
+  entityId   String
+  locale     String // 'ku' | 'ar' | 'fa' | 'tr'
+  // JSON string of the translated fields, e.g. { "name": "...", "description": "..." }.
+  data       String   @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([entityType, entityId, locale])
+  @@index([entityType, entityId])
+  @@map("content_translation")
+}

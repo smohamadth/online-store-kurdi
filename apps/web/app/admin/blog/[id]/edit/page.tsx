@@ -23,6 +23,8 @@ import {
   type CmsEditorExtras,
 } from '../../../_components/CmsEditor';
 import { PageBlocksEditor } from '../../../pages/_components/PageBlocksEditor';
+import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
+import { BLOG_TRANSLATION_FIELDS } from '@/lib/translationFields';
 
 interface PostRow extends CmsEditorBaseFields, CmsEditorExtras {
   id: string;
@@ -228,6 +230,13 @@ export default function EditPostPage() {
             onChange={(blocks) => setValues({ ...values, blocks })}
           />
         </div>
+      }
+      translationsSlot={
+        <ContentTranslationsEditor
+          entityType="blogPost"
+          entityId={id ?? null}
+          fields={BLOG_TRANSLATION_FIELDS}
+        />
       }
       renderPreview={(v) => (
         <article style={{ maxWidth: '720px', margin: '0 auto' }}>

@@ -930,6 +930,8 @@ const KNOWN_MODELS = [
   'giftCard', 'giftCardTransaction', 'storeCredit', 'storeCreditTransaction',
   // Multi-currency
   'currency', 'exchangeRateSnapshot',
+  // Content translations (per-locale overrides for product/category/page/blog)
+  'contentTranslation',
   // Recommendation / ML (schema-defined; no test references yet but
   // the routes in `modules/recommendations/` will hit these as soon
   // as we add the integration tests)

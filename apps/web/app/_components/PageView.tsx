@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { serverFetch } from '@/lib/serverFetch';
+import { resolveRequestLocale } from '@/lib/serverLocale';
 import { encodeRouteParam } from '@/lib/routeParam';
 import { PageBlocks } from '@/components/PageBlocks';
 import type { PageBlock } from '@/lib/pageBlocks';
@@ -58,8 +59,10 @@ export async function getPage(
 ): Promise<Page | null> {
   let res: Response;
   try {
+    const { code } = await resolveRequestLocale();
+    const lang = code === 'en' ? '' : `?lang=${code}`;
     res = await serverFetch(
-      `/pages/by-type/${encodeRouteParam(pageType)}/slug/${encodeRouteParam(slug)}`,
+      `/pages/by-type/${encodeRouteParam(pageType)}/slug/${encodeRouteParam(slug)}${lang}`,
       { cache: 'no-store' },
     );
   } catch (err) {

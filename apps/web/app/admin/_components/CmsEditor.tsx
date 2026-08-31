@@ -93,6 +93,11 @@ export interface CmsEditorProps {
    */
   contentSection?: React.ReactNode;
   /**
+   * Optional per-locale translation editor rendered below the form fields
+   * (only meaningful once the row has an id). The host owns the component.
+   */
+  translationsSlot?: React.ReactNode;
+  /**
    * Show the Auto/LTR/RTL direction switch in the preview panel (pages
    * only) - the admin shell is pinned LTR but the storefront renders
    * RTL for Kurdish/Arabic readers, so the preview needs a manual switch.
@@ -124,6 +129,7 @@ export function CmsEditor(props: CmsEditorProps) {
     renderPreview,
     formatLivePath,
     contentSection,
+    translationsSlot,
     previewDirToggle,
     isDirty,
     saving,
@@ -375,6 +381,7 @@ export function CmsEditor(props: CmsEditorProps) {
           kind={kind}
           isMobile={isMobile}
           contentSection={contentSection}
+          translationsSlot={translationsSlot}
         />
       ) : (
         <PreviewPanel
@@ -516,9 +523,11 @@ interface EditPanelProps {
   isMobile: boolean;
   /** Host-provided replacement for the default Content field (pages: block editor). */
   contentSection?: React.ReactNode;
+  /** Host-provided per-locale translation editor rendered below the form. */
+  translationsSlot?: React.ReactNode;
 }
 
-function EditPanel({ values, onChange, kind, isMobile, contentSection }: EditPanelProps) {
+function EditPanel({ values, onChange, kind, isMobile, contentSection, translationsSlot }: EditPanelProps) {
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '10px 12px',
@@ -815,6 +824,8 @@ function EditPanel({ values, onChange, kind, isMobile, contentSection }: EditPan
           </>
         )}
       </div>
+
+      {translationsSlot ? <div style={{ marginTop: '18px' }}>{translationsSlot}</div> : null}
     </div>
   );
 }

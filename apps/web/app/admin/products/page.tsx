@@ -23,6 +23,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import ImageGalleryUpload from '@/components/ImageGalleryUpload';
+import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
+import { PRODUCT_TRANSLATION_FIELDS } from '@/lib/translationFields';
 import { API_BASE } from '@/lib/http';
 import { useIsMobile } from '@/lib/hooks';
 
@@ -903,6 +905,12 @@ export default function AdminProductsPage() {
                   onChange={setSeo}
                 />
               </div>
+
+              <ContentTranslationsEditor
+                entityType="product"
+                entityId={editingProduct ? editingProduct.id : null}
+                fields={PRODUCT_TRANSLATION_FIELDS}
+              />
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button

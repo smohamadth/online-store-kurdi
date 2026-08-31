@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/apiBase';
 import { serverFetch } from '@/lib/serverFetch';
+import { resolveRequestLocale } from '@/lib/serverLocale';
 import { getStoreInfo, buildMetadata, SITE } from '@/lib/seo';
 import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
@@ -39,7 +40,9 @@ async function getPost(slug: string): Promise<BlogPost | null> {
   try {
     // no-store: an edit must show on the next load, and a post pulled back to
     // draft must stop being served immediately.
-    res = await serverFetch(`/blog/slug/${encodeRouteParam(slug)}`, {
+    const { code } = await resolveRequestLocale();
+    const lang = code === 'en' ? '' : `?lang=${code}`;
+    res = await serverFetch(`/blog/slug/${encodeRouteParam(slug)}${lang}`, {
       cache: 'no-store',
     });
   } catch (err) {

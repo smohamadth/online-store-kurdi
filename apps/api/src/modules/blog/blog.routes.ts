@@ -5,6 +5,14 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
 import { serializeContentBlocks, parseBlocksColumn } from '../../utils/contentBlocks';
+import { localizeRows } from '../contentTranslations/localize.helpers';
+import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
+
+/** Overlay blog translations (title/content/excerpt) for `?lang=`. */
+async function localizePosts(posts: any[], lang: unknown): Promise<any[]> {
+  const map = await localizedMapFor('blogPost', posts.map((p) => p.id), lang);
+  return localizeRows(posts, map, 'blogPost', typeof lang === 'string' ? lang.toLowerCase() : 'en');
+}
 
 const router = Router();
 
@@ -182,7 +190,7 @@ router.get('/', async (req, res, next) => {
     res.json({
       status: 'success',
       // The list does not need full post bodies - they can be tens of KB each.
-      data: rows.map((r) => fromRow(r, { withContent: false })),
+      data: await localizePosts(rows.map((r) => fromRow(r, { withContent: false })), req.query.lang),
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
   } catch (err) {
@@ -245,10 +253,11 @@ router.get('/slug/:slug', async (req, res, next) => {
       take: 3,
     });
 
+    const localized = (await localizePosts([fromRow(post)], req.query.lang))[0];
     res.json({
       status: 'success',
       data: {
-        ...fromRow(post),
+        ...localized,
         related: related.map((r) => fromRow(r, { withContent: false })),
       },
     });

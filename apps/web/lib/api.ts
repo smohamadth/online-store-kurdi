@@ -17,6 +17,7 @@
 'use client';
 
 import { API_BASE, CLIENT_API_BASE } from './apiBase';
+import { contentUrl } from './http';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -152,27 +153,27 @@ class ApiClient {
       });
     }
     const query = searchParams.toString();
-    return this.request(`/products${query ? `?${query}` : ''}`);
+    return this.request(contentUrl(`/products${query ? `?${query}` : ''}`));
   }
 
   async getProduct(id: string): Promise<ApiResponse<Product>> {
-    return this.request(`/products/${id}`);
+    return this.request(contentUrl(`/products/${id}`));
   }
 
   async getProductBySlug(slug: string): Promise<ApiResponse<Product>> {
-    return this.request(`/products/slug/${slug}`);
+    return this.request(contentUrl(`/products/slug/${slug}`));
   }
 
   async getFeaturedProducts(limit?: number): Promise<ApiResponse<Product[]>> {
-    return this.request(`/products/featured${limit ? `?limit=${limit}` : ''}`);
+    return this.request(contentUrl(`/products/featured${limit ? `?limit=${limit}` : ''}`));
   }
 
   async searchProducts(query: string): Promise<ApiResponse<Product[]>> {
-    return this.request(`/products/search?q=${encodeURIComponent(query)}`);
+    return this.request(contentUrl(`/products/search?q=${encodeURIComponent(query)}`));
   }
 
   async getRelatedProducts(productId: string): Promise<ApiResponse<Product[]>> {
-    return this.request(`/products/${productId}/related`);
+    return this.request(contentUrl(`/products/${productId}/related`));
   }
 
   // Recommendations
@@ -186,7 +187,7 @@ class ApiClient {
 
   // Categories
   async getCategories(): Promise<ApiResponse<Category[]>> {
-    return this.request('/categories');
+    return this.request(contentUrl('/categories'));
   }
 
   // Auth

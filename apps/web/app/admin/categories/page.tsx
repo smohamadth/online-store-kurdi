@@ -7,6 +7,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { http, authHttp, errorMessage } from '@/lib/http';
+import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
+import { CATEGORY_TRANSLATION_FIELDS } from '@/lib/translationFields';
 import { useIsMobile } from '@/lib/hooks';
 
 interface Category {
@@ -286,6 +288,12 @@ export default function AdminCategoriesPage() {
                   </label>
                 </div>
               </div>
+
+              <ContentTranslationsEditor
+                entityType="category"
+                entityId={editingCategory ? editingCategory.id : null}
+                fields={CATEGORY_TRANSLATION_FIELDS}
+              />
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => { setShowModal(false); setEditingCategory(null); }} style={{ padding: '10px 20px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>

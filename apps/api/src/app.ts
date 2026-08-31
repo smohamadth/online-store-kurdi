@@ -57,6 +57,7 @@ import dashboardRoutes from './modules/analytics/dashboard.routes';
 import themeRoutes from './modules/theme/theme.routes';
 import themeStudioRoutes from './modules/themeStudio/themeStudio.routes';
 import accountingRoutes from './modules/accounting/accounting.routes';
+import contentTranslationsRoutes from './modules/contentTranslations/contentTranslations.routes';
 import importExportRoutes from './modules/importExport/routes';
 import homeSectionRoutes from './modules/home/home.routes';
 import pageRoutes from './modules/pages/page.routes';
@@ -257,6 +258,7 @@ app.use('/api/home-sections', homeSectionRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/currencies', currencyRoutes);
+app.use('/api/content-translations', contentTranslationsRoutes);
 // Bulk import/export (admin). Export is a file download; import is a
 // preview (validate, no write) then an all-or-nothing commit.
 app.use('/api/import-export', importExportRoutes);

@@ -28,6 +28,32 @@ import { CLIENT_API_BASE } from './apiBase';
 const API_BASE = CLIENT_API_BASE;
 export { API_BASE };
 
+/**
+ * The current storefront language, for appending `?lang=` to content-read
+ * URLs (products, categories, pages, blog). Reads the language the i18n hook
+ * wrote to <html lang>, which is seeded server-side and kept in sync on
+ * change. English is the default-language fallback, so `lang` is only
+ * appended for a real non-English locale the storefront can display.
+ */
+export function currentApiLang(): string {
+  if (typeof document === 'undefined') return 'en';
+  const lang = (document.documentElement.lang || 'en').toLowerCase();
+  return ['en', 'ku', 'ar', 'fa', 'tr'].includes(lang) ? lang : 'en';
+}
+
+/**
+ * Append `?lang=` to a content-read API URL when the visitor is not reading
+ * English. Returns the URL unchanged for English (the store's default
+ * language, served by the row's own columns) so existing URLs/caches are
+ * untouched for the common case.
+ */
+export function contentUrl(path: string): string {
+  const lang = currentApiLang();
+  if (lang === 'en') return path;
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}lang=${lang}`;
+}
+
 /** Error carrying the server's real message plus status and field details. */
 export class ApiError extends Error {
   status: number;

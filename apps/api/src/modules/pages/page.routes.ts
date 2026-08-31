@@ -5,6 +5,14 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
 import { serializeContentBlocks, withParsedBlocks } from '../../utils/contentBlocks';
+import { localizeRows } from '../contentTranslations/localize.helpers';
+import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
+
+/** Overlay page translations (title/content/excerpt) for `?lang=`. */
+async function localizePages(pages: any[], lang: unknown): Promise<any[]> {
+  const map = await localizedMapFor('page', pages.map((p) => p.id), lang);
+  return localizeRows(pages, map, 'page', typeof lang === 'string' ? lang.toLowerCase() : 'en');
+}
 
 const router = Router();
 
@@ -142,7 +150,7 @@ router.get('/', async (_req, res, next) => {
         showInFooter: true, sortOrder: true, updatedAt: true,
       },
     });
-    res.json({ status: 'success', data: pages });
+    res.json({ status: 'success', data: await localizePages(pages, _req.query.lang) });
   } catch (err) {
     next(err);
   }
@@ -189,7 +197,7 @@ router.get('/by-type/:type/slug/:slug', async (req, res, next) => {
         .status(404)
         .json({ status: 'error', message: 'Page not found', code: 'NOT_FOUND' });
     }
-    res.json({ status: 'success', data: withParsedBlocks(page) });
+    res.json({ status: 'success', data: (await localizePages([withParsedBlocks(page)], req.query.lang))[0] });
   } catch (err) {
     next(err);
   }
@@ -213,7 +221,7 @@ router.get('/slug/:slug', async (req, res, next) => {
         .json({ status: 'error', message: 'Page not found', code: 'NOT_FOUND' });
     }
 
-    res.json({ status: 'success', data: withParsedBlocks(page) });
+    res.json({ status: 'success', data: (await localizePages([withParsedBlocks(page)], req.query.lang))[0] });
   } catch (err) {
     next(err);
   }

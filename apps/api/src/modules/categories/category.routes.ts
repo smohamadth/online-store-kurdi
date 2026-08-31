@@ -14,6 +14,14 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { localizeRows } from '../contentTranslations/localize.helpers';
+import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
+
+/** Overlay category translations for `?lang=`; returns a new array. */
+async function localizeCategories(categories: any[], lang: unknown): Promise<any[]> {
+  const map = await localizedMapFor('category', categories.map((c) => c.id), lang);
+  return localizeRows(categories, map, 'category', typeof lang === 'string' ? lang.toLowerCase() : 'en');
+}
 
 const router = Router();
 
@@ -43,7 +51,7 @@ router.get('/categories', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: categories,
+      data: await localizeCategories(categories, req.query.lang),
     });
   } catch (err) {
     next(err);
@@ -79,7 +87,7 @@ router.get('/categories/:id', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: category,
+      data: (await localizeCategories([category], req.query.lang))[0],
     });
   } catch (err) {
     next(err);

@@ -5,7 +5,7 @@
  * file covers the refactored client that admin/SSR code uses.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ApiError, authHttp, http, getToken } from './http';
+import { ApiError, authHttp, http, getToken, contentUrl, currentApiLang } from './http';
 
 
 type FetchMockInit = {
@@ -157,5 +157,43 @@ describe('http client', () => {
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(init.body).toBe('a,b,c\n1,2,3');
     expect(init.headers['Content-Type']).toBe('text/csv');
+  });
+});
+
+describe('contentUrl / currentApiLang', () => {
+  const setLang = (lang: string) => {
+    document.documentElement.lang = lang;
+  };
+
+  it('returns en when document lang is missing or unsupported', () => {
+    setLang('');
+    expect(currentApiLang()).toBe('en');
+    setLang('zz');
+    expect(currentApiLang()).toBe('en');
+  });
+
+  it('returns the supported document lang', () => {
+    for (const l of ['ku', 'ar', 'fa', 'tr', 'en']) {
+      setLang(l);
+      expect(currentApiLang()).toBe(l);
+    }
+  });
+
+  it('leaves URLs untouched for English (the default language)', () => {
+    setLang('en');
+    expect(contentUrl('/products')).toBe('/products');
+    expect(contentUrl('/products?x=1')).toBe('/products?x=1');
+    setLang('');
+    expect(contentUrl('/products')).toBe('/products');
+  });
+
+  it('appends ?lang= for a non-English locale', () => {
+    setLang('ku');
+    expect(contentUrl('/categories/clothing')).toBe('/categories/clothing?lang=ku');
+  });
+
+  it('reuses & when the URL already has a query string', () => {
+    setLang('fa');
+    expect(contentUrl('/products?q=shirt')).toBe('/products?q=shirt&lang=fa');
   });
 });

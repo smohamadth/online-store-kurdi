@@ -13,6 +13,8 @@ import {
 } from '@/lib/pageBlocks';
 import { CmsEditor, type CmsEditorBaseFields, type CmsEditorExtras, type PageType } from '../../../_components/CmsEditor';
 import { PageBlocksEditor } from '../../_components/PageBlocksEditor';
+import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
+import { PAGE_TRANSLATION_FIELDS } from '@/lib/translationFields';
 
 /**
  * Admin → Pages → Edit.
@@ -227,6 +229,13 @@ export default function EditPagePage() {
             onChange={(blocks) => setValues({ ...values, blocks })}
           />
         </div>
+      }
+      translationsSlot={
+        <ContentTranslationsEditor
+          entityType="page"
+          entityId={id ?? null}
+          fields={PAGE_TRANSLATION_FIELDS}
+        />
       }
       renderPreview={(v) => (
         <article style={{ maxWidth: '720px', margin: '0 auto' }}>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { serverFetch } from '@/lib/serverFetch';
+import { resolveRequestLocale } from '@/lib/serverLocale';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
 import BlogSearch from '@/components/BlogSearch';
@@ -38,6 +39,8 @@ async function getPosts(sp: Search): Promise<{ posts: BlogPost[]; pagination: Bl
 
   const empty = { posts: [], pagination: { page: 1, limit: 9, total: 0, totalPages: 1 } };
   try {
+    const { code } = await resolveRequestLocale();
+    if (code !== 'en') qs.set('lang', code);
     const res = await serverFetch(`/blog?${qs}`, { cache: 'no-store' });
     if (!res.ok) return empty;
     const json = await res.json();
