@@ -596,6 +596,16 @@ async function seedShipping() {
 main()
   .catch((e) => {
     console.error('❌ Error seeding database:', e);
+    // Diagnostic: emit the error via a GitHub Actions workflow command so it
+    // shows up in the check-run annotations (which CI surfaces even when the
+    // full job log is not accessible). Encodes % %0D %0A for safe annotation.
+    try {
+      const raw = e?.message ?? String(e);
+      const msg = String(raw).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A').slice(0, 2000);
+      console.log(`::error file=prisma/seed.ts::Seed failed: ${msg}`);
+    } catch {
+      // ignore annotation encoding errors
+    }
     process.exit(1);
   })
   .finally(async () => {
