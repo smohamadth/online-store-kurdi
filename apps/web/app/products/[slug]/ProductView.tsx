@@ -17,6 +17,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
+import { LayoutRenderer } from '@/lib/layouts/render';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { useCompare } from '@/lib/compare';
@@ -47,7 +49,10 @@ export default function ProductView() {
   const { settings } = useStoreSettings();
   
   const slug = params?.slug as string;
-  
+  // Resolved at the top so this hook runs on every render (the loading/error
+  // early returns below must not change the Rules-of-Hooks order).
+  const layout = useActiveLayout('product');
+
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -294,6 +299,17 @@ export default function ProductView() {
       console.error('Stock alert error:', err);
     }
   };
+
+  // Theme Studio override: when the active theme ships a `layouts.product`,
+  // render its grid (with the live product data) instead of the built-in PDP.
+  if (layout && product) {
+    return (
+      <LayoutRenderer
+        layout={layout}
+        data={{ product: { name: product.name, price: product.price, description: product.description }, title: product.name }}
+      />
+    );
+  }
 
   return (
     <>

@@ -85,6 +85,11 @@ const envSchema = z.object({
   // Security
   BCRYPT_ROUNDS: z.string().default('12'),
   CORS_ORIGIN: z.string(),
+
+  // Theme studio: where admin-created themes are stored (as theme.json files).
+  // Defaults to the web app's themes dir so a generated theme is picked up by
+  // the registry on the next build. Overridable in tests to a temp dir.
+  THEMES_DIR: z.string().default('../web/themes'),
 });
 
 // Validate environment variables. console (not the logger) is deliberate:

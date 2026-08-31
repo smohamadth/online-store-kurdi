@@ -21,6 +21,7 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
+import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
 import type Stripe from 'stripe';
 
 const router = Router();
@@ -73,6 +74,10 @@ export async function markOrderPaidByStripe(
       status: 'processing',
     },
   });
+
+  // Best-effort: when ACCOUNTING_AUTO_POST=true, post the sale entry. Never
+  // throws, so a posting hiccup cannot fail the (idempotent) webhook.
+  await autoPostOrder(orderId);
 
   logger.info(`Stripe settled order ${order.orderNumber} via checkout session ${session.id}`);
 }
@@ -228,6 +233,9 @@ router.post('/process', authenticate, async (req, res, next) => {
       },
     });
 
+    // Best-effort auto-posting of the settled sale (ACCOUNTING_AUTO_POST=true).
+    await autoPostOrder(orderId);
+
     logger.info(`Payment processed for order ${order.orderNumber}: ${transactionId}`);
 
     res.json({
@@ -285,6 +293,9 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
         status: 'refunded',
       },
     });
+
+    // Best-effort auto-posting of the refund (ACCOUNTING_AUTO_POST=true).
+    await autoPostRefund(orderId, amount || order.totalAmount);
 
     logger.info(`Refund processed for order ${order.orderNumber}`);
 

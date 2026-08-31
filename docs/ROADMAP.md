@@ -17,6 +17,12 @@ and a hands-on inventory/shipping review. Grouped by impact.
 - **Storefront breadth**: digital products, variants, reviews with
   photos, coupons, gift cards, multi-currency, themes, blog/CMS,
   SEO / sitemap / JSON-LD, analytics, import/export.
+- **Theming is now a visual builder, not just tokens**: the **Theme
+  Studio** (`/admin/theme-studio`) creates file-based themes and gives
+  full grid control over every page — 33 blocks (marketing, rich
+  pre-built, and page-native) composed on a draggable column grid, with
+  a live preview and a shared storefront renderer. See
+  `docs/THEME_STUDIO.md`.
 
 ---
 

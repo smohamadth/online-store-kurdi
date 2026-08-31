@@ -13,12 +13,15 @@
  * save succeeded, and the admin builder surfaces real errors.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { api, Product, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { useIsMobile } from '@/lib/hooks';
+import { getTheme } from '@/lib/themeRegistry';
+import { blockToHomeSection } from '@/lib/layouts/homeMapping';
+import type { PageLayout } from '@/lib/layouts/types';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import StoreImage from '@/components/StoreImage';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
@@ -197,6 +200,17 @@ export default function HomeView() {
   };
 
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
+
+  /**
+   * Theme Studio override: if the ACTIVE theme ships a `layouts.home`, render
+   * that grid instead of the HomeSection rows. Bundled themes have no
+   * `layouts` field, so this is inert for them and only activates once an
+   * admin creates a theme with a saved home layout.
+   */
+  const homeLayout: PageLayout | undefined = useMemo(() => {
+    const cfg = getTheme(theme.activeTheme);
+    return cfg?.layouts?.home as PageLayout | undefined;
+  }, [theme.activeTheme]);
 
   const renderSection = (s: HomeSection) => {
     const cfg = s.config || {};
@@ -430,6 +444,39 @@ export default function HomeView() {
       {!sectionsLoaded ? (
         <div style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '40px 20px' }}>
           <ProductGridSkeleton count={perRow * 2} />
+        </div>
+      ) : homeLayout && Array.isArray(homeLayout.blocks) && homeLayout.blocks.length > 0 ? (
+        /* Theme Studio home layout: render each block in its grid cell using
+            the same rich section renderers as the default layout. */
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${homeLayout.columns || 12}, 1fr)`,
+            gap: homeLayout.gap ?? 24,
+            gridAutoFlow: 'dense',
+          }}
+        >
+          {[...homeLayout.blocks]
+            .sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart)
+            .map((b) => {
+              const sec = blockToHomeSection(b);
+              // Master toggles (Appearance -> Sections) still win: a section
+              // switched off there stays hidden even in a studio layout.
+              if (legacyHidden(sec.key)) return null;
+              return (
+                <div
+                  key={b.id}
+                  data-block-type={b.type}
+                  style={{
+                    gridColumn: `${b.colStart} / span ${b.colSpan}`,
+                    gridRow: `${b.rowStart} / span ${b.rowSpan}`,
+                    minWidth: 0,
+                  }}
+                >
+                  {renderSection(sec)}
+                </div>
+              );
+            })}
         </div>
       ) : (
         visible.map(renderSection)

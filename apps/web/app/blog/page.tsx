@@ -5,6 +5,8 @@ import { serverFetch } from '@/lib/serverFetch';
 import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
 import BlogSearch from '@/components/BlogSearch';
+import { getServerPageLayout } from '@/lib/layouts/serverLayout';
+import StaticLayoutRenderer from '@/components/StaticLayoutRenderer';
 import PostCard from '@/components/PostCard';
 import FeaturedPostHero from '@/components/FeaturedPostHero';
 
@@ -88,6 +90,13 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
 
   const activeTag = searchParams.tag?.trim() || '';
   const activeSearch = searchParams.search?.trim() || '';
+
+  // Theme Studio override: when the active theme ships a `layouts.blog`,
+  // render its grid (with the live post data) server-side in the initial HTML.
+  const layout = await getServerPageLayout('blog');
+  if (layout) {
+    return <StaticLayoutRenderer layout={layout} data={{ posts, title: 'Blog' }} />;
+  }
 
   const pageHref = (page: number) => {
     const qs = new URLSearchParams();

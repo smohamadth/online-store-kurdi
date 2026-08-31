@@ -122,6 +122,12 @@ export const themeConfigSchema = z
     features: themeFeaturesSchema,
     tokens: z.record(z.string(), themeTokenSchema),
     sections: z.record(z.string(), z.string()).optional(),
+    // Per-page grid layouts created in the Theme Studio. Each key is a page
+    // key ("home", "products", "product", …); each value is a PageLayout.
+    // Layouts are authored by the admin editor, so they are validated there;
+    // the registry just needs to accept the field so a studio-generated
+    // theme.json passes the build-time gate.
+    layouts: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 

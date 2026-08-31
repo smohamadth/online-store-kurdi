@@ -26,6 +26,8 @@ export default defineConfig({
       'lib/theme-rtl.test.{ts,tsx}',
       'lib/themeSections.test.{ts,tsx}',
       'lib/themeConfigSchema.test.{ts,tsx}',
+      'lib/layouts/render.test.{ts,tsx}',
+      'lib/layouts/useActiveLayout.test.{ts,tsx}',
       'lib/previewTheme.test.{ts,tsx}',
       'lib/i18n.test.{ts,tsx}',
       'app/**/*.test.{ts,tsx}',

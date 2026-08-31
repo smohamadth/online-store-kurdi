@@ -10,6 +10,8 @@ import PostCard from '@/components/PostCard';
 import ReadingProgress from '@/components/ReadingProgress';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { PageBlocks } from '@/components/PageBlocks';
+import { getServerPageLayout } from '@/lib/layouts/serverLayout';
+import StaticLayoutRenderer from '@/components/StaticLayoutRenderer';
 import { encodeRouteParam } from '@/lib/routeParam';
 import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 
@@ -216,6 +218,18 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
     { name: 'Blog', url: `${SITE}/blog` },
     { name: post.title, url: `${SITE}/blog/${post.slug}` },
   ]);
+
+  // Theme Studio override: render the active theme's `layouts.blogPost` grid
+  // when it exists, with the live post data, in the initial HTML.
+  const layout = await getServerPageLayout('blogPost');
+  if (layout) {
+    return (
+      <StaticLayoutRenderer
+        layout={layout}
+        data={{ post: { title: post.title, content: post.content || '' } }}
+      />
+    );
+  }
 
   return (
     <article style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 20px 80px' }}>

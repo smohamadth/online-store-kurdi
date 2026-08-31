@@ -203,6 +203,9 @@ export default function AdminAppearancePage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
+          <a href="/admin/theme-studio" style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontWeight: 600, textDecoration: 'none', color: '#111', display: 'inline-flex', alignItems: 'center' }}>
+            🧩 Theme Studio
+          </a>
           <button onClick={reset} disabled={saving} style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}>
             Reset
           </button>

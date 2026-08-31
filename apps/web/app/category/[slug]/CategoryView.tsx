@@ -24,6 +24,8 @@ import ProductCard from '@/components/ProductCard';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import { API_BASE } from '@/lib/http';
 import { encodeRouteParam } from '@/lib/routeParam';
+import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
+import { LayoutRenderer } from '@/lib/layouts/render';
 
 // These values must match the API's sort enum exactly
 // (price_asc | price_desc | name_asc | name_desc | newest | popular),
@@ -119,6 +121,13 @@ export default function CategoryView({ slug }: { slug: string }) {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const title = category?.name || slug.replace(/-/g, ' ');
+
+  // Theme Studio override: render the active theme's `layouts.category` grid
+  // with the live category products when it exists.
+  const layout = useActiveLayout('category');
+  if (layout) {
+    return <LayoutRenderer layout={layout} data={{ products, title, categories: allCategories }} />;
+  }
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px 64px' }}>

@@ -55,8 +55,11 @@ Dashboard, Products, Variants, Categories, Inventory (stock, warehouses,
 transfers, reservations, stock takes, reorder rules, channel inventory),
 Orders, Customers, Reviews, Coupons, Gift cards, Shipping (zones &
 methods), Tax, Pages, Blog, **Appearance (theme picker + design tokens)**,
-Banners & gallery, Menus, **Analytics**, **Import / Export**, Settings,
-Users (role-based: admin, manager, customer).
+**Theme Studio (visual theme & per-page layout builder — see §9.1)**,
+Banners & gallery, Menus, **Analytics**, **Import / Export**, **Accounting
+(double-entry ledger, chart of accounts & reports — see
+[docs/ACCOUNTING.md](docs/ACCOUNTING.md))**, Settings, Users (role-based:
+admin, manager, customer).
 
 ### Platform
 
@@ -184,8 +187,8 @@ the database.
 │   │       │   #   auth, products, variant, orders, payments, analytics,
 │   │       │   #   recommendations, inventory, categories, users, reviews,
 │   │       │   #   coupons, gift-cards, shipping, tax, pages, blog, banners,
-│   │       │   #   menus, newsletter, pages, settings, theme, importExport,
-│   │       │   #   downloads, currency, storage, …
+│   │       │   #   menus, newsletter, pages, settings, theme, themeStudio, accounting,
+│   │       │   #   importExport, downloads, currency, storage, …
 │   │       ├── services/      # email, payment helpers
 │   │       ├── utils/         # logger, csv, content blocks
 │   │       ├── app.ts         # express app, routes, limits
@@ -193,9 +196,13 @@ the database.
 │   │   └── tests/             # unit + integration (mock-Prisma, no DB needed)
 │   └── web/
 │       ├── app/               # Next.js App Router: storefront + /admin
+│       │   └── admin/theme-studio/   # the Theme Studio visual builder (see §9.1)
 │       ├── themes/            # one directory per theme (see §9)
-│       ├── components/        # shared UI
-│       ├── lib/               # api client, http, i18n, theme, tracking, seo, …
+│       ├── components/        # shared UI (incl. PageLayoutView, StaticLayoutRenderer)
+│       ├── lib/
+│       │   ├── layouts/       # theme-studio data model, defaults, edit helpers,
+│       │   │                  # block renderers, useActiveLayout, serverLayout
+│       │   └── …              # api client, http, i18n, theme, tracking, seo, …
 │       └── public/themes/     # theme preview images
 ├── docker/                    # dev + prod compose files
 ├── scripts/                   # setup, install, verify-* (CI live checks),
@@ -286,6 +293,30 @@ Per-store token overrides layer on top of the active theme.
 no runtime upload); `paid: true` is metadata only (no license check or
 marketplace yet); `darkMode` is a capability badge only.
 
+### 9.1 Theme Studio — visual theme & layout builder
+
+The **Theme Studio** (`/admin/theme-studio`, linked from Admin → Appearance)
+lets an admin **create** a theme visually and take full **grid control over
+every storefront page**: drag blocks from a palette onto a column grid, set each
+block's column/row start & span, reorder, hide, and click-to-edit its config —
+with a live preview rendered by the same component the storefront uses.
+
+- Themes are **file-based**: the Studio writes a `theme.json` (tokens +
+  per-page `layouts`) into `apps/web/themes/<key>/` via the `/api/theme-studio`
+  API. A new/edited theme takes effect on the **next web build**.
+- Three groups of blocks: **marketing** (hero…newsletter), **rich pre-built**
+  (cta, video, image, textImage, divider, faq, steps, logoStrip, pricing,
+  quote, iconsGrid), and **page-native** (productDetail, productList,
+  categoryGrid, blogList, blogPostBody, pageContent — they render a page's real
+  content).
+- Every page opts in through one shared renderer (`LayoutRenderer`) plus a
+  client hook (`useActiveLayout`) and a server resolver
+  (`getServerPageLayout`) for SEO pages. A page with **no** layout keeps its
+  built-in content — nothing changes until an admin ships a layout.
+
+Full architecture, data model, block list, API reference, extension guide and
+honest limitations: **[docs/THEME_STUDIO.md](docs/THEME_STUDIO.md)**.
+
 ## 10. Bulk import / export
 
 Admin + manager only. UI at `/admin/import-export`; API at
@@ -352,6 +383,15 @@ REST, JSON, JWT-protected where needed. Base: `/api`.
 - **Catalog ops**: categories (tree), inventory & warehouses, coupons,
   gift cards, shipping, tax
 - **CMS**: pages, blog, banners, menus, home sections, settings, theme
+- **Theme Studio**: `GET/PUT/DELETE /theme-studio/themes/:key` (admin/manager)
+  — file-based create/edit/delete of `theme.json` themes incl. per-page layouts
+  (see §9.1)
+- **Accounting**: `GET/POST/PUT/DELETE /accounting/accounts`, `GET/POST
+  /accounting/entries` (multi-currency), `POST /accounting/entries/:id/void`,
+  `POST /accounting/entries/close-year/:year`, `GET /accounting/ledger/:accountId`
+  and `/accounting/reports/{balances,trial-balance,income-statement,balance-sheet}`
+  — file-based double-entry bookkeeping, auto-posted at checkout when
+  `ACCOUNTING_AUTO_POST=true` (see [docs/ACCOUNTING.md](docs/ACCOUNTING.md))
 - **Store ops**: `import-export` (§10), `analytics` (§11),
   `recommendations` (trending, new-arrivals, also-bought, bought-together,
   history, personalized), `downloads`, `currency`, `storage` (uploads)

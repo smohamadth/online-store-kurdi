@@ -27,6 +27,8 @@ import {
 } from '@/lib/filterParams';
 import type { ProductFilter } from '@/lib/filterParams.types';
 import { API_BASE } from '@/lib/apiBase';
+import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
+import { LayoutRenderer } from '@/lib/layouts/render';
 import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 import { SITE } from '@/lib/seo';
 import { getImageUrl } from '@/lib/api';
@@ -121,6 +123,14 @@ function ProductsContent() {
   }, []);
 
   const filterCount = activeFilterCount(filter);
+
+  // Theme Studio override: when the active theme ships a `layouts.products`,
+  // render its grid (fed with the live product data) instead of the built-in
+  // listing UI. Otherwise the full built-in page renders unchanged.
+  const layout = useActiveLayout('products');
+  if (layout) {
+    return <LayoutRenderer layout={layout} data={{ products, title: 'Products', total }} />;
+  }
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>

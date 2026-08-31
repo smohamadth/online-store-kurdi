@@ -108,10 +108,17 @@ jobs `api-tests` and `web-tests`):
 
 | Suite | Count | What it covers |
 |---|---|---|
-| API unit (`apps/api/tests/unit`) | 267 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers |
-| API integration (`apps/api/tests/integration`) | 711 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, attribute index, …) |
+| API unit (`apps/api/tests/unit`) | 317 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers, accounting engine |
+| API integration (`apps/api/tests/integration`) | 657 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, attribute index, accounting, …) |
 | Web lib (`apps/web`, vitest) | 317 | filter params, i18n, SEO, structured data, theme config, preview, page blocks, home sections |
-| Web components (React Testing Library + happy-dom) | 502 | PDP, cart, admin pages, filter sidebar, theme picker, custom section |
+| Web components (React Testing Library + happy-dom) | 555 | PDP, cart, admin pages, filter sidebar, theme picker, custom section, Theme Studio layout renderer |
+
+The **Theme Studio** adds dedicated suites on top of these (see
+`docs/THEME_STUDIO.md` §6): `edit.test.ts` (grid-edit invariants + off-grid
+guard), `blockUtils.test.ts` (embed parsing + model/editor/renderer
+bookkeeping), `homeMapping.test.ts`, `render.test.tsx` (every one of the 33
+block types renders, plus per-block assertions), `useActiveLayout.test.tsx`,
+and `apps/api/tests/integration/themeStudio.test.ts` (the file API).
 
 The Playwright browser suites in CI (`regression-ui.py` etc.) still run on top
 of this; they and the Vitest suites are complementary, not duplicates.
@@ -417,3 +424,75 @@ deliberate design choices or niche gaps.
 14. **SQLite remains the default.** Fine for the default install; the
     single-writer limit is real under sustained write-heavy traffic
     (flash sales). See §2 and `SCALING.md`.
+
+---
+
+## 13. Theme Studio — shipped, with honest limits
+
+**Status:** the visual theme & per-page layout builder is complete and tested
+(see `docs/THEME_STUDIO.md`). What is deliberately *not* done:
+
+1. **File-based themes need a rebuild.** The Studio writes `theme.json`
+   (tokens + per-page `layouts`) into `apps/web/themes/<key>/`, and the web
+   registry reads themes at **build time** — so a new/edited admin theme shows
+   on the live storefront only after the next web build. This is the accepted
+   trade-off of the file-based storage model (themes stay first-class,
+   reviewed code artifacts).
+2. **Home-page rich blocks render as custom/title sections.** The home page
+   renders a themed layout through its home-specific section renderers, so a
+   rich pre-built block (`cta`, `faq`, `steps`, `pricing`, …) placed on the
+   *home* page falls back to the generic custom/title section. Rich blocks
+   render fully on products, category, product detail, blog, blog post, and
+   custom pages, which use `LayoutRenderer`.
+3. **A themed page layout replaces the page's built-in chrome.** When an admin
+   defines a layout for a page such as `/products`, that grid (not the built-in
+   filter sidebar / pagination) is what renders — the admin's explicit
+   composition wins. This is the intended behaviour of "full layout control",
+   not a bug, but it changes the UX for pages the admin themes.
+4. **No runtime hot-reload / no marketplace.** Admin-created themes are not
+   hot-reloaded at runtime, and there is still no theme marketplace or license
+   enforcement for `paid` themes (see README §18).
+5. **Config fields are authored in the Studio and trusted as authored.** The
+   `/api/theme-studio` layer validates the theme envelope (key, semver,
+   features, required fields) and strips unknown keys, but per-block `config`
+   payloads are stored as authored (rich HTML is sanitised on the home path).
+
+The model lives in `apps/web/lib/layouts/`; the file API in
+`apps/api/src/modules/themeStudio/`. Every block type is covered by the
+"every registered block type renders" test plus per-block unit/component
+tests; the file API is covered by `apps/api/tests/integration/themeStudio.test.ts`.
+
+---
+
+## 14. Accounting — shipped
+
+A lightweight, file-based double-entry bookkeeping module (see
+`docs/ACCOUNTING.md`). The five original gaps are now closed:
+
+1. **Auto-posting at checkout — DONE.** `ACCOUNTING_AUTO_POST=true` posts a sale
+   entry when a payment is settled (Stripe webhook or staff bank-transfer/COD)
+   and a refund entry on refund; idempotent and best-effort so a posting hiccup
+   never fails a payment. Manual **Post from Order** (suggest → post) remains for
+   review-first workflows.
+2. **Multi-currency — DONE.** Every entry carries an ISO currency and reports /
+   the ledger filter by `?currency=` — a per-currency ledger model (no FX
+   conversion).
+3. **Append-only entries — DONE, by design.** Entries are never edited/deleted;
+   corrections use **reverse** or **void** (`POST /entries/:id/void`), both
+   keeping the audit trail.
+4. **In-process persistence — DONE.** Writes are atomic (tmp + rename) and every
+   read/modify/write cycle takes a cross-process filesystem lock with staleness
+   recovery, so multiple API instances sharing a data directory are safe.
+5. **No fiscal-year periods — DONE.** `POST /entries/close-year/:year` moves net
+   income to retained earnings via a `closing` entry that the income statement
+   ignores but the balance sheet includes.
+
+Remaining honest limits: multi-currency is per-ledger (no FX conversion), closing
+a year is permanent (adjust via normal entries in that year), auto-posting is
+opt-in via the env flag, and the cross-process lock needs the instances to share
+the same data directory.
+
+The pure engine lives in `apps/api/src/modules/accounting/accountingEngine.ts`
+and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
+API and reports are covered by `apps/api/tests/integration/accounting.test.ts`
+and the admin UI by `apps/web/app/admin/accounting/page.test.tsx`.

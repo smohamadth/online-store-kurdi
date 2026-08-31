@@ -269,6 +269,8 @@ UserEvents (التحليلات).
 **القوالب المدمجة (٥):** `default`، `minimal` (مدفوعة، نصية البنية،
 خط serif)، `bold`، `dawnlight`، `pulse`.
 
+**Theme Studio** — مُنشئ القوالب البصري وتخطيط كل صفحة. التوثيق الكامل: [`docs/THEME_STUDIO.md`](THEME_STUDIO.md).
+
 **مسار المطور لقالب جديد:**
 
 ```bash

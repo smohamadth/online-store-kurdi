@@ -271,6 +271,8 @@ SQLite/Postgres.
 **تم‌های داخلی (۵):** `default`، `minimal` (پولی، متن‌محور، serif)،
 `bold`، `dawnlight`، `pulse`.
 
+**Theme Studio** — سازندهٔ بصری قالب و چیدمان (لِی‌اوت) هر صفحه. مستند کامل: [`docs/THEME_STUDIO.md`](THEME_STUDIO.md).
+
 **مسیر توسعه برای تم نو:**
 
 ```bash

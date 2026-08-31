@@ -73,7 +73,7 @@ describe('/deals structured data', () => {
 
   it('omits the ItemList when there are no deals', async () => {
     const { api } = await import('@/lib/api');
-    vi.mocked(api.getProducts).mockResolvedValueOnce({ data: [] });
+    vi.mocked(api.getProducts).mockResolvedValueOnce({ status: 'success', data: [] });
     render(<DealsView />);
     await screen.findByText(/No deals right now/);
     expect(document.querySelector('script[data-testid="json-ld-deals"]')).toBeNull();
