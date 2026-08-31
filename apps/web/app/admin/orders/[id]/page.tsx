@@ -16,7 +16,7 @@ import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 export default function AdminOrderDetailPage() {
   const params = useParams();
@@ -27,6 +27,8 @@ export default function AdminOrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [settleMsg, setSettleMsg] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
 
@@ -94,6 +96,28 @@ export default function AdminOrderDetailPage() {
       alert('Could not reach the server. The order was NOT updated.');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  // Record a payment for an order paid offline (COD / bank transfer).
+  // Calls the staff-only POST /api/payments/process, which creates the
+  // Payment row, marks the order paid and moves it to processing. This is the
+  // admin end of the COD flow: the customer picked COD at checkout, and the
+  // staff confirms the cash/transfer was collected here.
+  const handleMarkPaid = async () => {
+    setSettling(true);
+    setSettleMsg('');
+    try {
+      await authHttp.post('/payments/process', {
+        orderId,
+        paymentMethod: order.paymentMethod || 'bank_transfer',
+      });
+      setSettleMsg('Payment recorded — the order is now paid and processing.');
+      setOrder((prev: any) => ({ ...prev, paymentStatus: 'completed', status: 'processing' }));
+    } catch (err: any) {
+      setSettleMsg(errorMessage(err) || 'Could not record the payment. Please try again.');
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -342,6 +366,33 @@ export default function AdminOrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
+            {order.paymentStatus !== 'completed' && (
+              <>
+                <button
+                  onClick={handleMarkPaid}
+                  disabled={settling}
+                  style={{
+                    marginTop: '16px',
+                    width: '100%',
+                    padding: '10px 20px',
+                    backgroundColor: settling ? '#ccc' : '#16a34a',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 600,
+                    cursor: settling ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {settling ? 'Recording…' : 'Mark as paid'}
+                </button>
+                <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+                  Record cash collected or a bank transfer received for this order.
+                </p>
+              </>
+            )}
+            {settleMsg && (
+              <p style={{ fontSize: '13px', marginTop: '10px', color: '#374151' }}>{settleMsg}</p>
+            )}
           </div>
 
           {/* Order Summary */}
