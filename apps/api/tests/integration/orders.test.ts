@@ -392,3 +392,37 @@ describe('purchase event tracking (server-side)', () => {
     expect(peekMockStore('userEvent')).toHaveLength(0);
   });
 });
+
+describe('POST /api/orders/:id/pay (retry payment)', () => {
+  it('forbids another customer (403)', async () => {
+    const { user: a } = await authHeader();
+    const { token: b } = await authHeader();
+    const o = await createOrder(a.id, { paymentStatus: 'pending' });
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/pay`)
+      .set('Authorization', `Bearer ${b}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects an already-paid order (400)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    await mockPrisma.order.update({ where: { id: o.id }, data: { paymentStatus: 'completed' } });
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/pay`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/already been paid/i);
+  });
+
+  it('rejects a COD order (not payable online)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'pending' });
+    await mockPrisma.order.update({ where: { id: o.id }, data: { paymentMethod: 'cod' } });
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/pay`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/not payable online/i);
+  });
+});

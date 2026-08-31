@@ -10,8 +10,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { authHttp, errorMessage } from '@/lib/http';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { DirectionArrow } from '@/components/DirectionArrow';
+
+// Methods backed by a hosted payment page (can be (re)opened for payment).
+const ONLINE_PAYMENT_METHODS = new Set(['card', 'stripe', 'paypal', 'zarinpal', 'idpay', 'zaincash', 'fib']);
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -36,6 +40,23 @@ export default function OrderDetailPage() {
   const [tracking, setTracking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState('');
+
+  // Re-open the hosted payment page for a pending online-payment order.
+  const handlePayNow = async () => {
+    setPaying(true);
+    setPayError('');
+    try {
+      const res = await authHttp.post<{ checkoutUrl?: string }>(`/orders/${orderId}/pay`);
+      const url = res?.data?.checkoutUrl;
+      if (!url) throw new Error('No payment link returned. Please try again.');
+      window.location.replace(url);
+    } catch (err) {
+      setPayError(errorMessage(err) || 'Could not open the payment page. Please try again.');
+      setPaying(false);
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -439,6 +460,31 @@ export default function OrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
+            {order.paymentStatus === 'pending' && ONLINE_PAYMENT_METHODS.has(order.paymentMethod) && (
+              <>
+                <button
+                  onClick={handlePayNow}
+                  disabled={paying}
+                  style={{
+                    marginTop: '16px',
+                    width: '100%',
+                    padding: '10px 20px',
+                    backgroundColor: paying ? '#ccc' : '#000',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 600,
+                    cursor: paying ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {paying ? 'Opening payment…' : 'Pay now'}
+                </button>
+                <p style={{ fontSize: '12px', color: 'var(--muted, #888)', marginTop: '8px' }}>
+                  Complete your payment for this order.
+                </p>
+              </>
+            )}
+            {payError && <p style={{ fontSize: '13px', color: '#b91c1c', marginTop: '10px' }}>{payError}</p>}
           </div>
 
           {/* Shipping Address */}

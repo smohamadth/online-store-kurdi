@@ -156,6 +156,54 @@ router.get('/:id', authenticate, async (req, res, next) => {
   }
 });
 
+// POST /api/orders/:id/pay - (re)open the hosted payment page for an order.
+//
+// The customer may have cancelled/abandoned the gateway page after the
+// order was placed (paymentStatus=pending). This re-runs the gateway
+// checkout session creation for that order and returns a fresh checkoutUrl
+// so they can complete the payment without re-entering their details.
+// Only the order owner (or an admin) may do this, and only while the order
+// is unpaid.
+router.post('/:id/pay', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) throw new NotFoundError('Order');
+    if (req.user?.role !== 'admin' && req.user?.role !== 'manager' && order.userId !== req.user?.id) {
+      throw new AppError('Forbidden', 403);
+    }
+    if (order.paymentStatus === 'completed' || order.paymentStatus === 'refunded') {
+      throw new AppError('This order has already been paid.', 400);
+    }
+    const method = order.paymentMethod || '';
+    if (!isGatewayMethod(method)) {
+      throw new AppError('This order is not payable online. Please choose cash on delivery or bank transfer.', 400);
+    }
+    if (!(await isGatewayConfigured(method))) {
+      const gw = getGatewayById(method);
+      throw new AppError(`${gw ? gw.name + ' ' : 'This '}payment method is not enabled for this store.`, 400);
+    }
+    const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+    const user = await prisma.user.findUnique({ where: { id: order.userId }, select: { email: true, phone: true } });
+    const result = await createGatewayPayment({
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        currency: settings?.currency || 'USD',
+        customerEmail: user?.email || null,
+        customerPhone: user?.phone || (order.shippingAddress as any)?.phone || null,
+        description: `Order ${order.orderNumber}`,
+      },
+      paymentMethod: method,
+      storeCurrency: settings?.currency || 'USD',
+    });
+    res.json({ status: 'success', data: { checkoutUrl: result.checkoutUrl } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/orders/:id/tracking - customer-facing status timeline
 //
 // Derived from the order's own fields (createdAt / shippedAt /
