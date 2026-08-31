@@ -15,31 +15,6 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { seedEmailTemplates } from './seed-email-templates';
 
-function emitErrorAnnotation(tag: string, e: unknown) {
-  try {
-    const raw = (e as any)?.message ?? String(e);
-    const msg = String(raw).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A').slice(0, 2000);
-    // Synchronous writes + process.exitCode (not process.exit) so the line is
-    // guaranteed to flush; a GH Actions workflow command surfaces in the
-    // check-run annotations even when the job log is inaccessible.
-    process.stdout.write(`::error file=prisma/seed.ts::${tag}: ${msg}\n`);
-    process.stderr.write(`Seed failed (${tag}): ${raw}\n`);
-  } catch {
-    // ignore annotation encoding errors
-  }
-}
-// Diagnostic: also catch errors thrown before main() (module top-level, e.g.
-// `new PrismaClient()`) and surface them via a GH Actions workflow command so
-// they appear in check-run annotations even when the job log is inaccessible.
-process.on('uncaughtException', (e) => {
-  emitErrorAnnotation('uncaughtException', e);
-  process.exitCode = 1;
-});
-process.on('unhandledRejection', (e) => {
-  emitErrorAnnotation('unhandledRejection', e);
-  process.exitCode = 1;
-});
-
 const prisma = new PrismaClient();
 
 async function main() {
@@ -621,8 +596,7 @@ async function seedShipping() {
 main()
   .catch((e) => {
     console.error('❌ Error seeding database:', e);
-    emitErrorAnnotation('main.catch', e);
-    process.exitCode = 1;
+    process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
