@@ -34,6 +34,22 @@ storefront automatically offers them at checkout.
    (creates the `Payment` row, sets `paymentStatus=completed`, moves the order
    to `processing`, and posts the accounting entry if enabled).
 
+## Payment confirmation email
+
+When an order actually becomes **paid**, the customer receives a **Payment
+Received** email (`payment_confirmation` template, admin-editable under Store
+Settings → email templates, seeded by `prisma/seed-email-templates.ts`). It is
+sent for every settlement path:
+
+- staff records a **COD / bank-transfer** payment via **Mark as paid** on the
+  admin order detail page,
+- a hosted gateway verifies a return (`/api/payments/gateways/:id/verify`),
+- the **Stripe** webhook settles an order.
+
+For Cash on Delivery the order-confirmation email is sent at placement, and the
+payment-confirmation email is the later acknowledgement when staff records that
+the cash/transfer was collected.
+
 ## Admin API
 
 - `GET  /api/settings/payment-gateways` (admin) — full config + field metadata.

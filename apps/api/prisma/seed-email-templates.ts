@@ -49,6 +49,49 @@ const emailTemplates = [
     isActive: true,
   },
   {
+    name: 'payment_confirmation',
+    subject: 'Payment Received for Order #{{orderNumber}}',
+    htmlContent: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #16a34a; color: #fff; padding: 20px; text-align: center; }
+          .content { padding: 20px; }
+          .pay-info { background: #f0fdf4; padding: 15px; border-radius: 5px; border: 1px solid #86efac; margin: 15px 0; }
+          .row { display: flex; justify-content: space-between; padding: 6px 0; }
+          .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Payment Received ✅</h1>
+          </div>
+          <div class="content">
+            <p>Hi {{customerName}},</p>
+            <p>Thank you! We have received your payment for order <strong>#{{orderNumber}}</strong>.</p>
+            <div class="pay-info">
+              <div class="row"><span>Order</span><span>#{{orderNumber}}</span></div>
+              <div class="row"><span>Amount paid</span><span>${{orderTotal}}</span></div>
+              <div class="row"><span>Payment method</span><span>{{paymentMethod}}</span></div>
+            </div>
+            <p>Your order is now being prepared. We'll email you the moment it ships.</p>
+            <p style="text-align: center; margin-top: 30px;">
+              <a href="{{orderUrl}}" class="button">View Order</a>
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    textContent: 'Hi {{customerName}}, Payment received for order #{{orderNumber}}! Amount: ${{orderTotal}}',
+    variables: JSON.stringify(['customerName', 'orderNumber', 'orderTotal', 'paymentMethod', 'orderUrl']),
+    isActive: true,
+  },
+  {
     name: 'shipping_notification',
     subject: 'Your Order #{{orderNumber}} Has Shipped!',
     htmlContent: `

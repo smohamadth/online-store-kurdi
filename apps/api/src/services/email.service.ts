@@ -244,6 +244,79 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
   await sendEmail(user.email, subject, html);
 }
 
+// Payment confirmation email.
+//
+// Sent when an order transitions to paid — which for Cash on Delivery /
+// bank transfer happens when staff records the collected payment
+// (POST /api/payments/process), and for hosted gateways when the gateway
+// verifies the payment (webhook / return-verify). The order was already
+// confirmed at placement; this email is the "we received your payment"
+// acknowledgement, so the total/payment method are the key facts.
+export async function sendPaymentConfirmation(order: any, user: any): Promise<void> {
+  const template = await getTemplate('payment_confirmation');
+  // Variables shared by the subject and the HTML body, so a merchant's
+  // custom {{orderNumber}} in the subject renders the real value too.
+  const variables = {
+    customerName: user.firstName,
+    orderNumber: order.orderNumber,
+    orderTotal: Number(order.totalAmount || 0).toFixed(2),
+    paymentMethod: order.paymentMethod || 'Online payment',
+    orderUrl: `${env.FRONTEND_URL}/account/orders/${order.id}`,
+    storeName: 'Online Store',
+  };
+  const subject = template
+    ? renderTemplate(template.subject, variables)
+    : `Payment Received for Order #${order.orderNumber}`;
+
+  const defaultHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #16a34a; color: #fff; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .pay-info { background: #f0fdf4; padding: 15px; border-radius: 5px; border: 1px solid #86efac; margin: 15px 0; }
+        .row { display: flex; justify-content: space-between; padding: 6px 0; }
+        .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Payment Received ✅</h1>
+        </div>
+        <div class="content">
+          <p>Hi ${user.firstName},</p>
+          <p>Thank you! We have received your payment for order <strong>#${order.orderNumber}</strong>.</p>
+
+          <div class="pay-info">
+            <div class="row"><span>Order</span><span>#${order.orderNumber}</span></div>
+            <div class="row"><span>Amount paid</span><span>$${Number(order.totalAmount || 0).toFixed(2)}</span></div>
+            <div class="row"><span>Payment method</span><span>${order.paymentMethod || 'Online payment'}</span></div>
+          </div>
+
+          <p>Your order is now being prepared. We'll email you the moment it ships.</p>
+
+          <p style="text-align: center; margin-top: 30px;">
+            <a href="${env.FRONTEND_URL}/account/orders/${order.id}" class="button">View Order</a>
+          </p>
+
+          <p style="margin-top: 30px; color: #666; font-size: 14px;">
+            If you have any questions, please contact us at ${env.EMAIL_FROM}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const html = template ? renderTemplate(template.htmlContent, variables) : defaultHtml;
+
+  await sendEmail(user.email, subject, html);
+}
+
 // Shipping notification email
 export async function sendShippingNotification(order: any, user: any, trackingNumber: string): Promise<void> {
   const subject = `Your Order #${order.orderNumber} Has Shipped!`;
@@ -374,6 +447,7 @@ export default {
   initializeEmail,
   sendEmail,
   sendOrderConfirmation,
+  sendPaymentConfirmation,
   sendShippingNotification,
   sendWelcomeEmail,
   sendPasswordResetEmail,

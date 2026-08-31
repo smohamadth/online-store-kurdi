@@ -23,6 +23,7 @@ import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
 import { verifyAndSettleGatewayPayment } from './gateway.service';
+import { sendPaymentConfirmation } from '../../services/email.service';
 import type Stripe from 'stripe';
 
 const router = Router();
@@ -80,7 +81,30 @@ export async function markOrderPaidByStripe(
   // throws, so a posting hiccup cannot fail the (idempotent) webhook.
   await autoPostOrder(orderId);
 
+  // Fire-and-forget: email the customer that their payment was received.
+  await notifyPaymentReceived(orderId).catch(() => {});
+
   logger.info(`Stripe settled order ${order.orderNumber} via checkout session ${session.id}`);
+}
+
+/**
+ * Send the payment-confirmation email for a newly-paid order. Never throws:
+ * an email failure must not fail the settlement that triggered it.
+ */
+async function notifyPaymentReceived(orderId: string): Promise<void> {
+  const [order, orderUser] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: { shippingAddress: true },
+    }),
+    prisma.order
+      .findUnique({ where: { id: orderId }, select: { userId: true } })
+      .then((o: { userId: string } | null) =>
+        o ? prisma.user.findUnique({ where: { id: o.userId }, select: { firstName: true, email: true } }) : null,
+      ),
+  ]);
+  if (!order || !orderUser) return;
+  await sendPaymentConfirmation(order, orderUser);
 }
 
 // POST /api/payments/webhooks/stripe - Stripe Checkout webhook
@@ -270,6 +294,10 @@ router.post('/process', authenticate, async (req, res, next) => {
 
     // Best-effort auto-posting of the settled sale (ACCOUNTING_AUTO_POST=true).
     await autoPostOrder(orderId);
+
+    // Fire-and-forget: email the customer that their COD/bank-transfer
+    // payment was recorded. Never fails the settlement.
+    await notifyPaymentReceived(orderId).catch(() => {});
 
     logger.info(`Payment processed for order ${order.orderNumber}: ${transactionId}`);
 

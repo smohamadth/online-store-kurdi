@@ -16,6 +16,7 @@ import { getGatewayConfig, isGatewayConfigured } from './gatewayConfig';
 import { defaultHttp } from './gateways/helpers';
 import type { GatewayContext, GatewayOrder } from './gateways/types';
 import { autoPostOrder } from '../accounting/accounting.service';
+import { sendPaymentConfirmation } from '../../services/email.service';
 
 /** Currency recorded on the Payment row for a given gateway. */
 function gatewayCurrency(gatewayId: string, config: Record<string, string | boolean>, storeCurrency: string): string {
@@ -178,5 +179,16 @@ export async function settleOrderPaid(args: {
     },
   });
   await autoPostOrder(args.orderId);
+
+  // Fire-and-forget: email the customer that their payment was received.
+  // Never fails the settlement.
+  const orderUser = await prisma.user.findUnique({
+    where: { id: order.userId },
+    select: { firstName: true, email: true },
+  });
+  if (orderUser) {
+    await sendPaymentConfirmation(order, orderUser).catch(() => {});
+  }
+
   logger.info(`Gateway ${args.method} settled order ${args.orderNumber} (${args.transactionId})`);
 }
