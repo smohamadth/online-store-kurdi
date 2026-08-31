@@ -36,6 +36,19 @@ const entries = [{
   createdAt: '2024-01-15T10:00:00.000Z',
   voided: false,
   kind: 'normal',
+}, {
+  id: 'e-close',
+  date: '2024-12-31',
+  memo: 'Close fiscal year 2024',
+  reference: undefined,
+  currency: 'USD',
+  lines: [
+    { accountId: 'acc-4000', debit: 100, credit: 0 },
+    { accountId: 'acc-3100', debit: 0, credit: 100 },
+  ],
+  createdAt: '2024-12-31T10:00:00.000Z',
+  voided: false,
+  kind: 'closing',
 }];
 
 const balances = [{ account: cash, balance: 100, debits: 100, credits: 0 }];
@@ -149,7 +162,7 @@ describe('/admin/accounting', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
     await screen.findByText('Test sale');
-    fireEvent.click(screen.getByRole('button', { name: '↺ Reverse' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '↺ Reverse' })[0]);
 
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([u, o]) => String(u).includes('/accounting/entries/') && (o?.method || 'GET') === 'POST');
@@ -217,6 +230,36 @@ describe('/admin/accounting', () => {
       const call = fetchMock.mock.calls.find(([u, o]) => String(u).includes('/accounting/entries/') && String(u).includes('/void') && (o?.method || 'GET') === 'POST');
       expect(call).toBeTruthy();
     });
+  });
+
+  it('does not offer a Void action on a closing entry', async () => {
+    mockApi();
+    render(<AdminAccountingPage />);
+    await screen.findByText('Cash on hand');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
+    await screen.findByText('Close fiscal year 2024');
+
+    // The closing entry is in the journal but must NOT expose a Void button
+    // (the server rejects voiding closing entries). Walk up from the memo to
+    // the entry card (the ancestor that contains the action buttons) and
+    // assert it shows the "closing" badge but no Void action.
+    const cardOf = (el: Element) => {
+      let n: HTMLElement | null = el as HTMLElement;
+      while (n) {
+        if (n.querySelector('button') && n.textContent!.includes('Close fiscal year 2024')) return n;
+        n = n.parentElement;
+      }
+      return null;
+    };
+    const closingCard = cardOf(screen.getByText('Close fiscal year 2024'));
+    expect(closingCard).not.toBeNull();
+    expect(closingCard!.textContent).toContain('closing');
+    expect(closingCard!.textContent).not.toContain('Void');
+
+    // The normal entry still has one.
+    const normalCard = cardOf(screen.getByText('Test sale'));
+    expect(normalCard!.textContent).toContain('Void');
   });
 
   it('closes a fiscal year from the Reports tab', async () => {

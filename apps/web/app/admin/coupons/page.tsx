@@ -167,7 +167,7 @@ export default function AdminCouponsPage() {
         }}>
           <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
           <p style={{ fontSize: '14px', color: '#92400e', marginTop: '4px' }}>
-            Showing sample coupons. Start API to manage database coupons: <code>npm run dev:api</code>
+            Could not load coupons from the database. Start the API to manage coupons: <code>npm run dev:api</code>
           </p>
         </div>
       )}

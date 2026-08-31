@@ -182,6 +182,10 @@ guard: add a type without a renderer and the suite goes red.
   block and placeholder states.
 - `lib/layouts/useActiveLayout.test.tsx` — the client resolution hook
   (found / absent / empty / unknown theme).
+- `apps/web/app/admin/theme-studio/page.test.tsx` — the editor UI: drag-and-drop
+  add, reorder/remove, per-page draft persistence (save PUT round-trips the
+  edited `layouts`), and the responsive stacking of the 3-column canvas
+  (theme list | canvas | palette) below 900px.
 - `apps/api/tests/integration/themeStudio.test.ts` — the file API: auth guards,
   key validation, semver/feature validation, unknown-field stripping, list/read/
   write/delete against a temp themes dir.

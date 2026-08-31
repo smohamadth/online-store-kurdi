@@ -16,6 +16,7 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { API_BASE } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 import {
   PageKey,
   PageLayout,
@@ -80,6 +81,10 @@ const BLOCK_LABELS: Record<BlockType, string> = {
 };
 
 export default function ThemeStudioPage() {
+  // The Theme Studio is a 3-column desktop layout (theme list | canvas |
+  // palette+tokens). On phones that fixed ~580px of columns overflows a
+  // ~360px viewport, so stack the three panels vertically below 900px.
+  const isMobile = useIsMobile(900);
   const [themes, setThemes] = useState<ThemeStudioTheme[]>([]);
   const [currentKey, setCurrentKey] = useState<string>('');
   const [current, setCurrent] = useState<ThemeStudioTheme | null>(null);
@@ -263,7 +268,7 @@ export default function ThemeStudioPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 320px', gap: 18, marginTop: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '260px 1fr 320px', gap: 18, marginTop: 20, alignItems: 'start' }}>
         {/* ---- Theme list ---- */}
         <div style={card}>
           <h3 style={{ fontSize: 15, marginBottom: 10 }}>Themes</h3>

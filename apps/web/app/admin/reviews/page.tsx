@@ -84,43 +84,28 @@ export default function AdminReviewsPage() {
 
   const handleApprove = async (reviewId: string) => {
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const res = await fetch(`${API_BASE}/reviews/${reviewId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isApproved: true }),
-        });
-        if (!res.ok) throw new Error('Approve failed');
-      }
-
-      setReviews(reviews.map(r => r.id === reviewId ? { ...r, isApproved: true } : r));
+      // Only flip the row once the server confirms. Previously the local
+      // state was updated even when the API failed, so a failed approve
+      // looked successful and the review reappeared as pending on refresh.
+      const res = await authHttp.put<Review>(`/reviews/${reviewId}`, { isApproved: true });
+      setReviews((list) =>
+        list.map((r) => (r.id === res?.data?.id || r.id === reviewId ? { ...r, isApproved: true } : r))
+      );
     } catch (err) {
       console.error('Failed to approve review:', err);
+      alert(errorMessage(err, 'Could not approve the review.'));
     }
   };
 
   const handleReject = async (reviewId: string) => {
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const res = await fetch(`${API_BASE}/reviews/${reviewId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isApproved: false }),
-        });
-        if (!res.ok) throw new Error('Reject failed');
-      }
-
-      setReviews(reviews.map(r => r.id === reviewId ? { ...r, isApproved: false } : r));
+      const res = await authHttp.put<Review>(`/reviews/${reviewId}`, { isApproved: false });
+      setReviews((list) =>
+        list.map((r) => (r.id === res?.data?.id || r.id === reviewId ? { ...r, isApproved: false } : r))
+      );
     } catch (err) {
       console.error('Failed to reject review:', err);
+      alert(errorMessage(err, 'Could not reject the review.'));
     }
   };
 

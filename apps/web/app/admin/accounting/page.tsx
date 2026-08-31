@@ -495,7 +495,11 @@ export default function AdminAccountingPage() {
                   {!e.voided && (
                     <>
                       <button style={btnGhost} onClick={() => reverseEntry(e.id, e.memo)}>↺ Reverse</button>{' '}
-                      <button style={btnGhost} onClick={() => voidEntry(e.id, e.memo)}>Void</button>
+                      {/* Closing entries can't be voided (the server rejects it); only
+                          normal entries get a Void action. */}
+                      {e.kind !== 'closing' && (
+                        <button style={btnGhost} onClick={() => voidEntry(e.id, e.memo)}>Void</button>
+                      )}
                     </>
                   )}
                 </div>

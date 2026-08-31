@@ -111,7 +111,7 @@ jobs `api-tests` and `web-tests`):
 | API unit (`apps/api/tests/unit`) | 317 | middleware (auth, CSRF, error handling), variant/currency/review/download/content-block helpers, schedulers, accounting engine |
 | API integration (`apps/api/tests/integration`) | 657 | every route module end-to-end against an in-memory Prisma mock (checkout, variants, options, currency, downloads, inventory, payments, attribute index, accounting, …) |
 | Web lib (`apps/web`, vitest) | 317 | filter params, i18n, SEO, structured data, theme config, preview, page blocks, home sections |
-| Web components (React Testing Library + happy-dom) | 555 | PDP, cart, admin pages, filter sidebar, theme picker, custom section, Theme Studio layout renderer |
+| Web components (React Testing Library + happy-dom) | 587 | PDP, cart, admin pages, filter sidebar, theme picker, custom section, Theme Studio layout renderer + editor UI |
 
 The **Theme Studio** adds dedicated suites on top of these (see
 `docs/THEME_STUDIO.md` §6): `edit.test.ts` (grid-edit invariants + off-grid
@@ -461,6 +461,11 @@ The model lives in `apps/web/lib/layouts/`; the file API in
 `apps/api/src/modules/themeStudio/`. Every block type is covered by the
 "every registered block type renders" test plus per-block unit/component
 tests; the file API is covered by `apps/api/tests/integration/themeStudio.test.ts`.
+
+The Studio's editor UI is covered by `apps/web/app/admin/theme-studio/page.test.tsx`:
+drag-and-drop add, reorder/remove, per-page draft persistence (the save PUT
+round-trips the edited `layouts` back to the API), and the responsive stacking
+of the 3-column canvas (theme list | canvas | palette) below 900px.
 
 ---
 
