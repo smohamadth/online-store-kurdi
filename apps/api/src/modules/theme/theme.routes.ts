@@ -138,7 +138,12 @@ router.put('/', authenticate, authorize('admin', 'manager'), async (req, res, ne
       // platforms diverge, a future change is to publish the
       // registry as a shared package.
       if (k === 'activeTheme' && v !== null) {
-        const INSTALLED_THEMES = new Set(['default', 'minimal', 'bold']);
+        // Keep in sync with the web app's themeRegistry.ts (the source of
+        // truth). This list must match every key shipped under
+        // apps/web/themes/*/theme.json - a drift here makes an installed
+        // theme un-activatable from the admin picker (the picker lists the
+        // registry, the API would 400 the chosen theme).
+        const INSTALLED_THEMES = new Set(['default', 'minimal', 'bold', 'dawnlight', 'pulse']);
         if (!INSTALLED_THEMES.has(v as string)) {
           return res.status(400).json({
             status: 'error',
