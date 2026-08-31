@@ -503,7 +503,7 @@ export function LayoutRenderer({ layout, data }: { layout: PageLayout; data: Lay
     gridAutoFlow: 'dense',
   };
   return (
-    <div style={gridStyle}>
+    <div className="builder-layout" style={gridStyle}>
       {blocks.map((block) => {
         const renderer = BLOCK_RENDERERS[block.type];
         if (!renderer) return null;

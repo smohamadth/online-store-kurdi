@@ -366,7 +366,10 @@ describe('LayoutRenderer responsive grids', () => {
     // The outer scaffold intentionally stays a fixed `repeat(layout.columns,
     // 1fr)` grid: blocks are absolutely placed by explicit colStart/colSpan
     // cell coordinates, so collapsing the scaffold would corrupt their spans.
-    // Mobile reflow lives in the per-block content grids (auto-fit), not here.
+    // Mobile reflow lives in the per-block content grids (auto-fit) PLUS the
+    // `builder-layout` container query in globals.css, which stacks every
+    // block full-width below a 640px container (a phone, or the Theme Studio
+    // Phone preview frame). The scaffold grid definition itself stays intact.
     const { container } = render(
       <LayoutRenderer
         layout={{
@@ -378,6 +381,8 @@ describe('LayoutRenderer responsive grids', () => {
     );
     const grid = container.querySelector('div') as HTMLElement;
     expect(grid.style.gridTemplateColumns).toBe('repeat(12, 1fr)');
+    // The container-query stacking hook must be wired onto the scaffold grid.
+    expect(grid.className).toContain('builder-layout');
   });
 
   it('every other multi-column block emits a reflowable grid template', () => {

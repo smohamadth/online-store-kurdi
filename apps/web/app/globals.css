@@ -439,3 +439,30 @@ article figcaption {
   margin-top: 6px;
   text-align: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Store-builder layouts (Theme Studio output)
+
+   .builder-layout is the CSS grid rendered by LayoutRenderer. Blocks are
+   positioned by explicit colStart/colSpan cell coordinates in a fixed
+   layout.columns grid, so the grid itself is deliberately NOT responsive.
+   Instead, on a narrow container we stack every block full-width so an
+   author's intentional partial-width column (e.g. colSpan 6) does not stay
+   half a phone screen.
+
+   A CSS container query (not a viewport media query) is used on purpose:
+   the grid is the sizing context, so this fires both on a real phone AND in
+   the Theme Studio's Phone preview frame (a ~375px box inside a desktop
+   viewport), keeping the "different displays" preview accurate with the
+   real storefront. `container-type: inline-size` makes the grid a size
+   container for its own children.
+   --------------------------------------------------------------------------- */
+.builder-layout {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .builder-layout > [data-block-type] {
+    grid-column: 1 / -1 !important;
+  }
+}
+
