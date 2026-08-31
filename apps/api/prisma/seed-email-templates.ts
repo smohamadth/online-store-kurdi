@@ -75,7 +75,7 @@ const emailTemplates = [
             <p>Thank you! We have received your payment for order <strong>#{{orderNumber}}</strong>.</p>
             <div class="pay-info">
               <div class="row"><span>Order</span><span>#{{orderNumber}}</span></div>
-              <div class="row"><span>Amount paid</span><span>${{orderTotal}}</span></div>
+              <div class="row"><span>Amount paid</span><span>\${{orderTotal}}</span></div>
               <div class="row"><span>Payment method</span><span>{{paymentMethod}}</span></div>
             </div>
             <p>Your order is now being prepared. We'll email you the moment it ships.</p>
@@ -118,7 +118,7 @@ const emailTemplates = [
             <p>We have issued a refund for order <strong>#{{orderNumber}}</strong>. The money is on its way back to your original payment method.</p>
             <div class="refund-info">
               <div class="row"><span>Order</span><span>#{{orderNumber}}</span></div>
-              <div class="row"><span>Refund amount</span><span>${{refundAmount}}</span></div>
+              <div class="row"><span>Refund amount</span><span>\${{refundAmount}}</span></div>
               <div class="row"><span>Reason</span><span>{{reason}}</span></div>
             </div>
             <p>Please allow a few business days for your bank or payment provider to process the refund.</p>
