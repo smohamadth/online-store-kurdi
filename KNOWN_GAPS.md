@@ -467,6 +467,13 @@ drag-and-drop add, reorder/remove, per-page draft persistence (the save PUT
 round-trips the edited `layouts` back to the API), and the responsive stacking
 of the 3-column canvas (theme list | canvas | palette) below 900px.
 
+The admin table pages follow one responsive rule for their wide data grids
+(orders, products, variants, coupons, inventory, reviews, gift-cards, tax,
+categories, accounting, …): the table wrapper is `overflow-x: auto` so a grid
+that is wider than the phone viewport scrolls inside the card instead of being
+clipped. The admin shell itself (sidebar) collapses to a hamburger + slide-in
+overlay below 768px (see `app/admin/layout.test.tsx`).
+
 ---
 
 ## 14. Accounting — shipped

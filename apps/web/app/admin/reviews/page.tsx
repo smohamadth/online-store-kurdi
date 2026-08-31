@@ -218,7 +218,10 @@ export default function AdminReviewsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: 'auto'` (not 'hidden'): seven columns at min-content
+        // exceed a ~360px phone. A horizontal scroll inside the card is the
+        // lesser evil — `hidden` was clipping the right-hand columns.
+        overflow: 'auto',
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>

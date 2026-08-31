@@ -240,7 +240,7 @@ export default function AdminVariantsPage() {
         </div>
       </div>
 
-      <div style={{ marginTop: '18px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '10px', overflow: 'hidden', background: 'var(--card-bg, #fff)' }}>
+      <div style={{ marginTop: '18px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '10px', overflowX: 'auto', background: 'var(--card-bg, #fff)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }} data-testid="variants-table">
           <thead>
             <tr>

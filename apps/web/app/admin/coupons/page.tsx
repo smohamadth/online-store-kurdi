@@ -211,7 +211,9 @@ export default function AdminCouponsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: 'auto'` (not 'hidden'): nine columns at min-content
+        // exceed a ~360px phone; scroll inside the card instead of clipping.
+        overflow: 'auto',
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>

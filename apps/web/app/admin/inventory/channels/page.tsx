@@ -91,7 +91,7 @@ export default function ChannelsPage() {
         </div>
       )}
 
-      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f9f9f9' }}>

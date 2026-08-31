@@ -140,7 +140,7 @@ export default function StockTakesPage() {
         </div>
       )}
 
-      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr style={{ background: '#f9f9f9' }}><th style={th}>Name</th><th style={th}>Status</th><th style={th}>Warehouse</th><th style={th}>Items</th><th style={{ ...th, textAlign: 'right' }}>Actions</th></tr></thead>
           <tbody>

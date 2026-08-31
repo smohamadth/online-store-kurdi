@@ -337,6 +337,9 @@ const card: React.CSSProperties = {
   border: '1px solid #e5e5e5',
   padding: '16px',
   marginBottom: '16px',
+  // Allow the wide variants table to scroll horizontally on a phone
+  // rather than clip; harmless on sections without an overflowing child.
+  overflowX: 'auto',
 };
 const input: React.CSSProperties = {
   display: 'block', width: '100%', padding: '8px',
