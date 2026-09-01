@@ -83,6 +83,23 @@ describe('GET /api/inventory (summary)', () => {
   });
 });
 
+describe('GET /api/inventory/low-stock (clamped threshold)', () => {
+  it('clamps a hostile threshold (cannot 500 or scan everything)', async () => {
+    // Regression: `threshold` was raw parseInt — `?threshold=-5` gave a
+    // Prisma 500 (gt:0 AND lte:-5 is a Prisma validation error) and
+    // `?threshold=1e999` gave Infinity.
+    const { token } = await authHeader({ role: 'admin' });
+    await createProduct({ quantity: 3 });
+    for (const t of ['-5', 'abc', '1e999', '3.5', '0']) {
+      const res = await request(app)
+        .get(`/api/inventory/low-stock?threshold=${t}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    }
+  });
+});
+
 describe('POST /api/inventory/alerts', () => {
   it('upserts an alert for a product', async () => {
     const { token } = await authHeader({ role: 'admin' });

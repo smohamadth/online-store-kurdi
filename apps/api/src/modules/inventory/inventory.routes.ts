@@ -378,7 +378,12 @@ router.post('/alerts', authenticate, authorize('admin'), async (req, res, next) 
 // GET /api/inventory/low-stock - Get low stock products
 router.get('/low-stock', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const threshold = parseInt(req.query.threshold as string) || 10;
+    // Clamped: a hostile ?threshold=-5 would be a Prisma validation
+    // error (gt:0 AND lte:-5) and ?threshold=1e999 parses to Infinity.
+    const raw = req.query.threshold;
+    const n = typeof raw === 'string' ? Number(raw) : NaN;
+    const threshold =
+      Number.isFinite(n) && Number.isInteger(n) && n >= 1 ? Math.min(n, 9999) : 10;
 
     const products = await prisma.product.findMany({
       where: {
