@@ -10,7 +10,16 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { env } from '../../config/environment';
 import { isGatewayMethod, getGatewayById } from '../payments/gateways/registry';
 import { isGatewayConfigured } from '../payments/gatewayConfig';
-import { createGatewayPayment } from '../payments/gateway.service';
+import { createGatewayPayment, settleOrderPaid } from '../payments/gateway.service';
+import {
+  getGiftCardByCode,
+  isRedeemable,
+  debitGiftCard,
+} from '../payments/giftcard.service';
+import {
+  getStoreCreditBalance,
+  debitStoreCredit,
+} from '../payments/storecredit.service';
 import { emit } from '../plugins/pluginHooks';
 import { calculateTaxForOrder } from '../tax/tax.service';
 import { calculateShippingForOrder } from '../shipping/shipping.service';
@@ -54,6 +63,13 @@ const createOrderSchema = z.object({
   couponCode: z.string().max(100).optional(),
   couponId: z.string().optional(),
   shippingMethodId: z.string().optional(),
+  // Wallet credit at checkout. `applyStoreCredit` debits the caller's
+  // store-credit balance; `giftCardCode` debits the card. Both apply
+  // AFTER the coupon, never below zero, and are ledgered against the
+  // order. The server re-validates everything (code, redeemability,
+  // currency, balance) — these fields are only a request to use credit.
+  applyStoreCredit: z.boolean().optional(),
+  giftCardCode: z.string().min(1).max(64).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -236,7 +252,13 @@ router.post('/:id/pay', authenticate, async (req, res, next) => {
       order: {
         id: order.id,
         orderNumber: order.orderNumber,
-        totalAmount: order.totalAmount,
+        // Charge only what the wallet credit did NOT cover (defensive:
+        // the mix rule refuses partial credit with gateways, so this is
+        // normally the full amount).
+        totalAmount: Math.max(
+          0,
+          order.totalAmount - (order.storeCreditApplied || 0) - (order.giftCardApplied || 0),
+        ),
         currency: settings?.currency || 'USD',
         customerEmail: user?.email || null,
         customerPhone: user?.phone || order.shippingAddress?.phone || null,
@@ -328,7 +350,7 @@ router.post('/', authenticate, async (req, res, next) => {
     // All amounts are recomputed server-side (see the totals block below).
     const body = createOrderSchema.parse(req.body);
     const { items, shippingAddressId, shippingAddress, paymentMethod, notes,
-            couponCode, couponId } = body;
+            couponCode, couponId, applyStoreCredit, giftCardCode } = body;
     const shippingMethodId = body.shippingMethodId;
 
     if (!items || items.length === 0) {
@@ -580,6 +602,69 @@ router.post('/', authenticate, async (req, res, next) => {
       throw new AppError('Order total cannot be negative', 400);
     }
 
+    // ------------------------------------------------------------------
+    // Wallet credit (store credit + gift card). Both are validated HERE,
+    // before the order is created, so a bad code / mismatch fails the
+    // request without a half-created order:
+    //   - the gift card must exist, be redeemable and be in the store's
+    //     currency (a USD card can't pay an EUR order);
+    //   - store credit and gift cards may be combined with offline
+    //     payment methods, or cover the order ENTIRELY with a card
+    //     method (then no gateway session is created); a partial credit
+    //     against a hosted-gateway method is refused — the gateway would
+    //     otherwise charge the full amount and the credit would be spent
+    //     even if the customer abandons the payment page.
+    // ------------------------------------------------------------------
+    const storeCurrency =
+      (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.currency || 'USD';
+    const wantStoreCredit = applyStoreCredit === true;
+    const giftCode = typeof giftCardCode === 'string' && giftCardCode.trim()
+      ? giftCardCode.trim().toUpperCase()
+      : null;
+
+    let storeCreditBalance = 0;
+    if (wantStoreCredit) {
+      storeCreditBalance = await getStoreCreditBalance(req.user!.id, storeCurrency);
+    }
+
+    let giftCardBalance = 0;
+    if (giftCode) {
+      let card: any;
+      try {
+        card = await getGiftCardByCode(giftCode);
+      } catch {
+        throw new AppError('Gift card not found', 400);
+      }
+      if (!isRedeemable(card)) {
+        throw new AppError('Gift card is not redeemable (expired, cancelled or depleted)', 400);
+      }
+      if ((card.currency || 'USD').toUpperCase() !== storeCurrency.toUpperCase()) {
+        throw new AppError(
+          `Gift card currency (${card.currency}) does not match the store currency (${storeCurrency})`,
+          400,
+        );
+      }
+      giftCardBalance = card.balance;
+    }
+
+    // Client-side estimate of the wallet coverage (server debits below
+    // are authoritative; this only decides the gateway-mix rule).
+    const walletEstimate = Math.min(
+      finalTotalAmount,
+      (wantStoreCredit ? storeCreditBalance : 0) + giftCardBalance,
+    );
+    const fullyCoveredByWallet = finalTotalAmount - walletEstimate <= 0.005;
+    if (
+      isGatewayMethod(paymentMethod) &&
+      (wantStoreCredit || giftCode) &&
+      !fullyCoveredByWallet
+    ) {
+      throw new AppError(
+        'Store credit and gift cards can cover an order entirely, but a partial amount cannot be combined with online card payment. Choose cash on delivery or bank transfer for the remaining balance.',
+        400,
+      );
+    }
+
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
@@ -623,6 +708,74 @@ router.post('/', authenticate, async (req, res, next) => {
       },
     });
 
+    // ------------------------------------------------------------------
+    // Apply the wallet credit: store credit first, then the gift card.
+    // Each debit is atomic and writes its own ledger row (type 'use' /
+    // 'order_use') linked to this order. The order row is then updated
+    // with exactly what was applied — totalAmount stays the full order
+    // value, so the amount still due is totalAmount - applied.
+    // ------------------------------------------------------------------
+    let amountDue = finalTotalAmount;
+    let storeCreditApplied = 0;
+    let giftCardApplied = 0;
+
+    if (wantStoreCredit && amountDue > 0.005) {
+      const sc = await debitStoreCredit({
+        userId: req.user!.id,
+        amount: amountDue,
+        currency: storeCurrency,
+        orderId: order.id,
+        notes: `Order ${orderNumber}`,
+      });
+      storeCreditApplied = Math.round(sc.applied * 100) / 100;
+      amountDue = Math.round((amountDue - sc.applied) * 100) / 100;
+    }
+    if (giftCode && amountDue > 0.005) {
+      // Cap the debit at what the order still needs: a card with more
+      // balance than the order never leaves a residual on the order.
+      const card = await getGiftCardByCode(giftCode);
+      const giftAmount = Math.round(Math.min(card.balance, amountDue) * 100) / 100;
+      if (giftAmount > 0.005) {
+        await debitGiftCard({
+          code: giftCode,
+          amount: giftAmount,
+          orderId: order.id,
+          notes: `Order ${orderNumber}`,
+        });
+        giftCardApplied = giftAmount;
+        amountDue = Math.round((amountDue - giftAmount) * 100) / 100;
+      }
+    }
+
+    const walletApplied = Math.round((storeCreditApplied + giftCardApplied) * 100) / 100;
+    if (walletApplied > 0) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          storeCreditApplied,
+          giftCardApplied,
+          giftCardCode: giftCardApplied > 0 ? giftCode : null,
+        },
+      });
+
+      // Fully covered by wallet credit: settle the order like any other
+      // payment — Payment ledger row (method 'store_credit' / 'gift_card'),
+      // paymentStatus completed, status processing, accounting auto-post,
+      // and the payment.settled plugin hook — all crash-safe and deduped
+      // on the stable transactionId by settleOrderPaid.
+      if (amountDue <= 0.005) {
+        await settleOrderPaid({
+          orderId: order.id,
+          orderNumber,
+          amount: walletApplied,
+          currency: storeCurrency,
+          method: storeCreditApplied > 0 ? 'store_credit' : 'gift_card',
+          transactionId: `wallet-${order.id}`,
+          gatewayResponse: { storeCreditApplied, giftCardApplied, giftCardCode: giftCode },
+        });
+      }
+    }
+
     // Analytics: record a purchase event per line item so the
     // recommendation engine can learn co-purchases ("customers also
     // bought"). One event per line keeps productId clean for the
@@ -656,17 +809,23 @@ router.post('/', authenticate, async (req, res, next) => {
     // customer into Stripe's hosted payment page (no card data ever
     // touches this server).
     let checkoutUrl: string | null = null;
-    if (isGatewayMethod(paymentMethod)) {
+    // A wallet-covered order (amountDue <= 0) is settled by the credit
+    // above and needs no gateway session — the card option was either
+    // refused earlier (partial credit) or the credit covers everything.
+    if (isGatewayMethod(paymentMethod) && amountDue > 0.005) {
       // Hosted-payment gateway (Stripe card, PayPal, Zarinpal, IDPay,
       // ZainCash, FIB). Each gateway builds its own payment page for this
       // order; the response carries checkoutUrl and the storefront redirects
       // the customer to it. The webhook / return-verify settles the order.
+      // The session charges the AMOUNT DUE after wallet credit, never the
+      // full totalAmount (defensive: the mix rule above already refuses
+      // partial credit with gateways, but the math must hold regardless).
       const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
       const result = await createGatewayPayment({
         order: {
           id: order.id,
           orderNumber: order.orderNumber,
-          totalAmount: order.totalAmount,
+          totalAmount: amountDue,
           currency: settings?.currency || 'USD',
           customerPhone: (order.shippingAddress as any)?.phone || (req.user as any)?.phone || null,
           customerEmail: (req.user as any)?.email || null,

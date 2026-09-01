@@ -133,6 +133,12 @@ export interface Order {
   shippingAmount: number;
   discountAmount: number;
   totalAmount: number;
+  /** Wallet credit applied at checkout. totalAmount stays the full
+   * order value; the amount still due is totalAmount - storeCreditApplied
+   * - giftCardApplied. */
+  storeCreditApplied?: number;
+  giftCardApplied?: number;
+  giftCardCode?: string | null;
   shippingAddressId?: string;
   shippingAddress?: UserAddress;
   shippingMethodId?: string;

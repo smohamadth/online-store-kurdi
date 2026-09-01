@@ -709,10 +709,28 @@ coupon, gift-card, store-credit, currency, shipping-method and
 product/variant price schemas now require finite numbers (and coupon
 types are enum-validated, dates must parse, usageLimit must be a
 positive integer). Gift-card cancel reasons are capped at 500 chars.
-Honest-limits note: gift cards and store credit are currently
-issue/redeem/display-only — the checkout does NOT debit them yet
-(debitGiftCard/debitStoreCredit have no callers), and the wallet page
-no longer claims credit is applied at checkout.
+Wallet credit IS spendable at checkout now: order placement accepts
+`applyStoreCredit` (the caller's store-credit balance) and/or
+`giftCardCode`, debits them atomically with ledger rows (store credit
+first, then the card, AFTER the coupon, never below zero), and the
+order records storeCreditApplied / giftCardApplied / giftCardCode —
+totalAmount stays the full order value, so the amount still due is
+totalAmount minus the applied columns. A wallet payment that FULLY
+covers the order settles it like any other payment (paymentStatus
+completed, Payment ledger row with method 'store_credit'/'gift_card',
+accounting auto-post, payment.settled hook) with no gateway session;
+a PARTIAL wallet payment keeps the order pending and is refused for
+online gateway methods (the gateway would charge the full amount and
+the credit would be spent even if the customer abandoned the page) —
+combine credit with cash on delivery / bank transfer instead. Gift
+cards are validated (exists / redeemable / currency matches the store)
+BEFORE the order is created, so a bad code never leaves a half-created
+order. Refunds: `creditToStoreCredit=true` returns the money to the
+customer's store-credit balance (no gateway movement); cash refunds
+are capped at the amount actually paid in cash (the wallet-credit
+portion was never cash). The checkout page has a Wallet Credit
+section (store-credit toggle + gift-card code check); the wallet page
+and order list show applied amounts.
 SECURITY: imported customer accounts no longer ship with a known
 password. Bulk customer/order import used to create every imported
 account with the hardcoded password 'Imported-Change-Me-123!' (public

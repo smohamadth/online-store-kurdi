@@ -517,6 +517,14 @@ model Order {
   paymentMethod     String?
   paymentStatus     String    @default("pending") // pending, completed, failed, refunded
   paymentIntentId   String?   // Stripe payment intent ID
+
+  // Wallet credit applied at checkout (store credit + gift card). The
+  // order's totalAmount stays the FULL order value; these two columns
+  // record how much the customer covered with wallet credit, and the
+  // amount still due is totalAmount - storeCreditApplied - giftCardApplied.
+  storeCreditApplied Float     @default(0)
+  giftCardApplied    Float     @default(0)
+  giftCardCode       String?   // the card code debited, for the ledger trail
   
   // Notes
   notes             String?

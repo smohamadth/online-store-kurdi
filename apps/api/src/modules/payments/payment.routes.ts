@@ -23,6 +23,7 @@ import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
+import { creditStoreCredit } from './storecredit.service';
 import { getGatewayById, isGatewayMethod } from './gateways/registry';
 import { sendPaymentConfirmation, sendRefundConfirmation } from '../../services/email.service';
 import { parsePagination } from '../../utils/pagination';
@@ -365,7 +366,7 @@ router.post('/process', authenticate, async (req, res, next) => {
 // POST /api/payments/refund - Process refund (admin only)
 router.post('/refund', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const { orderId, amount, reason } = req.body;
+    const { orderId, amount, reason, creditToStoreCredit } = req.body;
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -395,15 +396,44 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       .filter((p: any) => p.method === 'refund' && p.status === 'completed')
       .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
-    const remaining = Math.max(0, order.totalAmount - refundedSoFar);
+    const walletApplied = (order.storeCreditApplied || 0) + (order.giftCardApplied || 0);
+    // Cash refunds can only return money that was actually paid in cash:
+    // the wallet-credit portion was never charged to a card / collected
+    // on delivery, so refunding it as cash would over-pay the customer.
+    const remainingCash = Math.max(0, order.totalAmount - walletApplied - refundedSoFar);
+    // A "credit back to store credit" refund returns value to the
+    // customer's store-credit balance instead, so it may cover the
+    // wallet portion too (the full unpaid-by-cash remainder).
+    const remaining = creditToStoreCredit
+      ? Math.max(0, order.totalAmount - refundedSoFar)
+      : remainingCash;
     // Default to the remaining amount (full refund of what is left); a partial
     // `amount` refunds less. Guard against non-numeric/negative/NaN input.
     const refundAmount = amount == null ? remaining : Number(amount);
     if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
       throw new AppError('Refund amount must be a positive number.', 400);
     }
-    if (refundedSoFar + refundAmount > order.totalAmount + 1e-9) {
-      throw new AppError(`Refund amount exceeds the remaining balance (${remaining.toFixed(2)}).`, 400);
+    if (refundedSoFar + refundAmount > remaining + refundedSoFar + 1e-9) {
+      throw new AppError(
+        creditToStoreCredit
+          ? `Refund amount exceeds the remaining balance (${remaining.toFixed(2)}).`
+          : `Refund amount exceeds the amount actually paid in cash (${remainingCash.toFixed(2)}); use creditToStoreCredit=true to refund the wallet-credit portion to the customer's store credit.`,
+        400,
+      );
+    }
+
+    // creditToStoreCredit=true: nothing ever left the store in cash for
+    // this amount, so no gateway money movement — the customer's store
+    // credit balance is credited instead (atomic, ledgered).
+    if (creditToStoreCredit) {
+      await creditStoreCredit({
+        userId: order.userId,
+        amount: refundAmount,
+        type: 'refund',
+        orderId,
+        notes: reason || 'Refund issued as store credit',
+        createdById: req.user!.id,
+      });
     }
 
     // If this order was paid through a hosted gateway, actually move the money
@@ -413,7 +443,7 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
     const gateway = getGatewayById(order.paymentMethod);
     let gatewayRefund: { success: boolean; transactionId?: string | null; message?: string; raw?: unknown } | null = null;
 
-    if (gateway) {
+    if (gateway && !creditToStoreCredit) {
       if (!gateway.refundPayment) {
         throw new AppError(
           `${gateway.name} does not expose an API for refunds. Please issue this refund in the ${gateway.name} dashboard, then re-run the refund here.`,
@@ -457,6 +487,7 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
           originalTransaction: order.paymentIntentId,
           gateway: gateway?.id || null,
           gatewayRefund,
+          creditToStoreCredit: creditToStoreCredit === true,
           timestamp: new Date().toISOString(),
         }),
       },

@@ -28,11 +28,10 @@ const TYPE_LABELS: Record<string, string> = {
 /**
  * Account > Wallet page.
  *
- * Shows the customer's store credit balance + history. They can
- * also redeem a gift card here, which adds the card's balance to
- * their account as store credit. (The "redeem to store credit"
- * path is the most common UX; a "redeem at checkout" path is
- * also available via the API but not exposed in this UI yet.)
+ * Shows the customer's store credit balance + history, and lets them
+ * check a gift-card code. Both are usable at checkout: the checkout
+ * page has a "Wallet Credit" section where store credit is applied
+ * with a toggle and gift-card codes are entered directly.
  */
 export default function WalletPage() {
   const [credit, setCredit] = useState<StoreCredit | null>(null);
@@ -59,16 +58,15 @@ export default function WalletPage() {
     setRedeeming(true);
     setMessage(null);
     try {
-      // The redeem endpoint validates the code and returns metadata.
+      // The redeem endpoint validates the code and returns the balance.
+      // The card is spent at checkout (enter the code there) — nothing
+      // is debited or linked to the account from this page.
       const res = await authHttp.post<any>(`/gift-cards/${encodeURIComponent(giftCode.trim())}/redeem`);
       const balance = res.data.availableBalance as number;
       const currency = res.data.currency as string;
-      // Now "apply" it as store credit. There's no dedicated endpoint
-      // for that yet - the customer can see the card balance and
-      // use it at checkout. We just confirm the card is valid here.
       setMessage({
         type: 'ok',
-        text: `Card is valid! You have ${balance.toFixed(2)} ${currency} available. Redeeming it at checkout is coming soon.`,
+        text: `Card is valid! You have ${balance.toFixed(2)} ${currency} available. Enter the code at checkout to use it.`,
       });
       setGiftCode('');
     } catch (err) {
@@ -85,7 +83,7 @@ export default function WalletPage() {
       <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>Wallet</h1>
       <p style={{ color: '#666', marginBottom: '24px' }}>
         Store credit and gift card balances issued to your account. Balances can be redeemed and are
-        tracked here; checkout support for spending them is coming soon.
+        tracked here; spend them at checkout (Wallet Credit section).
       </p>
 
       {/* Store credit balance */}

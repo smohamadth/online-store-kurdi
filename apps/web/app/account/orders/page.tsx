@@ -153,6 +153,16 @@ export default function OrdersPage() {
                       {order.couponCode && ` (${order.couponCode})`}
                     </p>
                   )}
+                  {(order.storeCreditApplied || 0) > 0 && (
+                    <p style={{ fontSize: '14px', color: '#16a34a', marginBottom: '4px' }}>
+                      Paid with store credit: -{formatPrice(order.storeCreditApplied, settings.currencySymbol)}
+                    </p>
+                  )}
+                  {(order.giftCardApplied || 0) > 0 && (
+                    <p style={{ fontSize: '14px', color: '#16a34a', marginBottom: '4px' }}>
+                      Paid with gift card{order.giftCardCode ? ` (${order.giftCardCode})` : ''}: -{formatPrice(order.giftCardApplied, settings.currencySymbol)}
+                    </p>
+                  )}
                   <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
                     Total: {formatPrice(order.totalAmount || 0, settings.currencySymbol)}
                   </span>

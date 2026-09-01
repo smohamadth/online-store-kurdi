@@ -55,6 +55,19 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [discount, setDiscount] = useState(0);
+  // Wallet credit: store-credit toggle + gift-card code. The SERVER is
+  // the source of truth (it re-validates and debits atomically); these
+  // states only drive the estimate shown in the summary and the payload.
+  const [useStoreCredit, setUseStoreCredit] = useState(false);
+  const [storeCreditBalance, setStoreCreditBalance] = useState<number | null>(null);
+  const [giftCardCode, setGiftCardCode] = useState('');
+  const [giftCardInfo, setGiftCardInfo] = useState<{
+    code: string;
+    availableBalance: number;
+    currency: string;
+  } | null>(null);
+  const [giftCardError, setGiftCardError] = useState('');
+  const [walletError, setWalletError] = useState('');
 
   const [shippingInfo, setShippingInfo] = useState({
     firstName: '',
@@ -91,6 +104,22 @@ export default function CheckoutPage() {
   const taxAmount = taxInfo?.taxAmount || subtotal * 0.1;
   const total = subtotal - discount + shippingCost + taxAmount;
 
+  // Wallet estimate: what the store credit + gift card will cover
+  // (client-side preview; the server debits are authoritative and may
+  // apply less, e.g. if the balance changed since this was rendered).
+  const creditBalance = storeCreditBalance ?? 0;
+  const giftBalance = giftCardInfo?.availableBalance ?? 0;
+  const walletApplied = Math.min(
+    total,
+    (useStoreCredit ? creditBalance : 0) + giftBalance
+  );
+  const amountDue = Math.max(0, Math.round((total - walletApplied) * 100) / 100);
+  // Online gateways can't be mixed with a PARTIAL wallet payment (the
+  // API refuses it); the UI blocks it too so the customer finds out
+  // before clicking Place Order.
+  const gatewayMethod = paymentMethod !== 'cod' && paymentMethod !== 'bank_transfer';
+  const walletMixBlocked = gatewayMethod && walletApplied > 0.005 && amountDue > 0.005;
+
   useEffect(() => {
     // Check if user is logged in
     const storedUser = localStorage.getItem('user');
@@ -120,6 +149,20 @@ export default function CheckoutPage() {
       } catch (e) {}
     }
 
+    // Load the customer's store-credit balance (0 / null when they have
+    // none, or the endpoint is unreachable - checkout must never break
+    // because the wallet is down).
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHttp
+        .get<any>('/store-credit')
+        .then((res) => {
+          const b = Number(res?.data?.balance);
+          if (Number.isFinite(b)) setStoreCreditBalance(b);
+        })
+        .catch(() => {});
+    }
+
     // Redirect if cart is empty
     // A customer returning from Stripe Checkout has an empty cart by
     // design (it was cleared when the order was placed) - don't
@@ -128,6 +171,28 @@ export default function CheckoutPage() {
       router.push('/cart');
     }
   }, [items, orderPlaced, returnState, router]);
+
+  // Validate a gift-card code against the API before the order is
+  // placed. This only confirms the code + balance; the actual debit
+  // happens server-side at order placement (never here).
+  const checkGiftCard = async () => {
+    const code = giftCardCode.trim();
+    if (!code) return;
+    setGiftCardError('');
+    setGiftCardInfo(null);
+    try {
+      const res = await authHttp.post<any>(
+        `/gift-cards/${encodeURIComponent(code)}/redeem`
+      );
+      setGiftCardInfo({
+        code: String(res?.data?.code || code).toUpperCase(),
+        availableBalance: Number(res?.data?.availableBalance) || 0,
+        currency: String(res?.data?.currency || 'USD'),
+      });
+    } catch (err: any) {
+      setGiftCardError(err?.message || 'Gift card is not valid');
+    }
+  };
 
   // Stripe Checkout redirects back to /checkout?paid=true / ?canceled=true.
   // Read the flag once on mount; the order already exists either way.
@@ -199,6 +264,11 @@ export default function CheckoutPage() {
         shippingAmount: shippingCost,
         taxAmount,
         totalAmount: total,
+        // Wallet credit: the server re-validates the code, redeemability,
+        // currency and balance, then debits atomically. Sending the raw
+        // code is safe — a checked (validated) card is only a nicer UX.
+        applyStoreCredit: useStoreCredit,
+        giftCardCode: giftCardCode.trim() || undefined,
       };
 
       // An order is only real once the SERVER has stored it.
@@ -519,6 +589,76 @@ export default function CheckoutPage() {
                 ))}
               </div>
             </div>
+
+            {/* Wallet credit (store credit + gift card) */}
+            <div style={{ marginTop: '40px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Wallet Credit</h2>
+
+              {walletMixBlocked && (
+                <div style={{ padding: '12px 16px', borderRadius: '6px', backgroundColor: '#fef3c7', border: '1px solid #f59e0b', color: '#92400e', fontSize: '14px', marginBottom: '16px' }}>
+                  Online card payment can't be combined with a partial wallet credit.
+                  Cover the whole order with credit, or choose Cash on Delivery /
+                  Bank Transfer for the remaining balance.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', cursor: gatewayMethod ? 'not-allowed' : 'pointer', opacity: gatewayMethod ? 0.6 : 1 }}>
+                  <input
+                    type="checkbox"
+                    checked={useStoreCredit}
+                    disabled={gatewayMethod}
+                    onChange={(e) => setUseStoreCredit(e.target.checked)}
+                  />
+                  <span style={{ fontWeight: 500 }}>
+                    Use my store credit
+                    {storeCreditBalance !== null && (
+                      <span style={{ color: 'var(--muted, #666)', fontWeight: 400 }}>
+                        {' '}— balance {formatPrice(storeCreditBalance, settings.currencySymbol)}
+                      </span>
+                    )}
+                  </span>
+                </label>
+
+                <div style={{ padding: '16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="Gift card code"
+                      value={giftCardCode}
+                      disabled={gatewayMethod}
+                      onChange={(e) => {
+                        setGiftCardCode(e.target.value);
+                        setGiftCardInfo(null);
+                        setGiftCardError('');
+                      }}
+                      style={{ flex: 1, padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '14px', outline: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      disabled={gatewayMethod || !giftCardCode.trim()}
+                      onClick={checkGiftCard}
+                      style={{ padding: '12px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#000', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '14px' }}
+                    >
+                      Check
+                    </button>
+                  </div>
+                  {giftCardError && (
+                    <p style={{ color: '#dc2626', fontSize: '13px', marginTop: '8px' }}>{giftCardError}</p>
+                  )}
+                  {giftCardInfo && !giftCardError && (
+                    <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>
+                      ✓ {giftCardInfo.code} — {formatPrice(giftCardInfo.availableBalance, giftCardInfo.currency)} available
+                    </p>
+                  )}
+                  {!giftCardInfo && !giftCardError && (
+                    <p style={{ color: 'var(--muted, #666)', fontSize: '12px', marginTop: '8px' }}>
+                      Enter the code and press Check to confirm it before placing the order.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Right Column - Order Summary */}
@@ -568,26 +708,49 @@ export default function CheckoutPage() {
                   subtotal={subtotal}
                   onTaxCalculated={setTaxInfo}
                 />
+                {useStoreCredit && storeCreditBalance !== null && walletApplied > 0.005 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                    <span>Store credit</span>
+                    <span style={{ fontWeight: 600 }}>
+                      -{formatPrice(Math.min(creditBalance, walletApplied), settings.currencySymbol)}
+                    </span>
+                  </div>
+                )}
+                {giftCardInfo && giftBalance > 0.005 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                    <span>Gift card ({giftCardInfo.code})</span>
+                    <span style={{ fontWeight: 600 }}>
+                      -{formatPrice(Math.min(giftBalance, Math.max(0, walletApplied - (useStoreCredit ? creditBalance : 0))), settings.currencySymbol)}
+                    </span>
+                  </div>
+                )}
                 <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(total, settings.currencySymbol)}</span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                      {walletApplied > 0.005 ? 'Amount due' : 'Total'}
+                    </span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(amountDue, settings.currencySymbol)}</span>
                   </div>
+                  {walletApplied > 0.005 && (
+                    <p style={{ fontSize: '12px', color: 'var(--muted, #666)', marginTop: '4px' }}>
+                      {formatPrice(walletApplied, settings.currencySymbol)} covered by wallet credit
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <button type="submit" disabled={loading || !selectedShipping} style={{
+              <button type="submit" disabled={loading || !selectedShipping || walletMixBlocked} style={{
                 width: '100%', marginTop: '24px', padding: '16px',
-                backgroundColor: (loading || !selectedShipping) ? '#ccc' : '#000',
+                backgroundColor: (loading || !selectedShipping || walletMixBlocked) ? '#ccc' : '#000',
                 color: '#fff', border: 'none', borderRadius: '6px',
                 fontSize: '16px', fontWeight: 600,
-                cursor: (loading || !selectedShipping) ? 'not-allowed' : 'pointer',
+                cursor: (loading || !selectedShipping || walletMixBlocked) ? 'not-allowed' : 'pointer',
               }}>
                 {loading ? (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
                     <ButtonSpinner /> Placing Order…
                   </span>
-                ) : 'Place Order'}
+                ) : walletMixBlocked ? 'Choose another payment method' : 'Place Order'}
               </button>
 
               <p style={{ marginTop: '16px', fontSize: '12px', color: 'var(--muted, #666)', textAlign: 'center' }}>
