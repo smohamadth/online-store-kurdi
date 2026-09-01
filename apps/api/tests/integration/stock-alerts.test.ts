@@ -30,6 +30,22 @@ describe('POST /api/stock-alerts', () => {
     const res = await request(app).post('/api/stock-alerts').send({ productId: 'p1', email: 'a@example.com' });
     expect(res.body.message).toMatch(/already/);
   });
+
+  it('lets a SECOND guest with a different email subscribe to the same product', async () => {
+    // Regression: all guests share userId='anonymous', and the dedupe
+    // check OR-ed that shared id in — so the first guest subscription on
+    // a product made every later guest with a different email hit
+    // "already subscribed" and never receive an alert.
+    const first = await request(app).post('/api/stock-alerts').send({ productId: 'p1', email: 'a@example.com' });
+    expect(first.body.message).toMatch(/notified/);
+    const second = await request(app).post('/api/stock-alerts').send({ productId: 'p1', email: 'b@example.com' });
+    expect(second.status).toBe(200);
+    expect(second.body.message).toMatch(/notified/);
+    expect(second.body.message).not.toMatch(/already/);
+    const rows = await mockPrisma.stockAlertSubscription.findMany({ where: { productId: 'p1' } });
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r: any) => r.email).sort()).toEqual(['a@example.com', 'b@example.com']);
+  });
 });
 
 describe('GET /api/stock-alerts/check/:productId', () => {

@@ -5,7 +5,13 @@
  * must not produce cells that Excel/Sheets evaluates as formulas, and
  * re-importing an export must not leave the protective apostrophe behind.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// mappers.ts imports the prisma client at module load; this is a pure
+// unit test of readStrCell/serializeCsv, so stub the database module to
+// keep it hermetic (no generated client needed).
+vi.mock('../../../src/config/database', () => ({ prisma: {} }));
+
 import { serializeCsv } from '../../../src/utils/csv';
 import { readStrCell } from '../../../src/modules/importExport/mappers';
 

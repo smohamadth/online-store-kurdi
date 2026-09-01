@@ -48,11 +48,22 @@ router.post('/', async (req, res, next) => {
     const userId = req.user?.id || 'anonymous';
     const email = data.email || req.user?.email || '';
 
+    // Dedupe identity. Guests ALL share the 'anonymous' userId, so the
+    // dedupe check must be keyed by EMAIL for guests — using the shared
+    // userId would make the first guest subscription on a product
+    // silently block every later guest with a different email (they'd
+    // get "already subscribed" and never an alert).
+    const identityWhere = userId !== 'anonymous'
+      ? { userId }
+      : email
+        ? { email }
+        : { userId: '' }; // no usable identity: never collides
+
     // Check if already subscribed (same key: product + optional variant)
     const existing = await prisma.stockAlertSubscription.findFirst({
       where: {
         ...keyWhere(data.productId, data.variantId),
-        OR: [{ userId }, ...(email ? [{ email }] : [])],
+        ...identityWhere,
       },
       select: { id: true },
     });
