@@ -110,9 +110,13 @@ type ConfigSchema = Record<string, ConfigField>;
 
 - Config is stored per plugin in `<PLUGINS_DIR>/state/<id>.json`
   (`{ enabled, config }`) — no database, no migration.
-- `secret: true` fields are masked in API responses (`••••`), written
+- `secret: true` fields are masked in API responses (`••••••••`), written
   plainly to the state file (same trust level as the existing
   `customCss`/SMTP settings), and included in webhook signatures.
+- **Secret round-trip:** a save whose secret field carries the mask means
+  "unchanged" — the API keeps the stored value instead of overwriting it
+  with the placeholder (the admin UI sends the mask for blank secret
+  inputs; a mask sent for a never-set secret leaves it unset).
 - Saving config validates every field against the schema; unknown keys are
   stripped (same policy as themes).
 

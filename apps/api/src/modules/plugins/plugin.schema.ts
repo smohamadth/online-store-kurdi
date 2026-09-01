@@ -110,11 +110,14 @@ export function validatePluginConfig(manifest: PluginManifest, raw: unknown): Re
   return out;
 }
 
+/** Placeholder used in API responses in place of a secret config value. */
+export const SECRET_MASK = '••••••••';
+
 /** Mask secret config fields for API responses. */
 export function maskSecretConfig(manifest: PluginManifest, config: Record<string, string | boolean | number>): Record<string, string | boolean | number> {
   const out = { ...config };
   for (const [field, spec] of Object.entries(manifest.configSchema ?? {})) {
-    if (spec.secret && out[field] !== undefined) out[field] = '••••••••';
+    if (spec.secret && out[field] !== undefined) out[field] = SECRET_MASK;
   }
   return out;
 }

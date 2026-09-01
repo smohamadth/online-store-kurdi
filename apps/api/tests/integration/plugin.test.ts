@@ -274,6 +274,40 @@ describe('PATCH /api/plugins/:id', () => {
     expect(res.body.data.bundled).toBe(false);
   });
 
+  it('keeps a stored secret when the save round-trips the mask (no overwrite)', async () => {
+    const withSecret = await zipFor(
+      manifest({
+        id: 'secrets',
+        configSchema: {
+          token: { type: 'string', secret: true },
+          channel: { type: 'string' },
+        },
+      })
+    );
+    await request(app)
+      .post('/api/plugins/install')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', withSecret, 'secrets.zip');
+    await request(app)
+      .patch('/api/plugins/secrets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ config: { token: 'abc123', channel: '#old' } });
+
+    // The admin edits only `channel`; the UI sends the mask for `token`.
+    const res = await request(app)
+      .patch('/api/plugins/secrets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ config: { token: '••••••••', channel: '#new' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.config.channel).toBe('#new');
+    expect(res.body.data.config.token).toBe('••••••••');
+
+    // The REAL secret on disk must still be abc123 — never the mask.
+    const state = JSON.parse(fs.readFileSync(path.join(tempDir, 'state', 'secrets.json'), 'utf8'));
+    expect(state.config.token).toBe('abc123');
+    expect(state.config.channel).toBe('#new');
+  });
+
   it('cannot patch a bundled plugin', async () => {
     const res = await request(app)
       .patch('/api/plugins/order-logger')
@@ -340,6 +374,20 @@ describe('POST /api/plugins/:id/test', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ event: 'customer.registered' });
     expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to test a disabled plugin with a readable error', async () => {
+    await request(app)
+      .patch('/api/plugins/slack-alerts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ enabled: false });
+    const res = await request(app)
+      .post('/api/plugins/slack-alerts/test')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ event: 'order.created' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/disabled/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

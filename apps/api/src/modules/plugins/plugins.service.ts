@@ -16,7 +16,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { promisify } from 'util';
 import { extractZipToMap, normalizeEntryPaths } from '../../utils/zipPackage';
-import { pluginManifestSchema, validatePluginConfig, maskSecretConfig, KNOWN_HOOKS, HOOK_METHODS } from './plugin.schema';
+import { pluginManifestSchema, validatePluginConfig, maskSecretConfig, KNOWN_HOOKS, HOOK_METHODS, SECRET_MASK } from './plugin.schema';
 import type { PluginManifest, HookName } from './plugin.schema';
 import { isBundledPluginId, listBundledPluginIds, getBundledPlugin } from './bundledRegistry';
 import { isValidWebhookUrl } from './pluginWebhook';
@@ -353,7 +353,29 @@ export async function updatePluginConfig(
     secret: cryptoRandomHex(32),
   };
 
-  const config = input.config !== undefined ? validatePluginConfig(manifest, input.config) : state.config;
+  let config = input.config !== undefined ? validatePluginConfig(manifest, input.config) : state.config;
+
+  // Secret round-trip guard: the admin UI shows masked placeholders
+  // (SECRET_MASK) for secret fields. If a save comes back with the mask for
+  // a secret field, the client did NOT change it — keep the stored value
+  // instead of overwriting the real secret with the placeholder. (A client
+  // that sends the mask for a never-set secret field just leaves it unset.)
+  if (input.config !== undefined) {
+    const next = { ...config };
+    for (const [field, spec] of Object.entries(manifest.configSchema ?? {})) {
+      if (!spec.secret) continue;
+      const incoming = next[field];
+      if (incoming === SECRET_MASK) {
+        // Self-heal: a state file that already contains the mask (written by
+        // a pre-fix client) is treated as unset, so the corruption never
+        // locks itself in.
+        const stored = state.config[field];
+        if (stored !== undefined && stored !== SECRET_MASK) next[field] = stored;
+        else delete next[field];
+      }
+    }
+    config = next;
+  }
 
   let url = state.url;
   if (input.url !== undefined) {
@@ -516,6 +538,14 @@ export async function testPlugin(id: string, event: HookName): Promise<{ ok: boo
   if (!info) throw new Error(`Plugin "${id}" is not installed`);
   if (!info.hooks.includes(event)) {
     throw new Error(`Plugin "${id}" does not subscribe to "${event}"`);
+  }
+  // A disabled plugin receives nothing — say so instead of silently
+  // reporting a failed delivery ("no response").
+  if (!info.bundled) {
+    const state = await readState(id);
+    if (state?.enabled === false) {
+      throw new Error(`Plugin "${id}" is disabled — enable it before testing`);
+    }
   }
   const { emit } = await import('./pluginHooks');
   await emit(event, SAMPLE_PAYLOADS[event]);

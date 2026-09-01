@@ -67,8 +67,11 @@ const INSTALLED = {
   bundled: false,
   enabled: true,
   installedAt: '2026-01-01T00:00:00Z',
-  config: { channel: '#general' },
-  configSchema: { channel: { type: 'string', label: 'Channel', required: true } },
+  config: { channel: '#general', token: '••••••••' },
+  configSchema: {
+    channel: { type: 'string', label: 'Channel', required: true },
+    token: { type: 'string', secret: true, label: 'Token' },
+  },
   logCount: 2,
   url: 'https://hooks.example.com/slack',
   timeoutMs: 5000,
@@ -137,7 +140,11 @@ describe('PluginsPage', () => {
     await waitFor(() => expect(screen.getByTestId('plugin-detail')).toBeTruthy());
     expect((screen.getByTestId('plugin-url-input') as HTMLInputElement).value).toBe('https://hooks.example.com/slack');
     expect((screen.getByTestId('plugin-config-channel') as HTMLInputElement).value).toBe('#general');
-    // Bundled rows expose no mutation controls.
+    // A secret field never shows the real value: input is blank, the mask
+    // is the placeholder.
+    const tokenInput = screen.getByTestId('plugin-config-token') as HTMLInputElement;
+    expect(tokenInput.value).toBe('');
+    expect(tokenInput.placeholder).toContain('••••••••');
     expect(screen.getByTestId('plugin-test-order.created')).toBeTruthy();
   });
 
@@ -157,6 +164,8 @@ describe('PluginsPage', () => {
       const body = JSON.parse(String(patch![1].body));
       expect(body.url).toBe('https://hooks.example.com/new');
       expect(body.config.channel).toBe('#ops');
+      // Unchanged secret field is sent as the mask, never blanked out.
+      expect(body.config.token).toBe('••••••••');
     });
   });
 

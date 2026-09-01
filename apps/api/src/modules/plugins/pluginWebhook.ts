@@ -45,7 +45,10 @@ export function buildSignature(secret: string, body: string): string {
  */
 export async function dispatchWebhook(target: WebhookTarget, envelope: unknown): Promise<WebhookResult> {
   const started = Date.now();
-  const timeoutMs = Math.min(Math.max(target.timeoutMs ?? 5000, 100), 30_000);
+  // Guard against NaN/Infinity (e.g. a hand-edited state file): a NaN
+  // timeout would make setTimeout fire immediately and abort every send.
+  const requested = Number(target.timeoutMs);
+  const timeoutMs = Number.isFinite(requested) ? Math.min(Math.max(requested, 100), 30_000) : 5000;
   const body = JSON.stringify(envelope);
   const url = target.url;
 

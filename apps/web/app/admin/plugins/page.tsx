@@ -47,6 +47,9 @@ interface ExecLogLine {
   durationMs: number | null;
 }
 
+// Same placeholder the API uses for secret config values in responses.
+const SECRET_MASK = '••••••••';
+
 const HOOK_LABELS: Record<string, string> = {
   'order.created': 'Order created',
   'payment.settled': 'Payment settled',
@@ -155,10 +158,20 @@ export default function PluginsPage() {
     setError(null);
     setNotice(null);
     try {
+      // Secret fields: an empty input means "leave unchanged" — send the
+      // mask so the API keeps the stored value (it never sees the real
+      // secret; the response is masked).
+      const cfg: Record<string, string | boolean | number> = { ...draftConfig };
+      for (const [key, spec] of Object.entries(selected.configSchema)) {
+        if (spec.type === 'string' && spec.secret) {
+          const v = draftConfig[key];
+          if (v === undefined || v === '') cfg[key] = SECRET_MASK;
+        }
+      }
       const payload: Record<string, unknown> = {
         url: draftUrl,
         timeoutMs: Number(draftTimeout),
-        config: draftConfig,
+        config: cfg,
       };
       const { status, body } = await api(`/plugins/${selected.id}`, {
         method: 'PATCH',
@@ -437,9 +450,9 @@ export default function PluginsPage() {
                     ) : (
                       <input
                         data-testid={`plugin-config-${key}`}
-                        value={String(draftConfig[key] ?? spec.default ?? '')}
+                        value={spec.secret && String(draftConfig[key] ?? '') === SECRET_MASK ? '' : String(draftConfig[key] ?? spec.default ?? '')}
                         onChange={(e) => setDraftConfig((c) => ({ ...c, [key]: e.target.value }))}
-                        placeholder={spec.secret ? '••••••••' : ''}
+                        placeholder={spec.secret ? '•••••••• (leave blank to keep)' : ''}
                         style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
                       />
                     )}
