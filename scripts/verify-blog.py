@@ -305,7 +305,10 @@ try:
         pg.wait_for_timeout(1200)
         pg.get_by_test_id("new-post-blank").click()
         pg.wait_for_timeout(2500)
-        pg.get_by_label("Title", exact=True).fill("Written In The UI")
+        # Primary title input (#cms-title): the editor also renders a per-locale
+        # "Title" field in the translations block, so get_by_label("Title") is
+        # ambiguous. Target the primary English title by its stable id.
+        pg.locator("#cms-title").fill("Written In The UI")
         pg.wait_for_timeout(300)
         # The editor no longer auto-derives the slug from the title - it
         # is free text, pre-filled when the draft is created. The original
@@ -351,7 +354,7 @@ try:
         pg.wait_for_timeout(1200)
         pg.get_by_test_id("new-post-blank").click()
         pg.wait_for_timeout(2500)
-        pg.get_by_label("Title", exact=True).fill("Duplicate")
+        pg.locator("#cms-title").fill("Duplicate")
         pg.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         pg.get_by_test_id("cms-save-and-close").click()
         pg.wait_for_timeout(2500)

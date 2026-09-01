@@ -75,7 +75,9 @@ def run(pg, section, admin_path, storefront_prefix, new_link, template):
         pg.locator(f'[data-testid="{template}"]').click()
         pg.wait_for_timeout(2500)
 
-        pg.get_by_label("Title", exact=True).fill(title)
+        # Primary English title (#cms-title); the translations block renders a
+        # second "Title" input, so get_by_label("Title") is ambiguous.
+        pg.locator("#cms-title").fill(title)
         pg.wait_for_timeout(300)
         # The editor no longer auto-derives the slug from the title -
         # it is free text, pre-filled from the template. The original

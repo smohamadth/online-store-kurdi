@@ -435,7 +435,11 @@ try:
         # The template pre-fills title/slug; the admin overwrites both.
         # (The new editor does NOT auto-derive the slug from the title -
         # the slug field is free text, pre-filled from the template.)
-        page_ui.get_by_label("Title", exact=True).fill("UI Made Page")
+        # The CMS editor now renders the primary English title (#cms-title)
+        # alongside a per-locale "Title" input in the translations block
+        # (Kurdish tab active by default), so get_by_label("Title") is
+        # ambiguous. Target the primary title by its stable id.
+        page_ui.locator("#cms-title").fill("UI Made Page")
         page_ui.wait_for_timeout(300)
         page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         page_ui.wait_for_timeout(300)
@@ -514,7 +518,7 @@ try:
         page_ui.wait_for_timeout(1500)
         page_ui.get_by_test_id("new-page-template-about-us").click()
         page_ui.wait_for_timeout(2500)
-        page_ui.get_by_label("Title", exact=True).fill("Duplicate")
+        page_ui.locator("#cms-title").fill("Duplicate")
         page_ui.get_by_label("Address (slug)", exact=True).fill(f"{PREFIX}ui")
         page_ui.wait_for_timeout(300)
         page_ui.get_by_test_id("cms-save-and-close").click()
