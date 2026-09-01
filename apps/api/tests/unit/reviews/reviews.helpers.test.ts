@@ -153,6 +153,23 @@ describe('normaliseReviewPhotos', () => {
     }
   });
 
+  it('rejects scriptable/data: photo URLs', () => {
+    expect(normaliseReviewPhotos(['javascript:alert(1)'])).toEqual({
+      ok: false,
+      error: 'photos[0].url must be http(s) or a relative path',
+    });
+    expect(normaliseReviewPhotos(['data:image/svg+xml,<svg onload=alert(1)>'])).toEqual({
+      ok: false,
+      error: 'photos[0].url must be http(s) or a relative path',
+    });
+    expect(
+      normaliseReviewPhotos([{ url: 'https://cdn/a.jpg', thumbnail: 'javascript:x' }]),
+    ).toEqual({
+      ok: false,
+      error: 'photos[0].url must be http(s) or a relative path',
+    });
+  });
+
   it('rejects entries without a url', () => {
     const res = normaliseReviewPhotos([
       { thumbnail: 'https://x/a.jpg' },

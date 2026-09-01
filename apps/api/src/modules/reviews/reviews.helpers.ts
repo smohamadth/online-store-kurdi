@@ -9,6 +9,7 @@
  */
 
 import { MAX_REVIEW_PHOTOS } from './reviews.constants';
+import { isSafeLinkUrl } from '../../utils/safeUrl';
 
 /**
  * Order statuses that count as a "purchase" for the
@@ -109,6 +110,12 @@ export function normaliseReviewPhotos(raw: unknown): NormalisePhotosResult {
     }
     if (!url) {
       return { ok: false, error: `photos[${i}].url is required` };
+    }
+    // Customer-supplied URLs are rendered into <img src> on the public
+    // storefront: reject scriptable/data: schemes outright (defense in
+    // depth — images from the upload endpoint are http(s) or relative).
+    if (!isSafeLinkUrl(url) || (thumbnail !== null && !isSafeLinkUrl(thumbnail))) {
+      return { ok: false, error: `photos[${i}].url must be http(s) or a relative path` };
     }
     out.push({ url, thumbnail, sortOrder: i });
   }
