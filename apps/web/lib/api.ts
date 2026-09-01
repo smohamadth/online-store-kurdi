@@ -137,13 +137,16 @@ class ApiClient {
   }
 
   // Products
-  async getProducts(params?: {
-    page?: number;
-    limit?: number;
-    category?: string;
-    search?: string;
-    sort?: string;
-  }): Promise<ApiResponse<Product[]>> {
+  async getProducts(
+    params?: {
+      page?: number;
+      limit?: number;
+      category?: string;
+      search?: string;
+      sort?: string;
+    },
+    token?: string
+  ): Promise<ApiResponse<Product[]>> {
     const searchParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -153,7 +156,9 @@ class ApiClient {
       });
     }
     const query = searchParams.toString();
-    return this.request(contentUrl(`/products${query ? `?${query}` : ''}`));
+    return this.request(contentUrl(`/products${query ? `?${query}` : ''}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
   }
 
   async getProduct(id: string): Promise<ApiResponse<Product>> {

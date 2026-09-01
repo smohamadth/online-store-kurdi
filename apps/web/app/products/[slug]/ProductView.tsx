@@ -357,25 +357,29 @@ export default function ProductView() {
         // the validator treats each entry independently.
         const entities: any[] = [productLd, breadcrumb];
         if (isDigital) {
-          // Derive the file format from the URL's extension. The
-          // API returns the full URL (or null); we only know
-          // about a handful of common types so anything we don't
-          // recognise falls back to a plain "Download".
-          const url = (product as any).downloadUrl || '';
-          const ext = (url.split('.').pop() || '').toLowerCase();
-          const fileFormat = (
-            ext === 'pdf' ? 'application/pdf' :
-            ext === 'epub' ? 'application/epub+zip' :
-            ext === 'mobi' ? 'application/x-mobipocket-ebook' :
-            ext === 'zip' ? 'application/zip' :
-            ext === 'mp3' ? 'audio/mpeg' :
-            ext === 'wav' ? 'audio/wav' :
-            ext === 'mp4' ? 'video/mp4' :
-            ext === 'mov' ? 'video/quicktime' :
-            ext === 'exe' ? 'application/x-msdownload' :
-            ext === 'dmg' ? 'application/x-apple-diskimage' :
-            'Download'
-          );
+          // The API derives the file format server-side (the raw
+          // downloadUrl is withheld from public responses). The
+          // extension fallback covers fixtures/stubs that still carry
+          // the URL; anything unrecognised falls back to "Download".
+          const fileFormat =
+            (product as any).fileFormat ||
+            (() => {
+              const url = (product as any).downloadUrl || '';
+              const ext = (url.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
+              return (
+                ext === 'pdf' ? 'application/pdf' :
+                ext === 'epub' ? 'application/epub+zip' :
+                ext === 'mobi' ? 'application/x-mobipocket-ebook' :
+                ext === 'zip' ? 'application/zip' :
+                ext === 'mp3' ? 'audio/mpeg' :
+                ext === 'wav' ? 'audio/wav' :
+                ext === 'mp4' ? 'video/mp4' :
+                ext === 'mov' ? 'video/quicktime' :
+                ext === 'exe' ? 'application/x-msdownload' :
+                ext === 'dmg' ? 'application/x-apple-diskimage' :
+                'Download'
+              );
+            })();
           entities.push(
             buildDigitalDocumentJsonLd({
               url: productUrl,

@@ -107,7 +107,12 @@ export default function AdminProductsPage() {
       // Try API first - get ALL products (including drafts)
       let apiProducts: Product[] = [];
       try {
-        const response = await api.getProducts({ limit: 100 });
+        // Fetch with the admin token: the public product API strips the
+        // raw downloadUrl unless the caller is staff, and the edit form
+        // round-trips that URL (an anonymous list would blank it and a
+        // later save would wipe every product's download link).
+        const token = localStorage.getItem('token');
+        const response = await api.getProducts({ limit: 100 }, token || undefined);
         apiProducts = response.data || [];
         if (apiProducts.length > 0) {
           setApiStatus('connected');

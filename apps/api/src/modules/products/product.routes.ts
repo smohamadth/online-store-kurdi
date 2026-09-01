@@ -111,7 +111,7 @@ const productQuerySchema = z.object({
 });
 
 // Helper function to format product response
-function formatProduct(product: any) {
+function formatProduct(product: any, opts?: { includeDownloadUrl?: boolean }) {
   const ratings = product.reviews?.map((r: any) => r.rating) || [];
   const averageRating = ratings.length > 0
     ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length
@@ -161,12 +161,50 @@ function formatProduct(product: any) {
     // Digital-product fields. Returned on every product so the
     // storefront doesn't have to branch on `type` before deciding
     // which fields to render. `null` for physical products.
-    downloadUrl: product.downloadUrl ?? null,
+    //
+    // The raw downloadUrl is deliberately NOT part of the public API:
+    // it is the direct link to the file, and exposing it would let
+    // anyone fetch the file without paying (the downloads module
+    // issues per-order authenticated tokens instead). The storefront
+    // only needs the derived fileFormat for SEO annotation. Admin /
+    // manager sessions pass opts.includeDownloadUrl so the product
+    // editor can round-trip the URL it saved.
+    downloadUrl: opts?.includeDownloadUrl ? product.downloadUrl ?? null : null,
+    fileFormat: deriveFileFormat(product.downloadUrl),
     downloadLimit: product.downloadLimit ?? null,
     downloadExpiry: product.downloadExpiry ?? null,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
+}
+
+/**
+ * Media type of the digital file, derived from the downloadUrl's extension.
+ * The storefront annotates digital products with this (schema.org
+ * DigitalDocument) without ever needing the raw file URL.
+ */
+/** True when the request identity is a staff role that may see raw download URLs. */
+function isStaff(user: { role?: string } | undefined): boolean {
+  return user?.role === 'admin' || user?.role === 'manager';
+}
+
+function deriveFileFormat(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const path = url.split(/[?#]/)[0];
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  const map: Record<string, string> = {
+    pdf: 'application/pdf',
+    epub: 'application/epub+zip',
+    mobi: 'application/x-mobipocket-ebook',
+    zip: 'application/zip',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    exe: 'application/x-msdownload',
+    dmg: 'application/x-apple-diskimage',
+  };
+  return map[ext] ?? null;
 }
 
 /**
@@ -210,14 +248,15 @@ function flattenAttrQuery(qs: any): any {
   return qs;
 }
 
-router.get('/', async (req, res, next) => {
+router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const query = flattenAttrQuery({ ...req.query });
     const filter = parseFilterFromQuery(query);
     const result = await listProducts(filter);
+    const includeDownloadUrl = isStaff(req.user);
     res.json({
       status: 'success',
-      data: await localizeProducts(result.data.map(formatProduct), req.query.lang),
+      data: await localizeProducts(result.data.map((p: any) => formatProduct(p, { includeDownloadUrl })), req.query.lang),
       pagination: result.pagination,
       applied: {
         category: result.applied.category,
@@ -258,7 +297,7 @@ router.get('/facets', async (req, res, next) => {
 });
 
 // GET /api/products/featured - Get featured products
-router.get('/featured', async (req, res, next) => {
+router.get('/featured', optionalAuth, async (req, res, next) => {
   try {
     const { limit } = parsePagination(req.query, { limit: 10 });
 
@@ -274,9 +313,13 @@ router.get('/featured', async (req, res, next) => {
       take: limit,
     });
 
+    const includeDownloadUrl = isStaff(req.user);
     res.json({
       status: 'success',
-      data: await localizeProducts(products.map(formatProduct), req.query.lang),
+      data: await localizeProducts(
+        products.map((p: any) => formatProduct(p, { includeDownloadUrl })),
+        req.query.lang
+      ),
     });
   } catch (error) {
     next(error);
@@ -284,7 +327,7 @@ router.get('/featured', async (req, res, next) => {
 });
 
 // GET /api/products/search - Search products
-router.get('/search', async (req, res, next) => {
+router.get('/search', optionalAuth, async (req, res, next) => {
   try {
     const { q, limit } = req.query;
     const searchLimit = parseInt(limit as string) || 10;
@@ -317,9 +360,13 @@ router.get('/search', async (req, res, next) => {
       });
     }
 
+    const includeDownloadUrl = isStaff(req.user);
     res.json({
       status: 'success',
-      data: await localizeProducts(products.map(formatProduct), req.query.lang),
+      data: await localizeProducts(
+        products.map((p: any) => formatProduct(p, { includeDownloadUrl })),
+        req.query.lang
+      ),
     });
   } catch (error) {
     next(error);
@@ -343,7 +390,7 @@ router.post('/search/reindex', authenticate, authorize('admin'), async (req, res
 });
 
 // GET /api/products/:id - Get product by ID
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -375,7 +422,12 @@ router.get('/:id', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: (await localizeProducts([formatProduct(product)], req.query.lang))[0],
+      data: (
+        await localizeProducts(
+          [formatProduct(product, { includeDownloadUrl: isStaff(req.user) })],
+          req.query.lang
+        )
+      )[0],
     });
   } catch (error) {
     next(error);
@@ -383,7 +435,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // GET /api/products/slug/:slug - Get product by slug
-router.get('/slug/:slug', async (req, res, next) => {
+router.get('/slug/:slug', optionalAuth, async (req, res, next) => {
   try {
     const { slug } = req.params;
 
@@ -415,7 +467,12 @@ router.get('/slug/:slug', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: (await localizeProducts([formatProduct(product)], req.query.lang))[0],
+      data: (
+        await localizeProducts(
+          [formatProduct(product, { includeDownloadUrl: isStaff(req.user) })],
+          req.query.lang
+        )
+      )[0],
     });
   } catch (error) {
     next(error);
@@ -423,7 +480,7 @@ router.get('/slug/:slug', async (req, res, next) => {
 });
 
 // GET /api/products/:id/related - Get related products
-router.get('/:id/related', async (req, res, next) => {
+router.get('/:id/related', optionalAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { limit } = parsePagination(req.query, { limit: 6 });
@@ -453,9 +510,13 @@ router.get('/:id/related', async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    const includeDownloadUrl = isStaff(req.user);
     res.json({
       status: 'success',
-      data: await localizeProducts(products.map(formatProduct), req.query.lang),
+      data: await localizeProducts(
+        products.map((p: any) => formatProduct(p, { includeDownloadUrl })),
+        req.query.lang
+      ),
     });
   } catch (error) {
     next(error);
@@ -552,7 +613,7 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
 
     res.status(201).json({
       status: 'success',
-      data: formatProduct(product),
+      data: formatProduct(product, { includeDownloadUrl: true }),
     });
   } catch (error) {
     next(error);
@@ -687,7 +748,7 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
 
     res.json({
       status: 'success',
-      data: formatProduct(updatedProduct || product),
+      data: formatProduct(updatedProduct || product, { includeDownloadUrl: true }),
     });
   } catch (error) {
     next(error);

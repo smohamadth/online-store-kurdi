@@ -89,6 +89,36 @@ describe('POST /api/categories (admin/manager)', () => {
       .send({ name: 'Y', slug: 'taken' });
     expect(res.status).toBe(400);
   });
+
+  it('rejects self-parenting and child-cycles on update (regression)', async () => {
+    // Create can't self-parent (the id doesn't exist yet), but update
+    // could — a self-loop (or a two-row cycle) breaks the tree renderers.
+    const { token } = await authHeader({ role: 'admin' });
+    const a = await createCategory({ slug: 'a' });
+    const b = await createCategory({ slug: 'b' });
+    await mockPrisma.category.update({ where: { id: b.id }, data: { parentId: a.id } });
+
+    const self = await request(app)
+      .put(`/api/categories/${a.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentId: a.id });
+    expect(self.status).toBe(400);
+
+    // a -> b while b -> a would be a cycle.
+    const cycle = await request(app)
+      .put(`/api/categories/${a.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentId: b.id });
+    expect(cycle.status).toBe(400);
+
+    // A valid parent still works.
+    const c = await createCategory({ slug: 'c' });
+    const ok = await request(app)
+      .put(`/api/categories/${a.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentId: c.id });
+    expect(ok.status).toBe(200);
+  });
 });
 
 describe('DELETE /api/categories/:id (admin/manager)', () => {

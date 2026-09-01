@@ -225,10 +225,57 @@ describe('POST /api/products (admin)', () => {
     expect(res.body.data.downloadUrl).toBe('https://cdn.example.com/files/ebook.pdf');
     expect(res.body.data.downloadLimit).toBe(5);
     expect(res.body.data.downloadExpiry).toBe(30);
-    // GET /api/products/:id surfaces the same fields.
+    // GET /api/products/:id surfaces the same fields. The raw
+    // downloadUrl is deliberately withheld from the public API (only
+    // the derived fileFormat is public) - see the regression test below.
     const detail = await request(app).get(`/api/products/${res.body.data.id}`);
     expect(detail.status).toBe(200);
-    expect(detail.body.data.downloadUrl).toBe('https://cdn.example.com/files/ebook.pdf');
+    expect(detail.body.data.downloadLimit).toBe(5);
+    expect(detail.body.data.downloadExpiry).toBe(30);
+    expect(detail.body.data.fileFormat).toBe('application/pdf');
+  });
+
+  it('keeps the raw downloadUrl out of public responses (regression)', async () => {
+    // The downloadUrl is the direct link to the digital file; exposing it
+    // on the public API would let anyone fetch the file without paying
+    // (the downloads module issues per-order authenticated tokens instead).
+    // The public response carries the derived fileFormat only; admin and
+    // manager sessions still get the raw URL (their edit form round-trips it).
+    const { token } = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const created = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Secret eBook',
+        sku: 'EB-SECRET',
+        type: 'digital',
+        price: 9.99,
+        description: '<p>An eBook.</p>',
+        categoryId: cat.id,
+        downloadUrl: 'https://cdn.example.com/files/secret.pdf',
+      });
+    expect(created.status).toBe(201);
+
+    // Public (anonymous) detail: no raw URL, but the derived fileFormat.
+    const anon = await request(app).get(`/api/products/${created.body.data.id}`);
+    expect(anon.status).toBe(200);
+    expect(anon.body.data.downloadUrl).toBeNull();
+    expect(anon.body.data.fileFormat).toBe('application/pdf');
+
+    // Public listing: same.
+    const list = await request(app).get('/api/products?search=Secret%20eBook');
+    expect(list.status).toBe(200);
+    const listed = list.body.data.find((p: any) => p.id === created.body.data.id);
+    expect(listed.downloadUrl).toBeNull();
+    expect(listed.fileFormat).toBe('application/pdf');
+
+    // Admin-authenticated detail: raw URL available for the editor.
+    const admin = await request(app)
+      .get(`/api/products/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(admin.status).toBe(200);
+    expect(admin.body.data.downloadUrl).toBe('https://cdn.example.com/files/secret.pdf');
   });
 
   it('rejects anonymous (401)', async () => {

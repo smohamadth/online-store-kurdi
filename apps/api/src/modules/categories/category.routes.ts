@@ -157,6 +157,26 @@ router.put('/categories/:id', authenticate, authorize('admin', 'manager'), async
       }
     }
 
+    // A category cannot be its own parent (create can't hit this — the id
+    // does not exist yet — but update can; a self-loop breaks the tree
+    // renderers). Child-parent cycles are equally rejected: with a
+    // one-level tree a cycle makes both rows render inside each other.
+    if (data.parentId) {
+      if (data.parentId === id) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'A category cannot be its own parent',
+        });
+      }
+      const parent = await prisma.category.findUnique({ where: { id: data.parentId } });
+      if (!parent || parent.parentId === id) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid parent category',
+        });
+      }
+    }
+
     const category = await prisma.category.update({
       where: { id },
       data,

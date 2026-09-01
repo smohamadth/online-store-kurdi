@@ -63,4 +63,24 @@ describe('POST /api/recommendations/click', () => {
       .send({ productId: '00000000-0000-4000-a000-000000000000' });
     expect(res.status).toBe(200);
   });
+
+  it('rejects unbounded payload fields (regression)', async () => {
+    // Public endpoint: oversized strings used to be stored verbatim per
+    // click (free DB bloat). A too-long type/algorithm must now 400.
+    const big = 'x'.repeat(10_000);
+    const res = await request(app)
+      .post('/api/recommendations/click')
+      .send({ productId: '00000000-0000-4000-a000-000000000000', recommendationType: big });
+    expect(res.status).toBe(400);
+
+    const res2 = await request(app)
+      .post('/api/recommendations/click')
+      .send({ productId: '00000000-0000-4000-a000-000000000000', algorithmVersion: big });
+    expect(res2.status).toBe(400);
+
+    const res3 = await request(app)
+      .post('/api/recommendations/click')
+      .send({ productId: '00000000-0000-4000-a000-000000000000' });
+    expect(res3.status).toBe(200);
+  });
 });

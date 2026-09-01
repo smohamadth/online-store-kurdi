@@ -563,15 +563,19 @@ export class ProductService {
         attributes: variant.attributes as Record<string, string>,
         isActive: variant.isActive,
       })),
-      averageRating: Math.round(averageRating * 10) / 10,
-      reviewCount: ratings.length,
-      downloadUrl: product.downloadUrl ?? null,
-      downloadLimit: product.downloadLimit ?? null,
-      downloadExpiry: product.downloadExpiry ?? null,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-    };
-  }
+    averageRating: Math.round(averageRating * 10) / 10,
+    reviewCount: ratings.length,
+    // Public API: the raw file URL is never exposed (see the route-level
+    // formatProduct for the same policy); the derived fileFormat lets the
+    // storefront annotate digital downloads without the URL.
+    downloadUrl: null,
+    fileFormat: deriveFileFormat(product.downloadUrl),
+    downloadLimit: product.downloadLimit ?? null,
+    downloadExpiry: product.downloadExpiry ?? null,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+  };
+}
 
   // Clear product cache - a prefix sweep (KEYS + DEL) rather than tracking
   // individual keys; fine at this store's key volume, and it can't leak a
@@ -586,6 +590,26 @@ export class ProductService {
       logger.error('Error clearing product cache:', error);
     }
   }
+}
+
+/** Media type of the digital file, derived from the downloadUrl extension. */
+function deriveFileFormat(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const path = url.split(/[?#]/)[0];
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  const map: Record<string, string> = {
+    pdf: 'application/pdf',
+    epub: 'application/epub+zip',
+    mobi: 'application/x-mobipocket-ebook',
+    zip: 'application/zip',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    exe: 'application/x-msdownload',
+    dmg: 'application/x-apple-diskimage',
+  };
+  return map[ext] ?? null;
 }
 
 export default new ProductService();

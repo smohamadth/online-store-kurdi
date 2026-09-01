@@ -104,6 +104,9 @@ export interface ProductResponse {
    * but we always return them so the storefront doesn't have to branch
    * on the type before deciding what to render. */
   downloadUrl: string | null;
+  /** Derived from downloadUrl's extension; present on the public API
+   * instead of the raw URL (which stays admin-only). */
+  fileFormat: string | null;
   downloadLimit: number | null;
   /** Number of days from order placement until the per-order link
    * expires. `null` means no expiry. */

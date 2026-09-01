@@ -2,9 +2,19 @@
 // recommendation.routes.ts). Parses limit params, shapes responses; the
 // auth (the /history endpoint) and opt-in semantics live on the routes.
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { RecommendationService } from './recommendation.service';
 import { logger } from '../../utils/logger';
 import { parsePagination, parseDays } from '../../utils/pagination';
+
+// Public endpoint: every field lands verbatim in a DB row, so unbounded
+// strings are a free DB-bloat attack (a megabyte-long recommendationType
+// per click). Cap all of them.
+const CLICK_LOG_SCHEMA = z.object({
+  recommendationType: z.string().min(1).max(50).optional(),
+  productId: z.string().min(1).max(100),
+  algorithmVersion: z.string().min(1).max(50).default('v1'),
+});
 
 export class RecommendationController {
   private recommendationService: RecommendationService;
@@ -123,8 +133,11 @@ export class RecommendationController {
   // Log recommendation click
   logClick = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { recommendationType, productId, algorithmVersion } = req.body;
-      const sessionId = req.headers['x-session-id'] as string || `session-${Date.now()}`;
+      // Public endpoint: every field lands verbatim in a DB row, so
+      // unbounded strings are a free DB-bloat attack (a megabyte-long
+      // recommendationType per click). Cap all of them.
+      const { recommendationType, productId, algorithmVersion } = CLICK_LOG_SCHEMA.parse(req.body);
+      const sessionId = String(req.headers['x-session-id'] || '').slice(0, 200) || `session-${Date.now()}`;
 
       await this.recommendationService.logRecommendationClick(
         req.user?.id || null,
@@ -154,8 +167,8 @@ export class RecommendationController {
         });
       }
 
-      const { recommendationType, productId } = req.body;
-      const sessionId = req.headers['x-session-id'] as string || `session-${Date.now()}`;
+      const { recommendationType, productId } = CLICK_LOG_SCHEMA.parse(req.body);
+      const sessionId = String(req.headers['x-session-id'] || '').slice(0, 200) || `session-${Date.now()}`;
 
       await this.recommendationService.logRecommendationPurchase(
         userId,

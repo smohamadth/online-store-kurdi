@@ -58,8 +58,11 @@ export interface Product {
   averageRating: number;
   reviewCount: number;
   /** Digital product fields. Populated when `type === 'digital'`,
-   * but always present in the API response. */
+   * but always present in the API response. `downloadUrl` is only
+   * populated for admin/manager sessions (the public API strips the raw
+   * file URL; the derived `fileFormat` is public instead). */
   downloadUrl: string | null;
+  fileFormat: string | null;
   downloadLimit: number | null;
   /** Number of days the per-order link is valid. */
   downloadExpiry: number | null;

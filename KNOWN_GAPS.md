@@ -746,3 +746,21 @@ lowercase on write ('A@X.com' and 'a@x.com' used to create two
 subscriber rows). Menu items can no longer be reparented across menus
 or onto themselves through the UPDATE route (only create validated the
 parent, so an updated item could become invisible to both menus).
+
+Category UPDATE can no longer make a category its own parent or create
+a two-row parent cycle (the tree renderers loop forever); both now 400.
+The public POST /api/recommendations/click (and /purchase) used to store
+client-supplied recommendationType / productId / algorithmVersion /
+x-session-id verbatim in the recommendation_log table — a megabyte-long
+string per request was free DB bloat. All four fields are now length-
+capped (50/100/50/200) and empty/invalid payloads 400.
+SECURITY: the public product API no longer returns the raw `downloadUrl`
+(the direct link to the paid digital file — anyone could fetch it
+without paying; the downloads module issues per-order authenticated
+tokens instead). Public responses carry the derived `fileFormat` (from
+the URL extension) so the storefront can still emit schema.org
+DigitalDocument markup; admin/manager sessions get the raw URL back
+(optionalAuth on the read routes) so the product editor can round-trip
+it. The web admin products list now sends the session token when
+fetching, or its edit form would blank the download URL and a later
+save would wipe it.
