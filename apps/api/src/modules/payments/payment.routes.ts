@@ -281,13 +281,15 @@ router.post('/process', authenticate, async (req, res, next) => {
 
     // Mock payment processing
     const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const storeSettingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+    const storeCurrency = storeSettingsRow?.currency || 'USD';
 
     // Create payment record
     const payment = await prisma.payment.create({
       data: {
         orderId,
         amount: order.totalAmount,
-        currency: 'USD',
+        currency: storeCurrency,
         method: paymentMethod || 'stripe',
         status: 'completed',
         transactionId,
@@ -398,12 +400,16 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       }
     }
 
-    // Create refund payment record
+    // Create refund payment record. The Order row has no currency column,
+    // so record the store's current currency (same source the settle path
+    // uses) instead of assuming USD.
+    const storeSettingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+    const storeCurrency = storeSettingsRow?.currency || 'USD';
     const refund = await prisma.payment.create({
       data: {
         orderId,
         amount: refundAmount,
-        currency: 'USD',
+        currency: storeCurrency,
         method: 'refund',
         status: 'completed',
         transactionId: gatewayRefund?.transactionId || `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

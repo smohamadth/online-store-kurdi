@@ -583,3 +583,39 @@ refund). Only IDPay still requires a manual refund in its panel.
 By contrast, the customer **retry-payment** path (abandoned gateway page) is
 fully wired: `POST /api/orders/:id/pay` re-runs the hosted checkout session and
 the account order page offers **Pay now**.
+
+---
+
+## 17. Order totals — server-authoritative (review pass)
+
+Order placement no longer trusts any amount the client sends. The subtotal
+is recomputed from the DB prices of the line items, tax and shipping are
+recomputed with the same services the checkout's advisory `/calculate`
+endpoints use (extracted into `tax.service.ts` / `shipping.service.ts`),
+and the discount is re-derived from the coupon's rules (`coupon.service.ts`,
+shared with `/coupons/validate`). A request that claims a $1 total for a $20
+cart gets the $20 order; a coupon that is invalid, expired, inactive, or
+over its usage limit fails the order (400) instead of being silently
+recorded; a shipping method that does not match the destination also fails
+the order. `free_shipping` coupons zero the shipping cost server-side.
+
+Two deliberate edge notes:
+
+1. **Coupon per-customer limits are not enforceable today.** The Coupon
+   model has only a global `usageLimit`/`usedCount` — there is no
+   `maxUsesPerCustomer` column and no `Order.couponId` link to count
+   against, so "one use per customer" coupons need a schema migration
+   (add `couponId` to `Order` + a per-customer count) before they can be
+   enforced at order time.
+2. **Advisory endpoints remain advisory.** `/tax/calculate` and
+   `/shipping/calculate` still exist for the checkout display; the
+   numbers they return are what order placement recomputes, so the two
+   can never drift — but nothing stops a client from skipping them.
+
+Also from the review pass: `GET /api/newsletter/subscribers` and
+`GET /api/contact` are now admin/manager-only (they leaked subscriber
+emails and contact-message PII), upload `folder`/`id` path parameters are
+validated against the known buckets (path traversal), the rich-text
+sanitizer entity-decodes numeric character references before scheme checks
+(`java&#x73;cript:` bypass), and CSV exports neutralise spreadsheet
+formula injection.
