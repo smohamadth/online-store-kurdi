@@ -19,6 +19,35 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
+// Folder prefixes an upload may write under (mirrors modules/upload's
+// allowlist). An unvalidated `folder` body field would let any caller
+// write into arbitrary prefixes (e.g. `public/`, which the bucket policy
+// serves anonymously) and is the kind of free-form input that drifts
+// into path/object-key confusion.
+const ALLOWED_STORAGE_FOLDERS = new Set([
+  'products',
+  'users',
+  'categories',
+  'temp',
+  'public',
+  'uploads',
+]);
+
+function validateStorageFolder(folder: unknown): string {
+  const f = typeof folder === 'string' ? folder : '';
+  if (!ALLOWED_STORAGE_FOLDERS.has(f)) {
+    throw new AppError(`Invalid upload folder "${f}"`, 400);
+  }
+  return f;
+}
+
+/** Clamp a presigned-URL expiry request to [1 minute, 7 days] (MinIO's cap). */
+function parseExpiry(value: unknown): number {
+  const n = typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 60) return 3600;
+  return Math.min(Math.floor(n), 7 * 24 * 60 * 60);
+}
+
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -45,7 +74,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res, nex
     }
 
     const file = req.file;
-    const folder = req.body.folder || 'uploads';
+    const folder = validateStorageFolder(req.body.folder || 'uploads');
     const userId = req.user?.id;
 
     // Generate unique filename
@@ -104,7 +133,7 @@ router.post('/upload/multiple', authenticate, upload.array('files', 10), async (
       throw new AppError('No files provided', 400);
     }
 
-    const folder = req.body.folder || 'uploads';
+    const folder = validateStorageFolder(req.body.folder || 'uploads');
     const userId = req.user?.id;
     const uploadedFiles = [];
 
@@ -158,11 +187,20 @@ router.post('/upload/multiple', authenticate, upload.array('files', 10), async (
   }
 });
 
-// GET /api/storage/presigned/:fileName - Get presigned URL
-router.get('/presigned/:fileName(*)', authenticate, async (req, res, next) => {
+// GET /api/storage/presigned/:fileName - Get presigned URL (admin only).
+//
+// The bucket policy makes everything outside `public/` private, so a
+// presigned URL is the way gated objects are served. Handing this out to
+// ANY authenticated user meant any logged-in customer could mint a
+// (up to 7-day) presigned URL for ANY object key they knew — bypassing
+// whatever gate the object was stored under. Nothing in the storefront
+// calls this endpoint; it is an admin delivery tool. Expiry is clamped
+// to [1 minute, 7 days] so a hostile value can neither 500 (MinIO's cap)
+// nor mint an effectively permanent link.
+router.get('/presigned/:fileName(*)', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const { fileName } = req.params;
-    const expiry = parseInt(req.query.expiry as string) || 3600;
+    const expiry = parseExpiry(req.query.expiry);
 
     const url = await getPresignedUrl(fileName, expiry);
 
