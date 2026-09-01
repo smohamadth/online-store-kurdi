@@ -284,12 +284,16 @@ router.post('/calculate', async (req, res, next) => {
 // GET /api/tax/summary - Get tax summary for reporting
 router.get('/summary', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const startDate = req.query.startDate 
-      ? new Date(req.query.startDate as string) 
-      : new Date(new Date().setDate(1)); // First day of current month
-    const endDate = req.query.endDate 
-      ? new Date(req.query.endDate as string) 
-      : new Date();
+    // Strict date parsing: `new Date('abc')` is Invalid Date, which
+    // Prisma rejects with a 500 on { gte: Invalid Date }. Bad or
+    // missing values fall back to the defaults (first of month / now).
+    const parseDate = (v: unknown): Date | null => {
+      if (typeof v !== 'string' || v === '') return null;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const startDate = parseDate(req.query.startDate) ?? new Date(new Date().setDate(1));
+    const endDate = parseDate(req.query.endDate) ?? new Date();
 
     // Get orders with tax
     const orders = await prisma.order.findMany({

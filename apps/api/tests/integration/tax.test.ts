@@ -73,4 +73,21 @@ describe('GET /api/tax/summary (admin)', () => {
     const res = await request(app).get('/api/tax/summary').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
   });
+
+  it('tolerates hostile date params (no Invalid Date 500)', async () => {
+    // Regression: `new Date('abc')` is Invalid Date, and Prisma rejects
+    // { gte: Invalid Date } with a 500. Bad dates must fall back.
+    const { token } = await authHeader({ role: 'admin' });
+    for (const qs of [
+      '?startDate=abc',
+      '?endDate=not-a-date',
+      '?startDate=abc&endDate=xyz',
+      '?startDate=2024-13-45',
+    ]) {
+      const res = await request(app)
+        .get(`/api/tax/summary${qs}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+    }
+  });
 });
