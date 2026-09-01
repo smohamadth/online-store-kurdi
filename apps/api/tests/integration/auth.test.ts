@@ -76,6 +76,23 @@ describe('POST /api/auth/register', () => {
     // bcrypt hashes start with $2a$ or $2b$ or $2y$
     expect(u?.password).toMatch(/^\$2[aby]\$/);
   });
+
+  it('normalizes email case on register (one account per mailbox)', async () => {
+    // Regression: 'User@X.com' and 'user@x.com' used to create TWO
+    // accounts for the same mailbox; case-mismatched logins also failed.
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send(registerPayload({ email: 'MiXeD@TeSt.LoCal' }));
+    expect(res.status).toBe(201);
+    const stored = await mockPrisma.user.findUnique({ where: { email: 'mixed@test.local' } });
+    expect(stored).toBeTruthy();
+
+    // A second registration with a different case is the SAME account.
+    const dup = await request(app)
+      .post('/api/auth/register')
+      .send(registerPayload({ email: 'MIXED@TEST.LOCAL', firstName: 'Other' }));
+    expect(dup.status).toBe(409);
+  });
 });
 
 describe('POST /api/auth/login', () => {
@@ -90,6 +107,17 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.user.email).toBe('newuser@test.local');
     expect(res.body.data.user.password).toBeUndefined();
+    expect(res.body.data.accessToken).toBeDefined();
+  });
+
+  it('logs in with a different email case (normalized lookup)', async () => {
+    // Regression: case-mismatched logins failed (findUnique is
+    // case-sensitive); now the exact value is tried first, then the
+    // lowercase form, so legacy mixed-case rows still resolve.
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'NEWUSER@TEST.LOCAL', password: 'Password123!' });
+    expect(res.status).toBe(200);
     expect(res.body.data.accessToken).toBeDefined();
   });
 
@@ -254,6 +282,18 @@ describe('POST /api/auth/forgot-password', () => {
     const res = await request(app)
       .post('/api/auth/forgot-password')
       .send({ email: 'reset@test.local' });
+    expect(res.status).toBe(200);
+    const row = await mockPrisma.passwordReset.findFirst({ where: { userId: u.id } });
+    expect(row).toBeTruthy();
+  });
+
+  it('finds the user for forgot-password with a different email case', async () => {
+    const u = await mockPrisma.user.create({
+      data: { email: 'LegacyCase@test.local', password: 'x', firstName: 'A', lastName: 'B' },
+    });
+    const res = await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: 'legacycase@test.local' });
     expect(res.status).toBe(200);
     const row = await mockPrisma.passwordReset.findFirst({ where: { userId: u.id } });
     expect(row).toBeTruthy();

@@ -678,3 +678,10 @@ of a voided entry posted a live offset that distorted the books).
 Storefront/account pages read the localStorage 'user' blob through a
 safe helper — corrupt storage could white-screen checkout, the admin
 profile page, and break the stock-alert handler.
+Auth email handling is normalized: register/login/forgot-password all
+trim + lowercase the submitted email (case-sensitive `findUnique` used to
+let 'User@X.com' and 'user@x.com' become TWO accounts for one mailbox,
+and a case-mismatched login failed). Registration now stores the
+lowercase form, all three entry points resolve exact → normalized →
+case-insensitive (legacy rows registered with mixed case before the fix
+still authenticate, reset, and block duplicates).

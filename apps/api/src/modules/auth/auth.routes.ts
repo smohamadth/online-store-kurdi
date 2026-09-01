@@ -25,6 +25,37 @@ import { z } from 'zod';
 
 const router = Router();
 
+// Emails are case-insensitive identifiers: 'User@X.com' and 'user@x.com'
+// are the same mailbox, so every write stores the lowercase form and
+// every read resolves the exact value first, then the normalized form,
+// then a case-insensitive scan for legacy rows registered before
+// normalization (e.g. 'LegacyCase@test.local'). SQLite LIKE is ASCII
+// case-insensitive, so `contains` finds those rows; the exact JS equality
+// check below rules out substring false positives from LIKE wildcards.
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+async function findUserByEmail(email: string): Promise<any> {
+  const normalized = normalizeEmail(email);
+
+  // Fast path: exact match (also covers already-lowercase inputs).
+  const exact = await prisma.user.findUnique({ where: { email } });
+  if (exact) return exact;
+
+  // The normalized form (covers uppercase input against a lowercase row).
+  if (normalized !== email) {
+    const norm = await prisma.user.findUnique({ where: { email: normalized } });
+    if (norm) return norm;
+  }
+
+  // Legacy rows with mixed case stored before normalization.
+  const candidates = await prisma.user.findMany({
+    where: { email: { contains: normalized } },
+  });
+  return candidates.find((u: any) => u.email.toLowerCase() === normalized) ?? null;
+}
+
 // Validation schemas
 const registerSchema = z.object({
   email: z.string().email(),
@@ -44,12 +75,13 @@ router.post('/register', async (req, res, next) => {
   try {
     // Validate request body
     const validatedData = registerSchema.parse(req.body);
-    const { email, password, firstName, lastName, phone } = validatedData;
+    const { password, firstName, lastName, phone } = validatedData;
+    // Normalize so 'User@X.com' and 'user@x.com' can never be two accounts.
+    const email = normalizeEmail(validatedData.email);
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    // Check if user already exists (legacy-aware: a mixed-case row from
+    // before normalization must still block the same mailbox).
+    const existingUser = await findUserByEmail(email);
 
     if (existingUser) {
       throw new ConflictError('User with this email already exists');
@@ -131,19 +163,8 @@ router.post('/login', async (req, res, next) => {
     const validatedData = loginSchema.parse(req.body);
     const { email, password } = validatedData;
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isActive: true,
-      },
-    });
+    // Find user (exact first, then lowercase for legacy rows)
+    const user = await findUserByEmail(email);
 
     if (!user) {
       throw new UnauthorizedError('Invalid email or password');
@@ -348,10 +369,8 @@ router.post('/forgot-password', async (req, res, next) => {
   try {
     const { email } = req.body;
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    // Find user (exact first, then lowercase for legacy rows)
+    const user = await findUserByEmail(email);
 
     // Don't reveal if user exists or not
     const successMessage = 'If an account exists with this email, you will receive a password reset link';
