@@ -91,3 +91,45 @@ describe('Account order detail Pay now', () => {
     expect(mocks.authHttp.post.mock.calls[0][0]).toBe('/orders/o-1/pay');
   });
 });
+
+describe('Account order detail wallet credit', () => {
+  beforeEach(() => {
+    mocks.api.getOrder.mockReset();
+    mocks.api.getOrderTracking.mockReset();
+    mocks.authHttp.post.mockReset();
+    localStorage.clear();
+    localStorage.setItem('token', 'test-token');
+    localStorage.setItem('user', JSON.stringify({ id: 'u1', firstName: 'Sara', email: 'sara@example.com' }));
+    mocks.api.getOrderTracking.mockResolvedValue({ data: null });
+    mocks.authHttp.post.mockResolvedValue({ data: { checkoutUrl: null } });
+  });
+
+  it('shows the wallet-credit breakdown in the Payment card when credit was applied', async () => {
+    mocks.api.getOrder.mockResolvedValue({
+      data: makeOrder({
+        paymentStatus: 'completed',
+        status: 'processing',
+        storeCreditApplied: 10,
+        giftCardApplied: 5,
+        giftCardCode: 'ABCD-1234',
+      }),
+    });
+    render(<OrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('completed')).toBeTruthy());
+    // Both lines render, with the gift card's code and the applied amounts.
+    expect(screen.getByText('Paid with store credit')).toBeTruthy();
+    expect(screen.getByText('-$10.00')).toBeTruthy();
+    expect(screen.getByText('Paid with gift card (ABCD-1234)')).toBeTruthy();
+    expect(screen.getByText('-$5.00')).toBeTruthy();
+  });
+
+  it('hides the wallet-credit lines for an order that did not use credit', async () => {
+    mocks.api.getOrder.mockResolvedValue({ data: makeOrder({ paymentStatus: 'completed', status: 'processing' }) });
+    render(<OrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('completed')).toBeTruthy());
+    expect(screen.queryByText('Paid with store credit')).toBeNull();
+    expect(screen.queryByText(/Paid with gift card/)).toBeNull();
+  });
+});

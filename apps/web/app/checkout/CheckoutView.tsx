@@ -644,7 +644,7 @@ export default function CheckoutPage() {
                   )}
                   {giftCardInfo && !giftCardError && (
                     <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>
-                      ✓ {giftCardInfo.code} — {formatPrice(giftCardInfo.availableBalance, giftCardInfo.currency)} available
+                      ✓ {giftCardInfo.code} — {formatPrice(giftCardInfo.availableBalance, settings.currencySymbol)} available
                     </p>
                   )}
                   {!giftCardInfo && !giftCardError && (
