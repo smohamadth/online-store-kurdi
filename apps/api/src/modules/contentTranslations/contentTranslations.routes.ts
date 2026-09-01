@@ -22,6 +22,7 @@ import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError } from '../../middleware/errorHandler';
+import { sanitizeRichText } from '../../utils/sanitizeRichText';
 import {
   ContentEntityType,
   isContentEntityType,
@@ -30,6 +31,35 @@ import {
 } from './translatableFields';
 
 const router = Router();
+
+// Fields whose base (default-language) values are stored sanitized and are
+// rendered with dangerouslySetInnerHTML on the storefront (page bodies,
+// post bodies, product descriptions, category descriptions). Translations
+// of these fields MUST get the same write-time sanitization — otherwise a
+// translation is an unsanitized HTML injection vector that bypasses the
+// base-content sanitizers (a compromised admin/manager account could
+// inject a store-wide script through a translated description).
+const HTML_RENDERED_FIELDS: Record<string, string[]> = {
+  page: ['content'],
+  blogPost: ['content'],
+  product: ['description'],
+  category: ['description'],
+};
+
+function sanitizeTranslatedData(
+  entityType: ContentEntityType,
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const htmlFields = HTML_RENDERED_FIELDS[entityType] || [];
+  const out: Record<string, unknown> = { ...data };
+  for (const field of htmlFields) {
+    const value = out[field];
+    if (typeof value === 'string') {
+      out[field] = sanitizeRichText(value);
+    }
+  }
+  return out;
+}
 
 const upsertBodySchema = z.object({
   data: z.record(z.unknown()).default({}),
@@ -81,7 +111,10 @@ router.put(
         });
       }
       const body = upsertBodySchema.parse(req.body);
-      const filtered = filterTranslatableFields(entityType as ContentEntityType, body.data || {});
+      const filtered = sanitizeTranslatedData(
+        entityType as ContentEntityType,
+        filterTranslatableFields(entityType as ContentEntityType, body.data || {}),
+      );
 
       const existing = await prisma.contentTranslation.findUnique({
         where: { entityType_entityId_locale: { entityType, entityId, locale } },

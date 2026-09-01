@@ -74,6 +74,45 @@ describe('PUT /api/content-translations/:entityType/:entityId/:locale', () => {
     expect(res.status).toBe(200);
   });
 
+  it('sanitizes HTML-rendered fields (translation XSS guard)', async () => {
+    // Regression: translated page/post content and product/category
+    // descriptions render with dangerouslySetInnerHTML on the storefront,
+    // but translations were stored RAW — bypassing the base-content
+    // sanitizers. A translation carrying <script> must come back stripped.
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .put('/api/content-translations/page/p9/ku')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        data: {
+          title: 'پەڕە',
+          content: '<p>Hello</p><script>alert(1)</script><img src=x onerror=alert(2)>',
+        },
+      });
+    expect(res.status).toBe(200);
+    const content = res.body.data.data.content as string;
+    expect(content).toContain('<p>Hello</p>');
+    expect(content).not.toContain('<script');
+    expect(content).not.toContain('onerror');
+  });
+
+  it('sanitizes translated product descriptions too', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .put('/api/content-translations/product/p1/ku')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        data: {
+          name: 'ئایفۆن',
+          description: '<b>تەلەفۆن</b><script>alert(1)</script>',
+        },
+      });
+    expect(res.status).toBe(200);
+    const description = res.body.data.data.description as string;
+    expect(description).toContain('<b>تەلەفۆن</b>');
+    expect(description).not.toContain('<script');
+  });
+
   it('customer is forbidden', async () => {
     const { token } = await authHeader({ role: 'customer' });
     const res = await request(app)

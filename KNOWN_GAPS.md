@@ -631,4 +631,7 @@ windows and the reviews admin queue are clamped (NaN/negative values
 could 500 or scan full ranges). Admin link fields (menu item URLs, banner
 link URLs) reject `javascript:`/`data:`/`vbscript:`/`file:` schemes —
 they render straight into `<a href>` in storefront themes, so a stored
-script URL would execute in every visitor's browser.
+script URL would execute in every visitor's browser. Content
+translations of HTML-rendered fields (page/post bodies, product/category
+descriptions) are now sanitized on write — they previously bypassed the
+base-content sanitizers and rendered with dangerouslySetInnerHTML.
