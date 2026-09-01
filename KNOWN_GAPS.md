@@ -624,3 +624,6 @@ endpoints clamp `page`/`limit` (no more full-table scans or negative-skip
 500s). Emails are hardened against header injection (CR/LF stripped from
 every subject at the send boundary and in subject templates) and HTML
 injection (customer/product names escaped in bodies and HTML templates).
+Auth now rejects refresh tokens presented as access tokens (a long-lived
+refresh token could previously be used directly in `Authorization: Bearer`,
+bypassing refresh rotation and replay detection).

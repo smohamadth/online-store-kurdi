@@ -69,6 +69,14 @@ export const authenticate = async (
     // Verify token
     const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
 
+    // An access token must not be a refresh token: refresh tokens are
+    // long-lived (30d) and session-rotated, so accepting one here would
+    // let a stolen refresh token be used directly as an access token,
+    // bypassing the rotation/replay detection on /auth/refresh.
+    if (decoded.type === 'refresh') {
+      throw new UnauthorizedError('Invalid token');
+    }
+
     // Get user from database
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -127,6 +135,12 @@ export const optionalAuth = async (
 
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
+
+    // Same refresh-token rejection as authenticate: optionalAuth must not
+    // treat a long-lived refresh token as an access token either.
+    if (decoded.type === 'refresh') {
+      return next();
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
