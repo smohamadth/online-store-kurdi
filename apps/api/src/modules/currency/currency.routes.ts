@@ -254,7 +254,23 @@ export async function refreshRates(): Promise<{
   const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
   const base = settings?.currency || 'USD';
   const url = `https://open.er-api.com/v6/latest/${encodeURIComponent(base)}`;
-  const res = await fetch(url, { headers: { 'user-agent': 'online-store-kurdi/1.0' } });
+  // 10s cap: a hanging upstream must not block the admin refresh route
+  // (or the scheduler job) indefinitely. Same failure shape as !res.ok:
+  // an error summary, never an exception.
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { 'user-agent': 'online-store-kurdi/1.0' },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err: any) {
+    const msg =
+      err?.name === 'TimeoutError' || err?.name === 'AbortError'
+        ? 'Open-ER fetch timed out after 10s'
+        : `Open-ER fetch failed: ${err?.message ?? err}`;
+    logger.error(`[currency-refresh] ${msg}`);
+    return { base, fetched: 0, skipped: 0, errors: [msg] };
+  }
   if (!res.ok) {
     const msg = `Open-ER returned ${res.status}`;
     logger.error(`[currency-refresh] ${msg}`);

@@ -664,7 +664,13 @@ and refuses to move archived/deleted products (dead wishlist rows
 self-clean) — a plain `quantity || 1` used to accept -5/1.5/'abc'/1e9
 straight into the cart. The tax summary endpoint parses its startDate/
 endDate query params strictly (Invalid Date used to 500 on the Prisma
-range query).
+range query). Order cancellation is hardened: settled (paid) orders
+cannot be cancelled without an admin refund first, variant-line cancels
+now restore the parent product's denormalized quantity too (it used to
+drift low forever), non-tracked products are no longer inflated with
+phantom stock, restores run in one transaction, and the reason field is
+capped. The currency-rate fetch has a 10s timeout (a hanging upstream
+used to block the admin refresh route and the scheduler indefinitely).
 Accounting: closing a fiscal year now zeroes contra (negative-balance)
 revenue/expense accounts too (they used to bleed into next year's P&L),
 and reversing a voided or closing journal entry is refused (a reversal

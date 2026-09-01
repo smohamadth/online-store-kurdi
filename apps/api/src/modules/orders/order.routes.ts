@@ -1036,6 +1036,13 @@ router.post('/:id/cancel', authenticate, async (req, res, next) => {
     const { id } = req.params;
     const { reason } = req.body;
 
+    if (reason !== undefined && reason !== null && typeof reason !== 'string') {
+      return res.status(400).json({ status: 'error', message: 'reason must be a string' });
+    }
+    if (typeof reason === 'string' && reason.length > 500) {
+      return res.status(400).json({ status: 'error', message: 'reason must be 500 characters or fewer' });
+    }
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
@@ -1057,41 +1064,72 @@ router.post('/:id/cancel', authenticate, async (req, res, next) => {
       throw new AppError('Order cannot be cancelled', 400);
     }
 
-    // Update order status
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: {
-        status: 'cancelled',
-        cancelledAt: new Date(),
-        notes: reason ? `Cancelled: ${reason}` : undefined,
-      },
-    });
-
-    // Restore inventory
-    for (const item of order.items) {
-      if (item.variantId) {
-        await prisma.variant.update({
-          where: { id: item.variantId },
-          data: {
-            quantity: {
-              increment: item.quantity,
-            },
-          },
-        });
-      } else {
-        await prisma.product.update({
-          where: { id: item.productId },
-          data: {
-            quantity: {
-              increment: item.quantity,
-            },
-          },
-        });
-      }
+    // A settled payment must be refunded FIRST (POST /api/payments/refund,
+    // admin). Cancelling here would strand the customer's money while the
+    // store restocks — an admin refund then cancel is the honest order.
+    if (order.paymentStatus !== 'pending') {
+      throw new AppError(
+        'This order has already been paid — process a refund before cancelling it.',
+        400,
+      );
     }
+
+    // Status flip + stock restoration in ONE transaction, mirroring the
+    // decrement semantics exactly:
+    //   - non-tracked products were never decremented -> skip
+    //   - variant lines: the variant AND the parent's denormalized
+    //     quantity were decremented at sale (unless it was a backorder,
+    //     which only went negative on the variant) -> restore both
+    //     when the sale wasn't a backorder
+    //   - plain lines: restore the product
+    await prisma.$transaction(async (tx: any) => {
+      const updatedOrder = await tx.order.update({
+        where: { id },
+        data: {
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          notes: reason ? `Cancelled: ${reason}` : undefined,
+        },
+      });
+
+      for (const item of order.items) {
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { trackInventory: true },
+        });
+        if (!product?.trackInventory) continue;
+
+        if (item.variantId) {
+          // A backorder sale left the parent untouched; a normal sale
+          // decremented it. The inventoryLog audit trail records which.
+          const backorder = await tx.inventoryLog.findFirst({
+            where: { orderId: order.id, variantId: item.variantId, reason: 'backorder' },
+            select: { id: true },
+          });
+          await tx.variant.update({
+            where: { id: item.variantId },
+            data: { quantity: { increment: item.quantity } },
+          });
+          if (!backorder) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { quantity: { increment: item.quantity } },
+            });
+          }
+        } else {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { quantity: { increment: item.quantity } },
+          });
+        }
+      }
+
+      return updatedOrder;
+    });
 
     logger.info(`Order ${order.orderNumber} cancelled`);
 
+    const updatedOrder = await prisma.order.findUnique({ where: { id } });
     res.json({
       status: 'success',
       data: updatedOrder,

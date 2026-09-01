@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma, peekMockStore } from '../helpers/mockPrisma';
-import { createProduct, createVariant, createAddress, createOrder, createCoupon } from '../helpers/factories';
+import { createProduct, createVariant, createAddress, createOrder, createOrderItem, createCoupon } from '../helpers/factories';
 import type { Express } from 'express';
 
 let app: Express;
@@ -465,6 +465,83 @@ describe('POST /api/orders/:id/cancel', () => {
       .post(`/api/orders/${o.id}/cancel`)
       .set('Authorization', `Bearer ${token}`)
       .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses to cancel a paid order without a refund (400, stock kept)', async () => {
+    // Regression: a paid order could be cancelled with no refund — the
+    // customer's money stayed with the store while the order was marked
+    // cancelled and the stock restored. Cancellation now requires a
+    // pending paymentStatus; settled orders must go through the admin
+    // refund endpoint first.
+    const { token, user } = await authHeader();
+    const p = await createProduct({ quantity: 10 });
+    const o = await createOrder(user.id, { paymentStatus: 'paid' });
+    await createOrderItem(o.id, p.id, { quantity: 2 });
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/refund/i);
+    const product = await mockPrisma.product.findUnique({ where: { id: p.id } });
+    expect(product?.quantity).toBe(10); // NOT restored
+  });
+
+  it('restores BOTH variant and parent product stock on cancel', async () => {
+    // Regression: the restore loop used else-if, so a variant line only
+    // restored the variant — the parent product's denormalized quantity
+    // (decremented at sale) was never re-incremented and drifted low.
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 100 });
+    const v = await createVariant(p.id, { price: 20, quantity: 10 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, variantId: v.id, quantity: 3 }] });
+    expect(res.status).toBe(201);
+    const orderId = res.body.data.id;
+
+    // Sale decremented both.
+    expect((await mockPrisma.product.findUnique({ where: { id: p.id } }))!.quantity).toBe(97);
+    expect((await mockPrisma.productVariant.findUnique({ where: { id: v.id } }))!.quantity).toBe(7);
+
+    const cancel = await request(app)
+      .post(`/api/orders/${orderId}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(cancel.status).toBe(200);
+
+    expect((await mockPrisma.product.findUnique({ where: { id: p.id } }))!.quantity).toBe(100);
+    expect((await mockPrisma.productVariant.findUnique({ where: { id: v.id } }))!.quantity).toBe(10);
+  });
+
+  it('does not inflate stock for non-tracked products on cancel', async () => {
+    // Regression: decrementStock is a no-op for trackInventory=false
+    // products, but cancel blindly incremented them — phantom stock
+    // accumulated on every cancel cycle.
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 5, trackInventory: false });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 2 }] });
+    expect(res.status).toBe(201);
+    const cancel = await request(app)
+      .post(`/api/orders/${res.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(cancel.status).toBe(200);
+    expect((await mockPrisma.product.findUnique({ where: { id: p.id } }))!.quantity).toBe(5);
+  });
+
+  it('rejects an oversized cancel reason (400)', async () => {
+    const { token, user } = await authHeader();
+    const o = await createOrder(user.id);
+    const res = await request(app)
+      .post(`/api/orders/${o.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'x'.repeat(501) });
     expect(res.status).toBe(400);
   });
 
