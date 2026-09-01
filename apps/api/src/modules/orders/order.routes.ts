@@ -12,6 +12,9 @@ import { isGatewayMethod, getGatewayById } from '../payments/gateways/registry';
 import { isGatewayConfigured } from '../payments/gatewayConfig';
 import { createGatewayPayment } from '../payments/gateway.service';
 import { emit } from '../plugins/pluginHooks';
+import { calculateTaxForOrder } from '../tax/tax.service';
+import { calculateShippingForOrder } from '../shipping/shipping.service';
+import { validateCoupon, CouponValidationError } from '../coupons/coupon.service';
 
 const router = Router();
 
@@ -24,10 +27,13 @@ const router = Router();
 // the confirmation email. The inline comments walk through that sequence;
 // read POST / first if you are touching checkout.
 //
-// Totals: the client sends its computed amounts (tax/shipping/discount
-// come from the tax + shipping modules); when it doesn't, the server falls
-// back to a flat 10% tax and $10 shipping (free over $100) - see the
-// "Use provided amounts or calculated ones" block.
+// Totals: computed server-side, never trusted from the client. The
+// subtotal comes from the DB prices of the line items; tax and shipping
+// are recomputed with the same services the checkout's advisory
+// /calculate endpoints use (so what the customer saw is what is charged);
+// the discount is re-derived from the coupon's own rules. Client-sent
+// subtotal/taxAmount/shippingAmount/discountAmount/totalAmount are
+// ignored — a tampered amount simply gets corrected to the real one.
 //
 // Read access: customers see their own orders; admin/manager see all
 // (the role check happens inside the list/GET handlers).
@@ -281,8 +287,11 @@ router.get('/:id/tracking', authenticate, async (req, res, next) => {
 // POST /api/orders - Create new order
 router.post('/', authenticate, async (req, res, next) => {
   try {
-    const { items, shippingAddressId, shippingAddress, paymentMethod, notes, 
-            couponCode, couponId, discountAmount, subtotal, shippingAmount, taxAmount, totalAmount } = req.body;
+    // NOTE: the client may also send subtotal/taxAmount/shippingAmount/
+    // discountAmount/totalAmount — they are deliberately NOT read here.
+    // All amounts are recomputed server-side (see the totals block below).
+    const { items, shippingAddressId, shippingAddress, paymentMethod, notes,
+            couponCode, couponId } = req.body;
 
     if (!items || items.length === 0) {
       throw new AppError('Order must contain at least one item', 400);
@@ -302,7 +311,10 @@ router.post('/', authenticate, async (req, res, next) => {
 
     // Handle shipping address - either ID or full object
     let addressId = shippingAddressId;
-    
+    let shippingAddressData: {
+      country?: string; state?: string; city?: string; zipCode?: string;
+    } = {};
+
     if (!addressId && shippingAddress) {
       // Create address from full object
       const newAddress = await prisma.address.create({
@@ -320,9 +332,29 @@ router.post('/', authenticate, async (req, res, next) => {
         },
       });
       addressId = newAddress.id;
+      shippingAddressData = {
+        country: newAddress.country || undefined,
+        state: newAddress.state || undefined,
+        city: newAddress.city || undefined,
+        zipCode: newAddress.postalCode || undefined,
+      };
+    } else if (addressId) {
+      // Resolve the stored address so tax/shipping can be recomputed
+      // from the real destination (not from client-sent amounts).
+      const existingAddress = await prisma.address.findUnique({
+        where: { id: addressId },
+      });
+      if (existingAddress) {
+        shippingAddressData = {
+          country: existingAddress.country || undefined,
+          state: existingAddress.state || undefined,
+          city: existingAddress.city || undefined,
+          zipCode: existingAddress.postalCode || undefined,
+        };
+      }
     }
 
-    // Calculate order totals if not provided
+    // Calculate order totals
     let calculatedSubtotal = 0;
     const orderItems: any[] = [];
 
@@ -339,7 +371,9 @@ router.post('/', authenticate, async (req, res, next) => {
     const productIds: string[] = [...new Set(itemsArr.map((i) => i.productId).filter((x): x is string => typeof x === 'string'))];
     const variantIds: string[] = [...new Set(itemsArr.map((i) => i.variantId).filter((x): x is string => typeof x === 'string'))];
     const [products, variants] = await Promise.all([
-      prisma.product.findMany({ where: { id: { in: productIds } } }),
+      // taxClass is included so per-item tax classes can be applied at
+      // order time (the product's class, not anything the client sends).
+      prisma.product.findMany({ where: { id: { in: productIds } }, include: { taxClass: true } }),
       variantIds.length
         ? prisma.variant.findMany({ where: { id: { in: variantIds } } })
         : Promise.resolve([] as any[]),
@@ -416,16 +450,97 @@ router.post('/', authenticate, async (req, res, next) => {
       });
     }
 
-    // Use provided amounts or calculated ones. The FALLBACKS are crude on
-    // purpose (flat 10% tax; $10 shipping, free over $100): the real
-    // numbers come from the tax/shipping modules on the client, and these
-    // only cover a client that skips them rather than re-implementing tax
-    // rules here.
-    const finalSubtotal = subtotal || calculatedSubtotal;
-    const finalTaxAmount = taxAmount || (finalSubtotal * 0.10);
-    const finalShippingAmount = shippingAmount !== undefined ? shippingAmount : (finalSubtotal >= 100 ? 0 : 10);
-    const finalDiscountAmount = discountAmount || 0;
-    const finalTotalAmount = totalAmount || (finalSubtotal + finalTaxAmount + finalShippingAmount - finalDiscountAmount);
+    // ------------------------------------------------------------------
+    // Server-authoritative totals. NOTHING amount-related is taken from
+    // the client body: subtotal is the DB prices, tax and shipping are
+    // recomputed from the destination + the chosen method, and the
+    // discount is re-derived from the coupon's own rules. A request that
+    // lies about subtotal/tax/shipping/discount/total simply gets the
+    // real numbers stored instead.
+    // ------------------------------------------------------------------
+    const finalSubtotal = calculatedSubtotal;
+
+    // Tax: same matching logic as POST /api/tax/calculate, driven by the
+    // shipping destination and each line's product tax class. No address
+    // (e.g. digital-only orders) or no configured rates -> 0.
+    const taxCalc = shippingAddressData.country
+      ? await calculateTaxForOrder({
+          country: shippingAddressData.country,
+          state: shippingAddressData.state,
+          city: shippingAddressData.city,
+          zipCode: shippingAddressData.zipCode,
+          subtotal: finalSubtotal,
+          items: orderItems.map((it) => ({
+            productId: it.productId,
+            price: it.unitPrice,
+            quantity: it.quantity,
+            taxClass: (productById.get(it.productId) as any)?.taxClass?.name || 'standard',
+          })),
+        })
+      : null;
+    const finalTaxAmount = taxCalc?.taxAmount ?? 0;
+
+    // Shipping: recompute the available methods for the destination, then
+    // take the rate of the method the client claims to have chosen. If the
+    // method is not actually available for this order, refuse the order
+    // rather than record a made-up charge. No method id -> 0 (digital-only).
+    let finalShippingAmount = 0;
+    if (shippingAddressData.country) {
+      const shippingMethods = await calculateShippingForOrder({
+        country: shippingAddressData.country,
+        state: shippingAddressData.state,
+        zipCode: shippingAddressData.zipCode,
+        subtotal: finalSubtotal,
+        weight: orderItems.reduce(
+          (sum: number, it: any) => sum + (Number((productById.get(it.productId) as any)?.weight) || 0) * it.quantity,
+          0
+        ),
+        itemCount: orderItems.reduce((sum: number, it: any) => sum + it.quantity, 0),
+      });
+      if (req.body.shippingMethodId) {
+        const chosen = shippingMethods.find((m) => m.id === req.body.shippingMethodId);
+        if (!chosen) {
+          throw new AppError('The selected shipping method is not available for this address', 400);
+        }
+        finalShippingAmount = chosen.rate;
+      }
+    }
+
+    // Discount: re-validate the coupon and recompute what it grants. An
+    // invalid coupon FAILS the order (the client showed the customer a
+    // discount that does not exist, so recording a silent 0 would charge
+    // more than was shown). No coupon -> no discount, whatever the client
+    // claimed.
+    let finalDiscountAmount = 0;
+    let freeShippingCoupon = false;
+    const claimedCouponId = couponId || null;
+    const claimedCouponCode = couponCode || null;
+    if (claimedCouponId || claimedCouponCode) {
+      try {
+        const couponResult = await validateCoupon({
+          couponId: claimedCouponId || undefined,
+          code: claimedCouponCode || undefined,
+          subtotal: finalSubtotal,
+        });
+        finalDiscountAmount = couponResult.discount;
+        freeShippingCoupon = couponResult.coupon.type === 'free_shipping';
+      } catch (err) {
+        if (err instanceof CouponValidationError) {
+          throw new AppError(err.message, 400);
+        }
+        throw err;
+      }
+    }
+    if (freeShippingCoupon) {
+      finalShippingAmount = 0;
+    }
+
+    const finalTotalAmount = Math.round(
+      (finalSubtotal + finalTaxAmount + finalShippingAmount - finalDiscountAmount) * 100
+    ) / 100;
+    if (finalTotalAmount < 0) {
+      throw new AppError('Order total cannot be negative', 400);
+    }
 
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;

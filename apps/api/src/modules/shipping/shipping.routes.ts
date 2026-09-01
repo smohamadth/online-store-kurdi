@@ -9,14 +9,16 @@
 // (base + baseRate per item); min/max weight and min/max order amount
 // act as availability gates.
 //
-// Like tax, calculate is advisory: the client sends its chosen
-// shippingAmount back with the order (order.routes.ts has a $10 /
-// free-over-$100 fallback when it doesn't).
+// Like tax, calculate is advisory (drives the checkout display); order
+// placement recomputes the chosen method's rate server-side via
+// shipping.service (see order.routes.ts), so the client's
+// shippingAmount is never trusted.
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { calculateShippingForOrder } from './shipping.service';
 import { z } from 'zod';
 
 const router = Router();
@@ -258,7 +260,8 @@ router.delete('/methods/:id', authenticate, authorize('admin'), async (req, res,
 // SHIPPING CALCULATION
 // ============================================
 
-// POST /api/shipping/calculate - Calculate shipping rates
+// POST /api/shipping/calculate - Calculate shipping rates (advisory; order
+// placement recomputes the same numbers server-side via shipping.service).
 router.post('/calculate', async (req, res, next) => {
   try {
     const { country, state, zipCode, subtotal, weight, itemCount } = req.body;
@@ -270,102 +273,18 @@ router.post('/calculate', async (req, res, next) => {
       });
     }
 
-    // Find matching shipping zones
-    const zones = await prisma.shippingZone.findMany({
-      where: { isActive: true },
-      include: {
-        methods: {
-          where: { isActive: true },
-        },
-      },
+    const methods = await calculateShippingForOrder({
+      country,
+      state,
+      zipCode,
+      subtotal: Number(subtotal || 0),
+      weight: Number(weight || 0),
+      itemCount: Number(itemCount || 0),
     });
-
-    const matchingMethods: any[] = [];
-
-    for (const zone of zones) {
-      const countries = JSON.parse(zone.countries as string || '[]');
-      const states = JSON.parse(zone.states as string || '[]');
-      const zipCodes = JSON.parse(zone.zipCodes as string || '[]');
-
-      // Check if address matches zone
-      const countryMatch = countries.includes(country) || countries.includes('*');
-      const stateMatch = states.length === 0 || states.includes(state) || states.includes('*');
-      const zipMatch = zipCodes.length === 0 || zipCodes.some((z: string) => zipCode?.startsWith(z));
-
-      if (countryMatch && stateMatch && zipMatch) {
-        for (const method of zone.methods) {
-          // Availability gates apply to every method type, not just
-          // `price`: a weight method with min/maxWeight is only offered
-          // when the cart's total weight is inside that band, and any
-          // method with min/maxOrderAmount is only offered when the
-          // order subtotal falls in range.
-          const sub = Number(subtotal || 0);
-          const w = Number(weight || 0);
-          const count = Number(itemCount || 0);
-
-          if (method.minOrderAmount != null && sub < Number(method.minOrderAmount)) continue;
-          if (method.maxOrderAmount != null && sub > Number(method.maxOrderAmount)) continue;
-          if (method.minWeight != null && w < Number(method.minWeight)) continue;
-          if (method.maxWeight != null && w > Number(method.maxWeight)) continue;
-
-          let rate = Number(method.baseRate);
-          let isFree = false;
-
-          // Calculate rate based on type
-          switch (method.type) {
-            case 'flat':
-              // Flat rate - already set
-              break;
-
-            case 'weight':
-              if (method.weightUnitRate && w > 0) {
-                rate = Number(method.baseRate) + (w * Number(method.weightUnitRate));
-              }
-              break;
-
-            case 'price':
-              if (method.pricePercentage && sub > 0) {
-                rate = (sub * Number(method.pricePercentage)) / 100;
-              }
-              break;
-
-            case 'item_count':
-              if (method.itemCountRate && count > 0) {
-                rate = Number(method.baseRate) + (count * Number(method.itemCountRate));
-              }
-              break;
-          }
-
-          // Check free shipping threshold
-          if (method.freeShippingThreshold != null && sub >= Number(method.freeShippingThreshold)) {
-            rate = 0;
-            isFree = true;
-          }
-
-          matchingMethods.push({
-            id: method.id,
-            name: method.name,
-            description: method.description,
-            type: method.type,
-            rate: Math.round(rate * 100) / 100,
-            isFree,
-            minDeliveryDays: method.minDeliveryDays,
-            maxDeliveryDays: method.maxDeliveryDays,
-            zone: {
-              id: zone.id,
-              name: zone.name,
-            },
-          });
-        }
-      }
-    }
-
-    // Sort by rate
-    matchingMethods.sort((a, b) => a.rate - b.rate);
 
     res.json({
       status: 'success',
-      data: matchingMethods,
+      data: methods,
     });
   } catch (err) {
     next(err);

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import { getTestApp, cleanDatabase } from '../helpers/db';
+import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
 import type { Express } from 'express';
 
@@ -64,7 +64,18 @@ describe('POST /api/contact', () => {
 });
 
 describe('GET /api/contact', () => {
-  it('returns the messages newest-first', async () => {
+  it('refuses anonymous access (401) — messages carry customer PII', async () => {
+    const res = await request(app).get('/api/contact');
+    expect(res.status).toBe(401);
+  });
+
+  it('refuses customers (403)', async () => {
+    const { token } = await authHeader();
+    const res = await request(app).get('/api/contact').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns the messages newest-first to an admin', async () => {
     // cleanDatabase() in beforeEach means the listing holds only this
     // test's two messages.
     await request(app).post('/api/contact').send({
@@ -73,7 +84,8 @@ describe('GET /api/contact', () => {
     await request(app).post('/api/contact').send({
       name: 'Bob', email: 'b@example.com', subject: 'CCC-SECOND', message: 'This is the second message body.',
     });
-    const res = await request(app).get('/api/contact');
+    const { token: adminToken } = await authHeader({ role: 'admin' });
+    const res = await request(app).get('/api/contact').set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     // Reverse = newest first, so the most recent CCC-* message is at index 0.
     const found = res.body.data.findIndex((m: any) => m.subject === 'CCC-SECOND');

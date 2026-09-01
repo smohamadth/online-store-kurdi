@@ -237,6 +237,23 @@ export function mapProductRow(
 }
 
 // Fill `plan` by reading/validating each cell of `raw`. Throws on a
+/**
+ * Read a cell as a trimmed string; empty/missing -> undefined ("not provided").
+ * Also strips the protective apostrophe the CSV exporter adds to cells that
+ * would otherwise read as spreadsheet formulas, so export -> import round
+ * trips preserve the original value ("=1+1" stays "=1+1", not "'=1+1").
+ */
+export function readStrCell(raw: Record<string, unknown>, k: string): string | undefined {
+  const v = raw[k];
+  if (v === null || v === undefined) return undefined;
+  let s = String(v).trim();
+  if (s === '') return undefined;
+  if (s.length > 1 && s[0] === "'" && /^[=+@\t\r]|^-[^0-9.]/.test(s.slice(1))) {
+    s = s.slice(1);
+  }
+  return s;
+}
+
 // malformed cell (the parseNumber/parseBool/... helpers throw on garbage);
 // mapProductRow catches it and records it as a row error instead of a 500.
 function buildProductPlan(
@@ -247,12 +264,7 @@ function buildProductPlan(
   const err = (msg: string) => plan.errors.push(msg);
 
   // Read a cell as a trimmed string; empty/missing -> undefined ("not provided").
-  const str = (k: string): string | undefined => {
-    const v = raw[k];
-    if (v === null || v === undefined) return undefined;
-    const s = String(v).trim();
-    return s === '' ? undefined : s;
-  };
+  const str = (k: string): string | undefined => readStrCell(raw, k);
 
   // --- required identity -------------------------------------------------
   const name = str('name');
@@ -489,12 +501,7 @@ export function mapCategoryRow(raw: Record<string, unknown>): CategoryPlan {
 function buildCategoryPlan(plan: CategoryPlan, raw: Record<string, unknown>): void {
   const err = (msg: string) => plan.errors.push(msg);
   // Read a cell as a trimmed string; empty/missing -> undefined ("not provided").
-  const str = (k: string): string | undefined => {
-    const v = raw[k];
-    if (v === null || v === undefined) return undefined;
-    const s = String(v).trim();
-    return s === '' ? undefined : s;
-  };
+  const str = (k: string): string | undefined => readStrCell(raw, k);
 
   const name = str('name');
   const slug = str('slug');
@@ -574,12 +581,7 @@ export function mapCustomerRow(raw: Record<string, unknown>): CustomerPlan {
 
 function buildCustomerPlan(plan: CustomerPlan, raw: Record<string, unknown>): void {
   const err = (msg: string) => plan.errors.push(msg);
-  const str = (k: string): string | undefined => {
-    const v = raw[k];
-    if (v === null || v === undefined) return undefined;
-    const s = String(v).trim();
-    return s === '' ? undefined : s;
-  };
+  const str = (k: string): string | undefined => readStrCell(raw, k);
 
   const email = str('email')?.toLowerCase();
   if (!email) {
@@ -692,12 +694,7 @@ export function mapOrderRow(raw: Record<string, unknown>): OrderPlan {
 
 function buildOrderPlan(plan: OrderPlan, raw: Record<string, unknown>): void {
   const err = (msg: string) => plan.errors.push(msg);
-  const str = (k: string): string | undefined => {
-    const v = raw[k];
-    if (v === null || v === undefined) return undefined;
-    const s = String(v).trim();
-    return s === '' ? undefined : s;
-  };
+  const str = (k: string): string | undefined => readStrCell(raw, k);
 
   const orderNumber = str('orderNumber');
   if (orderNumber) {

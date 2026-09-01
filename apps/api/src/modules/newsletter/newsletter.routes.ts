@@ -8,6 +8,7 @@
 // not the current enforcement - treat that endpoint as internal-only.
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
+import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
@@ -52,9 +53,10 @@ router.post('/subscribe', async (req, res, next) => {
   }
 });
 
-// GET /api/newsletter/subscribers - Intended for the admin UI.
-// NOTE: the "(admin only)" intent is not enforced - see the header above.
-router.get('/subscribers', async (req, res, next) => {
+// GET /api/newsletter/subscribers - Admin/manager only. Subscriber
+// emails are customer data: this used to be public (leaking every
+// subscriber's address to anyone who hit the URL).
+router.get('/subscribers', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const subscribers = await prisma.newsletterSubscriber.findMany({
       select: { email: true },

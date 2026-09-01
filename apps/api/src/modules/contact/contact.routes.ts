@@ -9,6 +9,7 @@
 // internal-only (same exposure as before the DB move).
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
+import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
@@ -48,9 +49,10 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// GET /api/contact - Get all messages (newest first).
-// NOTE: the "(admin)" intent is not enforced - see the header above.
-router.get('/', async (req, res, next) => {
+// GET /api/contact - Get all messages (newest first). Admin/manager
+// only: messages carry customer names, emails and phone numbers, and
+// this endpoint used to be public (leaking every message).
+router.get('/', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const messages = await prisma.contactMessage.findMany({
       orderBy: { createdAt: 'desc' },

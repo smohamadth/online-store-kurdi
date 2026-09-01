@@ -9,13 +9,15 @@
 // be overridden by the item's tax class (e.g. 'zero'/'digital' -> 0%).
 // Rates are fractions (0.1 = 10%), not percentages.
 //
-// Note: calculate is advisory - order placement re-uses the amount the
-// client sends back (see order.routes.ts), with a flat 10% fallback.
+// Note: calculate is advisory (drives the checkout display); order
+// placement recomputes the same numbers server-side via tax.service
+// (see order.routes.ts), so the client's taxAmount is never trusted.
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { calculateTaxForOrder } from './tax.service';
 import { z } from 'zod';
 
 const router = Router();
@@ -65,6 +67,214 @@ router.get('/rates', authenticate, authorize('admin'), async (req, res, next) =>
     res.json({
       status: 'success',
       data: rates,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/tax/rates - Create tax rate
+router.post('/rates', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const validatedData = taxRateSchema.parse(req.body);
+
+    const rate = await prisma.taxRate.create({
+      data: validatedData,
+    });
+
+    logger.info(`Tax rate created: ${rate.name} (${(Number(rate.rate) * 100).toFixed(1)}%)`);
+
+    res.status(201).json({
+      status: 'success',
+      data: rate,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/tax/rates/:id - Update tax rate
+router.put('/rates/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const validatedData = taxRateSchema.partial().parse(req.body);
+
+    const rate = await prisma.taxRate.update({
+      where: { id },
+      data: validatedData,
+    });
+
+    logger.info(`Tax rate updated: ${rate.name}`);
+
+    res.json({
+      status: 'success',
+      data: rate,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/tax/rates/:id - Delete tax rate
+router.delete('/rates/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.taxRate.delete({ where: { id } });
+
+    logger.info(`Tax rate deleted: ${id}`);
+
+    res.json({
+      status: 'success',
+      message: 'Tax rate deleted successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================
+// TAX CLASSES
+// ============================================
+
+// GET /api/tax/classes - Get all tax classes
+router.get('/classes', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const classes = await prisma.taxClass.findMany({
+      include: {
+        _count: {
+          select: { products: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({
+      status: 'success',
+      data: classes,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/tax/classes - Create tax class
+router.post('/classes', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const validatedData = taxClassSchema.parse(req.body);
+
+    // If setting as default, unset other defaults
+    if (validatedData.isDefault) {
+      await prisma.taxClass.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    const taxClass = await prisma.taxClass.create({
+      data: validatedData,
+    });
+
+    logger.info(`Tax class created: ${taxClass.name}`);
+
+    res.status(201).json({
+      status: 'success',
+      data: taxClass,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/tax/classes/:id - Update tax class
+router.put('/classes/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const validatedData = taxClassSchema.partial().parse(req.body);
+
+    // If setting as default, unset other defaults
+    if (validatedData.isDefault) {
+      await prisma.taxClass.updateMany({
+        where: { isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+
+    const taxClass = await prisma.taxClass.update({
+      where: { id },
+      data: validatedData,
+    });
+
+    logger.info(`Tax class updated: ${taxClass.name}`);
+
+    res.json({
+      status: 'success',
+      data: taxClass,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/tax/classes/:id - Delete tax class
+router.delete('/classes/:id', authenticate, authorize('admin'), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Check if tax class has products
+    const productsCount = await prisma.product.count({
+      where: { taxClassId: id },
+    });
+
+    if (productsCount > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Cannot delete tax class with ${productsCount} products. Reassign products first.`,
+      });
+    }
+
+    await prisma.taxClass.delete({ where: { id } });
+
+    logger.info(`Tax class deleted: ${id}`);
+
+    res.json({
+      status: 'success',
+      message: 'Tax class deleted successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================
+// TAX CALCULATION
+// ============================================
+
+// POST /api/tax/calculate - Calculate tax for order (advisory; order
+// placement recomputes the same numbers server-side via tax.service).
+router.post('/calculate', async (req, res, next) => {
+  try {
+    const { country, state, city, zipCode, subtotal, items } = req.body;
+
+    if (!country) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Country is required',
+      });
+    }
+
+    const result = await calculateTaxForOrder({
+      country,
+      state,
+      city,
+      zipCode,
+      subtotal: Number(subtotal || 0),
+      items,
+    });
+
+    res.json({
+      status: 'success',
+      data: result,
     });
   } catch (err) {
     next(err);

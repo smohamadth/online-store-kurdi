@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma, peekMockStore } from '../helpers/mockPrisma';
-import { createProduct, createVariant, createAddress, createOrder } from '../helpers/factories';
+import { createProduct, createVariant, createAddress, createOrder, createCoupon } from '../helpers/factories';
 import type { Express } from 'express';
 
 let app: Express;
@@ -184,6 +184,163 @@ describe('POST /api/orders', () => {
         },
       });
     expect(res.status).toBe(201);
+  });
+
+  it('ignores client-sent amounts and stores server-computed totals', async () => {
+    // Regression: order placement used to trust the client's
+    // subtotal/tax/shipping/discount/total verbatim, so a request
+    // claiming $1 for a $20 cart was recorded at $1. Totals are now
+    // recomputed server-side from DB prices and the configured rules.
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 2 }],
+        subtotal: 1,
+        taxAmount: 1,
+        shippingAmount: 1,
+        discountAmount: 50,
+        totalAmount: 1,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.subtotal).toBe(20);
+    expect(res.body.data.taxAmount).toBe(0); // no tax rates configured
+    expect(res.body.data.shippingAmount).toBe(0); // no shipping method
+    expect(res.body.data.discountAmount).toBe(0); // no coupon
+    expect(res.body.data.totalAmount).toBe(20);
+  });
+
+  it('recomputes the discount from the coupon instead of trusting discountAmount', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    const coupon = await createCoupon({ type: 'percentage', value: 10 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 2 }],
+        couponId: coupon.id,
+        discountAmount: 999, // client claims $999 off — must be ignored
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.discountAmount).toBe(2); // 10% of 20
+    expect(res.body.data.totalAmount).toBe(18);
+    // Usage is still counted exactly once for the validated coupon.
+    const after = await mockPrisma.coupon.findUnique({ where: { id: coupon.id } });
+    expect(after?.usedCount).toBe(1);
+  });
+
+  it('rejects an order carrying an invalid coupon (400)', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 5 });
+    const coupon = await createCoupon({ isActive: false });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 1 }], couponId: coupon.id });
+    expect(res.status).toBe(400);
+    // No order may be created for a request that lied about its discount.
+    const orders = await mockPrisma.order.findMany({});
+    expect(orders).toHaveLength(0);
+  });
+
+  it('recomputes tax server-side from the destination and configured rates', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    await mockPrisma.taxRate.create({
+      // isActive must be explicit: the in-memory mock does not apply
+      // Prisma schema defaults.
+      data: { name: 'US Tax', rate: 0.1, country: 'US', isActive: true },
+    });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 2 }],
+        shippingAddress: {
+          firstName: 'A', lastName: 'B', address: '1 St', city: 'NYC', state: 'NY', zipCode: '10001', country: 'US', phone: '555',
+        },
+        taxAmount: 0, // client claims no tax — server must still charge it
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.taxAmount).toBe(2); // 10% of the $20 subtotal
+    expect(res.body.data.totalAmount).toBe(22);
+  });
+
+  it('recomputes shipping from the chosen method instead of trusting shippingAmount', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    const zone = await mockPrisma.shippingZone.create({
+      data: { name: 'US Zone', countries: JSON.stringify(['US']), isActive: true },
+    });
+    const method = await mockPrisma.shippingMethod.create({
+      data: { zoneId: zone.id, name: 'Standard', type: 'flat', baseRate: 7, isActive: true },
+    });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 2 }],
+        shippingMethodId: method.id,
+        shippingAddress: {
+          firstName: 'A', lastName: 'B', address: '1 St', city: 'NYC', state: 'NY', zipCode: '10001', country: 'US', phone: '555',
+        },
+        shippingAmount: 1, // client claims $1 — the real rate is $7
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.shippingAmount).toBe(7);
+    expect(res.body.data.totalAmount).toBe(27);
+  });
+
+  it('refuses a shipping method that is not available for the destination', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 5 });
+    const zone = await mockPrisma.shippingZone.create({
+      data: { name: 'DE Zone', countries: JSON.stringify(['DE']), isActive: true },
+    });
+    const method = await mockPrisma.shippingMethod.create({
+      data: { zoneId: zone.id, name: 'German only', type: 'flat', baseRate: 5, isActive: true },
+    });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 1 }],
+        shippingMethodId: method.id,
+        shippingAddress: {
+          firstName: 'A', lastName: 'B', address: '1 St', city: 'NYC', state: 'NY', zipCode: '10001', country: 'US', phone: '555',
+        },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/not available/);
+  });
+
+  it('a free_shipping coupon zeroes the shipping cost', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    const zone = await mockPrisma.shippingZone.create({
+      data: { name: 'US Zone', countries: JSON.stringify(['US']), isActive: true },
+    });
+    const method = await mockPrisma.shippingMethod.create({
+      data: { zoneId: zone.id, name: 'Standard', type: 'flat', baseRate: 7, isActive: true },
+    });
+    const coupon = await createCoupon({ type: 'free_shipping', value: 0 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 2 }],
+        couponId: coupon.id,
+        shippingMethodId: method.id,
+        shippingAddress: {
+          firstName: 'A', lastName: 'B', address: '1 St', city: 'NYC', state: 'NY', zipCode: '10001', country: 'US', phone: '555',
+        },
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.shippingAmount).toBe(0);
+    expect(res.body.data.totalAmount).toBe(20);
   });
 });
 

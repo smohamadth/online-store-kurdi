@@ -92,12 +92,27 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c !== ''));
 }
 
+/**
+ * Cells that a spreadsheet would interpret as a FORMULA. A product named
+ * "=HYPERLINK(\"http://evil\",\"x\")" or a customer who registered with a
+ * "+cmd|'/C calc'!A0" name would execute when the exported CSV is opened
+ * in Excel/Sheets (CSV formula injection). Neutralise by prefixing a
+ * single quote, which every major spreadsheet shows as a literal text
+ * character and never evaluates.
+ *
+ * `-` is only dangerous when followed by a non-digit (a negative number
+ * like -5 must stay a number).
+ */
+const FORMULA_PREFIX_RE = /^[=+@\t\r]|^-[^0-9.]/;
+
 /** Quote a single cell when it contains a comma, quote or line break. */
 function csvCell(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  // Serialize is fed headers + data; the headers are ours and never match.
+  let cell = FORMULA_PREFIX_RE.test(value) ? `'${value}` : value;
+  if (/[",\n\r]/.test(cell)) {
+    return `"${cell.replace(/"/g, '""')}"`;
   }
-  return value;
+  return cell;
 }
 
 /**

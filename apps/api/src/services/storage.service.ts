@@ -65,6 +65,24 @@ subdirs.forEach(dir => {
   }
 });
 
+// The `folder` argument lands in a filesystem path (uploads/<folder>/<id>/),
+// so it MUST be constrained to the known buckets — a request body value like
+// "../../etc" would otherwise escape the uploads directory. `id` is used the
+// same way (DELETE /api/upload/:folder/:id) and must be a plain slug/uuid.
+const ALLOWED_FOLDERS = new Set(subdirs);
+// uuid, or anything alphanumeric with dashes/underscores, 1-128 chars.
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+
+/** Throw when `folder`/`id` would escape the uploads directory. */
+export function assertSafeUploadPath(folder: string, id?: string): void {
+  if (!ALLOWED_FOLDERS.has(folder)) {
+    throw new Error(`Invalid upload folder: ${folder}`);
+  }
+  if (id !== undefined && !SAFE_ID_RE.test(id)) {
+    throw new Error(`Invalid upload id: ${id}`);
+  }
+}
+
 // Process image into multiple sizes
 async function processImage(
   buffer: Buffer,
@@ -128,6 +146,10 @@ export async function uploadImage(
   folder: string = 'products'
 ): Promise<UploadResult> {
   try {
+    // Validate the destination bucket BEFORE any filesystem access: the
+    // folder comes from the request body and lands in a path.
+    assertSafeUploadPath(folder);
+
     // Validate file type
     if (!ALLOWED_TYPES.includes(mimeType)) {
       throw new Error(`File type ${mimeType} is not allowed`);
@@ -208,6 +230,9 @@ export function getImageUrl(
 // Delete image and all variants
 export async function deleteImage(folder: string, id: string): Promise<void> {
   try {
+    // Same guard as uploadImage: folder/id come from URLs and land in a
+    // filesystem path. Deleting outside the uploads tree must be impossible.
+    assertSafeUploadPath(folder, id);
     const dirPath = path.join(UPLOAD_DIR, folder, id);
 
     if (fs.existsSync(dirPath)) {
@@ -228,12 +253,22 @@ export async function deleteImage(folder: string, id: string): Promise<void> {
 
 // Check if image exists
 export function imageExists(folder: string, id: string): boolean {
+  try {
+    assertSafeUploadPath(folder, id);
+  } catch {
+    return false; // hostile input simply does not exist
+  }
   const dirPath = path.join(UPLOAD_DIR, folder, id);
   return fs.existsSync(dirPath);
 }
 
 // Get image info
 export function getImageInfo(folder: string, id: string): any {
+  try {
+    assertSafeUploadPath(folder, id);
+  } catch {
+    return null;
+  }
   try {
     const dirPath = path.join(UPLOAD_DIR, folder, id);
 

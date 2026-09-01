@@ -6,20 +6,39 @@
 // original under /uploads/<folder>/<uuid>/. The /uploads/* URL is served
 // statically by app.ts.
 //
-// Caveats (deliberate, documented for the next reader):
-// - The type allowlist below is HARDCODED; the ALLOWED_FILE_TYPES env var in
-//   .env is not read by this file (storage.service has its own copy).
-// - `folder` comes from the request body and lands in a filesystem path
-//   (uploads/<folder>/<id>) without sanitisation. Only logged-in users reach
-//   the upload route, but a hostile one could use "../" segments.
+// Security: `folder` comes from the request body and lands in a filesystem
+// path, so it is validated against the known buckets here (clean 400) AND
+// re-checked inside storage.service (defence in depth for non-route
+// callers). The type allowlist below is HARDCODED; the ALLOWED_FILE_TYPES
+// env var in .env is not read by this file (storage.service has its own
+// copy).
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
+import { AppError } from '../../middleware/errorHandler';
 import multer from 'multer';
 import { authenticate, authorize } from '../../middleware/auth';
-import { uploadImage, deleteImage, getImageUrl } from '../../services/storage.service';
+import {
+  uploadImage,
+  deleteImage,
+  getImageUrl,
+  assertSafeUploadPath,
+} from '../../services/storage.service';
 import { logger } from '../../utils/logger';
 
 const router = Router();
+
+// `folder` may only name one of the known storage buckets; `id` (delete
+// path) must be a plain uuid/slug. Anything else is rejected before it can
+// reach a filesystem path.
+const ALLOWED_FOLDERS = new Set(['products', 'users', 'categories', 'temp']);
+const SAFE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+function validateFolderParam(folder: unknown): string {
+  const f = typeof folder === 'string' ? folder : '';
+  if (!ALLOWED_FOLDERS.has(f)) {
+    throw new AppError('Invalid upload folder', 400);
+  }
+  return f;
+}
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
@@ -51,7 +70,8 @@ router.post('/image', authenticate, upload.single('file'), async (req, res, next
 
     // Caller picks the bucket (products | users | categories | temp); the
     // upload admin passes 'categories', profile pages pass 'users', etc.
-    const folder = req.body.folder || 'products';
+    // Anything outside the buckets is rejected here AND in storage.service.
+    const folder = validateFolderParam(req.body.folder || 'products');
 
     const result = await uploadImage(
       req.file.buffer,
@@ -97,7 +117,7 @@ router.post('/images', authenticate, upload.array('files', 10), async (req, res,
       });
     }
 
-    const folder = req.body.folder || 'products';
+    const folder = validateFolderParam(req.body.folder || 'products');
     const results = [];
 
     for (const file of files) {
@@ -134,6 +154,13 @@ router.post('/images', authenticate, upload.array('files', 10), async (req, res,
 router.delete('/:folder/:id', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const { folder, id } = req.params;
+    // Route-level guard: the delete path components land in a filesystem
+    // path, so both must be validated before touching the disk. The id is
+    // a uuid the API minted (optionally a slug for legacy rows).
+    validateFolderParam(folder);
+    if (!SAFE_ID_RE.test(id)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid image id' });
+    }
 
     await deleteImage(folder, id);
 
