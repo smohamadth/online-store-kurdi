@@ -262,40 +262,4 @@ router.delete('/coupons/:id', authenticate, authorize('admin'), async (req, res,
 });
 
 // POST /api/coupons/:id/apply - Apply coupon to order (used internally)
-router.post('/coupons/:id/apply', authenticate, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    const coupon = await prisma.coupon.findUnique({
-      where: { id },
-    });
-
-    if (!coupon) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Coupon not found',
-      });
-    }
-
-    // Increment usage count
-    await prisma.coupon.update({
-      where: { id },
-      data: {
-        usedCount: {
-          increment: 1,
-        },
-      },
-    });
-
-    logger.info(`Coupon applied: ${coupon.code}`);
-
-    res.json({
-      status: 'success',
-      message: 'Coupon applied successfully',
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 export default router;

@@ -189,3 +189,34 @@ describe('DELETE /api/coupons/:id (admin)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('POST /api/coupons/:id/apply (removed)', () => {
+  it('no longer exists — usage is only counted at order placement', async () => {
+    // Regression: this endpoint let ANY authenticated customer increment
+    // ANY coupon's usedCount (no active/expiry check, no order link, no
+    // rate limit). The coupon id is public (returned by /validate), so
+    // the endpoint could be hammered to burn a coupon's usage limit and
+    // deny legitimate customers. It is gone; the storefront only uses
+    // /coupons/validate and order placement counts usage in its
+    // transaction.
+    const { token } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    const created = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ code: 'SAVE10', type: 'percentage', value: 10, usageLimit: 5 });
+    const couponId = created.body.data.id;
+    expect(couponId).toBeTruthy();
+
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post(`/api/coupons/${couponId}/apply`)
+        .set('Authorization', `Bearer ${token}`);
+      expect([400, 404]).toContain(res.status);
+    }
+
+    // The usage count must be untouched by the removed endpoint.
+    const stored = await mockPrisma.coupon.findUnique({ where: { id: couponId } });
+    expect(stored.usedCount).toBe(0);
+  });
+});

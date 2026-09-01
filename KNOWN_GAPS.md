@@ -655,7 +655,11 @@ price/quantity rows. The MinIO storage routes are hardened: presigned
 URLs are admin-only (any authenticated user could previously mint a
 7-day URL for ANY bucket object, bypassing the private-prefix gating),
 upload folder prefixes are allowlisted, and presigned expiry is clamped
-to [1 minute, 7 days].
+to [1 minute, 7 days]. The coupon `POST /:id/apply` endpoint is removed:
+it let any authenticated customer increment ANY coupon's usedCount
+without checks (public /validate leaks the id), so it could be hammered
+to burn a coupon's usage limit — usage is only counted at order
+placement now.
 Accounting: closing a fiscal year now zeroes contra (negative-balance)
 revenue/expense accounts too (they used to bleed into next year's P&L),
 and reversing a voided or closing journal entry is refused (a reversal
