@@ -645,7 +645,11 @@ on read). Review photo URLs reject scriptable/data: schemes. The
 inventory low-stock `threshold` query param is clamped (`-5` used to be
 a Prisma validation error, `1e999` parsed to Infinity). Guest stock-alert
 subscriptions are deduped by email, not by the shared 'anonymous' userId
-(a second guest with a different email could never subscribe).
+(a second guest with a different email could never subscribe). The
+advisory shipping/calculate endpoint tolerates hostile numeric payloads
+(NaN/Infinity/negative numbers previously poisoned the rate math — the
+authoritative order-placement path already recomputed rates server-side,
+so this only affects the checkout display).
 Accounting: closing a fiscal year now zeroes contra (negative-balance)
 revenue/expense accounts too (they used to bleed into next year's P&L),
 and reversing a voided or closing journal entry is refused (a reversal

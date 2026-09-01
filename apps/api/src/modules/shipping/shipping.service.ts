@@ -34,9 +34,19 @@ export async function calculateShippingForOrder(params: {
   weight?: number;
   itemCount?: number;
 }): Promise<ShippingRate[]> {
-  const { country, state, zipCode, subtotal } = params;
-  const weight = Number(params.weight || 0);
-  const itemCount = Number(params.itemCount || 0);
+  const { country, state, zipCode } = params;
+  // The advisory endpoint lets a client send any JSON, so the numbers are
+  // re-parsed defensively: Number('abc') = NaN and Number(Infinity) =
+  // Infinity would silently poison every comparison below (NaN < x is
+  // false, Infinity matches nothing, and a negative weight would price a
+  // "negative cart"). Non-finite/negative values fall back to 0.
+  const asNonNegative = (v: unknown): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const subtotal = asNonNegative(params.subtotal);
+  const weight = asNonNegative(params.weight);
+  const itemCount = asNonNegative(params.itemCount);
 
   const zones = await prisma.shippingZone.findMany({
     where: { isActive: true },
@@ -63,7 +73,7 @@ export async function calculateShippingForOrder(params: {
       // a weight method with min/maxWeight is only offered when the cart's
       // total weight is inside that band, and any method with
       // min/maxOrderAmount is only offered when the subtotal fits.
-      const sub = Number(subtotal || 0);
+      const sub = subtotal;
       if (method.minOrderAmount != null && sub < Number(method.minOrderAmount)) continue;
       if (method.maxOrderAmount != null && sub > Number(method.maxOrderAmount)) continue;
       if (method.minWeight != null && weight < Number(method.minWeight)) continue;

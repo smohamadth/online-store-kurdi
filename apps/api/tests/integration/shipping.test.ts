@@ -46,6 +46,29 @@ describe('POST /api/shipping/calculate (public)', () => {
       .send({ country: 'US', weight: 1 });
     expect(res.status).toBe(200);
   });
+
+  it('tolerates hostile numeric payloads (no NaN/Infinity poisoning)', async () => {
+    // Regression: Number('abc') = NaN and Number(Infinity) = Infinity
+    // flowed into every comparison, silently dropping/keeping methods;
+    // negative weights priced a "negative cart". All of these must
+    // behave as 0 — the endpoint returns 200 with an array either way.
+    await seedZoneAndMethod({
+      name: 'Hostile', type: 'flat', baseRate: 5,
+      minOrderAmount: 1, maxOrderAmount: 100,
+    });
+    for (const payload of [
+      { country: 'US', subtotal: 'abc', weight: 'xyz', itemCount: 'zzz' },
+      { country: 'US', subtotal: 1e999, weight: Infinity },
+      { country: 'US', subtotal: -50, weight: -2, itemCount: -1 },
+      { country: 'US', subtotal: 10, weight: [1, 2] },   // Number([1,2]) = NaN
+      { country: 'US', subtotal: { a: 1 } },             // Number({}) = NaN
+      { country: 'US', weight: null, subtotal: null },
+    ]) {
+      const res = await request(app).post('/api/shipping/calculate').send(payload);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    }
+  });
 });
 
 describe('POST /api/shipping/zones/lookup (public)', () => {
