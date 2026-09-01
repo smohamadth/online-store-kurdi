@@ -795,6 +795,10 @@ router.post('/', authenticate, async (req, res, next) => {
         await creditStoreCredit({
           userId: req.user!.id,
           amount: storeCreditApplied,
+          // The debit took the store's currency; the reversal must put it
+          // back in the SAME currency or the credit lands in an invisible
+          // USD row (see the refund route for the same bug).
+          currency: storeCurrency,
           type: 'adjust',
           orderId: order.id,
           notes: `Reversal: order ${orderNumber} placement failed`,

@@ -150,6 +150,23 @@ describe('checkout wallet credit', () => {
     expect(submit.disabled).toBe(false);
   });
 
+  it('rejects a gift card in a different currency instead of adding its balance', async () => {
+    authHttp.get.mockResolvedValue({ data: { balance: 0, currency: 'USD' } });
+    authHttp.post.mockResolvedValue({
+      data: { code: 'abcd-1234', availableBalance: 20, currency: 'EUR', redeemable: true },
+    });
+    render(<CheckoutView />);
+
+    const input = screen.getByPlaceholderText('Gift card code');
+    fireEvent.change(input, { target: { value: 'abcd-1234' } });
+    screen.getByRole('button', { name: 'Check' }).click();
+
+    // The card is refused with an explanation; no balance is added to the
+    // estimate and no summary line appears.
+    await screen.findByText(/This gift card is in EUR, but this store sells in USD\./);
+    expect(screen.queryByText(/Gift card \(/)).toBeNull();
+  });
+
   it('checks a gift card, shows its balance, and sends the code + store credit in the order payload', async () => {
     authHttp.get.mockResolvedValue({ data: { balance: 10, currency: 'USD' } });
     authHttp.post.mockResolvedValue({

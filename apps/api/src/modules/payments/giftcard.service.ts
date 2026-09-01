@@ -128,15 +128,32 @@ export async function debitGiftCard(args: {
     if (!isRedeemable(card)) {
       throw new AppError(`Gift card is not redeemable (status=${card.status}, balance=${card.balance})`, 400);
     }
-    if (card.balance < args.amount) {
-      throw new AppError(`Insufficient balance: card has ${card.balance}, requested ${args.amount}`, 400);
-    }
-    const newBalance = card.balance - args.amount;
-    const newStatus = newBalance <= 0 ? 'depleted' : card.status;
-    const updated = await tx.giftCard.update({
-      where: { id: card.id },
-      data: { balance: newBalance, status: newStatus },
+    // Atomic conditional decrement (`UPDATE ... SET balance = balance - ?
+    // WHERE id = ? AND balance >= ?`): the old read-modify-write let two
+    // concurrent orders both read the same balance and both write it down
+    // by their own amount, spending the same money twice. The WHERE is
+    // evaluated at update time, so the second transaction matches nothing.
+    const res = await tx.giftCard.updateMany({
+      where: { id: card.id, balance: { gte: args.amount } },
+      data: { balance: { decrement: args.amount } },
     });
+    if (res.count !== 1) {
+      const fresh = await tx.giftCard.findUnique({ where: { id: card.id } });
+      throw new AppError(
+        `Insufficient balance: card has ${fresh?.balance ?? 0}, requested ${args.amount}`,
+        400,
+      );
+    }
+    // The status flip is a separate statement: re-read the balance so the
+    // decision is based on the actual post-decrement value, not the stale
+    // pre-read (a concurrent debit could have lowered it further).
+    const after = await tx.giftCard.findUnique({ where: { id: card.id } });
+    if (after && after.balance <= 0 && after.status !== 'depleted') {
+      await tx.giftCard.update({
+        where: { id: card.id },
+        data: { status: 'depleted' },
+      });
+    }
     await tx.giftCardTransaction.create({
       data: {
         giftCardId: card.id,
@@ -146,7 +163,7 @@ export async function debitGiftCard(args: {
         notes: args.notes ?? null,
       },
     });
-    return updated;
+    return (await tx.giftCard.findUnique({ where: { id: card.id } })) ?? card;
   });
 }
 

@@ -182,10 +182,22 @@ export default function CheckoutPage() {
       const res = await authHttp.post<any>(
         `/gift-cards/${encodeURIComponent(code)}/redeem`
       );
+      const cardCurrency = String(res?.data?.currency || 'USD').toUpperCase();
+      const storeCurrency = String(settings.currency || 'USD').toUpperCase();
+      if (cardCurrency !== storeCurrency) {
+        // A card in another currency cannot pay this store's orders; the
+        // server would reject it at placement, so surface it now instead
+        // of showing a balance that never applies.
+        setGiftCardError(
+          `This gift card is in ${cardCurrency}, but this store sells in ${storeCurrency}.`,
+        );
+        setGiftCardInfo(null);
+        return;
+      }
       setGiftCardInfo({
         code: String(res?.data?.code || code).toUpperCase(),
         availableBalance: Number(res?.data?.availableBalance) || 0,
-        currency: String(res?.data?.currency || 'USD'),
+        currency: cardCurrency,
       });
     } catch (err: any) {
       setGiftCardError(err?.message || 'Gift card is not valid');

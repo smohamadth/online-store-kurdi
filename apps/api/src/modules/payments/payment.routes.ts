@@ -422,13 +422,23 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       );
     }
 
+    // The Order row has no currency column, so the store's current
+    // currency (same source the settle path uses) applies to both the
+    // store-credit balance AND the refund Payment row below.
+    const storeSettingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+    const storeCurrency = storeSettingsRow?.currency || 'USD';
+
     // creditToStoreCredit=true: nothing ever left the store in cash for
     // this amount, so no gateway money movement — the customer's store
-    // credit balance is credited instead (atomic, ledgered).
+    // credit balance is credited instead (atomic, ledgered). The credit
+    // MUST land in the store's currency: a EUR store refunding without a
+    // currency used to create an invisible USD balance that checkout
+    // (which reads the EUR balance) could never spend.
     if (creditToStoreCredit) {
       await creditStoreCredit({
         userId: order.userId,
         amount: refundAmount,
+        currency: storeCurrency,
         type: 'refund',
         orderId,
         notes: reason || 'Refund issued as store credit',
@@ -468,11 +478,8 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
       }
     }
 
-    // Create refund payment record. The Order row has no currency column,
-    // so record the store's current currency (same source the settle path
-    // uses) instead of assuming USD.
-    const storeSettingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
-    const storeCurrency = storeSettingsRow?.currency || 'USD';
+    // Create refund payment record. Currency is the store's current
+    // currency, already resolved above.
     const refund = await prisma.payment.create({
       data: {
         orderId,
@@ -506,7 +513,10 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
     });
 
     // Best-effort auto-posting of the refund (ACCOUNTING_AUTO_POST=true).
-    await autoPostRefund(orderId, refundAmount);
+    // A creditToStoreCredit refund moves no cash — the journal entry
+    // credits customer deposits (the new liability) instead of the
+    // payment-gateway account, which would fabricate a cash refund.
+    await autoPostRefund(orderId, refundAmount, { toStoreCredit: creditToStoreCredit === true });
 
     // Fire-and-forget: email the customer that their order was refunded.
     // Never fails the refund. Reports the actual amount refunded this time.

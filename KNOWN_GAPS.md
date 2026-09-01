@@ -729,7 +729,20 @@ order; and if a debit fails mid-placement (a card drained by a
 concurrent order between validation and debit), the route reverses any
 credit already applied (ledgered as an adjust reversal) and deletes the
 just-created order, so wallet money is never spent on an order that
-never completed. Refunds: `creditToStoreCredit=true` returns the money to the
+never completed. All wallet money movements are atomic under
+concurrency: debits are conditional decrements (`WHERE balance >=
+amount`, evaluated at update time) so two concurrent checkouts can
+never spend the same balance twice, credits are atomic increments, and
+the get-or-create is a race-free upsert. All store-credit movements
+use the STORE's currency (the refund and rollback paths used to default
+to USD, so a EUR store refunded a customer into an invisible USD row
+the checkout could never spend; GET /store-credit and admin grants
+also defaulted to USD). Accounting matches the cash flow: a wallet-paid
+sale posts its debit to customer deposits (2200) instead of the
+payment-gateway account, and a creditToStoreCredit refund posts its
+credit to customer deposits instead of fabricating a gateway cash
+refund (falls back to the old behavior only when a custom chart lacks
+the deposits account). Refunds: `creditToStoreCredit=true` returns the money to the
 customer's store-credit balance (no gateway movement); cash refunds
 are capped at the amount actually paid in cash (the wallet-credit
 portion was never cash). The checkout page has a Wallet Credit

@@ -362,13 +362,30 @@ export async function buildOrderEntry(order: OrderLike): Promise<NewJournalEntry
   const shippingAmount = Math.round((order.shippingAmount || 0) * 100) / 100;
   const taxAmount = Math.round((order.taxAmount || 0) * 100) / 100;
 
+  // A wallet-covered order (paid entirely by store credit / gift card)
+  // moved no cash: the debit side belongs to the customer-deposits
+  // liability (prepaid customer value), not the payment-gateway asset.
+  // Fall back to the gateway account only when a custom chart removed
+  // the deposits account, so the revenue still gets recognized.
+  let assetAccount = paid ? gateway : receivable;
+  if (paid) {
+    const walletPayment = await prisma.payment.findFirst({
+      where: { orderId: order.id, status: 'completed', method: { in: ['store_credit', 'gift_card'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (walletPayment) {
+      const deposits = accounts.find((x) => x.code === '2200' && x.active);
+      if (deposits) assetAccount = deposits;
+    }
+  }
+
   return {
     date: order.createdAt.toISOString().slice(0, 10),
     memo: `Sale — order ${order.orderNumber}`,
     reference: order.orderNumber,
     currency: DEFAULT_CURRENCY,
     lines: [
-      { accountId: (paid ? gateway : receivable).id, debit: amount, credit: 0 },
+      { accountId: assetAccount.id, debit: amount, credit: 0 },
       { accountId: sales.id, debit: 0, credit: salesAmount },
       ...(shippingAmount > 0 ? [{ accountId: shipping.id, debit: 0, credit: shippingAmount }] : []),
       ...(taxAmount > 0 ? [{ accountId: tax.id, debit: 0, credit: taxAmount }] : []),
@@ -519,14 +536,31 @@ export async function autoPostOrder(orderId: string): Promise<JournalEntry | nul
 /**
  * Best-effort refund posting: debit refunds/returns, credit the payment
  * gateway. Used when a completed payment is refunded. Never throws.
+ *
+ * `toStoreCredit` refunds return value to the customer's store-credit
+ * balance — no cash moves — so the credit side is the customer-deposits
+ * liability (2200) instead of the gateway account; if a custom chart
+ * removed that account the posting is skipped rather than fabricating a
+ * cash event.
  */
-export async function autoPostRefund(orderId: string, amount: number): Promise<JournalEntry | null> {
+export async function autoPostRefund(
+  orderId: string,
+  amount: number,
+  opts?: { toStoreCredit?: boolean },
+): Promise<JournalEntry | null> {
   if (process.env.ACCOUNTING_AUTO_POST !== 'true') return null;
   try {
     return await withStoreLock(async () => {
       const accounts = await readAccounts();
       const refunds = await accountByCode(accounts, '4200', 'refunds & returns');
-      const gateway = await accountByCode(accounts, '1200', 'payment gateway');
+      let creditAccount: Account;
+      if (opts?.toStoreCredit) {
+        const deposits = accounts.find((x) => x.code === '2200' && x.active);
+        if (!deposits) return null; // no deposit liability account: skip, don't fabricate cash
+        creditAccount = deposits;
+      } else {
+        creditAccount = await accountByCode(accounts, '1200', 'payment gateway');
+      }
       const entry: JournalEntry = {
         id: crypto.randomUUID(),
         date: new Date().toISOString().slice(0, 10),
@@ -535,7 +569,7 @@ export async function autoPostRefund(orderId: string, amount: number): Promise<J
         currency: DEFAULT_CURRENCY,
         lines: [
           { accountId: refunds.id, debit: Math.round(amount * 100) / 100, credit: 0 },
-          { accountId: gateway.id, debit: 0, credit: Math.round(amount * 100) / 100 },
+          { accountId: creditAccount.id, debit: 0, credit: Math.round(amount * 100) / 100 },
         ],
         createdAt: new Date().toISOString(),
         voided: false,

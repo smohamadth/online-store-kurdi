@@ -152,7 +152,17 @@ router.post('/gift-cards/:id/credit', authenticate, authorize('admin'), async (r
 // GET /api/store-credit - own balance + history
 router.get('/store-credit', authenticate, async (req, res, next) => {
   try {
-    const currency = (typeof req.query.currency === 'string' && req.query.currency) || 'USD';
+    // Default to the STORE's currency, not a hardcoded 'USD': a EUR
+    // store's checkout reads this endpoint without a currency param and
+    // would otherwise show a $0 balance while the EUR credit sits unused.
+    let currency: string | undefined =
+      typeof req.query.currency === 'string' && req.query.currency
+        ? req.query.currency
+        : undefined;
+    if (!currency) {
+      currency =
+        (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.currency || 'USD';
+    }
     const balance = await getStoreCreditBalance(req.user!.id, currency);
     const transactions = await listStoreCreditTransactions(req.user!.id, currency);
     res.json({
@@ -179,10 +189,15 @@ router.post('/store-credit', authenticate, authorize('admin', 'manager'), async 
     // a credit row for a non-existent userId.
     const user = await prisma.user.findUnique({ where: { id: body.userId } });
     if (!user) throw new AppError('User not found', 404);
+    // Currency defaults to the store's currency (a EUR store granting
+    // without a currency must not create an invisible USD balance).
+    const currency = body.currency
+      ?? (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.currency
+      ?? 'USD';
     const updated = await creditStoreCredit({
       userId: body.userId,
       amount: body.amount,
-      currency: body.currency,
+      currency,
       type: body.type,
       orderId: body.orderId,
       notes: body.notes,
@@ -206,41 +221,54 @@ router.post('/store-credit/adjust', authenticate, authorize('admin'), async (req
     // Same user-existence check as the credit route.
     const user = await prisma.user.findUnique({ where: { id: body.userId } });
     if (!user) throw new AppError('User not found', 404);
+    const currency = body.currency
+      ?? (await prisma.storeSettings.findUnique({ where: { id: 'default' } }))?.currency
+      ?? 'USD';
     if (body.amount > 0) {
       const updated = await creditStoreCredit({
         userId: body.userId,
         amount: body.amount,
+        currency,
         type: 'adjust',
         notes: body.reason,
         createdById: req.user!.id,
       });
       return res.json({ status: 'success', data: updated });
     } else {
-    // Negative adjust: treat as a debit. We don't have a public
-    // debit function (the order pipeline uses one), so we reach
-    // into the prisma to do a guarded decrement.
-    const updated = await prisma.$transaction(async (tx: any) => {
-      const credit = await getOrCreateStoreCredit(body.userId, body.currency);
-      if (credit.balance + body.amount < 0) {
-        throw new AppError(`Insufficient balance: would go negative`, 400);
-      }
-      const out = await tx.storeCredit.update({
-        where: { id: credit.id },
-        data: { balance: credit.balance + body.amount },
+      // Negative adjust: atomic conditional decrement. The old code
+      // read the balance outside the transaction and wrote a computed
+      // value, which could lose a concurrent update; the WHERE is now
+      // evaluated at update time so the balance can never go negative.
+      const updated = await prisma.$transaction(async (tx: any) => {
+        let credit = await tx.storeCredit.findUnique({
+          where: { userId_currency: { userId: body.userId, currency } },
+        });
+        if (!credit) {
+          credit = await tx.storeCredit.create({
+            data: { userId: body.userId, currency, balance: 0 },
+          });
+        }
+        const dec = -body.amount; // positive
+        const res = await tx.storeCredit.updateMany({
+          where: { id: credit.id, balance: { gte: dec } },
+          data: { balance: { decrement: dec } },
+        });
+        if (res.count !== 1) {
+          throw new AppError('Insufficient balance: would go negative', 400);
+        }
+        await tx.storeCreditTransaction.create({
+          data: {
+            storeCreditId: credit.id,
+            amount: body.amount,  // already negative
+            type: 'adjust',
+            notes: body.reason,
+            createdById: req.user!.id,
+          },
+        });
+        return tx.storeCredit.findUnique({ where: { id: credit.id } });
       });
-      await tx.storeCreditTransaction.create({
-        data: {
-          storeCreditId: credit.id,
-          amount: body.amount,  // already negative
-          type: 'adjust',
-          notes: body.reason,
-          createdById: req.user!.id,
-        },
-      });
-      return out;
-    });
-    return res.json({ status: 'success', data: updated });
-  }
+      return res.json({ status: 'success', data: updated });
+    }
   } catch (err) { next(err); }
 });
 

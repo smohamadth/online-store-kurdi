@@ -282,6 +282,31 @@ function nowId(_model: string): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Apply a Prisma `data` object to a row. Plain values are merged;
+ * numeric operators (`decrement` / `increment` / `multiply` / `divide`)
+ * and `set` are applied like the real client does. Shared by `update`
+ * and `updateMany` so atomic balance movements behave identically in
+ * both.
+ */
+function applyUpdateData(row: Row, data: any): Row {
+  const merged: any = { ...row };
+  for (const [k, v] of Object.entries(data || {})) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      if ('decrement' in v) merged[k] = (merged[k] ?? 0) - Number(v.decrement);
+      else if ('increment' in v) merged[k] = (merged[k] ?? 0) + Number(v.increment);
+      else if ('multiply' in v) merged[k] = (merged[k] ?? 0) * Number(v.multiply);
+      else if ('divide' in v) merged[k] = (merged[k] ?? 0) / Number(v.divide);
+      else if ('set' in v) merged[k] = v.set;
+      else merged[k] = v;
+    } else {
+      merged[k] = v;
+    }
+  }
+  merged.updatedAt = new Date();
+  return merged;
+}
+
 function match(row: Row, where: any, parentModel: string = ''): boolean {
   if (!where) return true;
   const singular = parentModel;
@@ -830,23 +855,7 @@ function makeDelegate(model: string) {
       const store = storeFor(singular);
       for (const [id, row] of store) {
         if (match(row, where, singular)) {
-          // Apply special operators like `decrement` / `increment` / `multiply`
-          // that the real client understands. We do a shallow copy + merge
-          // for plain values and apply numeric ops when we recognise them.
-          const merged: any = { ...row };
-          for (const [k, v] of Object.entries(data || {})) {
-            if (v && typeof v === 'object' && !Array.isArray(v)) {
-              if ('decrement' in v) merged[k] = (merged[k] ?? 0) - Number(v.decrement);
-              else if ('increment' in v) merged[k] = (merged[k] ?? 0) + Number(v.increment);
-              else if ('multiply' in v) merged[k] = (merged[k] ?? 0) * Number(v.multiply);
-              else if ('divide' in v) merged[k] = (merged[k] ?? 0) / Number(v.divide);
-              else if ('set' in v) merged[k] = v.set;
-              else merged[k] = v;
-            } else {
-              merged[k] = v;
-            }
-          }
-          merged.updatedAt = new Date();
+          const merged = applyUpdateData(row, data);
           store.set(id, merged);
           return applyInclude(merged, include, select, singular);
         }
@@ -858,7 +867,7 @@ function makeDelegate(model: string) {
       let count = 0;
       for (const [id, row] of store) {
         if (match(row, where, singular)) {
-          store.set(id, { ...row, ...data, updatedAt: new Date() });
+          store.set(id, applyUpdateData(row, data));
           count++;
         }
       }
@@ -868,7 +877,7 @@ function makeDelegate(model: string) {
       const store = storeFor(singular);
       for (const [id, row] of store) {
         if (match(row, where, singular)) {
-          const updated = { ...row, ...update, updatedAt: new Date() };
+          const updated = applyUpdateData(row, update);
           store.set(id, updated);
           return applyInclude(updated, include, select, singular);
         }

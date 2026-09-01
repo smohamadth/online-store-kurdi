@@ -15,12 +15,19 @@
  *     at the amount actually paid in cash
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma, peekMockStore } from '../helpers/mockPrisma';
 import { createProduct, createCategory } from '../helpers/factories';
 import { AppError } from '../../src/middleware/errorHandler';
 import * as giftcardService from '../../src/modules/payments/giftcard.service';
+import {
+  debitStoreCredit,
+  creditStoreCredit,
+} from '../../src/modules/payments/storecredit.service';
 import type { Express } from 'express';
 
 let app: Express;
@@ -363,10 +370,16 @@ describe('mid-flight debit failure', () => {
 
     const { token, user } = await authHeader();
     const admin = await authHeader({ role: 'admin' });
+    // EUR store: the reversal must put the credit back in EUR (the same
+    // currency the debit took), not an invisible USD row.
+    await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ storeName: 'EUR Shop', currency: 'EUR' });
     const cat = await createCategory();
     const product = await createProduct({ price: 20, quantity: 5, categoryId: cat.id });
     await grantStoreCredit(admin.token, user.id, 10);
-    const card = await issueGiftCard(admin.token, 50);
+    const card = await issueGiftCard(admin.token, 50, { currency: 'EUR' });
 
     const res = await placeOrder(token, product.id, {
       applyStoreCredit: true,
@@ -377,9 +390,12 @@ describe('mid-flight debit failure', () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     // No order row survives (items cascade with it), the store credit
-    // is back at its pre-order balance, and the card was never debited.
+    // is back at its pre-order balance IN THE SAME CURRENCY, and the
+    // card was never debited.
     expect(peekMockStore('order')).toHaveLength(0);
     const credits = peekMockStore('storeCredit');
+    expect(credits).toHaveLength(1);
+    expect(credits[0].currency).toBe('EUR');
     expect(credits[0].balance).toBe(10);
     const txs = peekMockStore('storeCreditTransaction');
     // The reversal is the adjust row linked to the (now deleted) order;
@@ -388,5 +404,236 @@ describe('mid-flight debit failure', () => {
     const cards = peekMockStore('giftCard');
     expect(cards[0].balance).toBe(50);
     expect(peekMockStore('giftCardTransaction').some((t: any) => t.type === 'use')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Concurrency: the balance movements must be atomic. Two concurrent orders
+// must never spend the same balance twice (the old read-modify-write let
+// both read the same balance and both write their own result).
+// ---------------------------------------------------------------------------
+describe('concurrent wallet movements', () => {
+  it('two concurrent store-credit debits never overspend the balance', async () => {
+    const { token, user } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    await grantStoreCredit(admin.token, user.id, 100);
+
+    const [a, b] = await Promise.all([
+      debitStoreCredit({ userId: user.id, amount: 60, currency: 'USD' }),
+      debitStoreCredit({ userId: user.id, amount: 60, currency: 'USD' }),
+    ]);
+
+    // 100 balance can only be spent once: 60 + 40, never 60 + 60.
+    expect(Math.round((a.applied + b.applied) * 100) / 100).toBe(100);
+    const rows = peekMockStore('storeCredit');
+    expect(rows[0].balance).toBe(0);
+    const uses = peekMockStore('storeCreditTransaction').filter((t: any) => t.type === 'order_use');
+    expect(uses.reduce((s: number, t: any) => s + t.amount, 0)).toBe(-100);
+  });
+
+  it('two concurrent store-credit credits both land (single row, no lost update)', async () => {
+    const { user } = await authHeader();
+
+    await Promise.all([
+      creditStoreCredit({ userId: user.id, amount: 25, currency: 'USD' }),
+      creditStoreCredit({ userId: user.id, amount: 30, currency: 'USD' }),
+    ]);
+
+    // Exactly ONE balance row — the race-free upsert must not let the two
+    // first-time credits create duplicate rows.
+    const rows = peekMockStore('storeCredit');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].balance).toBe(55);
+    expect(peekMockStore('storeCreditTransaction')).toHaveLength(2);
+  });
+
+  it('two concurrent gift-card debits never overspend the card', async () => {
+    const admin = await authHeader({ role: 'admin' });
+    const card = await issueGiftCard(admin.token, 100);
+
+    const results = await Promise.allSettled([
+      giftcardService.debitGiftCard({ code: card.code, amount: 60 }),
+      giftcardService.debitGiftCard({ code: card.code, amount: 60 }),
+    ]);
+
+    const ok = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(ok).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    const cards = peekMockStore('giftCard');
+    expect(cards[0].balance).toBe(40);
+    // One use ledger row of -60.
+    expect(peekMockStore('giftCardTransaction').filter((t: any) => t.type === 'use')).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Currency correctness: store credit is per-currency, and every movement
+// must land in the STORE's currency — never a hardcoded 'USD' row that the
+// checkout (which reads the store-currency balance) can never spend.
+// ---------------------------------------------------------------------------
+describe('store credit currency handling', () => {
+  async function makeEurStore() {
+    const admin = await authHeader({ role: 'admin' });
+    await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ storeName: 'EUR Shop', currency: 'EUR' });
+    return admin;
+  }
+
+  it('GET /store-credit defaults to the store currency, not USD', async () => {
+    const admin = await makeEurStore();
+    const { token, user } = await authHeader();
+    // Grant EUR credit (explicit currency), then read without a param.
+    await request(app)
+      .post('/api/store-credit')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ userId: user.id, amount: 42, currency: 'EUR' });
+
+    const res = await request(app)
+      .get('/api/store-credit')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.currency).toBe('EUR');
+    expect(res.body.data.balance).toBe(42);
+  });
+
+  it('admin grant without a currency lands in the store currency', async () => {
+    const admin = await makeEurStore();
+    const { token, user } = await authHeader();
+
+    const res = await request(app)
+      .post('/api/store-credit')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ userId: user.id, amount: 20 });
+    expect(res.status).toBe(201);
+
+    const rows = peekMockStore('storeCredit');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].currency).toBe('EUR');
+    expect(rows[0].balance).toBe(20);
+  });
+
+  it('positive adjust respects the requested currency', async () => {
+    const admin = await authHeader({ role: 'admin' });
+    const { token, user } = await authHeader();
+
+    const res = await request(app)
+      .post('/api/store-credit/adjust')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ userId: user.id, amount: 15, currency: 'EUR', reason: 'goodwill' });
+    expect(res.status).toBe(200);
+
+    const rows = peekMockStore('storeCredit');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].currency).toBe('EUR');
+    expect(rows[0].balance).toBe(15);
+  });
+
+  it('refund creditToStoreCredit lands in the store currency', async () => {
+    const admin = await makeEurStore();
+    const { token, user } = await authHeader();
+    const cat = await createCategory();
+    const product = await createProduct({ price: 10, quantity: 5, categoryId: cat.id });
+    await grantStoreCredit(admin.token, user.id, 10);
+
+    const placed = await placeOrder(token, product.id, { applyStoreCredit: true });
+    expect(placed.status).toBe(201);
+    expect(placed.body.data.paymentStatus).toBe('completed');
+
+    const refund = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ orderId: placed.body.data.id, amount: 10, creditToStoreCredit: true });
+    expect(refund.status).toBe(200);
+
+    const rows = peekMockStore('storeCredit');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].currency).toBe('EUR');
+    expect(rows[0].balance).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Accounting: wallet payments move no cash, so the journal must not pretend
+// they did — sales debit customer deposits (2200), store-credit refunds
+// credit customer deposits (2200) instead of the gateway account (1200).
+// ---------------------------------------------------------------------------
+describe('wallet payments in the accounting journal', () => {
+  let tempDir = '';
+  afterEach(() => {
+    delete process.env.ACCOUNTING_AUTO_POST;
+    if (process.env.ACCOUNTING_DIR) {
+      delete process.env.ACCOUNTING_DIR;
+      if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  async function accountCodeById(): Promise<Map<string, string>> {
+    const raw = fs.readFileSync(path.join(tempDir, 'accounts.json'), 'utf8');
+    return new Map((JSON.parse(raw) as any[]).map((a) => [a.id, a.code]));
+  }
+
+  it('posts a wallet-covered sale to customer deposits, not the gateway account', async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wallet-accounting-'));
+    process.env.ACCOUNTING_DIR = tempDir;
+    process.env.ACCOUNTING_AUTO_POST = 'true';
+    const { token, user } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const product = await createProduct({ price: 30, quantity: 5, categoryId: cat.id });
+    await grantStoreCredit(admin.token, user.id, 30);
+
+    const placed = await placeOrder(token, product.id, { applyStoreCredit: true });
+    expect(placed.status).toBe(201);
+    expect(placed.body.data.paymentStatus).toBe('completed');
+
+    const entries = await request(app)
+      .get('/api/accounting/entries')
+      .set('Authorization', `Bearer ${admin.token}`);
+    const sale = entries.body.data.find((e: any) => e.reference === placed.body.data.orderNumber);
+    expect(sale).toBeTruthy();
+    const byCode = await accountCodeById();
+    const debitLine = sale.lines.find((l: any) => l.debit > 0);
+    expect(byCode.get(debitLine.accountId)).toBe('2200');
+  });
+
+  it('posts a creditToStoreCredit refund to customer deposits, not the gateway account', async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wallet-accounting-'));
+    process.env.ACCOUNTING_DIR = tempDir;
+    process.env.ACCOUNTING_AUTO_POST = 'true';
+    const { token, user } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const product = await createProduct({ price: 50, quantity: 5, categoryId: cat.id });
+    await grantStoreCredit(admin.token, user.id, 10);
+
+    const placed = await placeOrder(token, product.id, { applyStoreCredit: true });
+    expect(placed.status).toBe(201);
+    expect(placed.body.data.paymentStatus).toBe('pending');
+
+    // Settle the $40 cash remainder like a COD collection, then refund
+    // everything to store credit.
+    await request(app)
+      .post('/api/payments/process')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ orderId: placed.body.data.id, paymentMethod: 'cash_on_delivery' });
+    const refund = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ orderId: placed.body.data.id, amount: 50, creditToStoreCredit: true });
+    expect(refund.status).toBe(200);
+
+    const entries = await request(app)
+      .get('/api/accounting/entries')
+      .set('Authorization', `Bearer ${admin.token}`);
+    const refundEntry = entries.body.data.find(
+      (e: any) => e.memo.includes('Refund') && e.reference === placed.body.data.id,
+    );
+    expect(refundEntry).toBeTruthy();
+    const byCode = await accountCodeById();
+    const creditLine = refundEntry.lines.find((l: any) => l.credit > 0);
+    expect(byCode.get(creditLine.accountId)).toBe('2200');
   });
 });
