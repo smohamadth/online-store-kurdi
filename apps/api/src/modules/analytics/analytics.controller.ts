@@ -5,7 +5,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { logger } from '../../utils/logger';
-import { parsePagination } from '../../utils/pagination';
+import { parsePagination, parseDays } from '../../utils/pagination';
 
 export class AnalyticsController {
   private analyticsService: AnalyticsService;
@@ -84,7 +84,7 @@ export class AnalyticsController {
         });
       }
 
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const behavior = await this.analyticsService.getUserBehavior(userId, days);
 
       res.json({
@@ -100,7 +100,7 @@ export class AnalyticsController {
   getProductAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const analytics = await this.analyticsService.getProductAnalytics(id, days);
 
       res.json({
@@ -115,7 +115,7 @@ export class AnalyticsController {
   // Get search analytics (admin only)
   getSearchAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const analytics = await this.analyticsService.getSearchAnalytics(days);
 
       res.json({
@@ -131,7 +131,7 @@ export class AnalyticsController {
   getTrendingProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { limit } = parsePagination(req.query, { limit: 10 });
-      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const days = parseDays(req.query.days, 7);
       const products = await this.analyticsService.getTrendingProducts(limit, days);
 
       res.json({

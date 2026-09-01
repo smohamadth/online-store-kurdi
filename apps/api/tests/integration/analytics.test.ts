@@ -81,6 +81,18 @@ describe('GET /api/analytics/user/behavior', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
   });
+
+  it('clamps a hostile days window (cannot 500 on Invalid Date)', async () => {
+    // Regression: `days=abc` produced NaN -> Invalid Date -> Prisma 500;
+    // `days=-999999` produced a future-start range. Both must 200.
+    const { token } = await authHeader();
+    for (const days of ['abc', '-999999', '0', '1e999']) {
+      const res = await request(app)
+        .get(`/api/analytics/user/behavior?days=${days}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+    }
+  });
 });
 
 describe('Admin analytics', () => {

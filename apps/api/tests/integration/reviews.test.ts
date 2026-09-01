@@ -199,6 +199,18 @@ describe('GET /api/reviews (admin queue)', () => {
     const res = await request(app).get('/api/reviews').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
   });
+
+  it('clamps hostile pagination (negative page cannot 500)', async () => {
+    // Regression: `page=-5` used to produce a negative `skip` and a
+    // Prisma error. It must now clamp to page 1 and return 200.
+    const { token: adminToken } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .get('/api/reviews?page=-5&limit=999999')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.limit).toBeLessThanOrEqual(200);
+  });
 });
 
 describe('GET /api/users/me/reviews', () => {

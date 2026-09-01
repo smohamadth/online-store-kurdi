@@ -4,7 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { RecommendationService } from './recommendation.service';
 import { logger } from '../../utils/logger';
-import { parsePagination } from '../../utils/pagination';
+import { parsePagination, parseDays } from '../../utils/pagination';
 
 export class RecommendationController {
   private recommendationService: RecommendationService;
@@ -176,7 +176,7 @@ export class RecommendationController {
   // Get recommendation analytics (admin only)
   getAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const analytics = await this.recommendationService.getRecommendationAnalytics(days);
 
       res.json({

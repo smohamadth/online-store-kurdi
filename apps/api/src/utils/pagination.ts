@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Pagination parsing (shared).
+// Pagination + time-window parsing (shared).
 //
 // List endpoints used to do `parseInt(req.query.limit) || N` with no upper
 // bound, so `?limit=999999999` asked the DB for every row and `?limit=-5`
@@ -11,6 +11,24 @@ export interface Pagination {
   page: number;
   limit: number;
   skip: number;
+}
+
+/**
+ * Parse a "days" window parameter (analytics ranges, dashboards).
+ * Non-positive, fractional or NaN inputs fall back to the default and the
+ * result is clamped to [1, maxDays] — a hostile `?days=-999999` or
+ * `?days=abc` can never produce a future-start range or an Invalid Date
+ * (Prisma 500 on `gte: Invalid Date`).
+ */
+export function parseDays(
+  value: unknown,
+  defaultDays = 30,
+  maxDays = 365
+): number {
+  if (value === undefined || value === null || value === '') return defaultDays;
+  const n = typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) return defaultDays;
+  return Math.min(n, maxDays);
 }
 
 /**

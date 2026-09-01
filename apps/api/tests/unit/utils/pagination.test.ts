@@ -7,7 +7,31 @@
  * defaults and clamp the limit to a hard max.
  */
 import { describe, it, expect } from 'vitest';
-import { parsePagination } from '../../../src/utils/pagination';
+import { parsePagination, parseDays } from '../../../src/utils/pagination';
+
+describe('parseDays', () => {
+  it('returns the default when absent/empty/NaN/fractional/negative', () => {
+    expect(parseDays(undefined)).toBe(30);
+    expect(parseDays(null)).toBe(30);
+    expect(parseDays('')).toBe(30);
+    expect(parseDays('abc')).toBe(30);
+    expect(parseDays('3.5')).toBe(30);
+    expect(parseDays('-7')).toBe(30);
+    expect(parseDays('0')).toBe(30);
+    expect(parseDays('1e999')).toBe(30);
+  });
+
+  it('parses valid integers and clamps to the max', () => {
+    expect(parseDays('7')).toBe(7);
+    expect(parseDays('9999')).toBe(365); // clamped to maxDays
+    expect(parseDays('1')).toBe(1);
+  });
+
+  it('respects custom default and max', () => {
+    expect(parseDays(undefined, 14, 90)).toBe(14);
+    expect(parseDays('100', 14, 90)).toBe(90);
+  });
+});
 
 describe('parsePagination', () => {
   it('uses defaults when params are absent', () => {

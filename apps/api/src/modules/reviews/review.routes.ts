@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { parsePagination } from '../../utils/pagination';
 import {
   hasPurchasingOrder,
   normaliseReviewPhotos,
@@ -440,9 +441,10 @@ router.get('/users/me/reviews', authenticate, async (req, res, next) => {
 // product to collect reviews (an N+1 that also missed reviews on page 2+).
 router.get('/reviews', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, {
+      limit: 50,
+      maxLimit: 200,
+    });
     const { status } = req.query as { status?: string };
 
     const where: any = {};
