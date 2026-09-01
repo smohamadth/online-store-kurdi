@@ -16,6 +16,7 @@ import { getGatewayConfig, isGatewayConfigured } from './gatewayConfig';
 import { defaultHttp } from './gateways/helpers';
 import type { GatewayContext, GatewayOrder, RefundPaymentResult } from './gateways/types';
 import { autoPostOrder } from '../accounting/accounting.service';
+import { createCommissionForOrder } from '../affiliates/affiliate.service';
 import { sendPaymentConfirmation } from '../../services/email.service';
 import { emit } from '../plugins/pluginHooks';
 
@@ -210,6 +211,10 @@ export async function settleOrderPaid(args: {
     });
   });
   await autoPostOrder(args.orderId);
+
+  // Best-effort affiliate commission for referred orders (idempotent on
+  // orderId; never throws).
+  await createCommissionForOrder(args.orderId);
 
   // Plugin event: payment.settled (fire-and-forget — emit never throws).
   void emit('payment.settled', {

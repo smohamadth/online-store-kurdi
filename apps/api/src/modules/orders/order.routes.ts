@@ -26,6 +26,7 @@ import { emit } from '../plugins/pluginHooks';
 import { calculateTaxForOrder } from '../tax/tax.service';
 import { calculateShippingForOrder } from '../shipping/shipping.service';
 import { validateCoupon, CouponValidationError } from '../coupons/coupon.service';
+import { readCookie, AFFILIATE_COOKIE } from '../affiliates/affiliate.helpers';
 import { z } from 'zod';
 import { parsePagination } from '../../utils/pagination';
 
@@ -682,6 +683,28 @@ router.post('/', authenticate, async (req, res, next) => {
       );
     }
 
+    // ------------------------------------------------------------------
+    // Affiliate attribution: the aff_ref cookie set by
+    // POST /api/affiliates/track when the visitor came through an
+    // affiliate link. Only stored when the program is enabled AND the
+    // code belongs to an active affiliate; anything else is silently
+    // ignored — a stale/fake ref must never block checkout. The
+    // commission itself is created later, when the order is PAID.
+    // ------------------------------------------------------------------
+    let affiliateId: string | null = null;
+    let affiliateCode: string | null = null;
+    const refCode = readCookie(req, AFFILIATE_COOKIE);
+    if (refCode) {
+      const affSettings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+      if (affSettings?.affiliateEnabled) {
+        const affiliate = await prisma.affiliate.findUnique({ where: { code: refCode } });
+        if (affiliate && affiliate.status === 'active') {
+          affiliateId = affiliate.id;
+          affiliateCode = affiliate.code;
+        }
+      }
+    }
+
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
@@ -691,6 +714,8 @@ router.post('/', authenticate, async (req, res, next) => {
         orderNumber,
         userId: req.user!.id,
         status: 'pending',
+        affiliateId,
+        affiliateCode,
         subtotal: finalSubtotal,
         taxAmount: finalTaxAmount,
         shippingAmount: finalShippingAmount,

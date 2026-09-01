@@ -44,6 +44,7 @@ model User {
   inventoryLogs InventoryLog[]
   storeCredits    StoreCredit[]
   giftCardsIssued  GiftCard[]   @relation("GiftCardCreatedBy")
+  affiliate       Affiliate?
 
   @@index([email])
   @@index([role])
@@ -525,6 +526,15 @@ model Order {
   storeCreditApplied Float     @default(0)
   giftCardApplied    Float     @default(0)
   giftCardCode       String?   // the card code debited, for the ledger trail
+
+  // Affiliate attribution: captured from the aff_ref cookie at placement
+  // when the affiliate program is enabled and the code belongs to an
+  // active affiliate. A commission is created when the order is paid
+  // (idempotent on orderId). Null for orders placed without a valid
+  // referral, or while the program is off.
+  affiliateId        String?
+  affiliateCode      String?   // the code as seen in ?ref=CODE, for humans
+  affiliateCommission AffiliateCommission?
   
   // Notes
   notes             String?
@@ -539,6 +549,7 @@ model Order {
   user              User      @relation(fields: [userId], references: [id])
   shippingAddress   Address?  @relation(fields: [shippingAddressId], references: [id])
   shippingMethod    ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
+  affiliate         Affiliate? @relation(fields: [affiliateId], references: [id])
   items             OrderItem[]
   payments          Payment[]
   inventoryLogs     InventoryLog[]
@@ -548,6 +559,7 @@ model Order {
   @@index([status])
   @@index([paymentStatus])
   @@index([createdAt])
+  @@index([affiliateId])
 }
 
 // Order item model
@@ -786,6 +798,98 @@ model StoreCreditTransaction {
   @@index([orderId])
 }
 
+// ============================================
+// AFFILIATE MARKETING
+// ============================================
+//
+// The program is opt-in per store (StoreSettings.affiliateEnabled, default
+// off). A user applies, an admin approves them, and they promote their
+// unique `code` via a link like https://store/?ref=CODE. Visitors who land
+// on that link get an `aff_ref` cookie; an order placed with the cookie is
+// attributed to the affiliate, and when the order is PAID a commission row
+// is created at `order.totalAmount * rate / 100` (rate = affiliate's
+// override, else the store default). See docs/AFFILIATES_PLAN.md.
+
+model Affiliate {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  code          String   @unique // URL-safe referral code shown in ?ref=CODE
+  status        String   @default("pending") // pending, active, suspended
+  rateOverride  Float?   // % override; null = store default (affiliateRate)
+  totalEarned   Float    @default(0) // lifetime approved commissions
+  totalPaid     Float    @default(0) // lifetime paid-out amount
+  clicks        Int      @default(0) // denormalized click counter
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]
+  clicksLog     AffiliateClick[]
+  commissions   AffiliateCommission[]
+  payouts       AffiliatePayout[]
+
+  @@index([status])
+}
+
+// One tracked visit through an affiliate link. `ipHash` is a sha256 of the
+// visitor IP so the store can see rough unique-visitor counts without
+// storing IPs (PII). Clicks are display metrics — best-effort.
+model AffiliateClick {
+  id            String   @id @default(uuid())
+  affiliateId   String
+  ipHash        String?  // sha256(ip), so no raw IP is stored
+  createdAt     DateTime @default(now())
+
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId, createdAt])
+}
+
+// Commission earned on a PAID order attributed to an affiliate. One row per
+// order, ever (`orderId` unique) so webhook replays can never double-pay.
+// status: pending (awaiting admin approval) -> approved | rejected.
+model AffiliateCommission {
+  id            String   @id @default(uuid())
+  affiliateId   String
+  orderId       String   @unique
+  orderNumber   String
+  orderAmount   Float    // full order value the % was computed on
+  rate          Float    // the rate actually applied (override or store default)
+  amount        Float    // orderAmount * rate / 100, rounded to 2dp
+  status        String   @default("pending") // pending, approved, rejected
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  approvedAt    DateTime?
+
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  order         Order     @relation(fields: [orderId], references: [id])
+
+  @@index([affiliateId, status])
+  @@index([status])
+}
+
+// Withdrawal request from an affiliate, resolved by an admin. status:
+// pending -> paid | rejected. When a payout is paid the affiliate's
+// totalPaid is incremented atomically; available balance is always
+// (approved commissions) - totalPaid.
+model AffiliatePayout {
+  id            String   @id @default(uuid())
+  affiliateId   String
+  amount        Float
+  status        String   @default("pending") // pending, paid, rejected
+  currency      String   @default("USD")
+  notes         String?
+  adminNotes    String?
+  requestedAt   DateTime @default(now())
+  resolvedAt    DateTime?
+
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([status])
+}
+
 // Analytics and ML Data Collection Models
 
 // User behavior events for ML
@@ -961,6 +1065,13 @@ model StoreSettings {
   // metadata list so the checkout can list enabled gateways without
   // ever seeing a credential. See modules/payments/gatewayConfig.ts.
   paymentGateways       String    @default("{}")
+
+  // Affiliate marketing program. Default OFF — the feature is opt-in per
+  // store; affiliateRate is the default commission % applied to paid
+  // orders attributed via an affiliate link (per-affiliate overrides are
+  // set on the Affiliate row).
+  affiliateEnabled      Boolean   @default(false)
+  affiliateRate         Float     @default(10)
   
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

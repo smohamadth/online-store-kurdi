@@ -22,6 +22,7 @@ import { logger } from '../../utils/logger';
 import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
+import { createCommissionForOrder } from '../affiliates/affiliate.service';
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
 import { creditStoreCredit } from './storecredit.service';
 import { getGatewayById, isGatewayMethod } from './gateways/registry';
@@ -104,6 +105,10 @@ export async function markOrderPaidByStripe(
   // Best-effort: when ACCOUNTING_AUTO_POST=true, post the sale entry. Never
   // throws, so a posting hiccup cannot fail the (idempotent) webhook.
   await autoPostOrder(orderId);
+
+  // Best-effort affiliate commission for referred orders (idempotent on
+  // orderId; never throws).
+  await createCommissionForOrder(orderId);
 
   // Fire-and-forget: email the customer that their payment was received.
   await notifyPaymentReceived(orderId).catch(() => {});
@@ -352,6 +357,10 @@ router.post('/process', authenticate, async (req, res, next) => {
 
     // Best-effort auto-posting of the settled sale (ACCOUNTING_AUTO_POST=true).
     await autoPostOrder(orderId);
+
+    // Best-effort affiliate commission for referred orders (idempotent on
+    // orderId; never throws).
+    await createCommissionForOrder(orderId);
 
     // Fire-and-forget: email the customer that their COD/bank-transfer
     // payment was recorded. Never fails the settlement.

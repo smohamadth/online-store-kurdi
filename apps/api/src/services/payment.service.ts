@@ -16,6 +16,7 @@ import Stripe from 'stripe';
 import { env } from '../config/environment';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
+import { createCommissionForOrder } from '../modules/affiliates/affiliate.service';
 
 // Initialize Stripe (never called - see header; initializeStripe() is a
 // leftover of the pre-config/stripe.ts architecture)
@@ -203,6 +204,10 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         gatewayResponse: JSON.stringify(paymentIntent),
       },
     });
+
+    // Best-effort affiliate commission for referred orders (idempotent on
+    // orderId; never throws — the webhook must stay replay-safe).
+    await createCommissionForOrder(orderId);
 
     logger.info(`Payment succeeded for order ${orderId}`);
   } catch (error) {

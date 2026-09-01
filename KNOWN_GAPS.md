@@ -852,3 +852,42 @@ per email per window (mailbox bombing / token spam) and reset-
 password at 20 invalid tokens per IP. All state is per-process
 in-memory, so on a multi-instance deployment the cap is per
 instance; windows are 15 minutes.
+
+## 18. Affiliate marketing — shipped
+
+The affiliate program is a full feature now (docs/AFFILIATES.md): a
+store turns it on in Admin → Affiliates (StoreSettings.affiliateEnabled,
+default OFF) with a default commission rate (affiliateRate, default 10%).
+Customers apply; the admin approves them; each affiliate gets a unique
+referral code and a link (`/?ref=CODE`). A visitor landing on that link
+gets a 30-day `aff_ref` cookie (httpOnly, set server-side by
+POST /api/affiliates/track, which also records the click). Order
+placement captures the cookie ONLY when the program is on and the code
+belongs to an active affiliate; when the order is PAID a commission is
+created (`order.totalAmount × rate / 100`, rate = affiliate override or
+store default) — idempotent per order, best-effort and never blocking
+payment settlement. Commissions: pending → approved | rejected by the
+admin (approval moves `totalEarned` atomically). Payouts: the affiliate
+requests any amount up to their available balance (approved − paid, one
+pending request at a time); the admin marks it paid or rejects it
+(`totalPaid` moves atomically, guarded so a payout can never exceed the
+live balance). Affiliate dashboard in Account → Affiliate (stats, link,
+ledger, payout history); admin manager in Admin → Affiliates
+(affiliates + commissions + payouts + program settings).
+
+Honest limits:
+- Attribution is browser-cookie based: no cross-device tracking, no
+  fingerprinting; the click counter is throttled per code+IP (60s) and
+  recorded once per browser per code, so it undercounts shared machines
+  on purpose.
+- Payouts are manual transfers the admin verifies off-platform (bank /
+  PayPal); there is no gateway payout API.
+- Commissions are not posted to the accounting chart (the affiliate
+  ledger is internal and auditable: AffiliateCommission / AffiliatePayout
+  rows are append-only). A custom-chart-aware posting (commission
+  expense vs accrued liability, then liability vs bank on payout) can be
+  added later without changing the ledger semantics.
+- An affiliate whose account is suspended at payment time does not earn
+  on that order (payments landing while suspended are not attributed);
+  a store turning the PROGRAM off keeps paying commissions on orders
+  that were already placed while it was on.

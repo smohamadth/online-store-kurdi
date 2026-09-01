@@ -51,6 +51,10 @@ interface StoreSettings {
     currencyHint?: string;
     description?: string;
   }[];
+  /** Affiliate marketing program switch (opt-in, default off). */
+  affiliateEnabled: boolean;
+  /** Default commission % on paid referred orders. */
+  affiliateRate: number;
 }
 
 const DEFAULT_SETTINGS: StoreSettings = {
@@ -74,6 +78,8 @@ const DEFAULT_SETTINGS: StoreSettings = {
   maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
   stripeEnabled: false,
   paymentGateways: [],
+  affiliateEnabled: false,
+  affiliateRate: 10,
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -128,6 +134,9 @@ async function fetchSettingsFromAPI(): Promise<StoreSettings | null> {
         paymentGateways: Array.isArray(data.data.paymentGateways)
           ? data.data.paymentGateways
           : DEFAULT_SETTINGS.paymentGateways,
+        affiliateEnabled: data.data.affiliateEnabled === true,
+        affiliateRate:
+          typeof data.data.affiliateRate === 'number' ? data.data.affiliateRate : DEFAULT_SETTINGS.affiliateRate,
       };
       
       // Update localStorage with API data

@@ -73,6 +73,9 @@ const settingsSchema = z.object({
   privacyPolicyUrl: z.string().optional().nullable(),
   termsOfServiceUrl: z.string().optional().nullable(),
   returnPolicyUrl: z.string().optional().nullable(),
+  // Affiliate marketing program: master switch + default commission rate.
+  affiliateEnabled: z.boolean().optional().nullable(),
+  affiliateRate: z.number().min(0).max(100).optional().nullable(),
 });
 
 // GET /api/settings - Get store settings
@@ -118,7 +121,7 @@ const NOT_NULL_SETTINGS = new Set([
   'storeName', 'storeEmail', 'storeCountry',
   'currency', 'currencySymbol', 'currencyPosition', 'enabledCurrencies',
   'weightUnit', 'dimensionUnit', 'timezone', 'dateFormat',
-  'maintenanceMode',
+  'maintenanceMode', 'affiliateEnabled', 'affiliateRate',
 ]);
 
 // Intersecting the create and update inputs leaves only plain scalar

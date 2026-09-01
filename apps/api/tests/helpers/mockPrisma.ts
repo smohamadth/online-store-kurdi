@@ -937,6 +937,8 @@ const KNOWN_MODELS = [
   'stockTake', 'stockTakeItem', 'reorderRule', 'reorderDraft',
   'channel', 'channelStock', 'threePLSyncEvent', 'webhookSecret',
   'giftCard', 'giftCardTransaction', 'storeCredit', 'storeCreditTransaction',
+  // Affiliate marketing
+  'affiliate', 'affiliateClick', 'affiliateCommission', 'affiliatePayout',
   // Multi-currency
   'currency', 'exchangeRateSnapshot',
   // Content translations (per-locale overrides for product/category/page/blog)

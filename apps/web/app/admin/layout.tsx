@@ -162,6 +162,7 @@ export default function AdminLayout({
         { path: '/admin/orders', label: 'Orders', icon: '🛒' },
         { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
         { path: '/admin/gift-cards', label: 'Gift cards', icon: '🎁' },
+        { path: '/admin/affiliates', label: 'Affiliates', icon: '🤝' },
         { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
         { path: '/admin/tax', label: 'Tax', icon: '💰' },
       ],
