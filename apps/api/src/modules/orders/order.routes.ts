@@ -639,7 +639,7 @@ router.post('/', authenticate, async (req, res, next) => {
         orderItems.map((line) =>
           analyticsService.trackEvent({
             userId: req.user!.id,
-            sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
+            sessionId: String(req.headers['x-session-id'] || '').slice(0, 200) || 'anonymous',
             eventType: 'purchase',
             productId: line.productId,
             metadata: { orderId: order.id, orderNumber, quantity: line.quantity },

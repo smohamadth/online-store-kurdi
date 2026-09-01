@@ -59,6 +59,46 @@ describe('POST /api/analytics/track (opt-in enabled)', () => {
       .send({ events: [{ eventType: 'view' }, { eventType: 'click' }] });
     expect(res.status).toBe(200);
   });
+
+  it('rejects unbounded payloads and oversized batches (regression)', async () => {
+    // Every field lands verbatim in a UserEvent row: a megabyte
+    // searchQuery / metadata value, or a 10k-event batch, was free DB
+    // bloat. All of it must now 400.
+    process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    const big = 'x'.repeat(10_000);
+
+    const bigQuery = await request(app)
+      .post('/api/analytics/track')
+      .send({ eventType: 'search', searchQuery: big });
+    expect(bigQuery.status).toBe(400);
+
+    const bigMeta = await request(app)
+      .post('/api/analytics/track')
+      .send({ eventType: 'view', metadata: { slug: big } });
+    expect(bigMeta.status).toBe(400);
+
+    const bigType = await request(app)
+      .post('/api/analytics/track')
+      .send({ eventType: big });
+    expect(bigType.status).toBe(400);
+
+    const bigBatch = await request(app)
+      .post('/api/analytics/track/batch')
+      .send({ events: Array.from({ length: 200 }, () => ({ eventType: 'view' })) });
+    expect(bigBatch.status).toBe(400);
+
+    // A 51-key metadata object is rejected too.
+    const manyKeys = await request(app)
+      .post('/api/analytics/track')
+      .send({
+        eventType: 'view',
+        metadata: Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`k${i}`, 'v'])),
+      });
+    expect(manyKeys.status).toBe(400);
+
+    // Nothing was stored by any of the rejected requests.
+    expect(peekMockStore('userEvent')).toHaveLength(0);
+  });
 });
 
 describe('GET /api/analytics/trending (public)', () => {

@@ -111,11 +111,31 @@ router.post('/products/:productId/reviews', authenticate, async (req, res, next)
       });
     }
 
-    // Validate rating
-    if (!rating || rating < 1 || rating > 5) {
+    // Validate rating. Accept a number or a canonical integer string
+    // ('4' ok, '4.5' / 'abc' / {} / null not), anything else used to
+    // sail past the loose guard and 500 on the Int column (3.5), or get
+    // silently mangled ('abc' → NaN, '4.5' → 4).
+    const numericRating =
+      typeof rating === 'number'
+        ? rating
+        : typeof rating === 'string' && /^-?\d+$/.test(rating.trim())
+          ? parseInt(rating, 10)
+          : NaN;
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
       return res.status(400).json({
         status: 'error',
         message: 'Rating must be between 1 and 5',
+      });
+    }
+
+    // Cap the free-text fields: unbounded title/comment is DB bloat.
+    if (
+      (title !== undefined && (typeof title !== 'string' || title.length > 200)) ||
+      (comment !== undefined && (typeof comment !== 'string' || comment.length > 5000))
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Title must be under 200 characters and comment under 5000',
       });
     }
 
@@ -174,7 +194,7 @@ router.post('/products/:productId/reviews', authenticate, async (req, res, next)
       data: {
         userId,
         productId,
-        rating: parseInt(rating),
+        rating: numericRating,
         title: title || null,
         comment: comment || null,
         isVerified,
@@ -271,12 +291,39 @@ router.put('/reviews/:reviewId', authenticate, async (req, res, next) => {
       replacementPhotos = normalised.photos;
     }
 
+    // Same rating gate as create: only 1..5 integers (number or numeric
+    // string). The old `rating ? parseInt(rating) : undefined` silently
+    // dropped a 0 or 'abc' (and a 3.5 became 3).
+    const numericRating =
+      rating === undefined
+        ? undefined
+        : typeof rating === 'number'
+          ? rating
+          : typeof rating === 'string' && /^-?\d+$/.test(rating.trim())
+            ? parseInt(rating, 10)
+            : NaN;
+    if (rating !== undefined && (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Rating must be between 1 and 5',
+      });
+    }
+    if (
+      (title !== undefined && (typeof title !== 'string' || title.length > 200)) ||
+      (comment !== undefined && (typeof comment !== 'string' || comment.length > 5000))
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Title must be under 200 characters and comment under 5000',
+      });
+    }
+
     // The verified badge is recomputed only when the rating
     // changes. Otherwise a typo in the comment shouldn't flip
     // the badge. (Order history doesn't change, so we don't
     // need to recompute on every edit.)
     let isVerified = review.isVerified;
-    if (rating !== undefined && parseInt(rating) !== review.rating) {
+    if (rating !== undefined && numericRating !== review.rating) {
       const userOrders = await loadUserOrdersForProduct(review.userId, review.productId);
       isVerified = hasPurchasingOrder(userOrders, review.productId);
     }
@@ -285,7 +332,7 @@ router.put('/reviews/:reviewId', authenticate, async (req, res, next) => {
     const updatedReview = await prisma.review.update({
       where: { id: reviewId },
       data: {
-        rating: rating ? parseInt(rating) : undefined,
+        rating: numericRating,
         title: title !== undefined ? title : undefined,
         comment: comment !== undefined ? comment : undefined,
         isVerified,

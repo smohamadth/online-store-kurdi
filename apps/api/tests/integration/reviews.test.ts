@@ -59,6 +59,25 @@ describe('POST /api/products/:productId/reviews', () => {
     }
   });
 
+  it('rejects non-integer ratings and oversized text (regression)', async () => {
+    // A 3.5 rating used to 500 on the Int column (and 'abc' too); an
+    // unbounded title/comment was DB bloat.
+    const { token } = await authHeader();
+    const p = await createProduct();
+    for (const bad of [3.5, 'abc', {}, null, '4.5']) {
+      const res = await request(app)
+        .post(`/api/products/${p.id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: bad });
+      expect(res.status).toBe(400);
+    }
+    const big = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5, title: 'x'.repeat(300) });
+    expect(big.status).toBe(400);
+  });
+
   it('rejects a duplicate review from the same user', async () => {
     const { token, user } = await authHeader();
     const p = await createProduct();
@@ -92,6 +111,23 @@ describe('PUT /api/reviews/:reviewId', () => {
     expect(res.status).toBe(200);
     const after = await mockPrisma.review.findUnique({ where: { id: r.id } });
     expect(after?.rating).toBe(5);
+  });
+
+  it('rejects invalid ratings on update too (regression)', async () => {
+    // The old update path did `rating ? parseInt(rating) : undefined`,
+    // so 'abc' / 3.5 / 0 were silently dropped or mangled.
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({ data: { userId: user.id, productId: p.id, rating: 3 } });
+    for (const bad of [3.5, 'abc', 0]) {
+      const res = await request(app)
+        .put(`/api/reviews/${r.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: bad });
+      expect(res.status).toBe(400);
+    }
+    const after = await mockPrisma.review.findUnique({ where: { id: r.id } });
+    expect(after?.rating).toBe(3);
   });
 
   it('lets an admin toggle isApproved', async () => {

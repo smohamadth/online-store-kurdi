@@ -5,6 +5,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
 import { serializeContentBlocks, parseBlocksColumn } from '../../utils/contentBlocks';
+import { viewBumpAllowed } from '../../utils/viewThrottle';
 import { localizeRows } from '../contentTranslations/localize.helpers';
 import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
 
@@ -270,10 +271,16 @@ router.get('/slug/:slug', async (req, res, next) => {
 // not stop a reader seeing the article.
 router.post('/slug/:slug/view', async (req, res) => {
   try {
-    await prisma.blogPost.updateMany({
-      where: { slug: req.params.slug, status: 'published' },
-      data: { viewCount: { increment: 1 } },
-    });
+    // Public + unauthenticated: without a throttle, flooding this
+    // endpoint queues an UPDATE per request (a write-DoS on SQLite and
+    // unbounded counter inflation). One bump per slug per minute keeps
+    // real page views honest and caps the write rate.
+    if (viewBumpAllowed(`blog:${req.params.slug}`)) {
+      await prisma.blogPost.updateMany({
+        where: { slug: req.params.slug, status: 'published' },
+        data: { viewCount: { increment: 1 } },
+      });
+    }
   } catch {
     /* ignore */
   }

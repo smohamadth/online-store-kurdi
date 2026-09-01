@@ -113,6 +113,34 @@ describe('POST /api/cart', () => {
       .send({ productId: p.id, variantId: v.id, quantity: 1 });
     expect(res.status).toBe(400);
   });
+
+  it('400 when the variant belongs to a different product (regression)', async () => {
+    // A mismatched (product, variant) pair used to be stored, then the
+    // order route silently ignored the variant — the cart and the order
+    // disagreed about what was bought.
+    const { token, user } = await authHeader();
+    const p1 = await createProduct({ quantity: 50 });
+    const p2 = await createProduct({ quantity: 50 });
+    const v2 = await createVariant(p2.id, { quantity: 50 });
+    const res = await request(app)
+      .post('/api/cart')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: p1.id, variantId: v2.id, quantity: 1 });
+    expect(res.status).toBe(400);
+    // And nothing was stored.
+    const items = await mockPrisma.cartItem.findMany({ where: { userId: user.id } });
+    expect(items).toHaveLength(0);
+  });
+
+  it('400 when quantity exceeds the order-placement cap (regression)', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 999999 });
+    const res = await request(app)
+      .post('/api/cart')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: p.id, quantity: 100000 });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('PUT /api/cart/:id', () => {

@@ -21,14 +21,17 @@ import { createReservation, availableQuantity } from '../inventory/inventory.ser
 const router = Router();
 
 // Validation schemas
+// The quantity cap mirrors the order-placement cap: a cart can never
+// hold more than an order could ever place, so a checkout can't fail
+// at the last step with "quantity too large".
 const addToCartSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid().optional(),
-  quantity: z.number().int().min(1).default(1),
+  quantity: z.number().int().min(1).max(99999).default(1),
 });
 
 const updateCartItemSchema = z.object({
-  quantity: z.number().int().min(1),
+  quantity: z.number().int().min(1).max(99999),
 });
 
 // GET /api/cart - Get user's cart
@@ -140,7 +143,7 @@ router.post('/', authenticate, async (req, res, next) => {
     if (variantId) {
       const variant = await prisma.variant.findUnique({
         where: { id: variantId },
-        select: { id: true, quantity: true, isActive: true },
+        select: { id: true, quantity: true, isActive: true, productId: true },
       });
 
       if (!variant) {
@@ -149,6 +152,17 @@ router.post('/', authenticate, async (req, res, next) => {
 
       if (!variant.isActive) {
         return res.status(400).json({ status: 'error', message: 'Variant is not available' });
+      }
+
+      // The variant must belong to the product being added. A mismatched
+      // pair used to be stored (and shown as product P1 with variant V's
+      // attributes); order placement silently ignored such variants, so
+      // the cart and the order disagreed about what was bought.
+      if (variant.productId !== productId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Variant does not belong to this product',
+        });
       }
 
       // Use available quantity (subtracts active reservations) so

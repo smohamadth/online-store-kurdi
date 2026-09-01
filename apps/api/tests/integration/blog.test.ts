@@ -84,6 +84,21 @@ describe('POST /api/blog/slug/:slug/view', () => {
     const res = await request(app).post('/api/blog/slug/countered/view');
     expect(res.status).toBe(200);
   });
+
+  it('throttles view bumps per slug (regression)', async () => {
+    // The endpoint is public and unauthenticated; without a throttle a
+    // bot could queue an UPDATE per request (write-DoS on SQLite, plus
+    // unbounded counter inflation). Rapid bumps on the same slug must
+    // collapse to a single write.
+    const { token } = await authHeader({ role: 'admin' });
+    await request(app).post('/api/blog').set('Authorization', `Bearer ${token}`).send(postBody({ slug: 'throttled' }));
+    mockPrisma.blogPost.updateMany.mockClear();
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app).post('/api/blog/slug/throttled/view');
+      expect(res.status).toBe(200);
+    }
+    expect(mockPrisma.blogPost.updateMany).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('POST /api/blog (admin)', () => {

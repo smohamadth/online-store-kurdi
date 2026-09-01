@@ -764,3 +764,26 @@ DigitalDocument markup; admin/manager sessions get the raw URL back
 it. The web admin products list now sends the session token when
 fetching, or its edit form would blank the download URL and a later
 save would wipe it.
+
+Blog post view counter bumps are throttled to one per slug per minute
+(the endpoint is public and unauthenticated; a bot used to queue one
+UPDATE per request — a write-DoS on SQLite and unbounded counter
+inflation). POST /api/blog/slug/:slug/view still returns 200 for every
+request; it just skips the write when throttled.
+Reviews: POST and PUT used to accept any rating shape — 3.5 500'd on
+the Int column, 'abc' 500'd, '4.5' was silently truncated to 4, and PUT
+dropped a 0. Both routes now require an integer 1..5 (number or
+canonical integer string) and cap title at 200 / comment at 5000 chars.
+
+Analytics ingestion (/api/analytics/track and /track/batch) is now
+schema-capped end to end: eventType 50 / productId+categoryId 100 /
+searchQuery 300 / metadata values 500 with a 50-key cap / batches
+max 50 events, and the x-session-id header is capped at 200 chars.
+The storefront client only sends flat metadata, so this is fully
+compatible. Server-side trackEvent call sites (product search/views,
+order purchase events) cap sessionId and searchQuery the same way.
+Carts: a variant from a DIFFERENT product used to be accepted into
+the cart (stored and shown as product P1 + variant V, then silently
+ignored at order placement, so cart and order disagreed); it now
+400s. Cart quantities are capped at 99999 to match the order-
+placement cap, so a checkout can never fail at the last step.

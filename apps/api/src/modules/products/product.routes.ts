@@ -353,7 +353,9 @@ router.get('/search', optionalAuth, async (req, res, next) => {
         userId: req.user?.id,
         sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
         eventType: 'search',
-        searchQuery: q,
+        // The query string is stored in UserEvent.searchQuery; cap it so
+        // a hostile ?q= can't store unbounded text.
+        searchQuery: typeof q === 'string' ? q.slice(0, 300) : undefined,
         metadata: { resultsCount: products.length },
         userAgent: req.get('User-Agent'),
         ipAddress: req.ip,

@@ -227,10 +227,10 @@ export class ProductController {
     try {
       await this.analyticsService.trackEvent({
         userId: req.user?.id,
-        sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
+        sessionId: String(req.headers['x-session-id'] || '').slice(0, 200) || 'anonymous',
         eventType,
         productId: payload.productId,
-        searchQuery: payload.searchQuery,
+        searchQuery: payload.searchQuery?.slice(0, 300),
         metadata: payload.metadata,
         userAgent: req.get('User-Agent'),
         ipAddress: req.ip,
