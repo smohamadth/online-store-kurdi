@@ -20,6 +20,7 @@ import { generateTokens, verifyRefreshToken, authenticate } from '../../middlewa
 import { AppError, UnauthorizedError, ConflictError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../services/email.service';
+import { emit } from '../plugins/pluginHooks';
 import { z } from 'zod';
 
 const router = Router();
@@ -96,6 +97,14 @@ router.post('/register', async (req, res, next) => {
     });
 
     logger.info(`User registered: ${user.email}`);
+
+    // Plugin event: customer.registered (fire-and-forget — emit never throws).
+    void emit('customer.registered', {
+      customerId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    });
 
     // Send welcome email (non-blocking)
     sendWelcomeEmail({ firstName: user.firstName, email: user.email }).catch(err => {

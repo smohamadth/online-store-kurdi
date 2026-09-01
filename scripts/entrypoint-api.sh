@@ -53,6 +53,12 @@ else
   exit 1
 fi
 
+echo "==> store-api: ensuring plugin storage exists"
+# Plugins are file-based (no DB): packages/ + state/ under PLUGINS_DIR
+# (default apps/api/plugins; the prod compose mounts a named volume here).
+PLUGINS_DIR="${PLUGINS_DIR:-plugins}"
+mkdir -p "$PLUGINS_DIR/packages" "$PLUGINS_DIR/state"
+
 echo "==> store-api: seeding bundled themes into \$THEMES_DIR"
 # The themes directory is a shared volume (docker-compose.prod.yml mounts
 # themes_data at /app/apps/web/themes). The API image bakes in the bundled

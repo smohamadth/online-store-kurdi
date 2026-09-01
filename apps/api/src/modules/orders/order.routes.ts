@@ -11,6 +11,7 @@ import { env } from '../../config/environment';
 import { isGatewayMethod, getGatewayById } from '../payments/gateways/registry';
 import { isGatewayConfigured } from '../payments/gatewayConfig';
 import { createGatewayPayment } from '../payments/gateway.service';
+import { emit } from '../plugins/pluginHooks';
 
 const router = Router();
 
@@ -664,6 +665,28 @@ router.post('/', authenticate, async (req, res, next) => {
     });
 
     logger.info(`Order created: ${order.orderNumber} by user ${req.user!.email}`);
+
+    // Plugin event: order.created (fire-and-forget — emit never throws).
+    void emit('order.created', {
+      orderId: (orderWithDownloads || order).id,
+      orderNumber: (orderWithDownloads || order).orderNumber,
+      status: (orderWithDownloads || order).status,
+      subtotal: (orderWithDownloads || order).subtotal,
+      taxAmount: (orderWithDownloads || order).taxAmount,
+      shippingAmount: (orderWithDownloads || order).shippingAmount,
+      discountAmount: (orderWithDownloads || order).discountAmount,
+      totalAmount: (orderWithDownloads || order).totalAmount,
+      paymentMethod: (orderWithDownloads || order).paymentMethod,
+      paymentStatus: (orderWithDownloads || order).paymentStatus,
+      items: ((orderWithDownloads || order).items || []).map((it: any) => ({
+        productId: it.productId,
+        name: it.product?.name,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        lineTotal: it.lineTotal,
+      })),
+      customer: { userId: req.user!.id, email: req.user!.email },
+    });
 
     // Track coupon usage if coupon was applied
     if (couponId) {

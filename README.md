@@ -67,7 +67,10 @@ admin, manager, customer).
   preview, all-or-nothing commit) — see §10
 - **Analytics & recommendations** (opt-in, privacy-first) — see §11
 - **Theme system**: 5 bundled themes, scaffold tool, live preview,
-  per-store selection — see §9
+  per-store selection, runtime install/edit/remove — see §9
+- **Plugins**: bundled in-process code plugins + data-only webhook plugins
+  (install/config/test/uninstall at runtime, HMAC-signed delivery) — see
+  §9.2
 - Rate limiting, Zod input validation, JWT auth (access + refresh),
   bcrypt passwords, role-based access control
 - Optional services degrade gracefully: no Redis → no cache; no MinIO →
@@ -330,6 +333,46 @@ with a live preview rendered by the same component the storefront uses.
 
 Full architecture, data model, block list, API reference, extension guide and
 honest limitations: **[docs/THEME_STUDIO.md](docs/THEME_STUDIO.md)**.
+
+### 9.2 Plugins — events, webhooks and bundled code
+
+A **plugin** subscribes to store events and reacts to them. Two tiers:
+
+- **Bundled plugins** are reviewed code shipped with the platform
+  (`apps/api/src/modules/plugins/bundled/`), registered through a static
+  import map; their handlers run **in-process**. Example: `order-logger`,
+  which logs every order/payment event.
+- **Installed plugins** are admin-uploaded `.zip` packages that are
+  **data-only by design**: a `plugin.json` manifest (id, name, semver,
+  author, `kind: "webhook"`, a `hooks` subset, a tiny `configSchema` DSL)
+  plus config state. They are never executed — the platform delivers each
+  subscribed event to the admin-configured URL as a signed webhook
+  (`X-Store-Webhook-Signature: sha256=<HMAC>` over the raw body, with the
+  plugin's per-install secret; `X-Store-Webhook-Id` as a fallback). This is
+  the anti-RCE posture: uploaded code cannot run, only webhooks are sent.
+
+**Events (v1):** `order.created`, `payment.settled`, `product.created`,
+`product.updated`, `customer.registered`. Emission is fire-and-forget —
+`emit()` never throws or blocks the storefront. Every delivery attempt is
+recorded in `state/<id>.log.jsonl` (capped at 512 KB), visible in
+**Admin → Plugins** along with the config form, an enable/disable toggle and
+a **Test** button that fires a sample payload through the real pipeline.
+
+**Developer workflow** — full guide in
+**[docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md)**:
+
+```bash
+npm run plugin:pack -- my-plugin     # validate the manifest + zip it
+```
+
+Install the resulting `.zip` in **Admin → Plugins**; a plugin must be
+disabled before it can be uninstalled. Storage is file-based
+(`PLUGINS_DIR`, default `apps/api/plugins`: `packages/<id>/`,
+`state/<id>.json`); the production compose mounts a `plugins_data` volume.
+The install gate validates the manifest end-to-end (id/version/hooks/
+permissions/configSchema) and the shared zip extractor rejects zip-slip,
+symlink and bomb packages — the same hardening the theme installer uses.
+Bundled ids can never be overwritten or uninstalled.
 
 ## 10. Bulk import / export
 

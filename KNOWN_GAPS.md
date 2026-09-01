@@ -482,7 +482,40 @@ overlay below 768px (see `app/admin/layout.test.tsx`).
 
 ---
 
-## 14. Accounting — shipped
+## 14. Plugins — shipped, with honest limits
+
+**Status:** the plugin system is complete and tested (see
+`docs/PLUGIN_DEVELOPMENT.md`). What is deliberately *not* done:
+
+1. **Uploaded plugins are data-only.** A plugin `.zip` can only declare
+   webhook subscriptions + a config form; the platform POSTs signed webhooks
+   to the admin-configured URL. Uploaded code is never executed (the
+   anti-RCE posture). Plugins that need in-process logic must be **bundled**
+   with the platform (`apps/api/src/modules/plugins/bundled/`).
+2. **Five events, fire-and-forget, no retry queue.** `order.created`,
+   `payment.settled`, `product.created`, `product.updated`,
+   `customer.registered` are emitted synchronously (never blocking the
+   storefront); a failed delivery is recorded in the execution log but not
+   retried. A durable outbox + retry backoff is future work.
+3. **No marketplace / third-party trust model.** Plugins are installed by
+   an admin with the credentials to upload; there is no signature
+   verification against a publisher key, no marketplace, and no per-plugin
+   rate limiting (the platform rate-limits its own API).
+4. **HMAC signature, not a shared platform secret.** Each install gets its
+   own random secret (state file); receivers verify
+   `X-Store-Webhook-Signature`. Webhook-id replay protection
+   (`X-Store-Webhook-Id`) is present, but dedupe is the receiver's job.
+
+The plugin module lives in `apps/api/src/modules/plugins/`; the admin UI in
+`apps/web/app/admin/plugins/`; the pack CLI is `scripts/plugin-pack.mjs`
+(`npm run plugin:pack`). Tests: `apps/api/tests/integration/plugin.test.ts`
+(lifecycle + delivery), `tests/unit/plugins/plugin-schema.test.ts`,
+`tests/unit/utils/zipPackage.test.ts` (shared hostile-zip extractor), and
+`apps/web/app/admin/plugins/page.test.tsx` (admin UI contract).
+
+---
+
+## 15. Accounting — shipped
 
 A lightweight, file-based double-entry bookkeeping module (see
 `docs/ACCOUNTING.md`). The five original gaps are now closed:
@@ -515,7 +548,7 @@ and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
 API and reports are covered by `apps/api/tests/integration/accounting.test.ts`
 and the admin UI by `apps/web/app/admin/accounting/page.test.tsx`.
 
-## 15. Payment gateway refunds — wired (except IDPay)
+## 16. Payment gateway refunds — wired (except IDPay)
 
 Staff refunds (`POST /api/payments/refund`) now call the gateway's real refund
 API **when the order was paid through a gateway that exposes one**, and only

@@ -29,6 +29,7 @@
     "theme:create": "node scripts/scaffold-theme.mjs",
     "theme:pack": "node scripts/theme-pack.mjs",
     "theme:validate": "node scripts/theme-pack.mjs",
+    "plugin:pack": "node scripts/plugin-pack.mjs",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules",
     "lint": "npm run lint:api && npm run lint:web",
     "lint:api": "cd apps/api && npm run lint",

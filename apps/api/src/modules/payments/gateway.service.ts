@@ -17,6 +17,7 @@ import { defaultHttp } from './gateways/helpers';
 import type { GatewayContext, GatewayOrder, RefundPaymentResult } from './gateways/types';
 import { autoPostOrder } from '../accounting/accounting.service';
 import { sendPaymentConfirmation } from '../../services/email.service';
+import { emit } from '../plugins/pluginHooks';
 
 /** Currency recorded on the Payment row for a given gateway. */
 function gatewayCurrency(gatewayId: string, config: Record<string, string | boolean>, storeCurrency: string): string {
@@ -188,6 +189,16 @@ export async function settleOrderPaid(args: {
     },
   });
   await autoPostOrder(args.orderId);
+
+  // Plugin event: payment.settled (fire-and-forget — emit never throws).
+  void emit('payment.settled', {
+    orderId: args.orderId,
+    orderNumber: args.orderNumber,
+    amount: args.amount,
+    currency: args.currency,
+    transactionId: args.transactionId,
+    gateway: args.method,
+  });
 
   // Fire-and-forget: email the customer that their payment was received.
   // Never fails the settlement.

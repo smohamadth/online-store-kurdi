@@ -30,6 +30,7 @@ import { getProductSearch } from './productSearch.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { localizeRows } from '../contentTranslations/localize.helpers';
 import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
+import { emit } from '../plugins/pluginHooks';
 
 const router = Router();
 const analyticsService = new AnalyticsService();
@@ -546,6 +547,17 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
 
     logger.info(`Product created: ${product.name} (${product.id})`);
 
+    // Plugin event: product.created (fire-and-forget — emit never throws).
+    void emit('product.created', {
+      productId: product.id,
+      slug: product.slug,
+      name: product.name,
+      price: product.price,
+      quantity: product.quantity,
+      status: product.status,
+      categoryId: product.categoryId,
+    });
+
     // Keep the Elasticsearch index in step (no-op for the Postgres backend).
     await getProductSearch().indexProduct(product.id);
 
@@ -669,6 +681,17 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
     });
 
     logger.info(`Product updated: ${product.name} (${product.id})`);
+
+    // Plugin event: product.updated (fire-and-forget — emit never throws).
+    void emit('product.updated', {
+      productId: product.id,
+      slug: product.slug,
+      name: product.name,
+      price: product.price,
+      quantity: product.quantity,
+      status: product.status,
+      categoryId: product.categoryId,
+    });
 
     // Refresh the Elasticsearch index entry (no-op for the Postgres backend).
     await getProductSearch().indexProduct(id);

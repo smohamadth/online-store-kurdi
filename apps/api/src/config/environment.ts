@@ -90,6 +90,11 @@ const envSchema = z.object({
   // Defaults to the web app's themes dir so a generated theme is picked up by
   // the registry on the next build. Overridable in tests to a temp dir.
   THEMES_DIR: z.string().default('../web/themes'),
+
+  // Plugins: where installed plugins + their state live (file-based, no DB).
+  // Bundled plugins are code in the repo; installed plugins are data-only
+  // (signed webhooks). Overridable in tests to a temp dir.
+  PLUGINS_DIR: z.string().default('plugins'),
 });
 
 // Validate environment variables. console (not the logger) is deliberate:
