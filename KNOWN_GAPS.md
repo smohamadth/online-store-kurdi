@@ -726,3 +726,12 @@ isVerified=true. Registration sets isVerified=true (this store has no
 email-verification flow, so self-registration IS verification) and the
 admin users module already created verified accounts — imported
 accounts were the only unverified population.
+SECURITY: digital downloads now require a PAID order. Tokens are
+minted and emailed at order placement, but redemption never checked the
+order's payment status — a customer could order a digital product
+cash-on-delivery, download it, and never pay. Redemption now refuses
+unpaid orders with 402 ("available once the order is paid"), records an
+'unpaid' audit row, and never increments the counter; the same token
+unlocks as soon as the merchant marks the order paid (staff /process or
+gateway settle). Refunded orders keep access (revoking after a refund
+is a merchant policy this store has not made).

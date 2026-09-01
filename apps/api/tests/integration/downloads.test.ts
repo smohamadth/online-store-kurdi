@@ -111,7 +111,7 @@ describe('Downloads: public redemption (GET /api/downloads/:token)', () => {
       name: 'p', slug: 'p', price: 5, type: 'digital', categoryId: cat.id,
       downloadUrl: 'https://cdn.example.com/files/x.pdf',
     });
-    const order = await createOrder((await createUser({})).id);
+    const order = await createOrder((await createUser({})).id, { paymentStatus: 'completed' });
     const item = await createOrderItem(order.id, p.id, { downloadUrl: p.downloadUrl });
     const dl = await createProductDownload(item.id, { sourceUrl: p.downloadUrl! });
 
@@ -120,13 +120,42 @@ describe('Downloads: public redemption (GET /api/downloads/:token)', () => {
     expect(res.headers.location).toBe('https://cdn.example.com/files/x.pdf');
   });
 
+  it('refuses redemption while the order is unpaid (402) and never increments', async () => {
+    // Regression: tokens are minted and emailed at order placement, but
+    // redemption never checked the order's payment status — a customer
+    // could order a digital product cash-on-delivery, download it, and
+    // never pay. Unpaid (pending/failed) orders now get 402 until the
+    // merchant marks the order paid; the counter must not move.
+    const cat = await createCategory({ slug: 'v', name: 'V' });
+    const p = await createProduct({
+      name: 'p', slug: 'p', price: 5, type: 'digital', categoryId: cat.id,
+      downloadUrl: 'https://cdn.example.com/files/free.pdf',
+    });
+    const order = await createOrder((await createUser({})).id, { paymentStatus: 'pending' });
+    const item = await createOrderItem(order.id, p.id, { downloadUrl: p.downloadUrl });
+    const dl = await createProductDownload(item.id, { sourceUrl: p.downloadUrl! });
+
+    const res = await request(app).get(`/api/downloads/${dl.token}`);
+    expect(res.status).toBe(402);
+    const after = await mockPrisma.productDownload.findUnique({ where: { id: dl.id } });
+    expect(after?.downloadCount).toBe(0);
+    const log = await mockPrisma.downloadLog.findMany({ where: { downloadId: dl.id } });
+    expect(log.some((l: any) => l.status === 'unpaid')).toBe(true);
+
+    // Once the merchant records the payment, the SAME token unlocks.
+    await mockPrisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'completed' } });
+    const paid = await request(app).get(`/api/downloads/${dl.token}`);
+    expect(paid.status).toBe(302);
+    expect(paid.headers.location).toBe('https://cdn.example.com/files/free.pdf');
+  });
+
   it('increments the per-token counter and writes an audit row', async () => {
     const cat = await createCategory({ slug: 'v', name: 'V' });
     const p = await createProduct({
       name: 'p', slug: 'p', price: 5, type: 'digital', categoryId: cat.id,
       downloadUrl: 'https://cdn.example.com/files/y.pdf',
     });
-    const order = await createOrder((await createUser({})).id);
+    const order = await createOrder((await createUser({})).id, { paymentStatus: 'completed' });
     const item = await createOrderItem(order.id, p.id, { downloadUrl: p.downloadUrl });
     const dl = await createProductDownload(item.id, { sourceUrl: p.downloadUrl! });
 
@@ -150,7 +179,7 @@ describe('Downloads: public redemption (GET /api/downloads/:token)', () => {
       name: 'p', slug: 'p', price: 5, type: 'digital', categoryId: cat.id,
       downloadUrl: 'https://cdn.example.com/files/exp.pdf',
     });
-    const order = await createOrder((await createUser({})).id);
+    const order = await createOrder((await createUser({})).id, { paymentStatus: 'completed' });
     const item = await createOrderItem(order.id, p.id, { downloadUrl: p.downloadUrl });
     const dl = await createProductDownload(item.id, {
       sourceUrl: p.downloadUrl!,
@@ -166,7 +195,7 @@ describe('Downloads: public redemption (GET /api/downloads/:token)', () => {
       name: 'p', slug: 'p', price: 5, type: 'digital', categoryId: cat.id,
       downloadUrl: 'https://cdn.example.com/files/lim.pdf',
     });
-    const order = await createOrder((await createUser({})).id);
+    const order = await createOrder((await createUser({})).id, { paymentStatus: 'completed' });
     const item = await createOrderItem(order.id, p.id, {
       downloadUrl: p.downloadUrl,
       downloadCount: 0,
@@ -187,7 +216,7 @@ describe('Downloads: public redemption (GET /api/downloads/:token)', () => {
       name: 'p', slug: 'p', price: 5, type: 'digital', categoryId: cat.id,
       downloadUrl: 'https://cdn.example.com/files/plim.pdf',
     });
-    const order = await createOrder((await createUser({})).id);
+    const order = await createOrder((await createUser({})).id, { paymentStatus: 'completed' });
     // Product-level counter is already at the limit; per-token
     // counter is still 0.
     const item = await createOrderItem(order.id, p.id, {
@@ -225,7 +254,7 @@ describe('Downloads: account list (GET /api/account/downloads)', () => {
     // buyer's user.id is what we want.
     const { user: buyer } = await authHeader({ email: 'buyer@example.com' });
     void token; // use buyer-specific token below
-    const order = await createOrder(buyer.id);
+    const order = await createOrder(buyer.id, { paymentStatus: 'completed' });
     const item = await createOrderItem(order.id, p.id, { downloadUrl: p.downloadUrl });
     await createProductDownload(item.id, { sourceUrl: p.downloadUrl! });
 

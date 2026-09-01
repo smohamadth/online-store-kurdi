@@ -29,6 +29,12 @@ import {
 } from './downloads.helpers';
 import { logger } from '../../utils/logger';
 
+/** Order payment states in which a digital download may be redeemed.
+ *  `refunded` stays redeemable: revoking after a refund is a merchant
+ *  policy decision this store has not made, and blocking would break
+ *  the customer's paid-for copies. */
+const PAID_STATUSES = new Set(['completed', 'partially_refunded', 'refunded']);
+
 export interface MintDownloadInput {
   orderItemId: string;
   /** The product-level `downloadUrl`. Snapshotted at order
@@ -101,7 +107,7 @@ export interface RedeemSuccess {
 
 export interface RedeemFailure {
   ok: false;
-  reason: 'not_found' | 'expired' | 'limit_exceeded' | 'product_limit_exceeded';
+  reason: 'not_found' | 'expired' | 'limit_exceeded' | 'product_limit_exceeded' | 'unpaid';
   status: TokenStatus;
 }
 
@@ -130,17 +136,33 @@ export async function redeemToken(
     where: { token },
     include: {
       orderItem: {
-        select: {
-          id: true,
-          orderId: true,
-          downloadCount: true,
-          downloadLimit: true,
+        include: {
+          order: { select: { paymentStatus: true } },
         },
       },
     },
   });
   if (!row) {
     return { ok: false, reason: 'not_found', status: { ok: false, reason: 'not_found' } };
+  }
+  // Digital goods must be PAID before they are downloadable: tokens were
+  // minted at order placement (the confirmation email carries the links),
+  // so an unpaid COD / bank-transfer / failed order used to hand out the
+  // files for free. The merchant marks the order paid (staff /process or
+  // the gateway settle) and the same token unlocks.
+  const paymentStatus = row.orderItem?.order?.paymentStatus;
+  if (!paymentStatus || !PAID_STATUSES.has(paymentStatus)) {
+    await prisma.downloadLog.create({
+      data: {
+        downloadId: row.id,
+        orderItemId: row.orderItemId,
+        userId: ctx.userId ?? null,
+        ipAddress: ctx.ipAddress ?? null,
+        userAgent: ctx.userAgent ?? null,
+        status: 'unpaid',
+      },
+    });
+    return { ok: false, reason: 'unpaid', status: { ok: false, reason: 'unpaid' } };
   }
   const status = tokenStatus({
     downloadCount: row.downloadCount,

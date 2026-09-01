@@ -57,7 +57,7 @@ export interface TokenStatus {
   ok: boolean;
   /** Why not, when ok=false. Useful for a 410 (gone) vs 429
    *  (too many requests) response. */
-  reason?: 'not_found' | 'expired' | 'limit_exceeded' | 'product_limit_exceeded';
+  reason?: 'not_found' | 'expired' | 'limit_exceeded' | 'product_limit_exceeded' | 'unpaid';
 }
 
 export function isExpired(expiresAt: Date | string | null | undefined, now: Date = new Date()): boolean {

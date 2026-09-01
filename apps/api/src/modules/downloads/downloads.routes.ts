@@ -65,11 +65,13 @@ publicDownloadsRouter.get('/:token', optionalAuth, async (req, res, next) => {
       const status =
         result.reason === 'expired' ? 410 :
         result.reason === 'limit_exceeded' || result.reason === 'product_limit_exceeded' ? 429 :
+        result.reason === 'unpaid' ? 402 :
         404;
       throw new AppError(
         result.reason === 'not_found' ? 'Download link not found' :
         result.reason === 'expired' ? 'This download link has expired' :
         result.reason === 'limit_exceeded' ? 'Download limit reached' :
+        result.reason === 'unpaid' ? 'This download becomes available once the order is paid.' :
         'Product download limit reached',
         status,
       );
