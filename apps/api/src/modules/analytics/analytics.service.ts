@@ -1,3 +1,17 @@
+// ---------------------------------------------------------------------------
+// Analytics service: the event store + the aggregation queries behind the
+// admin analytics pages and the public "trending" feed.
+//
+// Ingestion: trackEvent()/trackEvents() write to the UserEvent table.
+// Callers MUST be behind the ANALYTICS_TRACKING_ENABLED gate (see
+// analytics.routes.ts) - this service does not re-check the flag, so a
+// stray call would silently start collecting data in a store that
+// promises not to.
+//
+// Aggregations (trending, product analytics, search analytics, real-time
+// stats) are Redis-cached for a few minutes; the cache is a convenience
+// layer, the numbers always come from the table.
+// ---------------------------------------------------------------------------
 import { PrismaClient } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { cache } from '../../config/redis';
@@ -38,7 +52,8 @@ export class AnalyticsService {
           productId: event.productId || null,
           categoryId: event.categoryId || null,
           searchQuery: event.searchQuery || null,
-          metadata: event.metadata || {},
+          // SQLite stores the metadata as a JSON string.
+          metadata: JSON.stringify(event.metadata || {}),
           timestamp: event.timestamp || new Date(),
           userAgent: event.userAgent || null,
           ipAddress: event.ipAddress || null,
@@ -82,7 +97,8 @@ export class AnalyticsService {
           productId: event.productId || null,
           categoryId: event.categoryId || null,
           searchQuery: event.searchQuery || null,
-          metadata: event.metadata || {},
+          // SQLite stores the metadata as a JSON string.
+          metadata: JSON.stringify(event.metadata || {}),
           timestamp: event.timestamp || new Date(),
           userAgent: event.userAgent || null,
           ipAddress: event.ipAddress || null,
@@ -118,6 +134,9 @@ export class AnalyticsService {
               name: true,
               slug: true,
               price: true,
+              // Needed by analyzeBehavior's category-preferences pass
+              // (it reads event.product.category.name).
+              category: { select: { name: true } },
               images: {
                 where: { isPrimary: true },
                 take: 1,

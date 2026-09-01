@@ -27,6 +27,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../middleware/errorHandler';
 import { verifyWebhookSignature as verifyWebhookSignatureHelper } from './inventory.helpers';
+import { sendEmail } from '../../services/email.service';
 
 // ---------------------------------------------------------------------
 // Variant-aware stock decrement
@@ -46,6 +47,10 @@ export interface DecrementResult {
   previousQuantity: number;
   wasBackorder: boolean;
   reservationReleased: boolean;
+  /** True when this decrement crossed the low-stock threshold downward
+      * (or hit zero) and a stock-alert row was raised. Edge-triggered:
+      * sales that stay below the threshold do not re-raise it. */
+  stockAlertRaised: boolean;
 }
 
 /**
@@ -67,11 +72,11 @@ export async function decrementStock(req: DecrementRequest): Promise<DecrementRe
     const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) throw new AppError(`Product not found: ${productId}`, 404);
     if (!product.trackInventory) {
-      return { newQuantity: product.quantity, previousQuantity: product.quantity, wasBackorder: false, reservationReleased: false };
+      return { newQuantity: product.quantity, previousQuantity: product.quantity, wasBackorder: false, reservationReleased: false, stockAlertRaised: false };
     }
 
     if (variantId) {
-      const variant = await tx.productVariant.findUnique({ where: { id: variantId } });
+      const variant = await tx.variant.findUnique({ where: { id: variantId } });
       if (!variant) throw new AppError(`Variant not found: ${variantId}`, 404);
       const previous = variant.quantity;
       const newQty = previous - quantity;
@@ -92,7 +97,7 @@ export async function decrementStock(req: DecrementRequest): Promise<DecrementRe
         );
       }
       const wasBackorder = newQty < 0;
-      await tx.productVariant.update({ where: { id: variantId }, data: { quantity: newQty } });
+      await tx.variant.update({ where: { id: variantId }, data: { quantity: newQty } });
       // Decrement parent product's denormalised quantity too.
       const parentDelta = wasBackorder ? 0 : quantity;
       if (parentDelta > 0) {
@@ -110,7 +115,7 @@ export async function decrementStock(req: DecrementRequest): Promise<DecrementRe
           createdBy: userId ?? null,
         },
       });
-      return { newQuantity: newQty, previousQuantity: previous, wasBackorder, reservationReleased: false };
+      return { newQuantity: newQty, previousQuantity: previous, wasBackorder, reservationReleased: false, stockAlertRaised: false };
     }
 
     // No variant.
@@ -139,7 +144,49 @@ export async function decrementStock(req: DecrementRequest): Promise<DecrementRe
         createdBy: userId ?? null,
       },
     });
-    return { newQuantity: newQty, previousQuantity: previous, wasBackorder, reservationReleased: false };
+
+    // Stock alerts. Rules:
+    //   - stock at/below the low-stock threshold AND no alert row yet
+    //     (product was created/restocked below threshold, or first sale
+    //     to cross it) -> create the row and raise.
+    //   - alert row exists AND this sale crossed the threshold downward
+    //     or hit zero -> (re)notify the admin's email and stamp
+    //     lastAlertSent. Sales that stay below the threshold do not
+    //     re-notify, so a slow-moving item cannot spam the inbox.
+    // Mail is fire-and-forget: a delivery failure never fails a sale.
+    let stockAlertRaised = false;
+    const threshold = product.lowStockThreshold;
+    const crossedThreshold = previous > threshold && newQty <= threshold;
+    const wentOutOfStock = previous > 0 && newQty <= 0;
+    if (newQty <= threshold) {
+      const existingAlert = await tx.stockAlert.findUnique({ where: { productId } });
+      if (!existingAlert) {
+        await tx.stockAlert.create({
+          data: {
+            productId,
+            lowStockThreshold: threshold,
+            outOfStockThreshold: 0,
+            isActive: true,
+          },
+        });
+        stockAlertRaised = true;
+      } else if (crossedThreshold || wentOutOfStock) {
+        if (existingAlert.notifyEmail) {
+          sendEmail(
+            existingAlert.notifyEmail,
+            `[Low stock] ${product.name} at ${newQty}`,
+            `<p>${product.name} (${product.sku}) dropped to <strong>${newQty}</strong> (threshold: ${threshold}).</p>`
+          ).catch((err) => logger.warn('Stock alert email failed:', err));
+          await tx.stockAlert.update({
+            where: { productId },
+            data: { lastAlertSent: new Date() },
+          });
+        }
+        stockAlertRaised = true;
+      }
+    }
+
+    return { newQuantity: newQty, previousQuantity: previous, wasBackorder, reservationReleased: false, stockAlertRaised };
   });
 }
 
@@ -151,11 +198,11 @@ export async function incrementStock(req: DecrementRequest & { reason?: 'return'
   const { productId, variantId, quantity, orderId, userId, reason, notes } = req;
   return prisma.$transaction(async (tx: any) => {
     if (variantId) {
-      const variant = await tx.productVariant.findUnique({ where: { id: variantId } });
+      const variant = await tx.variant.findUnique({ where: { id: variantId } });
       if (!variant) throw new AppError(`Variant not found: ${variantId}`, 404);
       const previous = variant.quantity;
       const newQty = previous + quantity;
-      await tx.productVariant.update({ where: { id: variantId }, data: { quantity: newQty } });
+      await tx.variant.update({ where: { id: variantId }, data: { quantity: newQty } });
       // If the product is NOT backorder-allowed, restoring decrements
       // from a real order should bump the parent too.
       const product = await tx.product.findUnique({ where: { id: productId } });
@@ -175,7 +222,7 @@ export async function incrementStock(req: DecrementRequest & { reason?: 'return'
           notes: notes ?? null,
         },
       });
-      return { newQuantity: newQty, previousQuantity: previous, wasBackorder: false, reservationReleased: false };
+      return { newQuantity: newQty, previousQuantity: previous, wasBackorder: false, reservationReleased: false, stockAlertRaised: false };
     }
     const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) throw new AppError(`Product not found: ${productId}`, 404);
@@ -195,7 +242,7 @@ export async function incrementStock(req: DecrementRequest & { reason?: 'return'
         notes: notes ?? null,
       },
     });
-    return { newQuantity: newQty, previousQuantity: previous, wasBackorder: false, reservationReleased: false };
+    return { newQuantity: newQty, previousQuantity: previous, wasBackorder: false, reservationReleased: false, stockAlertRaised: false };
   });
 }
 
@@ -344,7 +391,7 @@ export async function availableQuantity(productId: string, variantId?: string): 
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) return 0;
   if (variantId) {
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+    const variant = await prisma.variant.findUnique({ where: { id: variantId } });
     if (!variant) return 0;
     const reserved = await prisma.stockReservation.aggregate({
       where: {
@@ -442,11 +489,11 @@ export async function applyStockTake(stockTakeId: string, args: { cancel?: boole
       // is involved. For variants, adjust both the variant and the
       // parent (the parent's quantity is denormalised).
       if (item.variantId) {
-        const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
+        const variant = await tx.variant.findUnique({ where: { id: item.variantId } });
         if (variant) {
           const previous = variant.quantity;
           const newQty = item.counted;
-          await tx.productVariant.update({ where: { id: item.variantId }, data: { quantity: newQty } });
+          await tx.variant.update({ where: { id: item.variantId }, data: { quantity: newQty } });
           await tx.inventoryLog.create({
             data: {
               productId: item.productId,
@@ -537,7 +584,7 @@ export async function runAutoReorder(args: { dryRun?: boolean } = {}): Promise<A
       // reservations) if no variant, or the variant quantity.
       let effectiveStock = product.quantity;
       if (rule.variantId) {
-        const v = await prisma.productVariant.findUnique({ where: { id: rule.variantId } });
+        const v = await prisma.variant.findUnique({ where: { id: rule.variantId } });
         if (v) effectiveStock = v.quantity;
       }
       const reserved = await prisma.stockReservation.aggregate({
@@ -626,10 +673,10 @@ export async function apply3PLStockDelta(args: {
     });
     let newQty: number;
     if (args.variantId) {
-      const v = await tx.productVariant.findUnique({ where: { id: args.variantId } });
+      const v = await tx.variant.findUnique({ where: { id: args.variantId } });
       if (!v) throw new AppError(`Variant not found: ${args.variantId}`, 404);
       newQty = v.quantity + args.delta;
-      await tx.productVariant.update({ where: { id: args.variantId }, data: { quantity: Math.max(0, newQty) } });
+      await tx.variant.update({ where: { id: args.variantId }, data: { quantity: Math.max(0, newQty) } });
     } else {
       const p = await tx.product.findUnique({ where: { id: args.productId } });
       if (!p) throw new AppError(`Product not found: ${args.productId}`, 404);

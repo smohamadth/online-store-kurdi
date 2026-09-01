@@ -1,3 +1,7 @@
+// Thin HTTP layer over AnalyticsService (mounted by analytics.routes.ts):
+// validates the event payload shape, maps service results to the standard
+// response envelope. Auth/gating is the ROUTE's job - the controller
+// trusts that trackingGate (opt-in flag) and authorize() already ran.
 import { Request, Response, NextFunction } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { logger } from '../../utils/logger';

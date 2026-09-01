@@ -192,7 +192,7 @@ export default function WalletPage() {
               <tr style={{ background: '#f9f9f9' }}>
                 <th style={th}>Date</th>
                 <th style={th}>Type</th>
-                <th style={{ ...th, textAlign: 'right' }}>Amount</th>
+                <th style={{ ...th, textAlign: 'end' }}>Amount</th>
                 <th style={th}>Note</th>
               </tr>
             </thead>
@@ -204,7 +204,7 @@ export default function WalletPage() {
                   <td
                     style={{
                       ...td,
-                      textAlign: 'right',
+                      textAlign: 'end',
                       color: t.amount > 0 ? '#22c55e' : '#ef4444',
                       fontWeight: 500,
                     }}
@@ -223,5 +223,5 @@ export default function WalletPage() {
   );
 }
 
-const th: React.CSSProperties = { padding: '8px 12px', textAlign: 'left', fontSize: '12px', fontWeight: 600 };
+const th: React.CSSProperties = { padding: '8px 12px', textAlign: 'start', fontSize: '12px', fontWeight: 600 };
 const td: React.CSSProperties = { padding: '8px 12px', fontSize: '14px' };

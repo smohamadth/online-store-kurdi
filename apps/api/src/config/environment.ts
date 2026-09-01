@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Environment loading + validation (Zod).
+//
+// This is the single gate between "someone's .env" and the running server:
+// a missing/invalid variable makes the process EXIT AT IMPORT TIME with the
+// field names, instead of surfacing later as a confusing 500. .env.ci in
+// apps/api is the canonical set of values that must keep passing here -
+// scripts/verify-env-config.py checks the templates against this schema.
+// ---------------------------------------------------------------------------
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -14,6 +23,15 @@ const envSchema = z.object({
   
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  
+  // Search provider. 'postgres' is the default and needs nothing extra:
+  // product search runs a Prisma `contains` query. 'elasticsearch' turns on
+  // the optional Elasticsearch-backed search (index maintained on product
+  // writes); if Elasticsearch is unreachable the server logs and falls back
+  // to the Postgres search for the affected request, it never hard-fails.
+  SEARCH_PROVIDER: z.enum(['postgres', 'elasticsearch']).default('postgres'),
+  ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
+  ELASTICSEARCH_INDEX: z.string().default('products'),
   
   // JWT
   JWT_SECRET: z.string().min(32),
@@ -37,6 +55,12 @@ const envSchema = z.object({
   
   // Frontend
   FRONTEND_URL: z.string().url(),
+
+  // Public base URL of the API (e.g. https://api.example.com/api), used to
+  // build absolute links that leave the server (digital-download links in
+  // order emails). Optional: without it those fall back to localhost,
+  // which is only right for local development.
+  API_URL: z.string().url().optional(),
   
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
@@ -49,6 +73,10 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+  // Error tracking (optional): with no DSN the app runs with Sentry
+  // fully disabled - it is an observability add-on, never a dependency.
+  SENTRY_DSN: z.string().url().optional(),
   
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -57,9 +85,16 @@ const envSchema = z.object({
   // Security
   BCRYPT_ROUNDS: z.string().default('12'),
   CORS_ORIGIN: z.string(),
+
+  // Theme studio: where admin-created themes are stored (as theme.json files).
+  // Defaults to the web app's themes dir so a generated theme is picked up by
+  // the registry on the next build. Overridable in tests to a temp dir.
+  THEMES_DIR: z.string().default('../web/themes'),
 });
 
-// Validate environment variables
+// Validate environment variables. console (not the logger) is deliberate:
+// the logger itself depends on validated env (LOG_LEVEL), so using it here
+// would be circular.
 const envParse = envSchema.safeParse(process.env);
 
 if (!envParse.success) {

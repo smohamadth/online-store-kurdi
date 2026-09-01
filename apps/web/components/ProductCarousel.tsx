@@ -1,7 +1,12 @@
+// ProductCarousel - a generic horizontal product row used on the
+// home page (new arrivals / trending feeds). Takes pre-fetched
+// products; no data fetching of its own.
+
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { Product } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
 import ProductCard from './ProductCard';
@@ -73,7 +78,7 @@ export default function ProductCarousel({
               href={viewAllHref}
               style={{ fontSize: '14px', fontWeight: 600, color: 'var(--accent, #111)', textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
-              View all →
+              <DirectionArrow kind="forward" /> View all
             </Link>
           )}
           {showArrows && (

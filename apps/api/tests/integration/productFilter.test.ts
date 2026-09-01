@@ -31,6 +31,9 @@ import {
   createVariant,
   createReview,
   createUser,
+  createOption,
+  createOptionValue,
+  setVariantOptionValues,
 } from '../helpers/factories';
 import type { Express } from 'express';
 
@@ -132,6 +135,96 @@ describe('GET /api/products - advanced filters', () => {
       const res = await request(app).get('/api/products?category=does-not-exist');
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
+    });
+  });
+
+  describe('typed optionValueId filter', () => {
+    // Two products, each with a "Color" option. The shirt has the
+    // Red, Blue, Green values; the hat has only Red. The test
+    // exercises:
+    //   1. ?optionValueId=... picks the product that has the value
+    //      on one of its variants
+    //   2. ?optionValueId=a,b unions the two (OR semantics)
+    //   3. ?optionValueId= applies alongside other filters
+    //   4. an unknown optionValueId returns an empty list
+    async function seedOptionFixture() {
+      const clothing = await createCategory({ slug: 'clothing2', name: 'Clothing2' });
+      const shirt = await createProduct({
+        name: 'Opt Shirt', slug: 'opt-shirt', price: 30, quantity: 5, categoryId: clothing.id,
+      });
+      const hat = await createProduct({
+        name: 'Opt Hat', slug: 'opt-hat', price: 20, quantity: 5, categoryId: clothing.id,
+      });
+
+      // Build the Color option + values on the shirt.
+      const shirtColor = await createOption(shirt.id, { name: 'Color' });
+      const shirtRed = await createOptionValue(shirtColor.id, { value: 'Red', swatch: '#f00' });
+      const shirtBlue = await createOptionValue(shirtColor.id, { value: 'Blue', swatch: '#00f' });
+      const shirtGreen = await createOptionValue(shirtColor.id, { value: 'Green', swatch: '#0f0' });
+      const shirtVariantR = await createVariant(shirt.id, { name: 'Red, S', sku: 'osr', price: 30, quantity: 5 });
+      const shirtVariantB = await createVariant(shirt.id, { name: 'Blue, S', sku: 'osb', price: 30, quantity: 5 });
+      const shirtVariantG = await createVariant(shirt.id, { name: 'Green, S', sku: 'osg', price: 30, quantity: 0 });
+      await setVariantOptionValues(shirtVariantR.id, [shirtRed.id]);
+      await setVariantOptionValues(shirtVariantB.id, [shirtBlue.id]);
+      await setVariantOptionValues(shirtVariantG.id, [shirtGreen.id]);
+
+      // Hat has only Red.
+      const hatColor = await createOption(hat.id, { name: 'Color' });
+      const hatRed = await createOptionValue(hatColor.id, { value: 'Red', swatch: '#f00' });
+      const hatVariantR = await createVariant(hat.id, { name: 'Hat Red', sku: 'ohr', price: 20, quantity: 5 });
+      await setVariantOptionValues(hatVariantR.id, [hatRed.id]);
+
+      return { shirt, hat, shirtRed, shirtBlue, shirtGreen, hatRed };
+    }
+
+    it('narrows to products that have a variant with the optionValue', async () => {
+      const { shirtBlue, hatRed } = await seedOptionFixture();
+      // Shirt has Blue; hat does not. Only the shirt should match.
+      const res = await request(app).get(`/api/products?optionValueId=${shirtBlue.id}`);
+      expect(res.status).toBe(200);
+      const slugs = res.body.data.map((p: any) => p.slug).sort();
+      expect(slugs).toEqual(['opt-shirt']);
+    });
+
+    it('union of optionValueIds (CSV) - both products match', async () => {
+      const { shirtBlue, hatRed } = await seedOptionFixture();
+      // shirtBlue is on the shirt; hatRed is on the hat. Union.
+      const res = await request(app).get(`/api/products?optionValueId=${shirtBlue.id},${hatRed.id}`);
+      expect(res.status).toBe(200);
+      const slugs = res.body.data.map((p: any) => p.slug).sort();
+      expect(slugs).toEqual(['opt-hat', 'opt-shirt']);
+    });
+
+    it('combines with onSale=true (cross-filter narrowing)', async () => {
+      await seedOptionFixture();
+      // Add a sale to the hat. With onSale=true and optionValueId=hatRed,
+      // only the hat should match.
+      const cat = await createCategory({ slug: 'clothing3', name: 'Clothing3' });
+      const onSaleShirt = await createProduct({
+        name: 'Opt Shirt Sale', slug: 'opt-shirt-sale', price: 25, compareAtPrice: 35, quantity: 5, categoryId: cat.id,
+      });
+      const o = await createOption(onSaleShirt.id, { name: 'Color' });
+      const v = await createOptionValue(o.id, { value: 'Red' });
+      const sv = await createVariant(onSaleShirt.id, { name: 'Red', sku: 'oss', price: 25, quantity: 5 });
+      await setVariantOptionValues(sv.id, [v.id]);
+
+      const res = await request(app).get(`/api/products?optionValueId=${v.id}&onSale=true`);
+      expect(res.status).toBe(200);
+      const slugs = res.body.data.map((p: any) => p.slug);
+      expect(slugs).toEqual(['opt-shirt-sale']);
+    });
+
+    it('an unknown optionValueId returns an empty list', async () => {
+      await seedOptionFixture();
+      const res = await request(app).get('/api/products?optionValueId=00000000-0000-0000-0000-000000000000');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+    });
+
+    it('echoes the optionValueId in the applied filter', async () => {
+      const { shirtBlue } = await seedOptionFixture();
+      const res = await request(app).get(`/api/products?optionValueId=${shirtBlue.id}`);
+      expect(res.body.applied.optionValueId).toEqual([shirtBlue.id]);
     });
   });
 

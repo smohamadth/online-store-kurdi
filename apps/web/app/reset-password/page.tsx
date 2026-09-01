@@ -1,3 +1,8 @@
+// /reset-password - the reset form (reached from the email link, or
+// directly in dev mode where the forgot-password flow returns the
+// token). Calls POST /api/auth/reset-password; the server invalidates
+// all existing sessions on success, so the customer must log in fresh.
+
 'use client';
 
 import { LoadingState } from '@/components/Spinner';

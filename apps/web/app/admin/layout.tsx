@@ -1,3 +1,14 @@
+// ---------------------------------------------------------------------------
+// Admin layout: the sidebar shell + the admin AUTH GATE.
+//
+// checkAdminAuth() runs on mount: needs the localStorage token AND a
+// server round-trip to /auth/me proving the role is admin or manager.
+// A customer token (or a demoted user) is cleared and bounced to the
+// storefront. If the API is unreachable it falls back to the locally
+// stored role so the admin keeps working during an API blip - the
+// server-side authorize() middleware is the real boundary either way.
+// Everything under /admin renders inside this gate.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -139,8 +150,10 @@ export default function AdminLayout({
       heading: 'Catalogue',
       items: [
         { path: '/admin/products', label: 'Products', icon: '📦' },
+        { path: '/admin/variants', label: 'Variants', icon: '🏷️' },
         { path: '/admin/categories', label: 'Categories', icon: '🏷️' },
         { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
+        { path: '/admin/import-export', label: 'Import / Export', icon: '⇅' },
       ],
     },
     {
@@ -151,6 +164,13 @@ export default function AdminLayout({
         { path: '/admin/gift-cards', label: 'Gift cards', icon: '🎁' },
         { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
         { path: '/admin/tax', label: 'Tax', icon: '💰' },
+      ],
+    },
+    {
+      heading: 'Finance',
+      items: [
+        { path: '/admin/accounting', label: 'Accounting', icon: '🧾' },
+        { path: '/admin/payments', label: 'Payment Gateways', icon: '💳' },
       ],
     },
     {
@@ -194,7 +214,19 @@ export default function AdminLayout({
           {isMobile && (
             <button
               onClick={() => setSidebarOpen(false)}
-              style={{ background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '24px',
+                cursor: 'pointer',
+                // 44x44 tap target. The mobile sidebar's close button.
+                minWidth: '44px',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
               ✕
             </button>
@@ -269,12 +301,19 @@ export default function AdminLayout({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      padding: '7px 16px',
+                      padding: '10px 16px',
                       borderRadius: '6px',
                       textDecoration: 'none',
                       color: active ? '#ffffff' : '#a0a0c0',
                       backgroundColor: active ? '#2d2d4e' : 'transparent',
                       transition: 'background-color 0.15s ease, color 0.15s ease',
+                      // Nav rows were `padding: 7px 16px` - a 14px text line
+                      // plus 14px vertical padding gave ~30px total, below
+                      // the WCAG 2.5.5 AAA tap-target floor of 44px and
+                      // even the AA floor of 24px was tight on a phone.
+                      // 10px top + 10px bottom + ~16px text = 36px, which
+                      // matches the rest of the admin shell.
+                      minHeight: '36px',
                     }}
                   >
                     {/* Accent bar: the active row was previously distinguished
@@ -379,6 +418,16 @@ export default function AdminLayout({
             textDecoration: 'none',
             color: 'white',
             fontSize: '12px',
+            // WCAG 2.5.5 (Target Size) - tap targets should be at least
+            // 24x24 CSS pixels, and the AAA recommendation is 44x44. The
+            // sidebar is rendered at 260px wide, so 36px is the highest
+            // we can do without making the two buttons stack - and
+            // stacking breaks the existing visual layout. 36px is the
+            // floor for "comfortably tappable on a phone".
+            minHeight: '36px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
             View Store
           </Link>
@@ -393,6 +442,7 @@ export default function AdminLayout({
               color: 'white',
               fontSize: '12px',
               cursor: 'pointer',
+              minHeight: '36px',
             }}
           >
             Logout
@@ -410,9 +460,24 @@ export default function AdminLayout({
     // to its own neutral palette regardless of what the store looks like.
     <div
       data-admin-shell
+      // Deliberately pinned LTR even when the storefront renders RTL
+      // (ku/ar). The admin is staff tooling, and like Shopify/WooCommerce
+      // its dashboard stays LTR regardless of the store's display
+      // language: ~100 table alignments, indents and button gaps in the
+      // admin pages are physical by design, and mirroring them all is a
+      // bigger project than the value it would add. Storefront (and the
+      // account area) is fully RTL - only this shell opts out. To revisit,
+      // remove this attribute and run the RTL sweep over app/admin.
+      dir="ltr"
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        // `height`, not `minHeight`: with minHeight the shell grew to the
+        // content (the dashboard is ~1080px tall), so on any shorter
+        // viewport the WHOLE page scrolled - rail included - instead of
+        // just the main column. Pinned to the viewport, the main area's
+        // `overflow: auto` does the scrolling and the rail stays exactly
+        // viewport-tall (verify-admin-rail.py checks this).
+        height: '100vh',
         flexDirection: 'column',
         overflow: 'hidden',
         backgroundColor: '#f5f5f7',
@@ -440,7 +505,15 @@ export default function AdminLayout({
               color: 'white',
               fontSize: '24px',
               cursor: 'pointer',
-              padding: '4px',
+              // 4px padding around a 24px icon gave 32x32, below the
+              // 44x44 WCAG 2.5.5 AAA tap-target floor. Bump padding to
+              // 10px to land at 44x44.
+              padding: '10px',
+              minWidth: '44px',
+              minHeight: '44px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             ☰
@@ -452,7 +525,11 @@ export default function AdminLayout({
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, alignItems: 'stretch' }}>
+      {/* minHeight: 0 lets this row shrink to the shell's height.
+          Without it the row's automatic minimum size is the content
+          height (~1080px for the dashboard), so it overgrew the
+          100vh shell and the whole rail + main column overflowed it. */}
+      <div style={{ display: 'flex', flex: 1, alignItems: 'stretch', minHeight: 0 }}>
         {/* Sidebar - always visible on desktop, slide-out on mobile */}
         {!isMobile ? (
           <div style={{

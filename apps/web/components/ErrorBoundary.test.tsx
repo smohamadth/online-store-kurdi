@@ -12,22 +12,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
-function Boom({ message }: { message?: string }) {
+// React types for the Boom component's return type annotation.
+import type * as React from 'react';
+
+function Boom({ message }: { message?: string }): React.ReactElement {
   throw new Error(message || 'boom');
 }
 
 describe('ErrorBoundary', () => {
-  let originalNodeEnv: string | undefined;
   let originalReload: () => void;
 
   beforeEach(() => {
-    originalNodeEnv = process.env.NODE_ENV;
     originalReload = window.location.reload;
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
     window.location.reload = originalReload;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -68,7 +69,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('shows the error message in development mode', () => {
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -83,7 +84,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('hides the error message in production', () => {
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -95,7 +96,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('refresh button resets state and reloads the page', () => {
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const reloadSpy = vi.fn();
     window.location.reload = reloadSpy;

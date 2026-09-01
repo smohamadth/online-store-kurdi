@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor, fireEvent } from '@testing-library/react';
 import { getNextRouter, setNextRouter } from '@/test/setup-components';
 import SearchBar from '@/components/SearchBar';
+import { I18nSeedProvider } from '@/lib/I18nSeedProvider';
 import type { Product } from '@/lib/api';
 
 const sampleProduct: Product = {
@@ -36,6 +37,9 @@ const sampleProduct: Product = {
   compareAtPrice: null,
   quantity: 5,
   images: [],
+  downloadUrl: null,
+  downloadLimit: null,
+  downloadExpiry: null,
   category: { id: 'c1', name: 'Electronics', slug: 'electronics', image: null },
   variants: [],
   averageRating: 0,
@@ -185,5 +189,97 @@ describe('SearchBar', () => {
     fireEvent.change(input, { target: { value: 'nothing' } });
 
     expect(await screen.findByText(/no products found for/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * RTL regression tests.
+ *
+ * The header is used by Kurdish and Arabic visitors, where the document
+ * direction is rtl. The search icon, the asymmetric padding, and the
+ * "view all" arrow must all mirror. We seed the I18nSeedProvider with
+ * rtl/ku (and ltr/en for the inverse) so the first render uses the
+ * right direction without depending on localStorage timing.
+ */
+describe('SearchBar RTL', () => {
+  beforeEach(() => {
+    setNextRouter({ pathname: '/' });
+    localStorage.clear();
+  });
+
+  it('positions the search icon on the right and pads text from the right in RTL', () => {
+    render(
+      <I18nSeedProvider value={{ lang: 'ku', dir: 'rtl' }}>
+        <SearchBar />
+      </I18nSeedProvider>,
+    );
+    // The placeholder text is translated, so we cannot rely on
+    // `getByPlaceholderText`. The input is the only text input in the
+    // component, and is identifiable by its type.
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    // In RTL the leading edge is the right, so the icon must sit on the
+    // right and the text indent must come from the right too.
+    const padding = input.style.padding || '';
+    expect(padding).toMatch(/^40px 40px 10px 16px$/);
+    // The button is absolutely positioned; happy-dom exposes inline style
+    // on the element. Walk to the sibling button.
+    const iconBtn = input.parentElement?.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(iconBtn).toBeTruthy();
+    expect(iconBtn.style.right).toBe('12px');
+    expect(iconBtn.style.left).toBe('');
+  });
+
+  it('keeps the icon on the left in LTR (regression guard for the inverse)', () => {
+    render(
+      <I18nSeedProvider value={{ lang: 'en', dir: 'ltr' }}>
+        <SearchBar />
+      </I18nSeedProvider>,
+    );
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    const padding = input.style.padding || '';
+    expect(padding).toMatch(/^10px 16px 10px 40px$/);
+    const iconBtn = input.parentElement?.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(iconBtn.style.left).toBe('12px');
+    expect(iconBtn.style.right).toBe('');
+  });
+
+  it('flips the "view all" arrow to point left in RTL', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      ...sampleProduct,
+      id: `p${i}`,
+      slug: `p-${i}`,
+      name: `Result ${i}`,
+    }));
+    globalThis.fetch = mockFetchOk({ data: many });
+    render(
+      <I18nSeedProvider value={{ lang: 'ar', dir: 'rtl' }}>
+        <SearchBar />
+      </I18nSeedProvider>,
+    );
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'res' } });
+    const link = await screen.findByText(/View all 8 results/);
+    expect(link.textContent).toMatch(/←\s*$/);
+  });
+
+  it('keeps the "view all" arrow pointing right in LTR', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      ...sampleProduct,
+      id: `p${i}`,
+      slug: `p-${i}`,
+      name: `Result ${i}`,
+    }));
+    globalThis.fetch = mockFetchOk({ data: many });
+    render(
+      <I18nSeedProvider value={{ lang: 'en', dir: 'ltr' }}>
+        <SearchBar />
+      </I18nSeedProvider>,
+    );
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'res' } });
+    const link = await screen.findByText(/View all 8 results/);
+    expect(link.textContent).toMatch(/→\s*$/);
   });
 });

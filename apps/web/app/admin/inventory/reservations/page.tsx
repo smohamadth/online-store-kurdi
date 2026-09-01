@@ -1,3 +1,9 @@
+// /admin/inventory/reservations - the stock-reservation list
+// (cart holds + order holds). Manual release is for stuck rows
+// (e.g. a cart that will never check out); the normal expiry path
+// runs automatically via the scheduler's release-expired job.
+// Releasing a reservation returns the held quantity to available
+// stock.
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -58,7 +64,7 @@ export default function ReservationsPage() {
         and can be released manually with the button above.
       </p>
 
-      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f9f9f9' }}>

@@ -1,5 +1,18 @@
+// ---------------------------------------------------------------------------
+// Product controller (LEGACY - not imported by any route).
+//
+// STATUS: nothing imports this class. The live product endpoints are
+// written inline in product.routes.ts (which duplicates most of this
+// logic, including the analytics-gating pattern in trackEvent). Kept for
+// reference; if you are adding product behaviour, change product.routes.ts.
+//
+// (For the record) intended layering: validate (Zod, product.types) ->
+// call product.service -> shape the { status, data, pagination } envelope
+// -> fire opt-in analytics events that can never fail the request.
+// ---------------------------------------------------------------------------
 import { Request, Response, NextFunction } from 'express';
 import { ProductService } from './product.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { logger } from '../../utils/logger';
 import {
   CreateProductSchema,
@@ -9,9 +22,11 @@ import {
 
 export class ProductController {
   private productService: ProductService;
+  private analyticsService: AnalyticsService;
 
   constructor() {
     this.productService = new ProductService();
+    this.analyticsService = new AnalyticsService();
   }
 
   // Create a new product
@@ -133,7 +148,7 @@ export class ProductController {
     }
   };
 
-  // Get featured products
+  // Get featured products (home page hero / carousel)
   getFeaturedProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
@@ -164,7 +179,7 @@ export class ProductController {
     }
   };
 
-  // Search products
+  // Search products - the public ?q= endpoint the SearchBar drives.
   searchProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { q } = req.query;
@@ -179,8 +194,11 @@ export class ProductController {
 
       const products = await this.productService.searchProducts(q, limit);
 
-      // Track search event
-      await this.trackEvent(req, 'search', { searchQuery: q, resultsCount: products.length });
+      // Track the search (no-op unless the store opted in to analytics)
+      await this.trackEvent(req, 'search', {
+        searchQuery: q,
+        metadata: { resultsCount: products.length },
+      });
 
       res.json({
         status: 'success',
@@ -191,21 +209,32 @@ export class ProductController {
     }
   };
 
-  // Track analytics event
-  private async trackEvent(req: Request, eventType: string, metadata: any = {}) {
+  /**
+   * Track a server-side analytics event (search today).
+   *
+   * Gated on ANALYTICS_TRACKING_ENABLED like the public /track
+   * endpoints: with the flag unset the store collects nothing and the
+   * /privacy page says exactly that. The service swallows its own
+   * errors, so a tracking failure can never fail the request.
+   */
+  private async trackEvent(
+    req: Request,
+    eventType: string,
+    payload: { productId?: string; searchQuery?: string; metadata?: Record<string, unknown> } = {},
+  ) {
+    if (process.env.ANALYTICS_TRACKING_ENABLED !== 'true') return;
     try {
-      // This will be implemented in the analytics module
-      // For now, we'll just log it
-      logger.debug(`Analytics event: ${eventType}`, {
+      await this.analyticsService.trackEvent({
         userId: req.user?.id,
-        sessionId: req.headers['x-session-id'] || 'anonymous',
+        sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
         eventType,
-        metadata,
+        productId: payload.productId,
+        searchQuery: payload.searchQuery,
+        metadata: payload.metadata,
         userAgent: req.get('User-Agent'),
         ipAddress: req.ip,
       });
     } catch (error) {
-      // Don't fail the request if analytics tracking fails
       logger.error('Error tracking analytics event:', error);
     }
   }

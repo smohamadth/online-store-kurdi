@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// /admin/products - the product table + the add/edit modal (the biggest
+// form in the admin).
+//
+// The modal writes through POST/PUT /api/products (the live routes -
+// NOT the legacy controller/service). It owns: rich-text description
+// (sanitised by the editor AND re-sanitised by the API on write), the
+// SEO panel (meta title/description/keywords, slug), the image gallery
+// (ImageGalleryUpload -> /api/upload, variants come back per size),
+// and the variant quick-add.
+//
+// The table is a plain fetch of the products list with search +
+// category filter; on phones it becomes a horizontal-scroll container
+// (the seven columns overflow at 360px).
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useStoreSettings, formatPrice } from '@/lib/settings';
@@ -8,7 +23,10 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, Category, getCategoryEmoji, getImageUrl } from '@/lib/api';
 import ImageGalleryUpload from '@/components/ImageGalleryUpload';
+import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
+import { PRODUCT_TRANSLATION_FIELDS } from '@/lib/translationFields';
 import { API_BASE } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 interface GalleryImage {
   id: string;
@@ -26,6 +44,15 @@ interface GalleryImage {
 
 export default function AdminProductsPage() {
   const { settings } = useStoreSettings();
+  // Used to:
+  //   1) switch the products list to a horizontal-scroll container with
+  //      tightened padding on phones (the seven-column table overflows at
+  //      360px);
+  //   2) make the add/edit modal full-width on phones instead of fixed
+  //      600px (which would clip off the right edge);
+  //   3) collapse the 1fr/1fr/1fr form rows into a single column so the
+  //      three inputs each get the full viewport width.
+  const isMobile = useIsMobile(640);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +79,11 @@ export default function AdminProductsPage() {
     categoryId: '',
     type: 'physical',
     status: 'active',
+    // Digital-product fields. Only sent to the API when
+    // type === 'digital'. Empty strings clear the field on save.
+    downloadUrl: '',
+    downloadLimit: '',
+    downloadExpiry: '',
   });
 
   useEffect(() => {
@@ -161,6 +193,22 @@ export default function AdminProductsPage() {
       updatedAt: new Date().toISOString(),
     };
 
+    // Digital-product fields. Only sent when the type is
+    // "digital" so a physical product never accidentally gets a
+    // downloadUrl. Empty strings are normalised to null so a
+    // clear() on the input actually clears the column.
+    if (formData.type === 'digital') {
+      productData.downloadUrl = formData.downloadUrl.trim() || null;
+      productData.downloadLimit =
+        formData.downloadLimit !== '' && Number(formData.downloadLimit) > 0
+          ? Number(formData.downloadLimit)
+          : null;
+      productData.downloadExpiry =
+        formData.downloadExpiry !== '' && Number(formData.downloadExpiry) > 0
+          ? Number(formData.downloadExpiry)
+          : null;
+    }
+
     // Try API first
     try {
       const token = localStorage.getItem('token');
@@ -215,6 +263,9 @@ export default function AdminProductsPage() {
       categoryId: '',
       type: 'physical',
       status: 'active',
+      downloadUrl: '',
+      downloadLimit: '',
+      downloadExpiry: '',
     });
     setProductImages([]);
     setSeo({ metaTitle: '', metaDescription: '', metaKeywords: [], slug: '' });
@@ -233,6 +284,13 @@ export default function AdminProductsPage() {
       categoryId: product.category?.id || '',
       type: product.type,
       status: product.status,
+      downloadUrl: (product as any).downloadUrl || '',
+      downloadLimit: (product as any).downloadLimit
+        ? String((product as any).downloadLimit)
+        : '',
+      downloadExpiry: (product as any).downloadExpiry
+        ? String((product as any).downloadExpiry)
+        : '',
     });
 
     // Load stored SEO, falling back to generated values for products created
@@ -304,20 +362,36 @@ export default function AdminProductsPage() {
           <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Products</h2>
           <p style={{ color: '#666', fontSize: '14px' }}>{products.length} total products</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setEditingProduct(null); setShowAddModal(true); }}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#000',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Add Product
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link
+            href="/admin/import-export"
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'white',
+              color: '#000',
+              border: '1px solid #000',
+              borderRadius: '6px',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            ⇅ Import / Export
+          </Link>
+          <button
+            onClick={() => { resetForm(); setEditingProduct(null); setShowAddModal(true); }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#000',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Add Product
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -343,7 +417,12 @@ export default function AdminProductsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: 'auto'` (was 'hidden'): on a narrow phone the seven
+        // columns don't all fit; allow horizontal scroll inside this
+        // container instead of overflowing the document. The previous
+        // 'hidden' was hiding the problem and letting rows push past
+        // the viewport edge.
+        overflow: 'auto',
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -504,17 +583,29 @@ export default function AdminProductsPage() {
           backgroundColor: 'rgba(0,0,0,0.5)',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
           zIndex: 1000,
+          // On mobile let the scrim scroll; the modal itself is a child
+          // that needs the page to scroll when its content is taller
+          // than the viewport.
+          overflow: 'auto',
         }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '32px',
-            width: '600px',
-            maxHeight: '80vh',
-            overflow: 'auto',
-          }}>
+          <div
+            data-testid="product-modal"
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: isMobile ? '16px' : '32px',
+              // Was hard-coded 600px, which clipped off the right edge on
+              // any phone. On mobile we go full-width with a small
+              // margin; on desktop the 600px is fine.
+              width: isMobile ? 'calc(100vw - 24px)' : '600px',
+              maxWidth: '100%',
+              maxHeight: isMobile ? 'none' : '80vh',
+              minHeight: isMobile ? '100vh' : 'auto',
+              overflow: 'auto',
+              marginTop: isMobile ? '12px' : 0,
+            }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
               {editingProduct ? 'Edit Product' : 'Add New Product'}
             </h2>
@@ -533,7 +624,7 @@ export default function AdminProductsPage() {
                   <strong>Not saved.</strong> {saveError}
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Name *</label>
                   <input
@@ -565,7 +656,7 @@ export default function AdminProductsPage() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Price *</label>
                   <input
@@ -598,7 +689,7 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Category *</label>
                   <select
@@ -647,6 +738,163 @@ export default function AdminProductsPage() {
                 />
               </div>
 
+              {/* Digital product fields. Only rendered when the
+                  type select is "digital" so the physical-product
+                  admin doesn't see fields they can't use. */}
+              {formData.type === 'digital' && (
+                <div
+                  data-testid="digital-product-section"
+                  style={{
+                    marginBottom: '20px',
+                    padding: '16px',
+                    border: '1px solid #e0e7ff',
+                    borderRadius: '8px',
+                    backgroundColor: '#eef2ff',
+                  }}
+                >
+                  <h3
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#3730a3',
+                      marginBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>⬇️</span>
+                    <span>Digital product</span>
+                  </h3>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        marginBottom: '4px',
+                        color: '#1f2937',
+                      }}
+                    >
+                      Download URL *
+                    </label>
+                    <input
+                      type="url"
+                      data-testid="input-download-url"
+                      value={formData.downloadUrl}
+                      onChange={(e) =>
+                        setFormData({ ...formData, downloadUrl: e.target.value })
+                      }
+                      placeholder="https://example.com/files/ebook.pdf"
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        border: '1px solid #c7d2fe',
+                        borderRadius: '4px',
+                        backgroundColor: 'white',
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        marginTop: '4px',
+                      }}
+                    >
+                      The file the customer receives. Customers
+                      also get a per-order link with the same
+                      content.
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                      gap: '12px',
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          marginBottom: '4px',
+                          color: '#1f2937',
+                        }}
+                      >
+                        Per-order download limit
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        data-testid="input-download-limit"
+                        value={formData.downloadLimit}
+                        onChange={(e) =>
+                          setFormData({ ...formData, downloadLimit: e.target.value })
+                        }
+                        placeholder="5"
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: '1px solid #c7d2fe',
+                          borderRadius: '4px',
+                          backgroundColor: 'white',
+                        }}
+                      />
+                      <p
+                        style={{
+                          fontSize: '12px',
+                          color: '#6b7280',
+                          marginTop: '4px',
+                        }}
+                      >
+                        Max downloads per purchase. Blank = unlimited.
+                      </p>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          marginBottom: '4px',
+                          color: '#1f2937',
+                        }}
+                      >
+                        Link expiry (days)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        data-testid="input-download-expiry"
+                        value={formData.downloadExpiry}
+                        onChange={(e) =>
+                          setFormData({ ...formData, downloadExpiry: e.target.value })
+                        }
+                        placeholder="30"
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: '1px solid #c7d2fe',
+                          borderRadius: '4px',
+                          backgroundColor: 'white',
+                        }}
+                      />
+                      <p
+                        style={{
+                          fontSize: '12px',
+                          color: '#6b7280',
+                          marginTop: '4px',
+                        }}
+                      >
+                        Days the link stays valid. Blank = no expiry.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: '20px' }}>
                 <SeoPanel
                   productName={formData.name}
@@ -657,6 +905,12 @@ export default function AdminProductsPage() {
                   onChange={setSeo}
                 />
               </div>
+
+              <ContentTranslationsEditor
+                entityType="product"
+                entityId={editingProduct ? editingProduct.id : null}
+                fields={PRODUCT_TRANSLATION_FIELDS}
+              />
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button

@@ -1,0 +1,172 @@
+/**
+ * Pulse theme — Featured products section.
+ *
+ * Medusa-starter-style product cards: white cards on the off-white
+ * canvas, 16px corner radius, a soft shadow that deepens on hover, a
+ * square media tile, the name in semibold sans and the price bold.
+ * Three-up on desktop (the modern storefront's denser, larger-card
+ * rhythm), reflowing to 2 then 1 on smaller screens.
+ */
+
+'use client';
+
+import Link from 'next/link';
+import { useTheme } from '@/lib/theme';
+import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { getImageUrl } from '@/lib/api';
+import type { SectionProps } from '@/lib/themeSections';
+
+export default function PulseFeatured({ title, subtitle, products, config }: SectionProps) {
+  const { theme } = useTheme();
+  const { settings } = useStoreSettings();
+  const limit = (config?.limit as number) ?? 6;
+  const list = (products ?? []).slice(0, limit);
+  // Honor the theme's desktop columns-per-row token (falling back to a sane
+  // default when the admin has not set it), while letting auto-fit reflow to
+  // fewer columns on small screens.
+  const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 3));
+
+  if (list.length === 0) return null;
+
+  return (
+    <section
+      data-section="featured"
+      style={{
+        backgroundColor: 'var(--body-bg, #f8fafc)',
+        padding: 'clamp(48px, 7vw, 88px) 24px',
+      }}
+    >
+      <div style={{ maxWidth: 'var(--container, 1280px)', margin: '0 auto' }}>
+        {(title || subtitle) && (
+          <div style={{ marginBottom: '40px', maxWidth: '560px' }}>
+            {title && (
+              <h2
+                style={{
+                  fontSize: 'clamp(24px, 3.5vw, 34px)',
+                  letterSpacing: '-0.01em',
+                  fontWeight: 'var(--heading-weight, 700)',
+                  color: 'var(--body-text, #0f172a)',
+                  margin: 0,
+                }}
+              >
+                {title}
+              </h2>
+            )}
+            {subtitle && (
+              <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'var(--muted, #64748b)', margin: '12px 0 0' }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'grid',
+            // auto-fit keeps the grid responsive on phones/tablets, while the
+            // minmax floor derived from productsPerRow makes desktop land on
+            // the theme's declared columns-per-row.
+            gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${Math.max(240, Math.floor(1200 / perRow))}px), 1fr))`,
+            gap: '24px',
+          }}
+        >
+          {list.map((product) => {
+            const image = product.images?.[0];
+            const rating = Number(product.averageRating) || 0;
+            const hasSale =
+              typeof product.compareAtPrice === 'number' &&
+              product.compareAtPrice > product.price;
+            return (
+              <Link
+                key={product.id}
+                href={`/products/${product.slug}`}
+                style={{
+                  display: 'block',
+                  textDecoration: 'none',
+                  backgroundColor: 'var(--card-bg, #ffffff)',
+                  border: '1px solid var(--border, #e2e8f0)',
+                  borderRadius: 'var(--radius, 16px)',
+                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+                  color: 'var(--body-text, #0f172a)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    position: 'relative',
+                    aspectRatio: '1 / 1',
+                    backgroundColor: '#f1f5f9',
+                    backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
+                >
+                  {hasSale && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        insetInlineStart: '12px',
+                        insetBlockStart: '12px',
+                        backgroundColor: 'var(--sale, #dc2626)',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                      }}
+                    >
+                      -{Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100)}%
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: '18px 20px 20px' }}>
+                  <p style={{ fontSize: '16px', fontWeight: 600, margin: 0, letterSpacing: '-0.01em' }}>
+                    {product.name}
+                  </p>
+                  {rating > 0 && (
+                    <p
+                      aria-label={`Rated ${rating.toFixed(1)} out of 5`}
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--muted, #64748b)',
+                        margin: '6px 0 0',
+                        letterSpacing: '1px',
+                      }}
+                    >
+                      <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
+                      <span aria-hidden="true" style={{ opacity: 0.3 }}>
+                        {'★'.repeat(5 - Math.round(rating))}
+                      </span>{' '}
+                      <span>{rating.toFixed(1)}</span>
+                      {product.reviewCount ? ` (${product.reviewCount})` : ''}
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '10px', gap: '8px' }}>
+                    <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--price, #0f172a)', margin: 0 }}>
+                      {formatPrice(product.price, settings.currencySymbol)}
+                    </p>
+                    {hasSale && (
+                      <span style={{ fontSize: '14px', color: 'var(--muted, #94a3b8)', textDecoration: 'line-through' }}>
+                        {formatPrice(product.compareAtPrice!, settings.currencySymbol)}
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: 'var(--accent, #4f46e5)',
+                        marginInlineStart: 'auto',
+                      }}
+                    >
+                      View →
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}

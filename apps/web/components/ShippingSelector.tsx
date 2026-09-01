@@ -1,3 +1,8 @@
+// ShippingSelector - the checkout's shipping-options box. Asks
+// POST /api/shipping/calculate with the customer's address + order
+// values and lists the matching methods (free flag included); the
+// parent uses the selection for the order's shippingAmount.
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,6 +28,10 @@ interface ShippingSelectorProps {
   state?: string;
   zipCode?: string;
   subtotal: number;
+  /** Total number of physical items in the cart (for item_count methods). */
+  itemCount?: number;
+  /** Total physical weight in the product's unit (for weight methods). */
+  weight?: number;
   onSelect: (method: ShippingMethod | null) => void;
   selectedMethodId?: string;
 }
@@ -32,6 +41,8 @@ export default function ShippingSelector({
   state,
   zipCode,
   subtotal,
+  itemCount,
+  weight,
   onSelect,
   selectedMethodId,
 }: ShippingSelectorProps) {
@@ -58,8 +69,11 @@ export default function ShippingSelector({
           state,
           zipCode,
           subtotal,
-          weight: 1, // Default weight
-          itemCount: 1,
+          // Real cart weight / item count so weight- and item_count-based
+          // shipping methods price correctly. Fall back to 1 when unknown
+          // (a single item) so flat/price methods still behave.
+          weight: weight && weight > 0 ? weight : 1,
+          itemCount: itemCount && itemCount > 0 ? itemCount : 1,
         }),
       });
 

@@ -22,6 +22,7 @@ import {
   fetchHomeSections,
   updateHomeSection,
   reorderHomeSections,
+  reorderSectionsByDrop,
   createHomeSection,
   deleteHomeSection,
   resetHomeSections,
@@ -48,6 +49,12 @@ export default function HomeBuilder() {
   const isMobile = useIsMobile();
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [loading, setLoading] = useState(true);
+  // Drag-and-drop reordering (native HTML5 DnD, no dependency) - same
+  // pattern as the page-block editor: the grip handle starts the drag,
+  // the cards are drop targets, a thin bar marks the insertion point.
+  // The arrow buttons remain as a keyboard-friendly fallback.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropHint, setDropHint] = useState<{ index: number; after: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
@@ -119,15 +126,11 @@ export default function HomeBuilder() {
     }
   };
 
-  const move = async (index: number, dir: -1 | 1) => {
-    const target = index + dir;
-    if (target < 0 || target >= sections.length) return;
-
-    const next = [...sections];
-    [next[index], next[target]] = [next[target], next[index]];
+  // Persist a new section order (shared by the arrows and drag-and-drop):
+  // optimistic update, roll back so the UI matches the database on failure.
+  const applyReorder = async (next: HomeSection[]) => {
     const previous = sections;
     setSections(next); // optimistic
-
     try {
       const saved = await reorderHomeSections(next.map((s) => s.id));
       setSections(saved);
@@ -135,6 +138,51 @@ export default function HomeBuilder() {
       setSections(previous); // roll back so the UI matches the database
       say('error', errorMessage(e, 'Could not save the new order.'));
     }
+  };
+
+  const move = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= sections.length) return;
+
+    const next = [...sections];
+    [next[index], next[target]] = [next[target], next[index]];
+    await applyReorder(next);
+  };
+
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox requires some data for a drag to start.
+    e.dataTransfer.setData('text/plain', String(index));
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    if (dragIndex === null) return;
+    e.preventDefault(); // mark the card as a valid drop target
+    e.dataTransfer.dropEffect = 'move';
+    // Insert above the card when the cursor is in its top half, below
+    // when in the bottom half.
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    setDropHint((h) => (h && h.index === index && h.after === after ? h : { index, after }));
+  };
+
+  const handleDrop = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const d = dragIndex;
+    setDragIndex(null);
+    const hint = dropHint;
+    setDropHint(null);
+    if (d === null || d === index) return;
+    const after = !!hint && hint.index === index && hint.after;
+    // Index math is unit tested: lib/homeSections.test.ts
+    // ("reorderSectionsByDrop - drag-and-drop position math").
+    void applyReorder(reorderSectionsByDrop(sections, d, index, after));
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDropHint(null);
   };
 
   const add = async () => {
@@ -252,15 +300,23 @@ export default function HomeBuilder() {
           {sections.map((row, i) => {
             const open = openId === row.id;
             const isDirty = dirty[row.id];
+            const isDragged = dragIndex === i;
+            const hintHere = dropHint && dropHint.index === i && dragIndex !== null && dragIndex !== i;
+            const dropBar = (
+              <div style={{ height: '4px', borderRadius: '2px', backgroundColor: 'var(--brand, #2563eb)' }} />
+            );
             return (
+              <span key={row.id} style={{ display: 'block' }}>
+                {hintHere && !dropHint!.after && dropBar}
               <div
-                key={row.id}
                 data-home-row={row.key}
+                onDragOver={handleDragOver(i)}
+                onDrop={handleDrop(i)}
                 style={{
                   border: `1px solid ${isDirty ? '#f59e0b' : '#eee'}`,
                   borderRadius: '10px',
                   backgroundColor: row.isVisible ? '#fff' : '#fafafa',
-                  opacity: row.isVisible ? 1 : 0.72,
+                  opacity: isDragged ? 0.45 : row.isVisible ? 1 : 0.72,
                 }}
               >
                 {/* Row header */}
@@ -273,6 +329,18 @@ export default function HomeBuilder() {
                     flexWrap: 'wrap',
                   }}
                 >
+                  {/* Drag handle - starts the HTML5 drag */}
+                  <span
+                    draggable
+                    onDragStart={handleDragStart(i)}
+                    onDragEnd={handleDragEnd}
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                    style={{ cursor: 'grab', fontSize: '16px', color: '#999', userSelect: 'none' }}
+                  >
+                    ⠿
+                  </span>
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <button
                       aria-label="Move up"
@@ -420,6 +488,8 @@ export default function HomeBuilder() {
                   </div>
                 )}
               </div>
+                {hintHere && dropHint!.after && dropBar}
+              </span>
             );
           })}
         </div>
@@ -436,7 +506,8 @@ export default function HomeBuilder() {
       >
         <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Add a block</h3>
         <p style={{ fontSize: '13px', color: '#666', marginBottom: '14px' }}>
-          New blocks are appended to the bottom of the page — move them up with the arrows.
+          New blocks are appended to the bottom of the page — drag the ⠿ handle (or use the
+          arrows) to reorder them.
         </p>
         <div
           style={{
@@ -520,8 +591,8 @@ function TypeEditor({
               style={{
                 display: 'grid',
                 gridTemplateColumns: isMobile
-                  ? '1fr'
-                  : `${columns.map((c) => c.width || '1fr').join(' ')} auto`,
+                  ? '1fr auto'
+                  : `${columns.map((c) => c.width || '1fr').join(' ')} auto auto auto`,
                 gap: '8px',
                 alignItems: 'center',
               }}
@@ -540,6 +611,45 @@ function TypeEditor({
                   }}
                 />
               ))}
+              {/* Element-level reordering: move this item within the list */}
+              <button
+                aria-label="Move item up"
+                disabled={idx === 0}
+                onClick={() => {
+                  const next = [...items];
+                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                  setItems(next);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #d4d4d4',
+                  borderRadius: '6px',
+                  background: idx === 0 ? '#f5f5f5' : '#fff',
+                  color: idx === 0 ? '#bbb' : '#444',
+                  cursor: idx === 0 ? 'default' : 'pointer',
+                }}
+              >
+                ↑
+              </button>
+              <button
+                aria-label="Move item down"
+                disabled={idx === items.length - 1}
+                onClick={() => {
+                  const next = [...items];
+                  [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                  setItems(next);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #d4d4d4',
+                  borderRadius: '6px',
+                  background: idx === items.length - 1 ? '#f5f5f5' : '#fff',
+                  color: idx === items.length - 1 ? '#bbb' : '#444',
+                  cursor: idx === items.length - 1 ? 'default' : 'pointer',
+                }}
+              >
+                ↓
+              </button>
               <button
                 aria-label="Remove item"
                 onClick={() => setItems(items.filter((_, i) => i !== idx))}
@@ -870,6 +980,73 @@ function TypeEditor({
         </div>
       );
 
+    case 'custom': {
+      // The admin-designed section: same rich content as richText, plus
+      // background / padding / width so a whole band of the page can be
+      // composed (the storefront renders it with CustomSection).
+      const select = (
+        key: string,
+        label: string,
+        options: { value: string; text: string }[],
+        fallback: string
+      ) => (
+        <div>
+          <label style={labelStyle}>{label}</label>
+          <select
+            style={inputStyle}
+            value={cfg[key] || fallback}
+            onChange={(e) => patchConfig(row.id, { [key]: e.target.value })}
+          >
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.text}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+      return (
+        <div style={{ display: 'grid', gap: '14px' }}>
+          <div>
+            <label style={labelStyle}>Content (basic HTML allowed)</label>
+            <textarea
+              value={cfg.html || ''}
+              onChange={(e) => patchConfig(row.id, { html: e.target.value })}
+              spellCheck={false}
+              placeholder="<p>Design this section…</p>"
+              style={{ ...inputStyle, minHeight: '160px', fontFamily: 'monospace', fontSize: '13px' }}
+            />
+            <p style={{ fontSize: '12px', color: '#888', marginTop: '6px' }}>
+              Scripts, iframes and inline event handlers are stripped by the server before saving.
+            </p>
+          </div>
+          {twoCol(
+            <>
+              {select('background', 'Background', [
+                { value: 'none', text: 'None (page background)' },
+                { value: 'soft', text: 'Soft grey' },
+                { value: 'brand', text: 'Brand colour' },
+                { value: 'dark', text: 'Dark' },
+              ], 'soft')}
+              {select('width', 'Content width', [
+                { value: 'centered', text: 'Centered column' },
+                { value: 'full', text: 'Full width' },
+              ], 'centered')}
+              {select('padding', 'Vertical padding', [
+                { value: 'none', text: 'None' },
+                { value: 'small', text: 'Small' },
+                { value: 'large', text: 'Large' },
+              ], 'large')}
+              {select('align', 'Alignment', [
+                { value: 'left', text: 'Left' },
+                { value: 'center', text: 'Centered' },
+              ], 'left')}
+            </>
+          )}
+        </div>
+      );
+    }
+
     case 'hero':
       return (
         <p style={{ fontSize: '13px', color: '#666' }}>
@@ -902,6 +1079,14 @@ function defaultConfigFor(type: string): Record<string, any> {
   switch (type) {
     case 'richText':
       return { html: '<p>Write something about your store here.</p>', align: 'left' };
+    case 'custom':
+      return {
+        html: '<p>Design this section - content, background, spacing and width are all yours.</p>',
+        background: 'soft',
+        align: 'left',
+        padding: 'large',
+        width: 'centered',
+      };
     case 'trustBar':
     case 'features':
       return {

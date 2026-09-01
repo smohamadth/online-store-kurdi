@@ -1,3 +1,17 @@
+// ---------------------------------------------------------------------------
+// Local filesystem image storage (the "uploads/" directory served statically
+// by app.ts).
+//
+// uploadImage() is the single entry point used by the /api/upload routes:
+// it validates type+size, then re-encodes the image with sharp into four
+// fixed-size webp variants (thumbnail/medium/large/zoom) plus a capped
+// "original" - the store therefore never serves the raw upload, only the
+// derivatives, which keeps the storefront fast regardless of what a
+// customer uploads.
+//
+// Note: config/minio.ts is a separate, optional MinIO setup; this service is
+// the always-available local implementation.
+// ---------------------------------------------------------------------------
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -6,10 +20,12 @@ import { logger } from '../utils/logger';
 
 // Storage configuration
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB - keep in sync with the multer limit in upload.routes.ts
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// Image size presets
+// Image size presets. Key names are the storage vocabulary; the storefront
+// speaks a different one (thumbnail/card/detail/zoom), which getImageUrl
+// translates via sizeMap.
 const IMAGE_SIZES = {
   thumbnail: { width: 300, height: 300, quality: 80 },
   medium: { width: 600, height: 600, quality: 85 },
@@ -59,7 +75,10 @@ async function processImage(
 
   for (const [sizeName, config] of Object.entries(IMAGE_SIZES)) {
     try {
-      // Process image
+      // Process image. 'contain' preserves the aspect ratio and pads the
+      // rest with the background colour - hence a TRANSPARENT PNG ends up
+      // with a solid white background in every variant (intentional: the
+      // storefront has no global alpha handling for product imagery).
       const processed = await sharp(buffer)
         .resize(config.width, config.height, {
           fit: 'contain',
@@ -72,13 +91,13 @@ async function processImage(
       // Save file
       const fileName = `${folder}/${id}/${sizeName}.webp`;
       const filePath = path.join(UPLOAD_DIR, fileName);
-      
+
       // Ensure directory exists
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      
+
       fs.writeFileSync(filePath, processed);
 
       variants.push({
@@ -91,6 +110,9 @@ async function processImage(
 
       logger.info(`Image variant created: ${fileName} (${processed.length} bytes)`);
     } catch (error) {
+      // One failing variant is not fatal: the remaining variants still
+      // serve the image, so we log and continue rather than aborting the
+      // whole upload.
       logger.error(`Failed to create ${sizeName} variant:`, error);
     }
   }
@@ -111,7 +133,8 @@ export async function uploadImage(
       throw new Error(`File type ${mimeType} is not allowed`);
     }
 
-    // Validate file size
+    // Validate file size (the multer limit usually stops this first; this is
+    // the defence for callers that bypass multer).
     if (file.length > MAX_FILE_SIZE) {
       throw new Error(`File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
     }
@@ -122,7 +145,9 @@ export async function uploadImage(
     // Process image into multiple sizes
     const variants = await processImage(file, folder, id);
 
-    // Also save original (optimized)
+    // Also save original (optimized). Re-encoded to JPEG at max 2000px:
+    // 'inside' + withoutEnlargement never upscales small uploads, and the
+    // JPEG re-encode is why the "original" of a PNG loses transparency too.
     const originalProcessed = await sharp(file)
       .resize(2000, 2000, {
         fit: 'inside',
@@ -159,10 +184,12 @@ export function getImageUrl(
   context: 'thumbnail' | 'card' | 'detail' | 'zoom' = 'detail'
 ): string {
   if (!variants || variants.length === 0) {
+    // No variants at all (every sharp pass failed) - the storefront renders
+    // a placeholder instead of a broken image.
     return '/images/placeholder.jpg';
   }
 
-  // Map context to size
+  // Map context (storefront vocabulary) to size (storage vocabulary).
   const sizeMap: Record<string, string> = {
     thumbnail: 'thumbnail',
     card: 'medium',
@@ -171,8 +198,10 @@ export function getImageUrl(
   };
 
   const targetSize = sizeMap[context] || 'medium';
+  // Match by file name segment ("/medium.webp"), not by the whole URL, so
+  // the folder/uuid path can never interfere with the lookup.
   const variant = variants.find(v => v.url.includes(`/${targetSize}.`));
-  
+
   return variant?.url || variants[0]?.url || '/images/placeholder.jpg';
 }
 
@@ -180,7 +209,7 @@ export function getImageUrl(
 export async function deleteImage(folder: string, id: string): Promise<void> {
   try {
     const dirPath = path.join(UPLOAD_DIR, folder, id);
-    
+
     if (fs.existsSync(dirPath)) {
       // Remove all files in directory
       const files = fs.readdirSync(dirPath);
@@ -207,7 +236,7 @@ export function imageExists(folder: string, id: string): boolean {
 export function getImageInfo(folder: string, id: string): any {
   try {
     const dirPath = path.join(UPLOAD_DIR, folder, id);
-    
+
     if (!fs.existsSync(dirPath)) {
       return null;
     }

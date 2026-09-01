@@ -1,23 +1,40 @@
+// ---------------------------------------------------------------------------
+// Stripe payment service.
+//
+// STATUS: DEAD CODE. Nothing imports this file anymore - the live Stripe
+// path is config/stripe.ts (getStripe / isStripeConfigured), called
+// directly from modules/orders/order.routes.ts (checkout session creation)
+// and modules/payments/payment.routes.ts (payment intents, webhook). It was
+// kept because deleting it would churn the git blame of the payment
+// history; if you are touching payments, start from config/stripe.ts.
+//
+// What it does do (for the record): mock-mode fallbacks when no API key is
+// set, PaymentIntent create/confirm, refunds, webhook dispatch, and the
+// payment_intent.succeeded / payment_failed order updates.
+// ---------------------------------------------------------------------------
 import Stripe from 'stripe';
 import { env } from '../config/environment';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
 
-// Initialize Stripe
+// Initialize Stripe (never called - see header; initializeStripe() is a
+// leftover of the pre-config/stripe.ts architecture)
 let stripe: Stripe | null = null;
 
 export function initializeStripe(): void {
   if (env.STRIPE_SECRET_KEY) {
-    stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-      apiVersion: '2023-10-16',
-    });
+    // No explicit apiVersion: stripe >= v10 pins the API version to the
+    // installed package, and passing a stale one is a type error (and a
+    // request-time failure) rather than a way to "freeze" behaviour.
+    stripe = new Stripe(env.STRIPE_SECRET_KEY);
     logger.info('✅ Stripe initialized');
   } else {
     logger.warn('⚠️ Stripe not configured - payments will be mocked');
   }
 }
 
-// Create payment intent
+// Create payment intent. Mock mode returns a fake client secret so the
+// checkout flow can be exercised end-to-end with no Stripe account.
 export async function createPaymentIntent(
   orderId: string,
   amount: number,
@@ -114,7 +131,9 @@ export async function createRefund(
   }
 }
 
-// Handle webhook
+// Handle webhook - verify the Stripe-Signature header before trusting any
+// event (constructEvent throws on a bad signature, which is the security
+// boundary: an unverified caller can never move an order to "paid").
 export async function handleWebhook(
   payload: Buffer,
   signature: string
@@ -146,17 +165,23 @@ export async function handleWebhook(
   return { type: event.type, data: event.data.object };
 }
 
-// Handle successful payment
+// Handle successful payment. Order + payment row are written in two
+// statements (not a transaction): if the create fails, the order is still
+// marked paid, so the webhook's caller must treat a 200 as "event seen"
+// and rely on the Payment row as the audit trail.
 async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promise<void> {
   const orderId = paymentIntent.metadata.orderId;
 
   if (!orderId) {
+    // Webhook events for intents that were never tied to one of our orders
+    // (e.g. a payment test from the Stripe dashboard).
     logger.warn('No orderId in payment intent metadata');
     return;
   }
 
   try {
-    // Update order payment status
+    // Update order payment status ('processing' because the store still has
+    // to pick/pack - the order lifecycle continues in order.routes)
     await prisma.order.update({
       where: { id: orderId },
       data: {

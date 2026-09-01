@@ -1,3 +1,17 @@
+// ---------------------------------------------------------------------------
+// Tax: admin CRUD for rates + tax classes, and the public POST
+// /api/tax/calculate the checkout calls before placing an order.
+//
+// Rate matching (in /calculate): rates are looked up per country,
+// ordered by priority, and the first whose state/city/zip constraints
+// ALL match wins; with no precise match it falls back to the
+// country-level general rate (no state/city/zip set). Per-item rates can
+// be overridden by the item's tax class (e.g. 'zero'/'digital' -> 0%).
+// Rates are fractions (0.1 = 10%), not percentages.
+//
+// Note: calculate is advisory - order placement re-uses the amount the
+// client sends back (see order.routes.ts), with a flat 10% fallback.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';

@@ -1,11 +1,22 @@
+// ---------------------------------------------------------------------------
+// /admin/orders/[id] - the order detail: items, address, payment +
+// status, the tracking-number and admin-notes editors, and the status
+// transition buttons (PUT /api/orders/:id/status).
+//
+// The status buttons are the admin's fulfilment workflow: pending ->
+// processing -> shipped (with tracking number, which triggers the
+// customer's shipping email) -> delivered, plus cancel/refund. The
+// server validates each transition.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, authHttp, errorMessage } from '@/lib/http';
 
 export default function AdminOrderDetailPage() {
   const params = useParams();
@@ -16,6 +27,12 @@ export default function AdminOrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [settleMsg, setSettleMsg] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const [refundMsg, setRefundMsg] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
 
@@ -86,6 +103,60 @@ export default function AdminOrderDetailPage() {
     }
   };
 
+  // Record a payment for an order paid offline (COD / bank transfer).
+  // Calls the staff-only POST /api/payments/process, which creates the
+  // Payment row, marks the order paid and moves it to processing. This is the
+  // admin end of the COD flow: the customer picked COD at checkout, and the
+  // staff confirms the cash/transfer was collected here.
+  const handleMarkPaid = async () => {
+    setSettling(true);
+    setSettleMsg('');
+    try {
+      await authHttp.post('/payments/process', {
+        orderId,
+        paymentMethod: order.paymentMethod || 'bank_transfer',
+      });
+      setSettleMsg('Payment recorded — the order is now paid and processing.');
+      setOrder((prev: any) => ({ ...prev, paymentStatus: 'completed', status: 'processing' }));
+    } catch (err: any) {
+      setSettleMsg(errorMessage(err) || 'Could not record the payment. Please try again.');
+    } finally {
+      setSettling(false);
+    }
+  };
+
+  // Refund a completed payment. Calls the admin-only POST /api/payments/refund.
+  // For gateway payments (Stripe, PayPal, ZainCash, Zarinpal, FIB) the server
+  // actually refunds the money before marking the order refunded; if the
+  // gateway is disabled / has no API refund (IDPay) / rejects it, the server
+  // returns an error and the order stays 'completed' — never falsely refunded.
+  const handleRefund = async () => {
+    if (!window.confirm('Issue a refund for this order? This cannot be undone.')) return;
+    setRefunding(true);
+    setRefundMsg('');
+    const parsedAmount = refundAmount ? Number(refundAmount) : undefined;
+    if (parsedAmount !== undefined && (isNaN(parsedAmount) || parsedAmount <= 0)) {
+      setRefundMsg('Please enter a valid refund amount (or leave it blank for a full refund).');
+      return;
+    }
+    try {
+      await authHttp.post('/payments/refund', {
+        orderId,
+        ...(parsedAmount !== undefined ? { amount: parsedAmount } : {}),
+        reason: refundReason || 'Admin refund',
+      });
+      setRefundMsg('Refund issued.');
+      setRefundAmount('');
+      // A full refund marks the order refunded; a partial one leaves it
+      // partially_refunded — reload to reflect the server's real state.
+      await fetchOrder();
+    } catch (err: any) {
+      setRefundMsg(errorMessage(err) || 'Could not issue the refund. Please try again.');
+    } finally {
+      setRefunding(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'delivered': return '#22c55e';
@@ -129,7 +200,7 @@ export default function AdminOrderDetailPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
         <div>
           <Link href="/admin/orders" style={{ fontSize: '14px', color: '#666', textDecoration: 'none', marginBottom: '8px', display: 'block' }}>
-            ← Back to Orders
+            <DirectionArrow kind="back" /> Back to Orders
           </Link>
           <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Order #{order.orderNumber || order.id}</h2>
           <p style={{ color: '#666', marginTop: '4px' }}>
@@ -331,6 +402,77 @@ export default function AdminOrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
+            {(order.paymentStatus === 'pending' || order.paymentStatus === 'failed') && (
+              <>
+                <button
+                  onClick={handleMarkPaid}
+                  disabled={settling}
+                  style={{
+                    marginTop: '16px',
+                    width: '100%',
+                    padding: '10px 20px',
+                    backgroundColor: settling ? '#ccc' : '#16a34a',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 600,
+                    cursor: settling ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {settling ? 'Recording…' : 'Mark as paid'}
+                </button>
+                <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+                  Record cash collected or a bank transfer received for this order.
+                </p>
+              </>
+            )}
+            {(order.paymentStatus === 'completed' || order.paymentStatus === 'partially_refunded') && (
+              <>
+                <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '16px' }}>
+                  <input
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={`Refund amount (default: full ${formatPrice(order.totalAmount)})`}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '13px', marginBottom: '8px' }}
+                  />
+                  <input
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    placeholder="Refund reason (optional)"
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '13px' }}
+                  />
+                  <button
+                    onClick={handleRefund}
+                    disabled={refunding}
+                    style={{
+                      marginTop: '10px',
+                      width: '100%',
+                      padding: '10px 20px',
+                      backgroundColor: refunding ? '#ccc' : '#dc2626',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      cursor: refunding ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {refunding ? 'Refunding…' : 'Refund order'}
+                  </button>
+                  <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+                    Leave the amount blank to refund the full remaining balance. For online payments this refunds the customer at the gateway before marking the order refunded.
+                  </p>
+                </div>
+              </>
+            )}
+            {refundMsg && (
+              <p style={{ fontSize: '13px', marginTop: '10px', color: '#374151' }}>{refundMsg}</p>
+            )}
+            {settleMsg && (
+              <p style={{ fontSize: '13px', marginTop: '10px', color: '#374151' }}>{settleMsg}</p>
+            )}
           </div>
 
           {/* Order Summary */}

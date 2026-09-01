@@ -9,6 +9,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { formatDiscount, validateCoupon } from './coupons';
 
+
+type FetchMockInit = {
+  headers: Record<string, string>;
+  body: string;
+  method?: string;
+};
+
 describe('formatDiscount', () => {
   it('renders percentage coupons', () => {
     expect(formatDiscount({ type: 'percentage', value: 10 } as any)).toBe('10% off');
@@ -71,7 +78,7 @@ describe('validateCoupon', () => {
     }));
     vi.stubGlobal('fetch', fetchMock as any);
     await validateCoupon('CODE', 250);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, FetchMockInit];
     expect(url).toMatch(/\/coupons\/validate$/);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ code: 'CODE', subtotal: 250 });

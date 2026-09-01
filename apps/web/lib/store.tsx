@@ -1,7 +1,23 @@
+// ---------------------------------------------------------------------------
+// Cart context provider (the cart-icon badge, CartView, checkout all read
+// this).
+//
+// Guest flow: the cart lives in localStorage ('cart' + 'savedItems'),
+// so adding items works before login. Logged-in flow: on mount the
+// provider fetches the server cart (GET /api/cart) and REPLACES the
+// local items with it; from then on every mutation is mirrored to the
+// API best-effort (a failed API call never blocks the local cart - see
+// the "Try to ..." comments). syncWithDatabase() is the explicit import
+// used after login (POST /api/cart/sync).
+//
+// The server cart is authoritative for stock holds (see the cart module
+// on the API) - the localStorage copy is the guest UI state.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { api } from './api';
+import { trackEvent } from './tracking';
 
 // Types
 export interface CartItem {
@@ -14,6 +30,12 @@ export interface CartItem {
   variant?: string;
   variantId?: string;
   category: string;
+  /** Digital vs physical; stamped at add-to-cart so views can
+      * branch (e.g. "all digital" carts) without re-fetching. */
+  type?: 'digital' | 'physical';
+  /** Physical-unit weight (grams/kg) from the product, so checkout can
+      * compute weight-based shipping. Absent for digital products. */
+  weight?: number | null;
 }
 
 interface CartStore {
@@ -157,6 +179,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         return [...prev, { ...item, id: uniqueId }];
       }
+    });
+
+    // Analytics: add-to-cart event (feeds view-to-cart conversion).
+    trackEvent({
+      eventType: 'add_to_cart',
+      productId: item.productId,
+      metadata: { quantity: item.quantity },
     });
 
     // Try to save to database

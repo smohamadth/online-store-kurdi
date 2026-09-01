@@ -1,3 +1,11 @@
+// ---------------------------------------------------------------------------
+// /admin - the admin dashboard (KPI cards, recent orders, top products).
+//
+// All figures come from GET /api/dashboard/stats - real aggregates
+// computed in the database. (The old version summed a 100-product sample
+// in the browser and hardcoded user counts; see the inline comment.)
+// An API failure shows a "disconnected" banner instead of fake zeros.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { LoadingState } from '@/components/Spinner';
@@ -7,6 +15,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { API_BASE } from '@/lib/http';
+import { DirectionArrow } from '@/components/DirectionArrow';
 
 export default function AdminDashboard() {
   const { settings } = useStoreSettings();
@@ -91,7 +100,7 @@ export default function AdminDashboard() {
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Products</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{stats.totalProducts}</p>
           <Link href="/admin/products" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            Manage →
+            <DirectionArrow kind="forward" /> Manage
           </Link>
         </div>
 
@@ -99,7 +108,7 @@ export default function AdminDashboard() {
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Orders</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{stats.totalOrders}</p>
           <Link href="/admin/orders" style={{ fontSize: '14px', color: '#f59e0b', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            Manage →
+            <DirectionArrow kind="forward" /> Manage
           </Link>
         </div>
 
@@ -107,7 +116,7 @@ export default function AdminDashboard() {
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Categories</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{stats.totalCategories}</p>
           <Link href="/admin/categories" style={{ fontSize: '14px', color: '#22c55e', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            Manage →
+            <DirectionArrow kind="forward" /> Manage
           </Link>
         </div>
 
@@ -115,7 +124,7 @@ export default function AdminDashboard() {
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Revenue</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(stats.totalRevenue, settings.currencySymbol)}</p>
           <Link href="/admin/analytics" style={{ fontSize: '14px', color: '#8b5cf6', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            View details →
+            <DirectionArrow kind="forward" /> View details
           </Link>
         </div>
       </div>

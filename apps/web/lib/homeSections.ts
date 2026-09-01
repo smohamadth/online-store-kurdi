@@ -52,6 +52,7 @@ export const TYPE_LABELS: Record<string, string> = {
   features: 'Feature icons',
   newsletter: 'Newsletter signup',
   richText: 'Rich text block',
+  custom: 'Custom section (design it)',
 };
 
 export const TYPE_ICONS: Record<string, string> = {
@@ -70,10 +71,37 @@ export const TYPE_ICONS: Record<string, string> = {
   features: '✨',
   newsletter: '✉️',
   richText: '📝',
+  custom: '🎨',
 };
 
 /** Types an admin can add from scratch (the rest are singletons already seeded). */
-export const CREATABLE_TYPES = ['richText', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
+export const CREATABLE_TYPES = ['richText', 'custom', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
+
+/**
+ * Pure drag-and-drop reorder: given the list, the index of the dragged
+ * item, the index of the row being dropped ONTO, and whether the cursor
+ * was in that row's top half (before) or bottom half (after), return the
+ * new order.
+ *
+ * The drop index refers to the PRE-removal list, so when the drag comes
+ * from above, the target row shifts down by one once the dragged item is
+ * removed. Extracted from the HomeBuilder so the index math is unit
+ * tested instead of learned from a mis-ordered home page.
+ */
+export function reorderSectionsByDrop<T extends { id: string }>(
+  items: T[],
+  dragIndex: number,
+  dropIndex: number,
+  after: boolean,
+): T[] {
+  if (dragIndex === dropIndex) return items;
+  const t = dragIndex < dropIndex ? dropIndex - 1 : dropIndex;
+  const insertAt = after ? t + 1 : t;
+  const next = [...items];
+  const [moved] = next.splice(dragIndex, 1);
+  next.splice(insertAt, 0, moved);
+  return next;
+}
 
 export async function fetchHomeSections(): Promise<HomeSection[]> {
   const res = await http.get<HomeSection[]>('/home-sections');

@@ -1,6 +1,11 @@
+// PromoGrid - the home page promo banner grid: takes the active
+// 'promo' banners and renders up to six in a responsive grid (the
+// banner rows come from /api/banners?position=promo).
+
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
 import type { Banner } from './HeroGallery';
@@ -65,7 +70,7 @@ export default function PromoGrid({ banners }: { banners: Banner[] }) {
                   <p style={{ marginTop: '6px', fontSize: '14px', opacity: 0.9, maxWidth: '260px' }}>{b.description}</p>
                 )}
                 {b.buttonText && (
-                  <span style={{ marginTop: '14px', fontSize: '14px', fontWeight: 700 }}>{b.buttonText} →</span>
+                  <span style={{ marginTop: '14px', fontSize: '14px', fontWeight: 700 }}>{b.buttonText} <DirectionArrow kind="forward" /></span>
                 )}
               </div>
             </div>

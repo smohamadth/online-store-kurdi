@@ -9,7 +9,16 @@ import sys
 import glob
 import re
 
-files = sorted(glob.glob('apps/web/app/admin/**/*.tsx', recursive=True))
+# Only audit the real admin pages. Skip test/spec files: their
+# `expect.objectContaining({ method: 'POST' })` lines assert what request a
+# page SHOULD make, so they trip the "surfaces/checks" heuristic without being
+# a write operation in production code. The silent-write bug class this script
+# exists to catch lives in the pages themselves.
+files = sorted(
+    f
+    for f in glob.glob('apps/web/app/admin/**/*.tsx', recursive=True)
+    if not re.search(r'(^|/)[^/]*\.(test|spec)\.(tsx|ts|jsx|js)$', f)
+)
 problems = []
 
 for f in files:
@@ -24,10 +33,18 @@ for f in files:
         if not is_write:
             continue
 
-        # look ahead for how the result is handled
+        # look ahead for how the result is handled. "Surfaces" means the
+        # error reaches the user: a dialog/notification, a re-throw, or a
+        # state setter whose name says message/error and which the page
+        # renders (the admin pages use setMsg/setMessage/setLoadError/...
+        # and display the state as a banner, so match that whole family
+        # rather than an ever-growing list of individual names).
         window = '\n'.join(lines[i:i + 30])
         surfaces = bool(
-            re.search(r"alert\(|setMessage\(|setSaveError\(|setError\(|notify\(|throw ", window)
+            re.search(
+                r"alert\(|notify\(|throw |set[A-Za-z]*(Message|Msg|Error|Errors|Alert)\(",
+                window,
+            )
         )
         checks_ok = bool(re.search(r"res\.ok|response\.ok|!res\.ok|!response\.ok", window))
         uses_client = 'authHttp.' in line

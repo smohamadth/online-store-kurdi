@@ -1,3 +1,8 @@
+// /admin/banners - the storefront banner editor (hero/promo/strip):
+// list + add/edit modal with image upload, schedule (startsAt/endsAt),
+// and reorder. Writes go to /api/banners (the public GET / filters by
+// schedule + active flag, so a banner with a bad schedule is simply
+// never shown - check the schedule before wondering where it went).
 'use client';
 
 import { useState, useEffect } from 'react';

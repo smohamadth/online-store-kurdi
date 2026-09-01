@@ -1,3 +1,9 @@
+// Zod schemas + types for the product controller/service trio.
+// NOTE: product.controller.ts and product.service.ts are legacy (not
+// imported by the live product.routes.ts), so these schemas are not
+// exercised by the API - product.routes.ts defines its own inline
+// create/update/query schemas. Kept in sync with the live shapes where
+// practical, but treat product.routes.ts as the source of truth.
 import { z } from 'zod';
 
 // Product type enum
@@ -94,6 +100,14 @@ export interface ProductResponse {
   variants: ProductVariantResponse[];
   averageRating: number;
   reviewCount: number;
+  /** Digital-product fields. Only meaningful when `type === 'digital'`,
+   * but we always return them so the storefront doesn't have to branch
+   * on the type before deciding what to render. */
+  downloadUrl: string | null;
+  downloadLimit: number | null;
+  /** Number of days from order placement until the per-order link
+   * expires. `null` means no expiry. */
+  downloadExpiry: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -17,6 +17,12 @@ export interface ProductFilter {
   minPrice?: number;
   maxPrice?: number;
   search?: string;
+  // Typed-option filter (?optionValueId=...) - matches products
+  // that have at least one variant with this OptionValue. The PDP
+  // swatch picker can deep-link to a filtered list by pushing a
+  // value here; the FilterSidebar can render a typed-option
+  // section when facets include `typedOptions`.
+  optionValueId: string[];
   sort:
     | 'newest'
     | 'oldest'

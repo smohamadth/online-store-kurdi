@@ -8,7 +8,12 @@
 }
 
 html, body {
-  overflow-x: hidden;
+  /* `width: 100%` keeps flex/grid children from expanding the body past the
+     viewport on phones. We deliberately do NOT set `overflow-x: hidden` on
+     the <html> element: that suppresses the scrollbar that tells you a
+     child is too wide, masking real layout bugs. The <body> still gets
+     `overflow-x: hidden` below so a single rogue child can't horizontally
+     scroll the document, but the <html> will report overflow. */
   width: 100%;
 }
 
@@ -67,6 +72,22 @@ button {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+/* Self-hosted Kurdish/Arabic-script faces (the @fontsource imports in
+   app/layout.tsx define these family names). The theme's font stacks
+   (lib/theme.tsx FONT_STACKS) reference these variables: a store's
+   chosen face, plus a per-glyph fallback so Arabic-script text always
+   lands on a professional face even when the stack's primary fonts are
+   Latin-only. Family names only here - the generic fallback belongs to
+   the stack, and a generic mid-stack would stop font matching. */
+:root {
+  --font-vazirmatn: 'Vazirmatn';
+  --font-noto-naskh-arabic: 'Noto Naskh Arabic';
+  --font-noto-kufi-arabic: 'Noto Kufi Arabic';
+  --font-readex-pro: 'Readex Pro';
+  --font-cairo: 'Cairo';
+  --font-tajawal: 'Tajawal';
 }
 
 /* Selection color */
@@ -174,8 +195,15 @@ a[data-link]:hover {
   to { opacity: 1; }
 }
 
+/* Toast slides in from its anchored edge. The toast container uses
+   insetInlineEnd, so it sits on the right in LTR and the left in RTL;
+   --slide-from mirrors the entry direction to match (custom properties
+   resolve per-element, so the [dir="rtl"] flip on :root is inherited). */
+:root { --slide-from: 100%; }
+:root[dir="rtl"] { --slide-from: -100%; }
+
 @keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
+  from { transform: translateX(var(--slide-from)); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
 
@@ -411,3 +439,30 @@ article figcaption {
   margin-top: 6px;
   text-align: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Store-builder layouts (Theme Studio output)
+
+   .builder-layout is the CSS grid rendered by LayoutRenderer. Blocks are
+   positioned by explicit colStart/colSpan cell coordinates in a fixed
+   layout.columns grid, so the grid itself is deliberately NOT responsive.
+   Instead, on a narrow container we stack every block full-width so an
+   author's intentional partial-width column (e.g. colSpan 6) does not stay
+   half a phone screen.
+
+   A CSS container query (not a viewport media query) is used on purpose:
+   the grid is the sizing context, so this fires both on a real phone AND in
+   the Theme Studio's Phone preview frame (a ~375px box inside a desktop
+   viewport), keeping the "different displays" preview accurate with the
+   real storefront. `container-type: inline-size` makes the grid a size
+   container for its own children.
+   --------------------------------------------------------------------------- */
+.builder-layout {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .builder-layout > [data-block-type] {
+    grid-column: 1 / -1 !important;
+  }
+}
+

@@ -1,0 +1,139 @@
+# Production stack for the store-builder (client-server install).
+#
+#   docker compose -f docker/docker-compose.prod.yml --profile mail up -d --build
+#
+# Differences from the dev compose on purpose:
+#   - no pgadmin / elasticsearch / host-port publishing of internal
+#     services (the browser only reaches web :8080 and the minio
+#     console :9001 when you opt in with --profile minio-console)
+#   - api and web are built from Dockerfile.api / Dockerfile.web at the
+#     repo root and talk over the internal network
+#   - the API entrypoint runs `prisma migrate deploy` before boot, so
+#     the database converges to this build's schema automatically
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: store_db
+      POSTGRES_USER: store_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-store_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - store-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U store_user -d store_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - store-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-store-access}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-store-secret}
+    volumes:
+      - minio_data:/data
+    networks:
+      - store-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Optional: SMTP sink so order emails are visible without a real
+  # mail server (http://localhost:8025). Remove the profile flag for
+  # a lean install.
+  mailhog:
+    image: mailhog/mailhog:latest
+    profiles: ["mail"]
+    restart: unless-stopped
+    networks:
+      - store-network
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      API_VERSION: v1
+      DATABASE_URL: postgresql://store_user:${POSTGRES_PASSWORD:-store_password}@postgres:5432/store_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ chars) in the environment}
+      JWT_EXPIRES_IN: 7d
+      JWT_REFRESH_EXPIRES_IN: 30d
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-store-access}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-store-secret}
+      MINIO_BUCKET: store-files
+      MINIO_USE_SSL: "false"
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: "1025"
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@yourstore.com}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:8080}
+      LOG_LEVEL: info
+    networks:
+      - store-network
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+      args:
+        # The URL the CUSTOMER'S BROWSER uses to reach the API.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3001/api}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${WEB_PORT:-8080}:3000"
+    networks:
+      - store-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  store-network:
+    driver: bridge

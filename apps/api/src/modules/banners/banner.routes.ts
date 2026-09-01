@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Storefront banners (mounted at /api/banners): the hero image, promo
+// strips, and CTA banners the admin places on the home page.
+//
+// The public GET / returns only banners that are active AND inside their
+// [startsAt, endsAt] window (either bound may be null = open-ended),
+// optionally filtered by ?position=hero|promo|strip. Everything else is
+// admin/manager, including bulk reorder (one request rewrites the whole
+// sortOrder list).
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';

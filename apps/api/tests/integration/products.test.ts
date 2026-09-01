@@ -186,6 +186,38 @@ describe('POST /api/products (admin)', () => {
     expect(res.body.data.slug).toBe('new-product');
   });
 
+  it('persists digital product fields and surfaces them on the response', async () => {
+    // The storefront branches on `type === 'digital'`; if the
+    // downloadUrl / downloadLimit / downloadExpiry fields
+    // vanish from the response shape, the whole digital-buy
+    // flow breaks. Lock the round-trip here.
+    const { token } = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const res = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'eBook',
+        sku: 'EB-1',
+        type: 'digital',
+        price: 9.99,
+        description: '<p>An eBook.</p>',
+        categoryId: cat.id,
+        downloadUrl: 'https://cdn.example.com/files/ebook.pdf',
+        downloadLimit: 5,
+        downloadExpiry: 30,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.type).toBe('digital');
+    expect(res.body.data.downloadUrl).toBe('https://cdn.example.com/files/ebook.pdf');
+    expect(res.body.data.downloadLimit).toBe(5);
+    expect(res.body.data.downloadExpiry).toBe(30);
+    // GET /api/products/:id surfaces the same fields.
+    const detail = await request(app).get(`/api/products/${res.body.data.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.downloadUrl).toBe('https://cdn.example.com/files/ebook.pdf');
+  });
+
   it('rejects anonymous (401)', async () => {
     const res = await request(app).post('/api/products').send({ name: 'X', sku: 'X', price: 1, description: 'x' });
     expect(res.status).toBe(401);
@@ -306,5 +338,58 @@ describe('DELETE /api/products/:id (admin only, soft archive)', () => {
       .delete(`/api/products/${p.id}`)
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// search backend (Postgres default) + reindex
+// ---------------------------------------------------------------------------
+
+describe('search backend (postgres default)', () => {
+  it('GET /api/products/search returns active matches via the configured provider', async () => {
+    await createProduct({ name: 'Kurdish Kurte', slug: 'kurte', description: 'a kurta shirt' });
+    await createProduct({ name: 'Other', slug: 'other' });
+
+    const res = await request(app).get('/api/products/search?q=kurte');
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((p: any) => p.name)).toContain('Kurdish Kurte');
+  });
+
+  it('index maintenance on product writes is a no-op for postgres (create/update/archive still work)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+
+    const created = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Widget', sku: 'SEARCH-W', price: 5, description: 'd' });
+    expect(created.status).toBe(201);
+    const id = created.body.data.id;
+
+    const updated = await request(app)
+      .put(`/api/products/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ price: 9 });
+    expect(updated.status).toBe(200);
+
+    const archived = await request(app)
+      .delete(`/api/products/${id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(archived.status).toBe(200);
+  });
+});
+
+describe('POST /api/products/search/reindex', () => {
+  it('requires admin', async () => {
+    const { token } = await authHeader({ role: 'customer' });
+    const res = await request(app).post('/api/products/search/reindex').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('is a no-op for the postgres backend and reports so', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app).post('/api/products/search/reindex').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.provider).toBe('postgres');
+    expect(res.body.data.indexed).toBe(0);
   });
 });

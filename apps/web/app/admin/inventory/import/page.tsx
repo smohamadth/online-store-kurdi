@@ -1,3 +1,7 @@
+// /admin/inventory/import - the CSV stock import (POST /api/
+// inventory/import-csv). The file is parsed server-side
+// (parseInventoryCsv); this page uploads it, shows the per-row
+// result (applied / skipped / error), and links back to the overview.
 'use client';
 
 import { useState, useRef } from 'react';

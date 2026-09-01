@@ -1,8 +1,20 @@
+// /admin/reviews - the moderation queue (GET /api/reviews): approve /
+// reject / delete pending reviews, and view the photos a review
+// carries. The verified-purchase badge is server-computed (the
+// reviewer must own a non-cancelled order with that product) - the
+// admin can't set it by hand.
 'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { API_BASE, authHttp, errorMessage } from '@/lib/http';
+
+interface ReviewPhoto {
+  id: string;
+  url: string;
+  thumbnail: string | null;
+  sortOrder: number;
+}
 
 interface Review {
   id: string;
@@ -15,6 +27,9 @@ interface Review {
   comment?: string;
   isVerified: boolean;
   isApproved: boolean;
+  /** Photo gallery; the admin queue returns this so moderators
+   *  can spot shopped-in photos. */
+  photos: ReviewPhoto[];
   createdAt: string;
   user?: {
     id: string;
@@ -69,43 +84,28 @@ export default function AdminReviewsPage() {
 
   const handleApprove = async (reviewId: string) => {
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const res = await fetch(`${API_BASE}/reviews/${reviewId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isApproved: true }),
-        });
-        if (!res.ok) throw new Error('Approve failed');
-      }
-
-      setReviews(reviews.map(r => r.id === reviewId ? { ...r, isApproved: true } : r));
+      // Only flip the row once the server confirms. Previously the local
+      // state was updated even when the API failed, so a failed approve
+      // looked successful and the review reappeared as pending on refresh.
+      const res = await authHttp.put<Review>(`/reviews/${reviewId}`, { isApproved: true });
+      setReviews((list) =>
+        list.map((r) => (r.id === res?.data?.id || r.id === reviewId ? { ...r, isApproved: true } : r))
+      );
     } catch (err) {
       console.error('Failed to approve review:', err);
+      alert(errorMessage(err, 'Could not approve the review.'));
     }
   };
 
   const handleReject = async (reviewId: string) => {
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const res = await fetch(`${API_BASE}/reviews/${reviewId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isApproved: false }),
-        });
-        if (!res.ok) throw new Error('Reject failed');
-      }
-
-      setReviews(reviews.map(r => r.id === reviewId ? { ...r, isApproved: false } : r));
+      const res = await authHttp.put<Review>(`/reviews/${reviewId}`, { isApproved: false });
+      setReviews((list) =>
+        list.map((r) => (r.id === res?.data?.id || r.id === reviewId ? { ...r, isApproved: false } : r))
+      );
     } catch (err) {
       console.error('Failed to reject review:', err);
+      alert(errorMessage(err, 'Could not reject the review.'));
     }
   };
 
@@ -218,7 +218,10 @@ export default function AdminReviewsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: 'auto'` (not 'hidden'): seven columns at min-content
+        // exceed a ~360px phone. A horizontal scroll inside the card is the
+        // lesser evil — `hidden` was clipping the right-hand columns.
+        overflow: 'auto',
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -258,12 +261,89 @@ export default function AdminReviewsPage() {
                   </div>
                 </td>
                 <td style={{ padding: '16px', maxWidth: '300px' }}>
-                  {review.title && (
-                    <p style={{ fontWeight: 500, fontSize: '14px', marginBottom: '4px' }}>{review.title}</p>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    {review.title && (
+                      <p style={{ fontWeight: 500, fontSize: '14px', margin: 0 }}>{review.title}</p>
+                    )}
+                    {/* Verified-purchaser badge - lets the moderator
+                        see at a glance which reviews are tied to a
+                        real order. */}
+                    {review.isVerified && (
+                      <span
+                        data-testid="admin-review-verified"
+                        style={{
+                          padding: '1px 6px',
+                          borderRadius: '999px',
+                          backgroundColor: '#ecfdf5',
+                          color: '#047857',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✓ Verified
+                      </span>
+                    )}
+                  </div>
                   <p style={{ fontSize: '13px', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {review.comment || 'No comment'}
                   </p>
+                  {/* Photo strip. The full lightbox is on the
+                      storefront; here we just show a small row of
+                      thumbs so the moderator can see the gallery
+                      is non-empty before approving. */}
+                  {review.photos && review.photos.length > 0 && (
+                    <div
+                      data-testid="admin-review-photos"
+                      style={{
+                        display: 'flex',
+                        gap: '4px',
+                        marginTop: '6px',
+                      }}
+                    >
+                      {review.photos.slice(0, 4).map((p) => (
+                        <a
+                          key={p.id}
+                          href={p.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid="admin-review-photo"
+                          style={{
+                            display: 'block',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '4px',
+                            overflow: 'hidden',
+                            backgroundColor: '#f5f5f5',
+                          }}
+                          title="Open photo"
+                        >
+                          <img
+                            src={p.thumbnail || p.url}
+                            alt=""
+                            loading="lazy"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          />
+                        </a>
+                      ))}
+                      {review.photos.length > 4 && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '4px',
+                            backgroundColor: '#f5f5f5',
+                            fontSize: '11px',
+                            color: '#666',
+                          }}
+                        >
+                          +{review.photos.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: '16px', textAlign: 'center' }}>
                   <span style={{

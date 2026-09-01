@@ -1,3 +1,8 @@
+// /admin/users - the user list + role/activation editor.
+// Role changes go through PUT /api/users/:id with the ADMIN schema
+// (self-update can't touch role - that's the privilege-escalation
+// guard; here the admin does it deliberately). Deactivating a user
+// instantly invalidates their sessions (authenticate checks isActive).
 'use client';
 
 import { useState, useEffect } from 'react';

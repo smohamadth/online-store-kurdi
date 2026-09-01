@@ -1,3 +1,10 @@
+// ---------------------------------------------------------------------------
+// Customer addresses (mounted at /api/addresses). Every route is
+// scoped to req.user - a customer can only ever see or modify their own
+// rows. The checkout's "ship to a saved address" picker and the account
+// address book both drive these endpoints. PUT /:id/default designates
+// the preferred address (one per user - the handler clears the others).
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';

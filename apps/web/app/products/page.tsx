@@ -1,6 +1,18 @@
+// ---------------------------------------------------------------------------
+// /products - the main product listing (search box, filter sidebar,
+// sort, pagination).
+//
+// The whole filter state lives in the URL (lib/filterParams encodes/
+// decodes it), so a shopper can share or bookmark a filtered view;
+// every change updates the query string and re-fetches. Facets for the
+// sidebar come from GET /api/products/facets with the same filter, so
+// the counts reflect what's currently selected.
+// ---------------------------------------------------------------------------
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
+import { useDebouncedValue } from '@/lib/hooks';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, Product, Category } from '@/lib/api';
@@ -16,6 +28,12 @@ import {
 } from '@/lib/filterParams';
 import type { ProductFilter } from '@/lib/filterParams.types';
 import { API_BASE } from '@/lib/apiBase';
+import { contentUrl } from '@/lib/http';
+import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
+import { LayoutRenderer } from '@/lib/layouts/render';
+import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
+import { SITE } from '@/lib/seo';
+import { getImageUrl } from '@/lib/api';
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -38,6 +56,21 @@ function ProductsContent() {
     [],
   );
   const [filter, setFilter] = useState<ProductFilter>(initialFilter);
+  // The search box is the one field that changes on every keystroke. We keep
+  // its raw text in a draft so the input stays responsive, and only commit the
+  // debounced value into `filter` (which drives the URL push + products/facets
+  // refetch). Otherwise each character typed would push a history entry and
+  // fire two network requests - wasteful on slow connections.
+  const [searchDraft, setSearchDraft] = useState(initialFilter.search || '');
+  const debouncedSearch = useDebouncedValue(searchDraft, 350);
+
+  useEffect(() => {
+    setFilter((f) => {
+      const next = debouncedSearch || undefined;
+      return f.search === next ? f : { ...f, search: next };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   // Push filter changes to the URL and refetch. The URL is what
   // makes the filter shareable, so it's the source of truth on
@@ -58,7 +91,7 @@ function ProductsContent() {
 
     const fetchProducts = async () => {
       const params = encodeFilter(filter);
-      const res = await fetch(`${API_BASE}/products?${params.toString()}`);
+      const res = await fetch(contentUrl(`${API_BASE}/products?${params.toString()}`));
       if (!alive) return;
       if (res.ok) {
         const json = await res.json();
@@ -108,8 +141,51 @@ function ProductsContent() {
 
   const filterCount = activeFilterCount(filter);
 
+  // JSON-LD structured data, rebuilt only when the product list changes (not
+  // on every render/keystroke). This keeps a potentially large ItemList
+  // serialisation out of the render hot path while the shopper types.
+  const jsonLd = useMemo(() => {
+    if (products.length === 0) return null;
+    const listUrl = `${SITE}/products${typeof window !== 'undefined' && window.location.search ? window.location.search : ''}`;
+    const list = buildItemListJsonLd(
+      'Products',
+      products.slice(0, 50).map((p, i) => ({
+        url: `${SITE}/products/${p.slug}`,
+        name: p.name,
+        image: p.images?.[0] ? getImageUrl(p.images[0].url) : undefined,
+        position: i + 1,
+      })),
+      listUrl,
+    );
+    const breadcrumb = buildBreadcrumbJsonLd([
+      { name: 'Home', url: `${SITE}/` },
+      { name: 'Products', url: `${SITE}/products` },
+    ]);
+    return JSON.stringify(asGraph([list, breadcrumb]));
+  }, [products]);
+
+  // Theme Studio override: when the active theme ships a `layouts.products`,
+  // render its grid (fed with the live product data) instead of the built-in
+  // listing UI. Otherwise the full built-in page renders unchanged.
+  const layout = useActiveLayout('products');
+  if (layout) {
+    return <LayoutRenderer layout={layout} data={{ products, title: 'Products', total }} />;
+  }
+
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+      {/* Structured data: ItemList of the visible products + a
+          BreadcrumbList. The script is rendered every render
+          because the products list is client-side, but the
+          payload is small and the validator is happy with
+          any well-formed JSON-LD block. */}
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          data-testid="json-ld-list"
+          dangerouslySetInnerHTML={{ __html: jsonLd }}
+        />
+      )}
       {/* Breadcrumb */}
       <nav
         style={{
@@ -157,8 +233,8 @@ function ProductsContent() {
         <input
           type="text"
           placeholder="Search products..."
-          value={filter.search || ''}
-          onChange={(e) => setFilter({ ...filter, search: e.target.value || undefined })}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
           aria-label="Search products"
           style={{
             flex: 1,
@@ -212,7 +288,7 @@ function ProductsContent() {
           {filterCount > 0 && (
             <span
               style={{
-                marginLeft: '6px',
+                marginInlineStart: '6px',
                 backgroundColor: showAdvanced ? 'rgba(255,255,255,0.25)' : 'var(--accent, #2563eb)',
                 color: '#fff',
                 borderRadius: '999px',
@@ -229,7 +305,9 @@ function ProductsContent() {
 
       {/* Active-filter chips. Each chip is a button that, when clicked,
           removes just that dimension from the filter. */}
-      {filterCount > 0 && <ActiveFilterChips filter={filter} setFilter={setFilter} />}
+      {filterCount > 0 && (
+        <ActiveFilterChips filter={filter} setFilter={setFilter} onClearSearch={() => setSearchDraft('')} />
+      )}
 
       <div
         style={{
@@ -313,9 +391,11 @@ function ProductsContent() {
 function ActiveFilterChips({
   filter,
   setFilter,
+  onClearSearch,
 }: {
   filter: ProductFilter;
   setFilter: (f: ProductFilter) => void;
+  onClearSearch?: () => void;
 }) {
   const chips: { key: string; label: string; remove: () => void }[] = [];
 
@@ -370,7 +450,14 @@ function ActiveFilterChips({
     });
   }
   if (filter.search) {
-    chips.push({ key: 'search', label: `Search: "${filter.search}"`, remove: () => setFilter({ ...filter, search: undefined }) });
+    chips.push({
+      key: 'search',
+      label: `Search: "${filter.search}"`,
+      remove: () => {
+        setFilter({ ...filter, search: undefined });
+        onClearSearch?.();
+      },
+    });
   }
   if (filter.sort && filter.sort !== 'newest') {
     chips.push({ key: 'sort', label: `Sort: ${filter.sort}`, remove: () => setFilter({ ...filter, sort: 'newest' }) });

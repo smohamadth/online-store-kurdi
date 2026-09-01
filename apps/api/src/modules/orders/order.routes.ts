@@ -5,8 +5,32 @@ import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { decrementStock, consumeReservationsForCartItemIds } from '../inventory/inventory.service';
 import { logger } from '../../utils/logger';
 import { sendOrderConfirmation, sendShippingNotification } from '../../services/email.service';
+import { mintDownloadForOrderItem } from '../downloads/downloads.service';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { env } from '../../config/environment';
+import { isGatewayMethod, getGatewayById } from '../payments/gateways/registry';
+import { isGatewayConfigured } from '../payments/gatewayConfig';
+import { createGatewayPayment } from '../payments/gateway.service';
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// The order API. POST /api/orders is the single most complex endpoint in
+// the store: it validates stock, snapshots digital-download fields, mints
+// per-order download tokens, creates the Stripe Checkout session for card
+// orders, decrements inventory (backorder-aware), consumes the cart's
+// stock reservations, clears the cart, increments coupon usage, and fires
+// the confirmation email. The inline comments walk through that sequence;
+// read POST / first if you are touching checkout.
+//
+// Totals: the client sends its computed amounts (tax/shipping/discount
+// come from the tax + shipping modules); when it doesn't, the server falls
+// back to a flat 10% tax and $10 shipping (free over $100) - see the
+// "Use provided amounts or calculated ones" block.
+//
+// Read access: customers see their own orders; admin/manager see all
+// (the role check happens inside the list/GET handlers).
+// ---------------------------------------------------------------------------
 
 // GET /api/orders - Get orders (filtered by user or all for admin)
 router.get('/', authenticate, async (req, res, next) => {
@@ -132,6 +156,127 @@ router.get('/:id', authenticate, async (req, res, next) => {
   }
 });
 
+// POST /api/orders/:id/pay - (re)open the hosted payment page for an order.
+//
+// The customer may have cancelled/abandoned the gateway page after the
+// order was placed (paymentStatus=pending). This re-runs the gateway
+// checkout session creation for that order and returns a fresh checkoutUrl
+// so they can complete the payment without re-entering their details.
+// Only the order owner (or an admin) may do this, and only while the order
+// is unpaid.
+router.post('/:id/pay', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({ where: { id }, include: { shippingAddress: true } });
+    if (!order) throw new NotFoundError('Order');
+    if (req.user?.role !== 'admin' && req.user?.role !== 'manager' && order.userId !== req.user?.id) {
+      throw new AppError('Forbidden', 403);
+    }
+    if (
+      order.paymentStatus === 'completed' ||
+      order.paymentStatus === 'refunded' ||
+      order.paymentStatus === 'partially_refunded'
+    ) {
+      throw new AppError('This order has already been paid.', 400);
+    }
+    const method = order.paymentMethod || '';
+    if (!isGatewayMethod(method)) {
+      throw new AppError('This order is not payable online. Please choose cash on delivery or bank transfer.', 400);
+    }
+    if (!(await isGatewayConfigured(method))) {
+      const gw = getGatewayById(method);
+      throw new AppError(`${gw ? gw.name + ' ' : 'This '}payment method is not enabled for this store.`, 400);
+    }
+    const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+    const user = await prisma.user.findUnique({ where: { id: order.userId }, select: { email: true, phone: true } });
+    const result = await createGatewayPayment({
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        currency: settings?.currency || 'USD',
+        customerEmail: user?.email || null,
+        customerPhone: user?.phone || order.shippingAddress?.phone || null,
+        description: `Order ${order.orderNumber}`,
+      },
+      paymentMethod: method,
+      storeCurrency: settings?.currency || 'USD',
+    });
+    res.json({ status: 'success', data: { checkoutUrl: result.checkoutUrl } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/orders/:id/tracking - customer-facing status timeline
+//
+// Derived from the order's own fields (createdAt / shippedAt /
+// deliveredAt / cancelledAt / paymentStatus) - no extra history table.
+// The storefront renders this as a vertical timeline; the shape is
+// stable so that view can't break when the admin flow changes.
+router.get('/:id/tracking', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        payments: {
+          where: { status: 'completed' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundError('Order');
+    }
+
+    // Non-admin users can only view their own orders
+    if (req.user?.role !== 'admin' && req.user?.role !== 'manager' && order.userId !== req.user?.id) {
+      throw new AppError('Forbidden', 403);
+    }
+
+    const isPaid = order.paymentStatus === 'completed' || order.paymentStatus === 'partially_refunded';
+    // paidAt: the completed payment row's timestamp, falling back to
+    // the order's own updatedAt (the status flip happened then).
+    // (defensive: the in-memory test mock omits include args, so
+    // `payments` may be undefined there; the real client always
+    // returns an array for an include.)
+    const paidAt = isPaid ? (order.payments?.[0]?.createdAt ?? order.updatedAt) : null;
+
+    const isTerminal = order.status === 'cancelled' || order.status === 'refunded';
+
+    const steps = [
+      { key: 'placed', label: 'Order placed', at: order.createdAt, done: true },
+      { key: 'paid', label: 'Payment confirmed', at: paidAt, done: isPaid },
+      { key: 'shipped', label: 'Shipped', at: order.shippedAt, done: !!order.shippedAt },
+      { key: 'delivered', label: 'Delivered', at: order.deliveredAt, done: !!order.deliveredAt },
+    ];
+
+    res.json({
+      status: 'success',
+      data: {
+        orderNumber: order.orderNumber,
+        status: order.status,
+        trackingNumber: order.trackingNumber ?? null,
+        // Populated for cancelled/refunded orders so the timeline can
+        // end in an honest terminal state instead of a fake "in transit".
+        terminal: isTerminal
+          ? {
+              type: order.status === 'refunded' ? 'refunded' : 'cancelled',
+              at: order.cancelledAt,
+            }
+          : null,
+        steps,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/orders - Create new order
 router.post('/', authenticate, async (req, res, next) => {
   try {
@@ -140,6 +285,18 @@ router.post('/', authenticate, async (req, res, next) => {
 
     if (!items || items.length === 0) {
       throw new AppError('Order must contain at least one item', 400);
+    }
+
+    // Gateway payments (Stripe card, PayPal, Zarinpal, IDPay, ZainCash, FIB)
+    // go through a hosted payment page. If the gateway is not configured,
+    // refuse BEFORE creating the order so the customer picks cash on delivery
+    // / bank transfer instead of being left with an unpayable pending order.
+    if (isGatewayMethod(paymentMethod) && !(await isGatewayConfigured(paymentMethod))) {
+      const gw = getGatewayById(paymentMethod);
+      throw new AppError(
+        `${gw ? gw.name + ' ' : 'This '}payment method is not enabled for this store. Please choose cash on delivery or bank transfer.`,
+        400
+      );
     }
 
     // Handle shipping address - either ID or full object
@@ -168,15 +325,40 @@ router.post('/', authenticate, async (req, res, next) => {
     let calculatedSubtotal = 0;
     const orderItems: any[] = [];
 
+    // Load every product (and the referenced variants) in ONE round trip
+    // each, then resolve per line item from the maps. The old code did a
+    // sequential findUnique per cart line - N round trips on the
+    // checkout hot path, which serialised behind each other on a
+    // networked Postgres.
+    // `items` comes from req.body (untyped `any`), so `items.map(...)` is
+    // `any`; `new Set(any)` infers `Set<unknown>` and the spread becomes
+    // `unknown[]`, which Prisma's `in:` (typed `string[]`) rejects. Cast the
+    // array up front and filter through a type guard so these are `string[]`.
+    const itemsArr = items as any[];
+    const productIds: string[] = [...new Set(itemsArr.map((i) => i.productId).filter((x): x is string => typeof x === 'string'))];
+    const variantIds: string[] = [...new Set(itemsArr.map((i) => i.variantId).filter((x): x is string => typeof x === 'string'))];
+    const [products, variants] = await Promise.all([
+      prisma.product.findMany({ where: { id: { in: productIds } } }),
+      variantIds.length
+        ? prisma.variant.findMany({ where: { id: { in: variantIds } } })
+        : Promise.resolve([] as any[]),
+    ]);
+    const productById = new Map<string, any>(products.map((p: any): [string, any] => [p.id, p]));
+    const variantById = new Map<string, any>(variants.map((v: any): [string, any] => [v.id, v]));
+
     for (const item of items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        include: {
-          variants: item.variantId ? {
-            where: { id: item.variantId },
-          } : undefined,
-        },
-      });
+      const product = productById.get(item.productId);
+      // Same shape as the old per-item include: at most one variant row,
+      // only when the line item referenced one. A stale variantId (the
+      // admin deleted it) resolves to nothing; a variantId that belongs
+      // to a DIFFERENT product is ignored too (the old per-product
+      // include could never return it) - falling back to the product
+      // price/stock, exactly as before.
+      const matchedVariant = item.variantId ? variantById.get(item.variantId) : undefined;
+      const variant = matchedVariant && matchedVariant.productId === item.productId
+        ? matchedVariant
+        : undefined;
+      const productVariants = variant ? [variant] : [];
 
       if (!product) {
         throw new AppError(`Product not found: ${item.productId}`, 400);
@@ -192,7 +374,7 @@ router.post('/', authenticate, async (req, res, next) => {
       // non-tracked-inventory mismatch on a non-existent variant.
       if (product.trackInventory) {
         const availableQuantity = item.variantId
-          ? product.variants[0]?.quantity || 0
+          ? productVariants[0]?.quantity || 0
           : product.quantity;
         // Only reject if neither backorder nor a sufficient pool.
         if (availableQuantity < item.quantity && !product.allowBackorder) {
@@ -200,23 +382,44 @@ router.post('/', authenticate, async (req, res, next) => {
         }
       }
 
-      const unitPrice = item.variantId && product.variants[0]
-        ? Number(product.variants[0].price)
+      const unitPrice = item.variantId && productVariants[0]
+        ? Number(productVariants[0].price)
         : Number(product.price);
 
       const totalPrice = unitPrice * item.quantity;
       calculatedSubtotal += totalPrice;
 
+      // Snapshot the digital fields onto the line item. The
+      // product-level URL is what the legacy single-URL flow
+      // reads; the per-order token we mint below is what the
+      // token-based flow reads. We keep both so an order
+      // placed before the per-order token system still works.
+      const isDigital = product.type === 'digital';
       orderItems.push({
         productId: item.productId,
         variantId: item.variantId || null,
         quantity: item.quantity,
         unitPrice,
         totalPrice,
+        // Snapshot the digital fields at order-placement time
+        // so a product edit later doesn't invalidate the
+        // customer's downloads.
+        downloadUrl: isDigital ? product.downloadUrl : null,
+        downloadLimit: isDigital ? product.downloadLimit : null,
+        downloadExpiry: isDigital && product.downloadExpiry
+          // Schema stores days; the per-order column is a Date.
+          // Convert: purchasedAt + days.
+          ? new Date(Date.now() + product.downloadExpiry * 24 * 60 * 60 * 1000)
+          : null,
+        isBackorder: false,
       });
     }
 
-    // Use provided amounts or calculated ones
+    // Use provided amounts or calculated ones. The FALLBACKS are crude on
+    // purpose (flat 10% tax; $10 shipping, free over $100): the real
+    // numbers come from the tax/shipping modules on the client, and these
+    // only cover a client that skips them rather than re-implementing tax
+    // rules here.
     const finalSubtotal = subtotal || calculatedSubtotal;
     const finalTaxAmount = taxAmount || (finalSubtotal * 0.10);
     const finalShippingAmount = shippingAmount !== undefined ? shippingAmount : (finalSubtotal >= 100 ? 0 : 10);
@@ -257,6 +460,133 @@ router.post('/', authenticate, async (req, res, next) => {
                 },
               },
             },
+            // Include the freshly-minted download row so the
+            // confirmation email can include the link.
+            downloads: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
+        },
+        shippingAddress: true,
+      },
+    });
+
+    // Analytics: record a purchase event per line item so the
+    // recommendation engine can learn co-purchases ("customers also
+    // bought"). One event per line keeps productId clean for the
+    // groupBy the recommendations run. Off by default like every
+    // other analytics write - the /privacy page documents it.
+    // (The service swallows its own errors, so tracking can never
+    // fail an order.)
+    if (process.env.ANALYTICS_TRACKING_ENABLED === 'true') {
+      const analyticsService = new AnalyticsService();
+      // One event per line, fired in parallel - each trackEvent is
+      // independent (separate rows) and swallows its own errors, so a
+      // tracking failure can never fail the order.
+      await Promise.all(
+        orderItems.map((line) =>
+          analyticsService.trackEvent({
+            userId: req.user!.id,
+            sessionId: (req.headers['x-session-id'] as string) || 'anonymous',
+            eventType: 'purchase',
+            productId: line.productId,
+            metadata: { orderId: order.id, orderNumber, quantity: line.quantity },
+            userAgent: req.get('User-Agent'),
+            ipAddress: req.ip,
+          }),
+        ),
+      );
+    }
+
+    // Card payment: hand the customer a Stripe Checkout session for
+    // this order. The webhook settles the order server-side; the
+    // response carries checkoutUrl and the storefront redirects the
+    // customer into Stripe's hosted payment page (no card data ever
+    // touches this server).
+    let checkoutUrl: string | null = null;
+    if (isGatewayMethod(paymentMethod)) {
+      // Hosted-payment gateway (Stripe card, PayPal, Zarinpal, IDPay,
+      // ZainCash, FIB). Each gateway builds its own payment page for this
+      // order; the response carries checkoutUrl and the storefront redirects
+      // the customer to it. The webhook / return-verify settles the order.
+      const settings = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+      const result = await createGatewayPayment({
+        order: {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          totalAmount: order.totalAmount,
+          currency: settings?.currency || 'USD',
+          customerPhone: (order.shippingAddress as any)?.phone || (req.user as any)?.phone || null,
+          customerEmail: (req.user as any)?.email || null,
+          description: `Order ${order.orderNumber}`,
+        },
+        paymentMethod,
+        storeCurrency: settings?.currency || 'USD',
+      });
+      checkoutUrl = result.checkoutUrl;
+    }
+
+    // Mint a per-order download token for every digital line
+    // item. The customer's confirmation email embeds these
+    // tokens, and the /api/downloads/:token route redeems
+    // them. We also keep the legacy product-level URL on
+    // OrderItem.downloadUrl for backward compatibility with
+    // orders placed before the token system shipped.
+    // Minted in parallel: every digital line mints its own independent
+    // token row. The per-line try/catch (inside the map) keeps the old
+    // guarantee that one failed mint never fails the paid order.
+    await Promise.all(
+      order.items.map(async (item: any) => {
+        const isDigital = item.product?.type === 'digital';
+        if (!isDigital) return;
+        const sourceUrl = item.downloadUrl || item.product?.downloadUrl;
+        if (!sourceUrl) {
+          // Defensive: a digital product without a download URL
+          // is a config error, not a payment failure. The order
+          // succeeds; we just skip minting a token. Log it so
+          // an admin notices.
+          logger.warn(
+            `Skipped download token for orderItem=${item.id} ` +
+              `product=${item.productId}: no downloadUrl configured`,
+          );
+          return;
+        }
+        try {
+          await mintDownloadForOrderItem({
+            orderItemId: item.id,
+            sourceUrl,
+            // Schema column is days; the per-order column is a
+            // Date. Read what we snapshoted on the order item.
+            expiryDays: item.downloadExpiry
+              ? Math.max(0, Math.ceil(
+                  (item.downloadExpiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+                ))
+              : null,
+            // Per-token download limit. Copied from the
+            // OrderItem.downloadLimit snapshot (which in turn was
+            // copied from the product). null = unlimited.
+            downloadLimit: item.downloadLimit,
+            purchaseDate: order.createdAt,
+          });
+        } catch (err) {
+          // Don't fail the whole order if the download mint
+          // fails; the order is paid for. We log so an admin
+          // can retry.
+          logger.error(
+            `Failed to mint download for orderItem=${item.id}:`,
+            err as any,
+          );
+        }
+      }),
+    );
+
+    // Re-fetch the order so the email includes the freshly
+    // minted download rows.
+    const orderWithDownloads = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: {
+          include: {
+            product: { include: { images: { where: { isPrimary: true }, take: 1 } } },
+            downloads: { orderBy: { createdAt: 'desc' }, take: 1 },
           },
         },
         shippingAddress: true,
@@ -267,30 +597,50 @@ router.post('/', authenticate, async (req, res, next) => {
     // handles backorder allowance and writes an InventoryLog entry.
     // We also persist the backorder flag on the OrderItem so the
     // storefront can show "preorder" UI to the customer.
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const result = await decrementStock({
-        productId: item.productId,
-        variantId: item.variantId ?? undefined,
-        quantity: item.quantity,
-        orderId: order.id,
-        userId: req.user!.id,
+    //
+    // Lines for the SAME product read-modify-write the same stock row,
+    // so they must run sequentially; lines for DIFFERENT products touch
+    // disjoint rows and run in parallel (a 5-item cart of 5 products is
+    // now 1 round trip of parallel transactions, not 5 serial ones).
+    const itemsByProduct = new Map<string, typeof items>();
+    for (const item of items) {
+      if (!itemsByProduct.has(item.productId)) itemsByProduct.set(item.productId, []);
+      itemsByProduct.get(item.productId)!.push(item);
+    }
+    const decrementResults = (
+      await Promise.all(
+        [...itemsByProduct.values()].map(async (group) => {
+          const groupResults: { item: (typeof items)[number]; wasBackorder: boolean }[] = [];
+          for (const item of group) {
+            const result = await decrementStock({
+              productId: item.productId,
+              variantId: item.variantId ?? undefined,
+              quantity: item.quantity,
+              orderId: order.id,
+              userId: req.user!.id,
+            });
+            groupResults.push({ item, wasBackorder: result.wasBackorder });
+          }
+          return groupResults;
+        }),
+      )
+    ).flat();
+
+    for (const { item, wasBackorder } of decrementResults) {
+      if (!wasBackorder) continue;
+      // Find the matching OrderItem and patch its isBackorder flag.
+      const orderItem = await prisma.orderItem.findFirst({
+        where: {
+          orderId: order.id,
+          productId: item.productId,
+          ...(item.variantId ? { variantId: item.variantId } : {}),
+        },
       });
-      if (result.wasBackorder) {
-        // Find the matching OrderItem and patch its isBackorder flag.
-        const orderItem = await prisma.orderItem.findFirst({
-          where: {
-            orderId: order.id,
-            productId: item.productId,
-            ...(item.variantId ? { variantId: item.variantId } : {}),
-          },
+      if (orderItem) {
+        await prisma.orderItem.update({
+          where: { id: orderItem.id },
+          data: { isBackorder: true },
         });
-        if (orderItem) {
-          await prisma.orderItem.update({
-            where: { id: orderItem.id },
-            data: { isBackorder: true },
-          });
-        }
       }
     }
 
@@ -331,16 +681,70 @@ router.post('/', authenticate, async (req, res, next) => {
     
     if (orderUser) {
       sendOrderConfirmation({
-        ...order,
-        items: order.items,
+        ...(orderWithDownloads || order),
+        items: (orderWithDownloads || order).items,
+        // Stamp the API base on each download so the email
+        // gets a fully qualified URL the user can click.
+        downloads: ((orderWithDownloads || order).items as any[])
+          .filter((it: any) => it.downloads?.[0]?.token)
+          .map((it: any) => ({
+            orderItemId: it.id,
+            productName: it.product?.name,
+            token: it.downloads[0].token,
+            expiresAt: it.downloads[0].expiresAt,
+            downloadLimit: it.downloads[0].downloadLimit,
+            url: `${env.API_URL || 'http://localhost:3001/api'}/downloads/${it.downloads[0].token}`,
+          })),
       }, orderUser).catch(err => {
         logger.error('Failed to send order confirmation:', err);
       });
     }
 
+    // Build the response from the freshly-refetched order so
+    // the storefront sees the downloads that were just minted
+    // for digital line items. The same shape (`items[].downloads`)
+    // is also what the email uses above.
+    const responseOrder = (orderWithDownloads || order) as any;
+    // The mock prisma doesn't apply `orderBy` / `take` to
+    // nested `include` blocks, so the re-fetched order's
+    // `items[].downloads` array is empty. Re-resolve downloads
+    // by query against ProductDownload directly so the response
+    // still has the tokens regardless of mock-fidelity.
+    const allDownloads = (responseOrder.items || []).length
+      ? await prisma.productDownload.findMany({
+          where: { orderItemId: { in: (responseOrder.items || []).map((it: any) => it.id) } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+
     res.status(201).json({
       status: 'success',
-      data: order,
+      data: {
+        ...responseOrder,
+        // Non-null when the customer paid with a card: the storefront
+        // redirects into Stripe Checkout. COD / bank transfer orders
+        // get null and stay on the normal success screen.
+        checkoutUrl,
+        // Convenience field for the storefront: a flat array of
+        // {orderItemId, productName, token, url, ...} the checkout
+        // success page can iterate without having to flatten
+        // items[].downloads itself.
+        downloads: (responseOrder.items || [])
+          .map((it: any) => {
+            const dl = allDownloads.find((d: any) => d.orderItemId === it.id);
+            if (!dl || !dl.token) return null;
+            return {
+              orderItemId: it.id,
+              productName: it.product?.name,
+              token: dl.token,
+              expiresAt: dl.expiresAt,
+              downloadLimit: dl.downloadLimit,
+              downloadCount: dl.downloadCount,
+              url: `${env.API_URL || 'http://localhost:3001/api'}/downloads/${dl.token}`,
+            };
+          })
+          .filter(Boolean),
+      },
     });
   } catch (error) {
     next(error);
@@ -488,7 +892,7 @@ router.post('/:id/cancel', authenticate, async (req, res, next) => {
     // Restore inventory
     for (const item of order.items) {
       if (item.variantId) {
-        await prisma.productVariant.update({
+        await prisma.variant.update({
           where: { id: item.variantId },
           data: {
             quantity: {

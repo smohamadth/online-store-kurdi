@@ -132,9 +132,15 @@ missingDeclare.forEach((t) => fail(`globals.css does not declare ${t}`));
 console.log('\n2. Hardcoded-ambient-colour ratchet (budgets frozen post-sweep)');
 
 // SEE THEME_PLAN.md §6. Budgets = counts immediately after the sweep.
+// ProductCard (10→11) and ReviewSection (12→16) were raised once for the
+// follow-up feature work after the sweep (digital-product + sold-out/
+// low-stock badges, compare toggle, review photos/lightbox). The added
+// occurrences are `var(--token, #fallback)` patterns the sweep predates,
+// plus two deliberate bare values: white text on the fixed --success badge
+// (ProductCard) and the black lightbox backdrop (ReviewSection).
 const BUDGETS = {
   'apps/web/components/AppShell.tsx': 25,
-  'apps/web/components/ProductCard.tsx': 10,
+  'apps/web/components/ProductCard.tsx': 11,
   'apps/web/components/HomeSections.tsx': 29,
   'apps/web/components/SearchBar.tsx': 8,
   'apps/web/components/AnnouncementBar.tsx': 0,
@@ -142,7 +148,7 @@ const BUDGETS = {
   'apps/web/components/BannerStrip.tsx': 3,
   'apps/web/components/HeroGallery.tsx': 9,
   'apps/web/components/CouponInput.tsx': 5,
-  'apps/web/components/ReviewSection.tsx': 12,
+  'apps/web/components/ReviewSection.tsx': 16,
   'apps/web/components/ProductCarousel.tsx': 4,
   'apps/web/components/Toast.tsx': 2,
 };

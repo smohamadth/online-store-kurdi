@@ -1,3 +1,8 @@
+// CouponInput - the "have a code?" box in cart/checkout. Calls the
+// server's validate endpoint (never computes the discount locally -
+// see lib/coupons) and hands the validated coupon up to the parent,
+// which stores it and sends it with the order.
+
 'use client';
 
 import { useState } from 'react';
