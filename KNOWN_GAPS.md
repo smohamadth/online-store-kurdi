@@ -617,5 +617,10 @@ Also from the review pass: `GET /api/newsletter/subscribers` and
 emails and contact-message PII), upload `folder`/`id` path parameters are
 validated against the known buckets (path traversal), the rich-text
 sanitizer entity-decodes numeric character references before scheme checks
-(`java&#x73;cript:` bypass), and CSV exports neutralise spreadsheet
-formula injection.
+(`java&#x73;cript:` bypass), CSV exports neutralise spreadsheet formula
+injection, order line items are shape-validated (quantity must be an
+integer >= 1 — the zero-quantity free-downloads hole is closed) and list
+endpoints clamp `page`/`limit` (no more full-table scans or negative-skip
+500s). Emails are hardened against header injection (CR/LF stripped from
+every subject at the send boundary and in subject templates) and HTML
+injection (customer/product names escaped in bodies and HTML templates).

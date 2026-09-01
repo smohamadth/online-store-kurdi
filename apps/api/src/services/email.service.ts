@@ -62,16 +62,23 @@ export async function sendEmail(
   html: string,
   text?: string
 ): Promise<boolean> {
+  // Boundary hardening, applied BEFORE any branch: no CR/LF or control
+  // char may reach the SMTP headers (or the log-only line that mirrors
+  // them), no matter where the subject came from.
+  const safeSubject = sanitizeSubject(subject);
+  const safeTo = to.replace(/[\x00-\x1f\x7f]/g, '');
+  if (!safeTo) return false;
+
   try {
     if (!transporter) {
-      logger.info(`📧 Email would be sent to ${to}: ${subject}`);
+      logger.info(`📧 Email would be sent to ${safeTo}: ${safeSubject}`);
       return true;
     }
 
     const mailOptions = {
       from: env.EMAIL_FROM,
-      to,
-      subject,
+      to: safeTo,
+      subject: safeSubject,
       html,
       text: text || html.replace(/<[^>]*>/g, ''),
     };
@@ -104,16 +111,50 @@ async function getTemplate(name: string): Promise<{ subject: string; htmlContent
   }
 }
 
-// Render template with variables
-function renderTemplate(template: string, variables: Record<string, any>): string {
+/** HTML-escape a value interpolated into an email body. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string
+  ));
+}
+
+/**
+ * Render a template with variables.
+ *
+ * HTML content: values are HTML-escaped so a customer named
+ * `<img src=x onerror=...>` (or a product carrying markup) cannot inject
+ * markup into the email body.
+ */
+export function renderTemplate(template: string, variables: Record<string, any>): string {
   let rendered = template;
-  
+
   Object.entries(variables).forEach(([key, value]) => {
     const regex = new RegExp(`{{${key}}}`, 'g');
-    rendered = rendered.replace(regex, String(value));
+    rendered = rendered.replace(regex, escapeHtml(value));
   });
 
   return rendered;
+}
+
+/**
+ * Render a SUBJECT with variables: values are stripped of CR/LF and other
+ * control characters, so a customer-controlled firstName can never inject
+ * SMTP headers through a custom subject template (header injection).
+ */
+export function renderSubject(template: string, variables: Record<string, any>): string {
+  let rendered = template;
+
+  Object.entries(variables).forEach(([key, value]) => {
+    const regex = new RegExp(`{{${key}}}`, 'g');
+    rendered = rendered.replace(regex, String(value).replace(/[\x00-\x1f\x7f]/g, ''));
+  });
+
+  return rendered;
+}
+
+/** Strip CR/LF and other control chars from an outgoing subject. */
+function sanitizeSubject(subject: string): string {
+  return subject.replace(/[\x00-\x1f\x7f]/g, '').trim();
 }
 
 // ============================================
@@ -162,7 +203,7 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
           <h1>Order Confirmed!</h1>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName},</p>
+          <p>Hi ${escapeHtml(user.firstName)},</p>
           <p>Thank you for your order! We're processing it now.</p>
           
           <div class="order-info">
@@ -174,7 +215,7 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
           <h3>Order Items</h3>
           ${order.items?.map((item: any) => `
             <div class="item">
-              <span>${item.product?.name || item.name} x ${item.quantity}</span>
+              <span>${escapeHtml(item.product?.name || item.name)} x ${item.quantity}</span>
               <span>$${(item.price * item.quantity).toFixed(2)}</span>
             </div>
           `).join('') || ''}
@@ -192,7 +233,7 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
             <p>Your digital purchases are ready. Use the buttons below to download each file.</p>
             ${downloads.map((d) => `
               <div class="download">
-                <strong>${d.productName}</strong>
+                <strong>${escapeHtml(d.productName)}</strong>
                 <div style="margin-top: 8px;">
                   <a href="${d.url}" class="button">Download</a>
                 </div>
@@ -265,7 +306,7 @@ export async function sendPaymentConfirmation(order: any, user: any): Promise<vo
     storeName: 'Online Store',
   };
   const subject = template
-    ? renderTemplate(template.subject, variables)
+    ? renderSubject(template.subject, variables)
     : `Payment Received for Order #${order.orderNumber}`;
 
   const defaultHtml = `
@@ -288,13 +329,13 @@ export async function sendPaymentConfirmation(order: any, user: any): Promise<vo
           <h1>Payment Received ✅</h1>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName},</p>
+          <p>Hi ${escapeHtml(user.firstName)},</p>
           <p>Thank you! We have received your payment for order <strong>#${order.orderNumber}</strong>.</p>
 
           <div class="pay-info">
             <div class="row"><span>Order</span><span>#${order.orderNumber}</span></div>
             <div class="row"><span>Amount paid</span><span>$${Number(order.totalAmount || 0).toFixed(2)}</span></div>
-            <div class="row"><span>Payment method</span><span>${order.paymentMethod || 'Online payment'}</span></div>
+            <div class="row"><span>Payment method</span><span>${escapeHtml(order.paymentMethod || 'Online payment')}</span></div>
           </div>
 
           <p>Your order is now being prepared. We'll email you the moment it ships.</p>
@@ -337,7 +378,7 @@ export async function sendRefundConfirmation(
     storeName: 'Online Store',
   };
   const subject = template
-    ? renderTemplate(template.subject, variables)
+    ? renderSubject(template.subject, variables)
     : `Refund Issued for Order #${order.orderNumber}`;
 
   const defaultHtml = `
@@ -360,13 +401,13 @@ export async function sendRefundConfirmation(
           <h1>Refund Issued</h1>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName},</p>
+          <p>Hi ${escapeHtml(user.firstName)},</p>
           <p>We have issued a refund for order <strong>#${order.orderNumber}</strong>. The money is on its way back to your original payment method.</p>
 
           <div class="refund-info">
             <div class="row"><span>Order</span><span>#${order.orderNumber}</span></div>
             <div class="row"><span>Refund amount</span><span>$${variables.refundAmount}</span></div>
-            <div class="row"><span>Reason</span><span>${variables.reason}</span></div>
+            <div class="row"><span>Reason</span><span>${escapeHtml(variables.reason)}</span></div>
           </div>
 
           <p>Please allow a few business days for your bank or payment provider to process the refund.</p>
@@ -410,12 +451,12 @@ export async function sendShippingNotification(order: any, user: any, trackingNu
           <h1>Your Order Has Shipped! 🚚</h1>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName},</p>
+          <p>Hi ${escapeHtml(user.firstName)},</p>
           <p>Great news! Your order #${order.orderNumber} has been shipped.</p>
           
           <div class="tracking">
             <h3>Tracking Information</h3>
-            <p><strong>Tracking Number:</strong> ${trackingNumber}</p>
+            <p><strong>Tracking Number:</strong> ${escapeHtml(trackingNumber)}</p>
           </div>
           
           <p style="text-align: center; margin-top: 30px;">
@@ -456,7 +497,7 @@ export async function sendWelcomeEmail(user: any): Promise<void> {
           <h1>Welcome! 🎉</h1>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName},</p>
+          <p>Hi ${escapeHtml(user.firstName)},</p>
           <p>Welcome to our store! We're excited to have you.</p>
           <p>Start exploring our products and find something you love.</p>
           
@@ -494,7 +535,7 @@ export async function sendPasswordResetEmail(user: any, resetToken: string): Pro
           <h1>Password Reset</h1>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName},</p>
+          <p>Hi ${escapeHtml(user.firstName)},</p>
           <p>You requested to reset your password. Click the button below to set a new password:</p>
           
           <p style="text-align: center; margin-top: 30px;">
