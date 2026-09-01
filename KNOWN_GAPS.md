@@ -638,4 +638,7 @@ base-content sanitizers and rendered with dangerouslySetInnerHTML.
 Product descriptions now use the entity-decoding sanitizer
 (sanitizeRichText) instead of the weaker regex one — `java&#x73;cript:`
 hrefs used to survive the old regexes and execute after the browser
-decoded the entity.
+decoded the entity. Theme custom CSS now blocks `</style>` breakouts
+(`</style><img onerror=...>` used to pass the old DANGEROUS_CSS regex
+and become live HTML on every storefront page; legacy rows are scrubbed
+on read). Review photo URLs reject scriptable/data: schemes.

@@ -38,6 +38,39 @@ describe('PUT /api/theme (admin)', () => {
       .send({ primaryColor: '#ff0000' });
     expect(res.status).toBe(403);
   });
+
+  it('rejects a </style> breakout in customCss (stored XSS guard)', async () => {
+    // Regression: DANGEROUS_CSS used to check only for <script> tags,
+    // javascript: and expression() — a payload like
+    // '</style><img src=x onerror=alert(1)>' passed and the browser
+    // closed the <style> element, making the rest live HTML on every
+    // storefront page.
+    const { token } = await authHeader({ role: 'admin' });
+    for (const css of [
+      '</style><img src=x onerror=alert(1)>',
+      'a{color:red}</style><script>alert(1)</script>',
+      'x{background:url(javascript:alert(1))}',
+      'x{behavior:expression(alert(1))}',
+      'x{}</style><svg onload=alert(1)>',
+      '@import url(https://evil.example/x.css);',
+    ]) {
+      const res = await request(app)
+        .put('/api/theme')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ customCss: css });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('scrubs legacy dangerous customCss on read', async () => {
+    // A row written before the </style> guard must not come back raw.
+    await mockPrisma.themeSettings.create({
+      data: { id: 'default', customCss: '</style><img src=x onerror=alert(1)>' },
+    });
+    const res = await request(app).get('/api/theme');
+    expect(res.status).toBe(200);
+    expect(res.body.data.customCss).toBe('');
+  });
 });
 
 describe('PUT /api/theme activeTheme validation', () => {

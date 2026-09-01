@@ -87,7 +87,19 @@ const themeSchema = z.object({
   activeTheme: z.string().min(1).max(60).optional().nullable(),
 });
 
-const DANGEROUS_CSS = /<\/?script|javascript\s*:|expression\s*\(|@import\s+url\s*\(\s*['"]?\s*javascript/i;
+// Anything that could break out of the <style> element the storefront
+// injects this into, or execute script. `</` is the critical one: a
+// payload like `</style><img src=x onerror=...>` contains no <script>
+// tag, but the browser closes the style element at `</style>` and the
+// rest becomes live HTML. `on<...>=` handlers and `@import` are blocked
+// too (CSS can't legitimately need either inside a store theme).
+const DANGEROUS_CSS = /<\/?script|<\/|javascript\s*:|expression\s*\(|@import|on[a-z]+\s*=/i;
+
+/** Read-time scrub for legacy rows written before the `</style>` guard. */
+function scrubCustomCss(css: string | null | undefined): string | null | undefined {
+  if (!css) return css;
+  return DANGEROUS_CSS.test(css) ? '' : css;
+}
 
 async function getOrCreate() {
   const existing = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
@@ -111,7 +123,10 @@ router.get('/', async (_req, res, next) => {
     } catch {
       activeThemeConfig = null;
     }
-    res.json({ status: 'success', data: { ...theme, activeThemeConfig } });
+    res.json({
+      status: 'success',
+      data: { ...theme, customCss: scrubCustomCss(theme.customCss), activeThemeConfig },
+    });
   } catch (err) {
     next(err);
   }
@@ -125,7 +140,8 @@ router.put('/', authenticate, authorize('admin', 'manager'), async (req, res, ne
     if (data.customCss && DANGEROUS_CSS.test(data.customCss)) {
       return res.status(400).json({
         status: 'error',
-        message: 'Custom CSS may not contain <script>, javascript: URLs or expression().',
+        message:
+          'Custom CSS may not contain </style>, <script>, javascript: URLs, expression(), @import or event handlers.',
         code: 'UNSAFE_CSS',
       });
     }
