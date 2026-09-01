@@ -626,4 +626,9 @@ every subject at the send boundary and in subject templates) and HTML
 injection (customer/product names escaped in bodies and HTML templates).
 Auth now rejects refresh tokens presented as access tokens (a long-lived
 refresh token could previously be used directly in `Authorization: Bearer`,
-bypassing refresh rotation and replay detection).
+bypassing refresh rotation and replay detection). Analytics `days`
+windows and the reviews admin queue are clamped (NaN/negative values
+could 500 or scan full ranges). Admin link fields (menu item URLs, banner
+link URLs) reject `javascript:`/`data:`/`vbscript:`/`file:` schemes —
+they render straight into `<a href>` in storefront themes, so a stored
+script URL would execute in every visitor's browser.

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { isSafeLinkUrl } from '../../utils/safeUrl';
 
 const router = Router();
 
@@ -41,10 +42,14 @@ const bannerSchema = z.object({
   description: nullableStr,
   image: z.string().max(1000).optional().default('').transform((v) => v ?? ''),
   mobileImage: nullableStr,
-  linkUrl: nullableStr,
+  linkUrl: nullableStr.refine(isSafeLinkUrl, {
+    message: 'URL must be http(s), mailto, tel or a relative path',
+  }),
   buttonText: nullableStr,
   secondaryText: nullableStr,
-  secondaryUrl: nullableStr,
+  secondaryUrl: nullableStr.refine(isSafeLinkUrl, {
+    message: 'URL must be http(s), mailto, tel or a relative path',
+  }),
   badge: nullableStr,
   textColor: z.string().max(30).optional(),
   overlayColor: z.string().max(300).optional(),

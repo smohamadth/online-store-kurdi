@@ -75,6 +75,16 @@ describe('Menu items', () => {
     expect(res.status).toBe(201);
   });
 
+  it('rejects a javascript: item URL (stored XSS guard)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const menu = await request(app).post('/api/menus').set('Authorization', `Bearer ${token}`).send(menuBody());
+    const res = await request(app)
+      .post(`/api/menus/${menu.body.data.id}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(itemBody({ url: 'javascript:alert(document.cookie)' }));
+    expect(res.status).toBe(400);
+  });
+
   it('updates an item', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const menu = await request(app).post('/api/menus').set('Authorization', `Bearer ${token}`).send(menuBody());

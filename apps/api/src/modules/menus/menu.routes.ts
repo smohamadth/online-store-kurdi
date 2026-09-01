@@ -18,6 +18,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { isSafeLinkUrl } from '../../utils/safeUrl';
 
 const router = Router();
 
@@ -30,7 +31,11 @@ const menuSchema = z.object({
 
 const menuItemSchema = z.object({
   label: z.string().min(1).max(100),
-  url: z.string().min(1).max(500),
+  url: z
+    .string()
+    .min(1)
+    .max(500)
+    .refine(isSafeLinkUrl, { message: 'URL must be http(s), mailto, tel or a relative path' }),
   // Normalize '' -> null so empty form fields do not persist as empty strings.
   // (parentId is fine as-is: .uuid() rejects '', so its .or() branch does fire.)
   icon: z
