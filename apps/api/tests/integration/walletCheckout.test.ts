@@ -243,6 +243,63 @@ describe('checkout with gift cards', () => {
     expect(res.body.message).toMatch(/currency/i);
     expect(peekMockStore('order')).toHaveLength(0);
   });
+
+  it('refuses a card already claimed by another account (400, no order)', async () => {
+    const admin = await authHeader({ role: 'admin' });
+    const owner = await authHeader();
+    const other = await authHeader();
+    const cat = await createCategory();
+    const product = await createProduct({ price: 10, quantity: 5, categoryId: cat.id });
+    const card = await issueGiftCard(admin.token, 10);
+
+    // The owner claims the card through the wallet/checkout check.
+    const claim = await request(app)
+      .post(`/api/gift-cards/${card.code}/redeem`)
+      .set('Authorization', `Bearer ${owner.token}`);
+    expect(claim.status).toBe(200);
+
+    // A different account cannot spend it.
+    const res = await placeOrder(other.token, product.id, { giftCardCode: card.code });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/claimed by another account/i);
+    expect(peekMockStore('order')).toHaveLength(0);
+    // The card balance is untouched.
+    expect(peekMockStore('giftCard')[0].balance).toBe(10);
+  });
+
+  it('claims an unclaimed card to the buyer at placement', async () => {
+    const { token, user } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const product = await createProduct({ price: 10, quantity: 5, categoryId: cat.id });
+    const card = await issueGiftCard(admin.token, 10);
+
+    const res = await placeOrder(token, product.id, { giftCardCode: card.code });
+    expect(res.status).toBe(201);
+    expect(res.body.data.paymentStatus).toBe('completed');
+
+    const cards = peekMockStore('giftCard');
+    expect(cards[0].redeemedByUserId).toBe(user.id);
+    expect(cards[0].redeemedAt).toBeTruthy();
+    expect(cards[0].balance).toBe(0);
+  });
+
+  it('lets the claiming account spend the card at checkout', async () => {
+    const admin = await authHeader({ role: 'admin' });
+    const { token, user } = await authHeader();
+    const cat = await createCategory();
+    const product = await createProduct({ price: 10, quantity: 5, categoryId: cat.id });
+    const card = await issueGiftCard(admin.token, 10);
+
+    await request(app)
+      .post(`/api/gift-cards/${card.code}/redeem`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await placeOrder(token, product.id, { giftCardCode: card.code });
+    expect(res.status).toBe(201);
+    expect(res.body.data.paymentStatus).toBe('completed');
+    expect(res.body.data.giftCardApplied).toBe(10);
+  });
 });
 
 describe('wallet credit vs online gateways', () => {

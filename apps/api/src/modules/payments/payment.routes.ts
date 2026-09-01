@@ -132,7 +132,12 @@ async function notifyPaymentReceived(orderId: string): Promise<void> {
 }
 
 /** Fire-and-forget: email the customer that their order was refunded. */
-async function notifyRefundIssued(orderId: string, reason?: string, refundedAmount?: number): Promise<void> {
+async function notifyRefundIssued(
+  orderId: string,
+  reason?: string,
+  refundedAmount?: number,
+  toStoreCredit?: boolean,
+): Promise<void> {
   const [order, orderUser] = await Promise.all([
     prisma.order.findUnique({ where: { id: orderId }, include: { shippingAddress: true } }),
     prisma.order
@@ -142,7 +147,7 @@ async function notifyRefundIssued(orderId: string, reason?: string, refundedAmou
       ),
   ]);
   if (!order || !orderUser) return;
-  await sendRefundConfirmation(order, orderUser, reason, refundedAmount);
+  await sendRefundConfirmation(order, orderUser, reason, refundedAmount, { toStoreCredit });
 }
 
 // POST /api/payments/webhooks/stripe - Stripe Checkout webhook
@@ -520,7 +525,9 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
 
     // Fire-and-forget: email the customer that their order was refunded.
     // Never fails the refund. Reports the actual amount refunded this time.
-    await notifyRefundIssued(orderId, reason, refundAmount).catch(() => {});
+    // A creditToStoreCredit refund says "store credit added", not "money
+    // on its way back to your payment method" — nothing left in cash.
+    await notifyRefundIssued(orderId, reason, refundAmount, creditToStoreCredit === true).catch(() => {});
 
     logger.info(
       `Refund ${isFullRefund ? 'full' : 'partial'} processed for order ${order.orderNumber} (${refundAmount})`,

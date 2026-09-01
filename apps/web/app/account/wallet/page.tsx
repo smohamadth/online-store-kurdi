@@ -7,6 +7,9 @@ interface StoreCredit {
   balance: number;
   currency: string;
   transactions: StoreCreditTransaction[];
+  // Every balance the user holds, in every currency (the store may have
+  // changed currency after a balance was granted).
+  allBalances?: { currency: string; balance: number }[];
 }
 
 interface StoreCreditTransaction {
@@ -66,7 +69,7 @@ export default function WalletPage() {
       const currency = res.data.currency as string;
       setMessage({
         type: 'ok',
-        text: `Card is valid! You have ${balance.toFixed(2)} ${currency} available. Enter the code at checkout to use it.`,
+        text: `Card is valid and linked to your account! You have ${balance.toFixed(2)} ${currency} available. It will be applied automatically at checkout.`,
       });
       setGiftCode('');
     } catch (err) {
@@ -104,6 +107,41 @@ export default function WalletPage() {
         <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
           Applied automatically at checkout. No card or code needed.
         </p>
+        {/* Balances in other currencies: the store switched currency after
+            these were granted, so they can't be spent at checkout anymore.
+            Show them honestly instead of letting the value silently vanish. */}
+        {(credit?.allBalances || [])
+          .filter((b) => b.currency !== credit?.currency && b.balance > 0)
+          .length > 0 && (
+          <div
+            data-testid="other-currency-balances"
+            style={{
+              marginTop: '12px',
+              padding: '12px 14px',
+              backgroundColor: '#fef3c7',
+              border: '1px solid #fde68a',
+              borderRadius: '6px',
+              fontSize: '13px',
+              color: '#92400e',
+            }}
+          >
+            <strong>Balances in other currencies</strong>
+            <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {(credit?.allBalances || [])
+                .filter((b) => b.currency !== credit?.currency && b.balance > 0)
+                .map((b) => (
+                  <span key={b.currency}>
+                    {b.balance.toFixed(2)} {b.currency}
+                  </span>
+                ))}
+            </div>
+            <p style={{ marginTop: '6px', fontSize: '12px' }}>
+              This credit was granted before the store switched to{' '}
+              {credit?.currency ?? 'the current currency'}. It can't be spent at
+              checkout — contact the store to convert it.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Gift card redemption */}

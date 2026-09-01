@@ -271,6 +271,52 @@ describe('Redeem', () => {
     const res = await request(app).post(`/api/gift-cards/${code}/redeem`).set('Authorization', `Bearer ${uToken}`);
     expect(res.status).toBe(400);
   });
+
+  it('claims the card to the calling account (redeemedByUserId written)', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const created = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${aToken}`).send({ amount: 100 });
+    const u = await createUser({});
+    const uToken = await tokenFor(u);
+
+    const res = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${uToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.claimedByMe).toBe(true);
+
+    // The card row records the claimant.
+    const { peekMockStore } = await import('../helpers/mockPrisma');
+    const cards = peekMockStore('giftCard');
+    expect(cards[0].redeemedByUserId).toBe(u.id);
+    expect(cards[0].redeemedAt).toBeTruthy();
+  });
+
+  it('rejects redeem of a card already claimed by another account (403)', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const created = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${aToken}`).send({ amount: 100 });
+    const u1 = await createUser({});
+    const u2 = await createUser({});
+
+    const first = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${await tokenFor(u1)}`);
+    expect(first.status).toBe(200);
+
+    const second = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${await tokenFor(u2)}`);
+    expect(second.status).toBe(403);
+    expect(second.body.message).toMatch(/claimed by another account/i);
+  });
+
+  it('allows the claiming user to check the same card again', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const created = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${aToken}`).send({ amount: 100 });
+    const u = await createUser({});
+    const uToken = await tokenFor(u);
+
+    await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${uToken}`);
+    const again = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${uToken}`);
+    expect(again.status).toBe(200);
+    expect(again.body.data.availableBalance).toBe(100);
+  });
 });
 
 // =====================================================================
@@ -401,6 +447,25 @@ describe('Store credit: own balance + history', () => {
     const res = await request(app).get('/api/store-credit').set('Authorization', `Bearer ${uToken}`);
     expect(res.body.data.balance).toBe(25);
     expect(res.body.data.transactions).toHaveLength(2);
+  });
+
+  it('reports every currency balance via allBalances so stranded credit is visible', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const u = await createUser({});
+    const uToken = await tokenFor(u);
+    // USD (store default) + EUR (granted before a currency switch).
+    await request(app).post('/api/store-credit').set('Authorization', `Bearer ${aToken}`).send({ userId: u.id, amount: 30 });
+    await request(app).post('/api/store-credit').set('Authorization', `Bearer ${aToken}`).send({ userId: u.id, amount: 20, currency: 'EUR' });
+
+    const res = await request(app).get('/api/store-credit').set('Authorization', `Bearer ${uToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.balance).toBe(30);
+    expect(res.body.data.currency).toBe('USD');
+    expect(res.body.data.allBalances).toEqual([
+      { currency: 'USD', balance: 30 },
+      { currency: 'EUR', balance: 20 },
+    ]);
   });
 
   it('rejects credit to a non-existent user (400)', async () => {

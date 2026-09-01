@@ -147,6 +147,15 @@ router.put('/', authenticate, authorize('admin'), async (req, res, next) => {
     const validatedData = settingsSchema.parse(req.body);
     const settingsData = toSettingsData(validatedData);
 
+    // Currency change awareness: store credit is per-currency and gift
+    // cards carry their issue currency, so switching the store currency
+    // strands every balance/card in the old currency (checkout reads
+    // only the store currency). Record the old value so the response
+    // can warn with exact numbers when anything would be stranded.
+    const previous = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
+    const oldCurrency = (previous as any)?.currency ?? null;
+    const newCurrency = settingsData.currency ?? oldCurrency;
+
     const settings = await prisma.storeSettings.upsert({
       where: { id: 'default' },
       update: settingsData,
@@ -158,9 +167,45 @@ router.put('/', authenticate, authorize('admin'), async (req, res, next) => {
 
     logger.info('Store settings updated');
 
+    // Compute the stranded-balance warning (additive; never fails the save).
+    let walletWarning: {
+      message: string;
+      storeCreditBalances: { currency: string; balance: number }[];
+      activeGiftCards: number;
+    } | null = null;
+    if (oldCurrency && newCurrency && oldCurrency.toUpperCase() !== newCurrency.toUpperCase()) {
+      const [creditRows, giftCards] = await Promise.all([
+        prisma.storeCredit.findMany({
+          where: { currency: { not: newCurrency } },
+          select: { currency: true, balance: true },
+        }),
+        prisma.giftCard.findMany({
+          where: { currency: { not: newCurrency }, status: 'active' },
+          select: { id: true },
+        }),
+      ]);
+      const balances = (creditRows || [])
+        .filter((r: any) => Number(r.balance) > 0)
+        .map((r: any) => ({ currency: r.currency, balance: Number(r.balance) }));
+      if (balances.length > 0 || (giftCards || []).length > 0) {
+        walletWarning = {
+          message:
+            `The store currency changed from ${oldCurrency} to ${newCurrency}. ` +
+            'Existing store-credit balances in other currencies and active gift cards ' +
+            'issued in other currencies can no longer be spent at checkout — convert or ' +
+            're-issue them, or the value sits unused.',
+          storeCreditBalances: balances,
+          activeGiftCards: (giftCards || []).length,
+        };
+      }
+    }
+
     res.json({
       status: 'success',
-      data: settings,
+      data: {
+        ...settings,
+        ...(walletWarning ? { walletWarning } : {}),
+      },
     });
   } catch (err) {
     next(err);

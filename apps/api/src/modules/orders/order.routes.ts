@@ -646,6 +646,21 @@ router.post('/', authenticate, async (req, res, next) => {
           400,
         );
       }
+      // Ownership: a card claimed by another account cannot be spent by
+      // this one (the redeem endpoint claims it; spending also claims it
+      // so a card used without an explicit check belongs to its buyer).
+      if (card.redeemedByUserId && card.redeemedByUserId !== req.user!.id) {
+        throw new AppError(
+          'This gift card has already been claimed by another account. Check the code, or ask the store for a new one.',
+          400,
+        );
+      }
+      if (!card.redeemedByUserId) {
+        await prisma.giftCard.updateMany({
+          where: { id: card.id, redeemedByUserId: null },
+          data: { redeemedByUserId: req.user!.id, redeemedAt: new Date() },
+        });
+      }
       giftCardBalance = card.balance;
     }
 

@@ -51,6 +51,57 @@ describe('PUT /api/settings (admin)', () => {
       .send({ storeName: 'X' });
     expect(res.status).toBe(403);
   });
+
+  it('warns with exact numbers when a currency change strands wallet balances', async () => {
+    const admin = await authHeader({ role: 'admin' });
+    const customer = await authHeader();
+    const aToken = admin.token;
+
+    // Store starts in USD; the customer holds USD credit and an active
+    // USD gift card. Switching the store to EUR strands them (checkout
+    // reads only the store currency).
+    await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${aToken}`)
+      .send({ storeName: 'S', currency: 'USD' });
+    await request(app)
+      .post('/api/store-credit')
+      .set('Authorization', `Bearer ${aToken}`)
+      .send({ userId: customer.user.id, amount: 25 });
+    const card = await request(app)
+      .post('/api/gift-cards')
+      .set('Authorization', `Bearer ${aToken}`)
+      .send({ amount: 50 });
+    expect(card.status).toBe(201);
+
+    const res = await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${aToken}`)
+      .send({ storeName: 'S', currency: 'EUR' });
+    expect(res.status).toBe(200);
+
+    const warning = res.body.data.walletWarning;
+    expect(warning).toBeTruthy();
+    expect(warning.message).toMatch(/USD/);
+    expect(warning.storeCreditBalances).toEqual([{ currency: 'USD', balance: 25 }]);
+    expect(warning.activeGiftCards).toBe(1);
+  });
+
+  it('does not warn on a currency change with nothing stranded', async () => {
+    const admin = await authHeader({ role: 'admin' });
+    const aToken = admin.token;
+
+    await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${aToken}`)
+      .send({ storeName: 'S', currency: 'USD' });
+    const res = await request(app)
+      .put('/api/settings')
+      .set('Authorization', `Bearer ${aToken}`)
+      .send({ storeName: 'S', currency: 'EUR' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.walletWarning).toBeUndefined();
+  });
 });
 
 describe('Email templates', () => {

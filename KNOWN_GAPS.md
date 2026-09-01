@@ -745,9 +745,19 @@ refund (falls back to the old behavior only when a custom chart lacks
 the deposits account). Refunds: `creditToStoreCredit=true` returns the money to the
 customer's store-credit balance (no gateway movement); cash refunds
 are capped at the amount actually paid in cash (the wallet-credit
-portion was never cash). The checkout page has a Wallet Credit
-section (store-credit toggle + gift-card code check); the wallet page
-and order list show applied amounts.
+portion was never cash). Gift cards are CLAIMED to an account on first
+validation (POST /gift-cards/:code/redeem or order placement write
+redeemedByUserId/redeemedAt; the claim is atomic so two concurrent
+claims resolve to one winner) and can no longer be spent by another
+account — a code that leaks can't be drained by whoever reads it
+first. The checkout page has a Wallet Credit section (store-credit
+toggle + gift-card code check); the wallet page and order list show
+applied amounts, and the wallet page surfaces balances stranded in
+other currencies after a store currency change. Changing the store
+currency while store-credit balances or active gift cards exist in the
+old currency returns a walletWarning listing the exact stranded
+amounts, and store-credit refund emails say "store credit added" (not
+"money on its way back") when creditToStoreCredit is used.
 SECURITY: imported customer accounts no longer ship with a known
 password. Bulk customer/order import used to create every imported
 account with the hardcoded password 'Imported-Change-Me-123!' (public

@@ -96,4 +96,57 @@ describe('sendRefundConfirmation', () => {
     const call = infoSpy.mock.calls.find((c) => String(c[0]).includes('📧 Email would be sent'));
     expect(String(call![0])).toContain('Refunded 5.00 for #O3');
   });
+
+  it('says store credit was added, not money returned, when toStoreCredit is set', async () => {
+    const infoSpy = loggerMock.info.mockImplementation(() => {});
+    const order = { id: 'ord_4', orderNumber: 'ORD-300', totalAmount: 42 };
+    const user = { firstName: 'Sara', email: 'sara@example.com' };
+
+    await sendRefundConfirmation(order, user, 'policy', 42, { toStoreCredit: true });
+
+    // Log-only mode prints the subject; the store-credit subject must
+    // replace the cash-refund one.
+    const call = infoSpy.mock.calls.find((c) => String(c[0]).includes('📧 Email would be sent'));
+    const logLine = String(call![0]);
+    expect(logLine).toContain('Store Credit Added for Order #ORD-300');
+    expect(logLine).not.toContain('Refund Issued for Order #ORD-300');
+  });
+
+  it('exposes refundMethod to custom templates so credit refunds are worded correctly', async () => {
+    const infoSpy = loggerMock.info.mockImplementation(() => {});
+    // {{refundMethod}} is shared by the subject and the HTML body; the
+    // subject lands in the log-only line, so it proves the variable.
+    (prisma.emailTemplate.findUnique as any).mockResolvedValue({
+      name: 'refund_confirmation',
+      subject: 'Refund via {{refundMethod}}',
+      htmlContent: '<p>{{refundMethod}}</p>',
+      isActive: true,
+    });
+
+    await sendRefundConfirmation(
+      { id: 'ord_5', orderNumber: 'O5', totalAmount: 10 },
+      { firstName: 'Ali', email: 'ali@example.com' },
+      'return',
+      10,
+      { toStoreCredit: true },
+    );
+    let call = infoSpy.mock.calls.find((c) => String(c[0]).includes('📧 Email would be sent'));
+    expect(String(call![0])).toContain('Refund via store credit');
+
+    infoSpy.mockClear();
+    (prisma.emailTemplate.findUnique as any).mockResolvedValue({
+      name: 'refund_confirmation',
+      subject: 'Refund via {{refundMethod}}',
+      htmlContent: '<p>{{refundMethod}}</p>',
+      isActive: true,
+    });
+    await sendRefundConfirmation(
+      { id: 'ord_5', orderNumber: 'O5', totalAmount: 10 },
+      { firstName: 'Ali', email: 'ali@example.com' },
+      'return',
+      10,
+    );
+    call = infoSpy.mock.calls.find((c) => String(c[0]).includes('📧 Email would be sent'));
+    expect(String(call![0])).toContain('Refund via original payment method');
+  });
 });

@@ -363,7 +363,9 @@ export async function sendRefundConfirmation(
   user: any,
   reason?: string,
   refundedAmount?: number,
+  opts?: { toStoreCredit?: boolean },
 ): Promise<void> {
+  const toStoreCredit = opts?.toStoreCredit === true;
   const template = await getTemplate('refund_confirmation');
   // Variables shared by the subject and the HTML body, so a merchant's
   // custom {{orderNumber}} in the subject renders the real value too.
@@ -376,10 +378,15 @@ export async function sendRefundConfirmation(
     reason: reason || order.refundReason || 'Requested by the store',
     orderUrl: `${env.FRONTEND_URL}/account/orders/${order.id}`,
     storeName: 'Online Store',
+    // 'store credit' vs 'original payment method' — custom templates can
+    // branch on it so a credit refund is never described as a cash refund.
+    refundMethod: toStoreCredit ? 'store credit' : 'original payment method',
   };
   const subject = template
     ? renderSubject(template.subject, variables)
-    : `Refund Issued for Order #${order.orderNumber}`;
+    : toStoreCredit
+      ? `Store Credit Added for Order #${order.orderNumber}`
+      : `Refund Issued for Order #${order.orderNumber}`;
 
   const defaultHtml = `
     <!DOCTYPE html>
@@ -388,9 +395,9 @@ export async function sendRefundConfirmation(
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: #dc2626; color: #fff; padding: 20px; text-align: center; }
+        .header { background: ${toStoreCredit ? '#16a34a' : '#dc2626'}; color: #fff; padding: 20px; text-align: center; }
         .content { padding: 20px; }
-        .refund-info { background: #fef2f2; padding: 15px; border-radius: 5px; border: 1px solid #fecaca; margin: 15px 0; }
+        .refund-info { background: ${toStoreCredit ? '#f0fdf4' : '#fef2f2'}; padding: 15px; border-radius: 5px; border: 1px solid ${toStoreCredit ? '#bbf7d0' : '#fecaca'}; margin: 15px 0; }
         .row { display: flex; justify-content: space-between; padding: 6px 0; }
         .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
       </style>
@@ -398,19 +405,28 @@ export async function sendRefundConfirmation(
     <body>
       <div class="container">
         <div class="header">
-          <h1>Refund Issued</h1>
+          <h1>${toStoreCredit ? 'Store Credit Added' : 'Refund Issued'}</h1>
         </div>
         <div class="content">
           <p>Hi ${escapeHtml(user.firstName)},</p>
-          <p>We have issued a refund for order <strong>#${order.orderNumber}</strong>. The money is on its way back to your original payment method.</p>
+          ${
+            toStoreCredit
+              ? `<p>We have credited <strong>$${variables.refundAmount}</strong> to your store credit balance for order <strong>#${order.orderNumber}</strong>. The credit is already available — apply it automatically at checkout on your next order.</p>`
+              : `<p>We have issued a refund for order <strong>#${order.orderNumber}</strong>. The money is on its way back to your original payment method.</p>`
+          }
 
           <div class="refund-info">
             <div class="row"><span>Order</span><span>#${order.orderNumber}</span></div>
-            <div class="row"><span>Refund amount</span><span>$${variables.refundAmount}</span></div>
+            <div class="row"><span>${toStoreCredit ? 'Credit amount' : 'Refund amount'}</span><span>$${variables.refundAmount}</span></div>
+            <div class="row"><span>Paid back via</span><span>${toStoreCredit ? 'Store credit (available now)' : 'Original payment method'}</span></div>
             <div class="row"><span>Reason</span><span>${escapeHtml(variables.reason)}</span></div>
           </div>
 
-          <p>Please allow a few business days for your bank or payment provider to process the refund.</p>
+          ${
+            toStoreCredit
+              ? '<p>You can use the credit on any future order — no code needed. It is applied in the Wallet Credit section at checkout.</p>'
+              : '<p>Please allow a few business days for your bank or payment provider to process the refund.</p>'
+          }
 
           <p style="text-align: center; margin-top: 30px;">
             <a href="${env.FRONTEND_URL}/account/orders/${order.id}" class="button">View Order</a>

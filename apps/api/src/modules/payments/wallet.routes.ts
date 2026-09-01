@@ -91,13 +91,32 @@ router.get('/gift-cards/:code/transactions', authenticate, authorize('admin', 'm
 
 // POST /api/gift-cards/:code/redeem - apply code to the calling user
 // (no debit happens here - that happens at order-placement. We just
-// validate the code and return the available balance so the
-// checkout UI can show the discount.)
+// validate the code, CLAIM it to the calling account (first claim
+// wins, so a card code that leaks can't be spent by whoever reads it
+// first), and return the available balance so the checkout UI can
+// show the discount.)
 router.post('/gift-cards/:code/redeem', authenticate, async (req, res, next) => {
   try {
     const card = await getGiftCardByCode(req.params.code);
     if (!isRedeemable(card)) {
       throw new AppError('Gift card is not redeemable', 400);
+    }
+    // Claim the card for this account. Atomic: the WHERE makes two
+    // concurrent claims resolve to exactly one winner; the loser
+    // re-reads and gets the "already claimed" error.
+    const claim = await prisma.giftCard.updateMany({
+      where: { id: card.id, redeemedByUserId: null },
+      data: { redeemedByUserId: req.user!.id, redeemedAt: new Date() },
+    });
+    if (claim.count === 0) {
+      const fresh = await prisma.giftCard.findUnique({ where: { id: card.id } });
+      if (fresh && fresh.redeemedByUserId && fresh.redeemedByUserId !== req.user!.id) {
+        throw new AppError(
+          'This gift card has already been claimed by another account. Check the code, or ask the store for a new one.',
+          403,
+        );
+      }
+      // Already claimed by this same user on an earlier check — fine.
     }
     res.json({
       status: 'success',
@@ -107,6 +126,9 @@ router.post('/gift-cards/:code/redeem', authenticate, async (req, res, next) => 
         // The customer now knows the balance; checkout will debit it.
         availableBalance: card.balance,
         currency: card.currency,
+        // Confirms the claim so the UI can tell the customer the card
+        // is now linked to their account.
+        claimedByMe: true,
       },
     });
   } catch (err) { next(err); }
@@ -165,9 +187,22 @@ router.get('/store-credit', authenticate, async (req, res, next) => {
     }
     const balance = await getStoreCreditBalance(req.user!.id, currency);
     const transactions = await listStoreCreditTransactions(req.user!.id, currency);
+    // Every balance the user holds, in every currency: if the store
+    // changed currency after a balance was granted, the old-currency
+    // balance is still here and the wallet page can surface it (it is
+    // NOT spendable at checkout, which only reads the store currency).
+    const allRows = await prisma.storeCredit.findMany({
+      where: { userId: req.user!.id },
+      select: { currency: true, balance: true },
+    });
     res.json({
       status: 'success',
-      data: { balance, currency, transactions },
+      data: {
+        balance,
+        currency,
+        transactions,
+        allBalances: allRows.map((r: any) => ({ currency: r.currency, balance: r.balance })),
+      },
     });
   } catch (err) { next(err); }
 });
