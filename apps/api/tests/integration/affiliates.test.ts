@@ -77,11 +77,13 @@ async function approvedAffiliate(rate = 10) {
 
 /**
  * Place a real order through POST /api/orders with an optional ref cookie.
- * The buyer is a fresh customer (attribution is per-browser, not per-user,
- * so any logged-in buyer works).
+ * The buyer is a fresh customer unless `buyerToken` is given (attribution
+ * is per-browser, not per-user, so any logged-in buyer works).
  */
-async function placeOrder(opts: { refCookie?: string; price?: number } = {}) {
-  const buyer = await authHeader({ role: 'customer' });
+async function placeOrder(opts: { refCookie?: string; price?: number; buyerToken?: string; buyerUserId?: string } = {}) {
+  const buyer = opts.buyerToken
+    ? { token: opts.buyerToken, user: { id: opts.buyerUserId! } }
+    : await authHeader({ role: 'customer' });
   const p = await createProduct({ price: opts.price ?? 100, quantity: 50 });
   await mockPrisma.cartItem.create({ data: { userId: buyer.user.id, productId: p.id, quantity: 1 } });
   let req = request(app)
@@ -92,6 +94,16 @@ async function placeOrder(opts: { refCookie?: string; price?: number } = {}) {
   const res = await req;
   expect(res.status).toBe(201);
   return res.body.data as { id: string; orderNumber: string; totalAmount: number };
+}
+
+/** Refund an order as admin (full refund unless an amount is given). */
+async function refundOrder(adminToken: string, orderId: string, amount?: number) {
+  const res = await request(app)
+    .post('/api/payments/refund')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send(amount !== undefined ? { orderId, amount, reason: 'customer request' } : { orderId, reason: 'customer request' });
+  expect(res.status).toBe(200);
+  return res.body.data;
 }
 
 /** Settle an order's payment as admin (the COD/bank-transfer path). */
@@ -440,6 +452,130 @@ describe('Commission creation on payment', () => {
     const commissions = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
     expect(commissions).toHaveLength(0);
   });
+
+  it('never pays out self-referrals: buying through your own link earns nothing', async () => {
+    const { admin, affiliate, code, affiliateId, affiliateUser } = await approvedAffiliate();
+    // The affiliate themselves buys with their own cookie on the order.
+    const order = await placeOrder({
+      refCookie: `aff_ref=${encodeURIComponent(code)}`,
+      buyerToken: affiliate,
+      buyerUserId: affiliateUser.id,
+    });
+    // Attribution still captured (the order remembers the code)...
+    const row = await mockPrisma.order.findUnique({ where: { id: order.id } });
+    expect(row?.affiliateId).toBe(affiliateId);
+
+    // ...but payment creates NO commission: the buyer IS the affiliate.
+    await settleOrder(admin, order.id);
+    const commissions = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    expect(commissions).toHaveLength(0);
+  });
+});
+
+// =====================================================================
+// Refund clawback
+// =====================================================================
+
+describe('Refund clawback', () => {
+  it('a FULL refund voids an approved commission and claws back totalEarned', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    expect(commission).toBeTruthy();
+
+    // Approved + paid out of the balance.
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    let profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalEarned).toBe(commission.amount);
+
+    // Full refund → the commission is voided and earnings clawed back.
+    await refundOrder(admin, order.id);
+    const after = await mockPrisma.affiliateCommission.findUnique({ where: { id: commission.id } });
+    expect(after?.status).toBe('voided');
+    profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalEarned).toBe(0);
+  });
+
+  it('a FULL refund voids a PENDING commission without touching totalEarned', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    expect(commission?.status).toBe('pending');
+
+    await refundOrder(admin, order.id);
+
+    const after = await mockPrisma.affiliateCommission.findUnique({ where: { id: commission.id } });
+    expect(after?.status).toBe('voided');
+    const profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalEarned ?? 0).toBe(0); // never credited, never touched
+  });
+
+  it('a PARTIAL refund leaves the commission approved (sale still earned)', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}`, price: 200 });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+
+    // Refund half the order.
+    await refundOrder(admin, order.id, order.totalAmount / 2);
+
+    const after = await mockPrisma.affiliateCommission.findUnique({ where: { id: commission.id } });
+    expect(after?.status).toBe('approved');
+    const profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalEarned).toBe(commission.amount);
+  });
+
+  it('an unreferred order refund is a clean no-op', async () => {
+    const { admin } = await approvedAffiliate();
+    const order = await placeOrder();
+    await settleOrder(admin, order.id);
+    await refundOrder(admin, order.id);
+    const commissions = await mockPrisma.affiliateCommission.findMany({});
+    expect(commissions).toHaveLength(0);
+  });
+
+  it('admin can void a commission manually (fraud / partial-refund follow-up)', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+
+    const res = await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/void`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('voided');
+
+    const profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalEarned).toBe(0);
+
+    // Terminal: a second void is refused.
+    const again = await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/void`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(again.status).toBe(400);
+  });
+
+  it('admin void is admin-only (403 for the affiliate themselves)', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    const res = await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/void`)
+      .set('Authorization', `Bearer ${affiliate}`);
+    expect(res.status).toBe(403);
+  });
 });
 
 // =====================================================================
@@ -512,6 +648,51 @@ describe('GET /api/affiliates/me', () => {
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].affiliate.user.email).toBeTruthy();
   });
+
+  it('bounded lists: limit is honoured and capped, page skips correctly', async () => {
+    const { admin, affiliate, code } = await approvedAffiliate();
+    // Three referred + paid orders -> three commissions.
+    for (let i = 0; i < 3; i += 1) {
+      const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+      await settleOrder(admin, order.id);
+    }
+
+    // limit=1 returns exactly the newest row.
+    const one = await request(app)
+      .get('/api/affiliates/me/commissions?limit=1')
+      .set('Authorization', `Bearer ${affiliate}`);
+    expect(one.status).toBe(200);
+    expect(one.body.data).toHaveLength(1);
+
+    // A hostile limit is capped (default maxLimit=100), not a full scan.
+    const huge = await request(app)
+      .get('/api/affiliates/me/commissions?limit=999999999')
+      .set('Authorization', `Bearer ${affiliate}`);
+    expect(huge.status).toBe(200);
+    expect(huge.body.data).toHaveLength(3);
+
+    // page=2&limit=2 -> skips the newest, returns the oldest one.
+    const page2 = await request(app)
+      .get('/api/affiliates/me/commissions?page=2&limit=2')
+      .set('Authorization', `Bearer ${affiliate}`);
+    expect(page2.status).toBe(200);
+    expect(page2.body.data).toHaveLength(1);
+
+    // Admin list is bounded too (maxLimit=500 there).
+    const adminList = await request(app)
+      .get('/api/affiliates/commissions?limit=999999999')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(adminList.status).toBe(200);
+    expect(adminList.body.data).toHaveLength(3);
+
+    // Garbage pagination falls back to sane defaults instead of 500ing.
+    const garbage = await request(app)
+      .get('/api/affiliates/me/commissions?limit=-5&page=abc')
+      .set('Authorization', `Bearer ${affiliate}`);
+    expect(garbage.status).toBe(200);
+    expect(garbage.body.data.length).toBeGreaterThan(0);
+    expect(garbage.body.data.length).toBeLessThanOrEqual(3);
+  });
 });
 
 // =====================================================================
@@ -573,6 +754,26 @@ describe('Payouts', () => {
       .send({});
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/no approved earnings/i);
+  });
+
+  it('refuses a sub-cent payout request (dust rounds to a zero payout)', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+
+    const res = await request(app)
+      .post('/api/affiliates/me/payouts')
+      .set('Authorization', `Bearer ${affiliate}`)
+      .send({ amount: 0.001 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/too small/i);
+    // Nothing was created.
+    const payouts = await mockPrisma.affiliatePayout.findMany({ where: { affiliateId } });
+    expect(payouts).toHaveLength(0);
   });
 
   it('requests, approves and reflects the balance', async () => {

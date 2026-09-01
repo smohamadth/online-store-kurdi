@@ -40,7 +40,7 @@ export interface AffiliateCommission {
   orderAmount: number;
   rate: number;
   amount: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'voided';
   currency: string;
   createdAt: string;
 }
@@ -175,6 +175,12 @@ export async function approveCommission(id: string): Promise<AffiliateCommission
 
 export async function rejectCommission(id: string): Promise<AffiliateCommission> {
   const res = await authHttp.post<AffiliateCommission>(`/affiliates/commissions/${id}/reject`, {});
+  return res.data;
+}
+
+/** Void a commission (refund clawback / manual reversal; approved voids claw back earnings). */
+export async function voidCommission(id: string): Promise<AffiliateCommission> {
+  const res = await authHttp.post<AffiliateCommission>(`/affiliates/commissions/${id}/void`, {});
   return res.data;
 }
 

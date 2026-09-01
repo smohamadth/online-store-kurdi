@@ -17,6 +17,7 @@ const mockSetRate = vi.fn();
 const mockListCommissions = vi.fn();
 const mockApproveCommission = vi.fn();
 const mockRejectCommission = vi.fn();
+const mockVoidCommission = vi.fn();
 const mockListPayouts = vi.fn();
 const mockApprovePayout = vi.fn();
 const mockRejectPayout = vi.fn();
@@ -28,6 +29,7 @@ vi.mock('@/lib/affiliates', () => ({
   listCommissions: (...a: unknown[]) => mockListCommissions(...a),
   approveCommission: (...a: unknown[]) => mockApproveCommission(...a),
   rejectCommission: (...a: unknown[]) => mockRejectCommission(...a),
+  voidCommission: (...a: unknown[]) => mockVoidCommission(...a),
   listPayouts: (...a: unknown[]) => mockListPayouts(...a),
   approvePayout: (...a: unknown[]) => mockApprovePayout(...a),
   rejectPayout: (...a: unknown[]) => mockRejectPayout(...a),
@@ -77,6 +79,11 @@ const PENDING_COMMISSION = {
   },
 };
 
+const APPROVED_COMMISSION = {
+  ...PENDING_COMMISSION,
+  status: 'approved',
+};
+
 const PENDING_PAYOUT = {
   id: 'p1',
   affiliateId: 'a1',
@@ -103,6 +110,7 @@ describe('Admin affiliates page', () => {
     mockListCommissions.mockReset();
     mockApproveCommission.mockReset();
     mockRejectCommission.mockReset();
+    mockVoidCommission.mockReset();
     mockListPayouts.mockReset();
     mockApprovePayout.mockReset();
     mockRejectPayout.mockReset();
@@ -190,6 +198,29 @@ describe('Admin affiliates page', () => {
     fireEvent.click(screen.getByRole('button', { name: /^reject$/i }));
     await waitFor(() => {
       expect(mockRejectCommission).toHaveBeenCalledWith('c1');
+    });
+  });
+
+  it('voids an approved commission (refund clawback / manual reversal)', async () => {
+    mockListCommissions
+      .mockResolvedValueOnce([APPROVED_COMMISSION])
+      .mockResolvedValue([{ ...APPROVED_COMMISSION, status: 'voided' }]);
+    mockVoidCommission.mockResolvedValue({ ...APPROVED_COMMISSION, status: 'voided' });
+    render(<AdminAffiliatesPage />);
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: /commissions \(0 pending\)/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('commissions-table')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^void$/i }));
+    await waitFor(() => {
+      expect(mockVoidCommission).toHaveBeenCalledWith('c1');
+    });
+    // The refresh shows the voided row: no approve/reject/void actions remain.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument();
     });
   });
 

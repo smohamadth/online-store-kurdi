@@ -30,6 +30,7 @@ refer. It is **off by default** — enable it in **Admin → Affiliates**.
 | Affiliate        | `active` → `suspended` (admin)    | stops earning; new links ignored |
 | Commission       | `pending` → `approved` (admin)    | `totalEarned += amount`          |
 | Commission       | `pending` → `rejected` (admin)    | terminal; never counted          |
+| Commission       | `pending`/`approved` → `voided`   | refund clawback or manual admin reversal; `totalEarned -= amount` if it was approved (floored at 0) |
 | Payout request   | `pending` → `paid` (admin)        | `totalPaid += amount`            |
 | Payout request   | `pending` → `rejected` (admin)    | terminal; balance untouched      |
 
@@ -43,6 +44,13 @@ refer. It is **off by default** — enable it in **Admin → Affiliates**.
 - If an affiliate is suspended when an order is *paid*, that order does
   not earn. Turning the program **off** does not void commissions for
   orders placed while it was on.
+- A **full refund** voids the order's commission automatically (pending
+  or approved) and claws back `totalEarned` when it was approved — the
+  refund path never fails because of the affiliate ledger (best-effort).
+  Partial refunds leave the commission alone; the admin can void it
+  manually (Admin → Affiliates → Commissions → Void).
+- Buying through your own link never earns: the affiliate is not their
+  own customer.
 - Per-affiliate rate overrides: Admin → Affiliates → set a custom % for a
   specific affiliate (or reset to the store default). Rates are 0–100.
 
@@ -61,7 +69,7 @@ refer. It is **off by default** — enable it in **Admin → Affiliates**.
 | `POST /api/affiliates/:id/suspend`    | admin   | suspend                              |
 | `PUT /api/affiliates/:id/rate`        | admin   | per-affiliate rate override          |
 | `GET /api/affiliates/commissions`     | admin   | commission ledger                    |
-| `POST /api/affiliates/commissions/:id/approve\|reject` | admin | resolve a commission |
+| `POST /api/affiliates/commissions/:id/approve\|reject\|void` | admin | resolve / reverse a commission |
 | `GET /api/affiliates/payouts`         | admin   | payout requests                      |
 | `POST /api/affiliates/payouts/:id/approve\|reject`     | admin | resolve a payout     |
 

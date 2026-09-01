@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => {
     affiliateCommission: { findUnique: fn(), create: fn(), updateMany: fn(), findMany: fn() },
     affiliatePayout: { findUnique: fn(), updateMany: fn(), findMany: fn() },
     storeSettings: { findUnique: fn() },
+    // Interactive transaction; implementation is re-attached in beforeEach
+    // (impls declared inside vi.hoisted are dropped by vitest).
+    $transaction: fn(),
   };
 });
 
@@ -38,6 +41,8 @@ import {
   setAffiliateStatus,
   setAffiliateRate,
   trackClick,
+  voidCommission,
+  voidCommissionForOrder,
 } from '../../../src/modules/affiliates/affiliate.service';
 
 /** Minimal fake rows (only the fields the service touches). */
@@ -85,6 +90,10 @@ beforeEach(() => {
   mocks.affiliatePayout.updateMany.mockResolvedValue({ count: 1 });
   mocks.affiliatePayout.findMany.mockResolvedValue([]);
   mocks.storeSettings.findUnique.mockResolvedValue(undefined);
+  // Interactive transaction: run the callback with the same delegates
+  // (mirrors mockPrisma's $transaction behaviour). Declared here because
+  // implementations attached inside vi.hoisted do not survive to test run.
+  mocks.$transaction.mockImplementation((ops: any) => ops(mocks));
 });
 
 describe('createCommissionForOrder', () => {
@@ -143,6 +152,26 @@ describe('createCommissionForOrder', () => {
     (prisma.affiliate.findUnique as any).mockResolvedValue(affiliateRow({ status: 'suspended' }));
     await createCommissionForOrder('o1');
     expect(prisma.affiliateCommission.create).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op for a self-referral: the buyer IS the affiliate (farming guard)', async () => {
+    // order.userId === affiliate.userId: the affiliate bought through
+    // their own link — no commission.
+    (prisma.order.findUnique as any).mockResolvedValue(orderRow({ userId: 'u1' }));
+    (prisma.affiliate.findUnique as any).mockResolvedValue(affiliateRow({ userId: 'u1' }));
+    await createCommissionForOrder('o1');
+    expect(prisma.affiliateCommission.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a commission when a DIFFERENT buyer uses the link', async () => {
+    (prisma.order.findUnique as any).mockResolvedValue(orderRow({ userId: 'buyer-9' }));
+    (prisma.affiliate.findUnique as any).mockResolvedValue(affiliateRow({ userId: 'u1' }));
+    (prisma.storeSettings.findUnique as any).mockResolvedValue(settingsEnabled);
+    (prisma.affiliateCommission.findUnique as any).mockResolvedValue(null);
+    (prisma.affiliateCommission.create as any).mockResolvedValue({ id: 'c1' });
+    const result = await createCommissionForOrder('o1');
+    expect(result).toEqual({ id: 'c1' });
+    expect(prisma.affiliateCommission.create).toHaveBeenCalledTimes(1);
   });
 
   it('is a no-op when the commission rounds to zero (rate 0)', async () => {
@@ -263,6 +292,116 @@ describe('approveCommission / rejectCommission', () => {
     (prisma.affiliateCommission.updateMany as any).mockResolvedValue({ count: 0 });
     await expect(approveCommission('c1')).rejects.toThrow(/already resolved/i);
     expect(prisma.affiliate.update).not.toHaveBeenCalled();
+  });
+
+  it('approves inside one transaction (status flip + increment cannot diverge)', async () => {
+    (prisma.affiliateCommission.findUnique as any)
+      .mockResolvedValueOnce({ id: 'c1', affiliateId: 'aff1', status: 'pending', amount: 20 })
+      .mockResolvedValueOnce({ id: 'c1', status: 'approved' });
+    (prisma.affiliateCommission.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.affiliate.update as any).mockResolvedValue({});
+
+    await approveCommission('c1');
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const txCallback = (prisma.$transaction as any).mock.calls[0][0];
+    await expect(txCallback(prisma)).resolves.toBeUndefined();
+    expect(prisma.affiliateCommission.updateMany).toHaveBeenCalled();
+    expect(prisma.affiliate.update).toHaveBeenCalledWith({
+      where: { id: 'aff1' },
+      data: { totalEarned: { increment: 20 } },
+    });
+  });
+});
+
+describe('voidCommission (refund clawback)', () => {
+  it('voids a PENDING commission without touching totalEarned', async () => {
+    (prisma.affiliateCommission.findUnique as any)
+      .mockResolvedValueOnce({ id: 'c1', affiliateId: 'aff1', status: 'pending', amount: 20 })
+      .mockResolvedValueOnce({ id: 'c1', status: 'voided' });
+    (prisma.affiliateCommission.updateMany as any).mockResolvedValue({ count: 1 });
+
+    const result = await voidCommission('c1');
+
+    expect(prisma.affiliateCommission.updateMany).toHaveBeenCalledWith({
+      where: { id: 'c1', status: 'pending' },
+      data: { status: 'voided' },
+    });
+    expect(prisma.affiliate.update).not.toHaveBeenCalled();
+    expect(result?.status).toBe('voided');
+  });
+
+  it('voids an APPROVED commission and claws back totalEarned', async () => {
+    (prisma.affiliateCommission.findUnique as any)
+      .mockResolvedValueOnce({ id: 'c1', affiliateId: 'aff1', status: 'approved', amount: 20 })
+      .mockResolvedValueOnce({ id: 'c1', status: 'voided' });
+    (prisma.affiliateCommission.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.affiliate.updateMany as any).mockResolvedValue({ count: 1 }); // gte guard passes
+
+    await voidCommission('c1');
+
+    expect(prisma.affiliateCommission.updateMany).toHaveBeenCalledWith({
+      where: { id: 'c1', status: 'approved' },
+      data: { status: 'voided' },
+    });
+    expect(prisma.affiliate.updateMany).toHaveBeenCalledWith({
+      where: { id: 'aff1', totalEarned: { gte: 20 } },
+      data: { totalEarned: { decrement: 20 } },
+    });
+    expect(prisma.affiliate.update).not.toHaveBeenCalled(); // no zero-fallback
+  });
+
+  it('floors totalEarned at 0 when the balance is somehow below the amount', async () => {
+    (prisma.affiliateCommission.findUnique as any)
+      .mockResolvedValueOnce({ id: 'c1', affiliateId: 'aff1', status: 'approved', amount: 20 })
+      .mockResolvedValueOnce({ id: 'c1', status: 'voided' });
+    (prisma.affiliateCommission.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.affiliate.updateMany as any).mockResolvedValue({ count: 0 }); // gte guard fails
+    (prisma.affiliate.update as any).mockResolvedValue({});
+
+    await voidCommission('c1');
+
+    expect(prisma.affiliate.update).toHaveBeenCalledWith({
+      where: { id: 'aff1' },
+      data: { totalEarned: 0 },
+    });
+  });
+
+  it('refuses to void a terminal (rejected/voided) commission', async () => {
+    (prisma.affiliateCommission.findUnique as any).mockResolvedValue({ id: 'c1', status: 'rejected' });
+    await expect(voidCommission('c1')).rejects.toThrow(/already rejected/i);
+    expect(prisma.affiliateCommission.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the commission row is gone', async () => {
+    (prisma.affiliateCommission.findUnique as any).mockResolvedValue(null);
+    await expect(voidCommission('c1')).rejects.toThrow(/not found/i);
+  });
+});
+
+describe('voidCommissionForOrder', () => {
+  it('voids the commission of a fully refunded order', async () => {
+    (prisma.affiliateCommission.findUnique as any)
+      .mockResolvedValueOnce({ id: 'c1', affiliateId: 'aff1', status: 'approved', amount: 20 })
+      .mockResolvedValueOnce({ id: 'c1', status: 'approved', affiliateId: 'aff1', amount: 20 })
+      .mockResolvedValueOnce({ id: 'c1', status: 'voided', affiliateId: 'aff1', amount: 20 });
+    (prisma.affiliateCommission.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.affiliate.updateMany as any).mockResolvedValue({ count: 1 });
+
+    const result = await voidCommissionForOrder('o1');
+
+    expect(result?.status).toBe('voided');
+    expect(prisma.affiliateCommission.findUnique).toHaveBeenCalledWith({ where: { orderId: 'o1' } });
+  });
+
+  it('is a no-op when the order has no commission', async () => {
+    (prisma.affiliateCommission.findUnique as any).mockResolvedValue(null);
+    expect(await voidCommissionForOrder('o1')).toBeNull();
+  });
+
+  it('NEVER throws — a ledger hiccup cannot fail a refund', async () => {
+    (prisma.affiliateCommission.findUnique as any).mockRejectedValue(new Error('db down'));
+    await expect(voidCommissionForOrder('o1')).resolves.toBeNull();
   });
 });
 

@@ -8,6 +8,9 @@
 //   GET  /api/affiliates/commissions        list commissions (+ status filter)
 //   POST /api/affiliates/commissions/:id/approve   pending -> approved
 //   POST /api/affiliates/commissions/:id/reject    pending -> rejected
+//   POST /api/affiliates/commissions/:id/void      pending|approved -> voided
+//                                                  (approved also claws back
+//                                                  totalEarned)
 //   GET  /api/affiliates/payouts            list payout requests (+ filter)
 //   POST /api/affiliates/payouts/:id/approve      pending -> paid
 //   POST /api/affiliates/payouts/:id/reject       pending -> rejected
@@ -16,6 +19,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
+import { parsePagination } from '../../utils/pagination';
 import {
   approveCommission,
   approvePayout,
@@ -23,6 +27,7 @@ import {
   rejectPayout,
   setAffiliateRate,
   setAffiliateStatus,
+  voidCommission,
 } from './affiliate.service';
 
 const router = Router();
@@ -31,12 +36,17 @@ const router = Router();
 router.use(authenticate, authorize('admin'));
 
 // GET /api/affiliates — list with the owning user's identity + stats.
+// Bounded by parsePagination (limit is clamped; a hostile ?limit=999999999
+// cannot force a full-table scan).
 router.get('/', async (req, res, next) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const { skip, limit } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 500 });
     const affiliates = await prisma.affiliate.findMany({
       where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
       include: {
         user: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
@@ -75,13 +85,16 @@ router.put('/:id/rate', async (req, res, next) => {
 });
 
 // GET /api/affiliates/commissions — full commission ledger with affiliate
-// identity + order number. `status` filter: pending|approved|rejected.
+// identity + order number. `status` filter: pending|approved|rejected|voided.
 router.get('/commissions', async (req, res, next) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const { skip, limit } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 500 });
     const commissions = await prisma.affiliateCommission.findMany({
       where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
       include: {
         affiliate: {
           include: { user: { select: { email: true, firstName: true, lastName: true } } },
@@ -108,13 +121,26 @@ router.post('/commissions/:id/reject', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/affiliates/commissions/:id/void — refund clawback / manual
+// reversal. Works from pending OR approved; approved also decrements the
+// affiliate's totalEarned (atomically, floor at 0).
+router.post('/commissions/:id/void', async (req, res, next) => {
+  try {
+    const commission = await voidCommission(req.params.id);
+    res.json({ status: 'success', data: commission });
+  } catch (err) { next(err); }
+});
+
 // GET /api/affiliates/payouts — payout requests with affiliate identity.
 router.get('/payouts', async (req, res, next) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const { skip, limit } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 500 });
     const payouts = await prisma.affiliatePayout.findMany({
       where: status ? { status } : undefined,
       orderBy: { requestedAt: 'desc' },
+      skip,
+      take: limit,
       include: {
         affiliate: {
           include: { user: { select: { email: true, firstName: true, lastName: true } } },

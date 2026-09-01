@@ -891,3 +891,15 @@ Honest limits:
   on that order (payments landing while suspended are not attributed);
   a store turning the PROGRAM off keeps paying commissions on orders
   that were already placed while it was on.
+- FULL refunds void the order's commission automatically (pending →
+  voided; approved → voided with `totalEarned` clawed back, floored at
+  0) — the refund path is best-effort and never fails because of the
+  affiliate ledger. Partial refunds do NOT void; the admin can void any
+  commission manually (Admin → Affiliates → Commissions → Void). A
+  clawback never recalls money already transferred out in a paid
+  payout — it reduces the affiliate's future earnings to keep the
+  ledger consistent. Self-referral orders (the affiliate buying through
+  their own link) never earn a commission. List endpoints are bounded
+  (limit capped at 100 for affiliate-facing lists, 500 for admin
+  lists), and payout requests that round to sub-cent amounts are
+  rejected.

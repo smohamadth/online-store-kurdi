@@ -27,6 +27,7 @@ import {
   listCommissions,
   approveCommission,
   rejectCommission,
+  voidCommission,
   listPayouts,
   approvePayout,
   rejectPayout,
@@ -235,6 +236,7 @@ export default function AdminAffiliatesPage() {
                   <th style={{ padding: '6px' }}>Code</th>
                   <th style={{ padding: '6px' }}>Status</th>
                   <th style={{ padding: '6px' }}>Rate</th>
+                  <th style={{ padding: '6px' }}>Clicks</th>
                   <th style={{ padding: '6px' }}>Earned</th>
                   <th style={{ padding: '6px' }}>Paid</th>
                   <th style={{ padding: '6px' }}>Actions</th>
@@ -279,6 +281,7 @@ export default function AdminAffiliatesPage() {
                         </span>
                       )}
                     </td>
+                    <td style={{ padding: '6px' }}>{Number(a.clicks ?? 0)}</td>
                     <td style={{ padding: '6px' }}>{Number(a.totalEarned ?? 0).toFixed(2)}</td>
                     <td style={{ padding: '6px' }}>{Number(a.totalPaid ?? 0).toFixed(2)}</td>
                     <td style={{ padding: '6px' }}>
@@ -328,6 +331,11 @@ export default function AdminAffiliatesPage() {
                         <>
                           {smallBtn('Approve', () => run(() => approveCommission(c.id), `Commission ${c.orderNumber} approved.`))}
                           {smallBtn('Reject', () => run(() => rejectCommission(c.id), `Commission ${c.orderNumber} rejected.`), true)}
+                        </>
+                      )}
+                      {c.status === 'approved' && (
+                        <>
+                          {smallBtn('Void', () => run(() => voidCommission(c.id), `Commission ${c.orderNumber} voided — earnings clawed back.`), true)}
                         </>
                       )}
                     </td>

@@ -115,6 +115,11 @@ export async function createCommissionForOrder(orderId: string) {
     const affiliate = await prisma.affiliate.findUnique({ where: { id: order.affiliateId } });
     if (!affiliate || affiliate.status !== 'active') return null;
 
+    // Self-referral exclusion: an affiliate must not earn commission on
+    // their OWN purchases through their own link (farming). The buyer is
+    // the order's owner; if it is the affiliate's account, no commission.
+    if (order.userId === affiliate.userId) return null;
+
     const settings = await getStoreSettings();
     const rate =
       typeof affiliate.rateOverride === 'number'
@@ -186,22 +191,29 @@ export async function getAffiliateStats(affiliateId: string) {
 // Admin actions (money movements are conditional-atomic)
 // ====================================================================
 
-/** Approve a pending commission: pending -> approved, totalEarned += amount. */
+/**
+ * Approve a pending commission: pending -> approved, totalEarned += amount.
+ * The status flip and the balance increment happen in ONE transaction so a
+ * crash between them can never leave an approved commission that is not
+ * counted (or a counted commission that is not approved).
+ */
 export async function approveCommission(commissionId: string) {
   const commission = await prisma.affiliateCommission.findUnique({ where: { id: commissionId } });
   if (!commission) throw new AppError('Commission not found', 404);
   if (commission.status !== 'pending') {
     throw new AppError(`Commission is already ${commission.status}.`, 400);
   }
-  const result = await prisma.affiliateCommission.updateMany({
-    where: { id: commissionId, status: 'pending' },
-    data: { status: 'approved', approvedAt: new Date() },
-  });
-  if (result.count === 0) throw new AppError('Commission was already resolved.', 409);
-  // totalEarned is the sum of approved commissions; increment atomically.
-  await prisma.affiliate.update({
-    where: { id: commission.affiliateId },
-    data: { totalEarned: { increment: commission.amount } },
+  await prisma.$transaction(async (tx: any) => {
+    const result = await tx.affiliateCommission.updateMany({
+      where: { id: commissionId, status: 'pending' },
+      data: { status: 'approved', approvedAt: new Date() },
+    });
+    if (result.count === 0) throw new AppError('Commission was already resolved.', 409);
+    // totalEarned is the sum of approved commissions; increment atomically.
+    await tx.affiliate.update({
+      where: { id: commission.affiliateId },
+      data: { totalEarned: { increment: commission.amount } },
+    });
   });
   return prisma.affiliateCommission.findUnique({ where: { id: commissionId } });
 }
@@ -222,11 +234,71 @@ export async function rejectCommission(commissionId: string) {
 }
 
 /**
+ * Void a commission — the refund clawback. Works from `pending` OR
+ * `approved` (rejected/voided are terminal):
+ *   - approved -> voided AND totalEarned is decremented by the amount
+ *     (conditional, floor at 0), so the affiliate's balance shrinks to
+ *     match the money the store gave back to the customer;
+ *   - pending  -> voided (it never entered totalEarned, nothing to undo).
+ *
+ * Called automatically when a referred order is FULLY refunded, and
+ * available to admins manually (partial refunds, fraud).
+ */
+export async function voidCommission(commissionId: string) {
+  const commission = await prisma.affiliateCommission.findUnique({ where: { id: commissionId } });
+  if (!commission) throw new AppError('Commission not found', 404);
+  if (commission.status !== 'pending' && commission.status !== 'approved') {
+    throw new AppError(`Commission is already ${commission.status}.`, 400);
+  }
+  const wasApproved = commission.status === 'approved';
+  await prisma.$transaction(async (tx: any) => {
+    const result = await tx.affiliateCommission.updateMany({
+      where: { id: commissionId, status: wasApproved ? 'approved' : 'pending' },
+      data: { status: 'voided' },
+    });
+    if (result.count === 0) throw new AppError('Commission was already resolved.', 409);
+    if (wasApproved) {
+      // Claw back the counted earnings. Conditional decrement (gte amount)
+      // so a concurrent payout-paid state can never drive totalEarned
+      // negative; if the balance is somehow below the amount, zero it.
+      const clawed = await tx.affiliate.updateMany({
+        where: { id: commission.affiliateId, totalEarned: { gte: commission.amount } },
+        data: { totalEarned: { decrement: commission.amount } },
+      });
+      if (clawed.count === 0) {
+        await tx.affiliate.update({
+          where: { id: commission.affiliateId },
+          data: { totalEarned: 0 },
+        });
+      }
+    }
+  });
+  return prisma.affiliateCommission.findUnique({ where: { id: commissionId } });
+}
+
+/**
+ * Refund clawback for an order: void its commission when the order is fully
+ * refunded. Best-effort and NEVER throws (refunds must not fail because of
+ * the affiliate ledger), no-op when there is no commission.
+ */
+export async function voidCommissionForOrder(orderId: string) {
+  try {
+    const commission = await prisma.affiliateCommission.findUnique({ where: { orderId } });
+    if (!commission) return null;
+    if (commission.status !== 'pending' && commission.status !== 'approved') return commission;
+    return await voidCommission(commission.id);
+  } catch (err) {
+    logger.warn('⚠️ Affiliate: could not void commission on refund (best-effort):', err as Error);
+    return null;
+  }
+}
+
+/**
  * Approve a payout request: pending -> paid, totalPaid += amount.
  * Guarded: the affiliate's available balance must still cover the payout
- * (a commission approved after the request could have been rejected in the
- * meantime, shrinking the balance). Atomic conditional updateMany on the
- * payout row prevents double-approval.
+ * (a commission approved after the request could have been voided in the
+ * meantime, shrinking the balance). All reads + the status flip + the
+ * totalPaid increment happen in ONE transaction.
  */
 export async function approvePayout(payoutId: string, adminNotes?: string | null) {
   const payout = await prisma.affiliatePayout.findUnique({ where: { id: payoutId } });
@@ -234,33 +306,35 @@ export async function approvePayout(payoutId: string, adminNotes?: string | null
   if (payout.status !== 'pending') {
     throw new AppError(`Payout is already ${payout.status}.`, 400);
   }
-  const affiliate = await prisma.affiliate.findUnique({ where: { id: payout.affiliateId } });
-  if (!affiliate) throw new AppError('Affiliate not found', 404);
+  await prisma.$transaction(async (tx: any) => {
+    const affiliate = await tx.affiliate.findUnique({ where: { id: payout.affiliateId } });
+    if (!affiliate) throw new AppError('Affiliate not found', 404);
 
-  const commissions = await prisma.affiliateCommission.findMany({
-    where: { affiliateId: payout.affiliateId, status: 'approved' },
-  });
-  const approvedTotal = (commissions as { amount: number }[]).reduce(
-    (sum, c) => sum + (Number(c.amount) || 0),
-    0,
-  );
-  const available = availableBalance(approvedTotal, affiliate.totalPaid);
-  if (payout.amount > available + 0.005) {
-    throw new AppError(
-      `The affiliate's available balance (${available.toFixed(2)}) no longer covers this payout (${Number(payout.amount).toFixed(2)}). Reject it instead.`,
-      409,
+    const commissions = await tx.affiliateCommission.findMany({
+      where: { affiliateId: payout.affiliateId, status: 'approved' },
+    });
+    const approvedTotal = (commissions as { amount: number }[]).reduce(
+      (sum, c) => sum + (Number(c.amount) || 0),
+      0,
     );
-  }
+    const available = availableBalance(approvedTotal, affiliate.totalPaid);
+    if (payout.amount > available + 0.005) {
+      throw new AppError(
+        `The affiliate's available balance (${available.toFixed(2)}) no longer covers this payout (${Number(payout.amount).toFixed(2)}). Reject it instead.`,
+        409,
+      );
+    }
 
-  const result = await prisma.affiliatePayout.updateMany({
-    where: { id: payoutId, status: 'pending' },
-    data: { status: 'paid', resolvedAt: new Date(), adminNotes: adminNotes ?? null },
-  });
-  if (result.count === 0) throw new AppError('Payout was already resolved.', 409);
+    const result = await tx.affiliatePayout.updateMany({
+      where: { id: payoutId, status: 'pending' },
+      data: { status: 'paid', resolvedAt: new Date(), adminNotes: adminNotes ?? null },
+    });
+    if (result.count === 0) throw new AppError('Payout was already resolved.', 409);
 
-  await prisma.affiliate.update({
-    where: { id: payout.affiliateId },
-    data: { totalPaid: { increment: payout.amount } },
+    await tx.affiliate.update({
+      where: { id: payout.affiliateId },
+      data: { totalPaid: { increment: payout.amount } },
+    });
   });
   return prisma.affiliatePayout.findUnique({ where: { id: payoutId } });
 }

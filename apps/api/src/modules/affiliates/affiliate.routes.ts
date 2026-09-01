@@ -19,6 +19,7 @@ import { AppError } from '../../middleware/errorHandler';
 import { prisma } from '../../config/database';
 import { isDevelopment } from '../../config/environment';
 import { viewBumpAllowed } from '../../utils/viewThrottle';
+import { parsePagination } from '../../utils/pagination';
 import {
   applyAsAffiliate,
   getAffiliateStats,
@@ -127,9 +128,12 @@ router.get('/me/commissions', authenticate, async (req, res, next) => {
   try {
     const affiliate = await prisma.affiliate.findUnique({ where: { userId: req.user!.id } });
     if (!affiliate) throw new AppError('You have not joined the affiliate program.', 404);
+    const { skip, limit } = parsePagination(req.query as Record<string, unknown>);
     const commissions = await prisma.affiliateCommission.findMany({
       where: { affiliateId: affiliate.id },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
     });
     res.json({ status: 'success', data: commissions });
   } catch (err) {
@@ -158,9 +162,12 @@ router.get('/me/payouts', authenticate, async (req, res, next) => {
   try {
     const affiliate = await prisma.affiliate.findUnique({ where: { userId: req.user!.id } });
     if (!affiliate) throw new AppError('You have not joined the affiliate program.', 404);
+    const { skip, limit } = parsePagination(req.query as Record<string, unknown>);
     const payouts = await prisma.affiliatePayout.findMany({
       where: { affiliateId: affiliate.id },
       orderBy: { requestedAt: 'desc' },
+      skip,
+      take: limit,
     });
     res.json({ status: 'success', data: payouts });
   } catch (err) {
@@ -190,6 +197,11 @@ router.post('/me/payouts', authenticate, async (req, res, next) => {
       throw new AppError('You have no approved earnings available to withdraw yet.', 400);
     }
     const amount = body.amount !== undefined ? Math.round(body.amount * 100) / 100 : stats.available;
+    // A sub-cent amount (e.g. 0.001) rounds to a 0-value payout — refuse
+    // rather than create a ledger row for nothing.
+    if (amount <= 0) {
+      throw new AppError('Payout amount is too small.', 400);
+    }
     if (amount > stats.available + 0.005) {
       throw new AppError(`Requested ${amount.toFixed(2)} but only ${stats.available.toFixed(2)} is available.`, 400);
     }

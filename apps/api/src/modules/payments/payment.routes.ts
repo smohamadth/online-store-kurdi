@@ -22,7 +22,7 @@ import { logger } from '../../utils/logger';
 import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
-import { createCommissionForOrder } from '../affiliates/affiliate.service';
+import { createCommissionForOrder, voidCommissionForOrder } from '../affiliates/affiliate.service';
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
 import { creditStoreCredit } from './storecredit.service';
 import { getGatewayById, isGatewayMethod } from './gateways/registry';
@@ -531,6 +531,14 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
     // credits customer deposits (the new liability) instead of the
     // payment-gateway account, which would fabricate a cash refund.
     await autoPostRefund(orderId, refundAmount, { toStoreCredit: creditToStoreCredit === true });
+
+    // Affiliate clawback: a FULL refund voids the order's commission (the
+    // affiliate no longer earned that sale). Best-effort, never throws —
+    // refunds must not fail because of the affiliate ledger. Partial
+    // refunds leave the commission alone (admins can void manually).
+    if (isFullRefund) {
+      await voidCommissionForOrder(orderId);
+    }
 
     // Fire-and-forget: email the customer that their order was refunded.
     // Never fails the refund. Reports the actual amount refunded this time.
