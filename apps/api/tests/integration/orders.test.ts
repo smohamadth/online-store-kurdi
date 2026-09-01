@@ -342,6 +342,58 @@ describe('POST /api/orders', () => {
     expect(res.body.data.shippingAmount).toBe(0);
     expect(res.body.data.totalAmount).toBe(20);
   });
+
+  it('rejects quantity 0 (the free-digital-goods hole)', async () => {
+    // Regression: quantity was unvalidated, so `quantity: 0` passed the
+    // stock check AND still minted a download token for digital products —
+    // an attacker could farm paid downloads for free. Quantities must be
+    // integers >= 1.
+    const { token } = await authHeader();
+    const p = await createProduct({
+      name: 'eBook', slug: 'ebook-0', price: 9.99, type: 'digital',
+      trackInventory: false, quantity: 0,
+      downloadUrl: 'https://cdn.example.com/files/ebook.pdf',
+    });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 0 }] });
+    expect(res.status).toBe(400);
+    const downloads = await mockPrisma.productDownload.findMany({});
+    expect(downloads).toHaveLength(0);
+  });
+
+  it('rejects fractional and non-numeric quantities (400)', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ price: 10, quantity: 50 });
+    for (const q of [1.5, '2', -1, null]) {
+      const res = await request(app)
+        .post('/api/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ items: [{ productId: p.id, quantity: q }] });
+      expect(res.status, `quantity=${String(q)}`).toBe(400);
+    }
+  });
+
+  it('caps the list page size and tolerates hostile pagination params', async () => {
+    // Regression: limit/page were `parseInt(...) || N` with no bounds —
+    // `?limit=999999999` asked the DB for every row and `?limit=-5&page=2`
+    // produced a negative skip (500). Both must now be clamped.
+    const { token } = await authHeader();
+    await createProduct({ price: 1, quantity: 5 });
+
+    const res = await request(app)
+      .get('/api/orders?limit=-5&page=2')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.pagination.limit).toBeGreaterThan(0);
+
+    const res2 = await request(app)
+      .get('/api/orders?limit=999999999')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res2.status).toBe(200);
+    expect(res2.body.pagination.limit).toBeLessThanOrEqual(100);
+  });
 });
 
 describe('PUT /api/orders/:id/status (admin)', () => {

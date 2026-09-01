@@ -38,6 +38,7 @@ import {
   verifyWebhookSignature,
   type StockTakeItemInput,
 } from './inventory.service';
+import { parsePagination } from '../../utils/pagination';
 
 const router = Router();
 
@@ -69,9 +70,7 @@ const stockAlertSchema = z.object({
 // GET /api/inventory - Get inventory overview
 router.get('/', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 50 });
     const status = req.query.status as string; // 'in_stock', 'low_stock', 'out_of_stock'
 
     // Build filter
@@ -279,9 +278,7 @@ router.post('/bulk-update', authenticate, authorize('admin'), async (req, res, n
 // GET /api/inventory/logs - Get inventory logs
 router.get('/logs', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 50 });
     const productId = req.query.productId as string;
     const reason = req.query.reason as string;
 

@@ -15,8 +15,46 @@ import { emit } from '../plugins/pluginHooks';
 import { calculateTaxForOrder } from '../tax/tax.service';
 import { calculateShippingForOrder } from '../shipping/shipping.service';
 import { validateCoupon, CouponValidationError } from '../coupons/coupon.service';
+import { z } from 'zod';
+import { parsePagination } from '../../utils/pagination';
 
 const router = Router();
+
+// The order body carries the item list into stock decrements, price math,
+// download-token minting and the DB — every field must be shape-checked
+// here. Before this schema existed, `quantity: 0` sailed past the stock
+// check and still minted download tokens (free digital goods), fractional
+// quantities corrupted the stock math, and string quantities 500'd on the
+// Float column. This is the single gate every order must pass.
+const createOrderSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        variantId: z.string().min(1).optional(),
+        quantity: z.number().int().min(1).max(99999),
+      })
+    )
+    .min(1),
+  shippingAddressId: z.string().optional(),
+  shippingAddress: z
+    .object({
+      firstName: z.string().max(100).optional(),
+      lastName: z.string().max(100).optional(),
+      address: z.string().max(500).optional(),
+      city: z.string().max(100).optional(),
+      state: z.string().max(100).optional(),
+      zipCode: z.string().max(20).optional(),
+      country: z.string().max(2).optional(),
+      phone: z.string().max(40).optional(),
+    })
+    .optional(),
+  paymentMethod: z.string().max(50).optional(),
+  notes: z.string().max(2000).optional(),
+  couponCode: z.string().max(100).optional(),
+  couponId: z.string().optional(),
+  shippingMethodId: z.string().optional(),
+});
 
 // ---------------------------------------------------------------------------
 // The order API. POST /api/orders is the single most complex endpoint in
@@ -42,9 +80,7 @@ const router = Router();
 // GET /api/orders - Get orders (filtered by user or all for admin)
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 10 });
     const status = req.query.status as string;
 
     // Build where clause
@@ -290,8 +326,10 @@ router.post('/', authenticate, async (req, res, next) => {
     // NOTE: the client may also send subtotal/taxAmount/shippingAmount/
     // discountAmount/totalAmount — they are deliberately NOT read here.
     // All amounts are recomputed server-side (see the totals block below).
+    const body = createOrderSchema.parse(req.body);
     const { items, shippingAddressId, shippingAddress, paymentMethod, notes,
-            couponCode, couponId } = req.body;
+            couponCode, couponId } = body;
+    const shippingMethodId = body.shippingMethodId;
 
     if (!items || items.length === 0) {
       throw new AppError('Order must contain at least one item', 400);
@@ -497,8 +535,8 @@ router.post('/', authenticate, async (req, res, next) => {
         ),
         itemCount: orderItems.reduce((sum: number, it: any) => sum + it.quantity, 0),
       });
-      if (req.body.shippingMethodId) {
-        const chosen = shippingMethods.find((m) => m.id === req.body.shippingMethodId);
+      if (shippingMethodId) {
+        const chosen = shippingMethods.find((m) => m.id === shippingMethodId);
         if (!chosen) {
           throw new AppError('The selected shipping method is not available for this address', 400);
         }
@@ -557,8 +595,8 @@ router.post('/', authenticate, async (req, res, next) => {
         discountAmount: finalDiscountAmount,
         totalAmount: finalTotalAmount,
         shippingAddressId: addressId,
-        shippingMethodId: req.body.shippingMethodId,
-        paymentMethod,
+        shippingMethodId: shippingMethodId ?? null,
+        paymentMethod: paymentMethod ?? 'cash_on_delivery',
         paymentStatus: 'pending',
         notes,
         items: {
@@ -634,7 +672,9 @@ router.post('/', authenticate, async (req, res, next) => {
           customerEmail: (req.user as any)?.email || null,
           description: `Order ${order.orderNumber}`,
         },
-        paymentMethod,
+        // The gateway branch is only entered when isGatewayMethod(paymentMethod)
+        // matched, so this is always a real method string here.
+        paymentMethod: paymentMethod as string,
         storeCurrency: settings?.currency || 'USD',
       });
       checkoutUrl = result.checkoutUrl;

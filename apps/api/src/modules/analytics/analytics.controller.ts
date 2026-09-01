@@ -5,6 +5,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { logger } from '../../utils/logger';
+import { parsePagination } from '../../utils/pagination';
 
 export class AnalyticsController {
   private analyticsService: AnalyticsService;
@@ -129,7 +130,7 @@ export class AnalyticsController {
   // Get trending products
   getTrendingProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
       const days = req.query.days ? parseInt(req.query.days as string) : 7;
       const products = await this.analyticsService.getTrendingProducts(limit, days);
 

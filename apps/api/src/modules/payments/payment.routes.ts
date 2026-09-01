@@ -25,6 +25,7 @@ import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service'
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
 import { getGatewayById } from './gateways/registry';
 import { sendPaymentConfirmation, sendRefundConfirmation } from '../../services/email.service';
+import { parsePagination } from '../../utils/pagination';
 import type Stripe from 'stripe';
 
 const router = Router();
@@ -199,9 +200,7 @@ router.post('/gateways/:gatewayId/verify', authenticate, async (req, res, next) 
 // GET /api/payments - Get payments (admin only)
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 20 });
 
     const [payments, total] = await Promise.all([
       prisma.payment.findMany({

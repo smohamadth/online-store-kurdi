@@ -19,6 +19,7 @@ import {
   UpdateProductSchema,
   ProductQuerySchema,
 } from './product.types';
+import { parsePagination } from '../../utils/pagination';
 
 export class ProductController {
   private productService: ProductService;
@@ -151,7 +152,7 @@ export class ProductController {
   // Get featured products (home page hero / carousel)
   getFeaturedProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
       const products = await this.productService.getFeaturedProducts(limit);
 
       res.json({
@@ -167,7 +168,7 @@ export class ProductController {
   getRelatedProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 6;
+      const { limit } = parsePagination(req.query, { limit: 6 });
       const products = await this.productService.getRelatedProducts(id, limit);
 
       res.json({
@@ -183,7 +184,7 @@ export class ProductController {
   searchProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { q } = req.query;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
 
       if (!q || typeof q !== 'string') {
         return res.status(400).json({

@@ -4,6 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { RecommendationService } from './recommendation.service';
 import { logger } from '../../utils/logger';
+import { parsePagination } from '../../utils/pagination';
 
 export class RecommendationController {
   private recommendationService: RecommendationService;
@@ -16,7 +17,7 @@ export class RecommendationController {
   getAlsoBought = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { productId } = req.params;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 6;
+      const { limit } = parsePagination(req.query, { limit: 6 });
       const recommendations = await this.recommendationService.getAlsoBought(productId, limit);
 
       res.json({
@@ -40,7 +41,7 @@ export class RecommendationController {
         });
       }
 
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 6;
+      const { limit } = parsePagination(req.query, { limit: 6 });
       const recommendations = await this.recommendationService.getBasedOnHistory(userId, limit);
 
       res.json({
@@ -56,7 +57,7 @@ export class RecommendationController {
   // Get "Trending products" recommendations
   getTrending = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
       const recommendations = await this.recommendationService.getTrending(limit);
 
       res.json({
@@ -72,7 +73,7 @@ export class RecommendationController {
   // Get "New arrivals" recommendations
   getNewArrivals = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
       const recommendations = await this.recommendationService.getNewArrivals(limit);
 
       res.json({
@@ -89,7 +90,7 @@ export class RecommendationController {
   getFrequentlyBoughtTogether = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { productId } = req.params;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
+      const { limit } = parsePagination(req.query, { limit: 4 });
       const recommendations = await this.recommendationService.getFrequentlyBoughtTogether(productId, limit);
 
       res.json({
@@ -106,7 +107,7 @@ export class RecommendationController {
   getPersonalizedRecommendations = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 12;
+      const { limit } = parsePagination(req.query, { limit: 12 });
       const recommendations = await this.recommendationService.getPersonalizedRecommendations(userId, limit);
 
       res.json({

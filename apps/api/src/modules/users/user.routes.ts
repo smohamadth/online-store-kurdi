@@ -17,15 +17,14 @@ import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
+import { parsePagination } from '../../utils/pagination';
 
 const router = Router();
 
 // GET /api/users - Get all users (admin only)
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 20 });
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({

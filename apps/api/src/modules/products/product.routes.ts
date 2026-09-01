@@ -31,6 +31,7 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { localizeRows } from '../contentTranslations/localize.helpers';
 import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
 import { emit } from '../plugins/pluginHooks';
+import { parsePagination } from '../../utils/pagination';
 
 const router = Router();
 const analyticsService = new AnalyticsService();
@@ -271,7 +272,7 @@ router.get('/facets', async (req, res, next) => {
 // GET /api/products/featured - Get featured products
 router.get('/featured', async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 10;
+    const { limit } = parsePagination(req.query, { limit: 10 });
 
     const products = await prisma.product.findMany({
       where: { status: 'active' },
@@ -437,7 +438,7 @@ router.get('/slug/:slug', async (req, res, next) => {
 router.get('/:id/related', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const limit = parseInt(req.query.limit as string) || 6;
+    const { limit } = parsePagination(req.query, { limit: 6 });
 
     const product = await prisma.product.findUnique({
       where: { id },
