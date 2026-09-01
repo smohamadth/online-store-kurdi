@@ -293,6 +293,11 @@ export async function reversePostedEntry(id: string): Promise<JournalEntry> {
   return withStoreLock(async () => {
     const entry = (await loadJournal()).find((e) => e.id === id);
     if (!entry) throw new Error('Entry not found');
+    // Same guards as voidEntry: a voided entry no longer counts toward
+    // balances, so posting its "reversal" would leave a phantom offset
+    // that distorts the books; closing entries must stay immutable.
+    if (entry.voided) throw new Error('Cannot reverse a voided entry');
+    if (entry.kind === 'closing') throw new Error('Cannot reverse a closing entry');
     const accounts = await readAccounts();
     const validated = validateJournalEntry(accounts, reverseEntry(entry));
     const reversed: JournalEntry = {
@@ -459,11 +464,17 @@ export async function closeFiscalYear(year: number, currency: string = DEFAULT_C
     const lines: JournalLine[] = [];
     for (const a of revenueAccounts) {
       const bal = round2(accountBalance(a, inYear));
+      // Close BOTH directions: a positive (credit) balance is zeroed with a
+      // debit, but a negative (contra — refunds exceeding sales on this
+      // account) balance must be zeroed with a credit, or the negative
+      // carries into next year's P&L as if it were current-year activity.
       if (bal > 0) lines.push({ accountId: a.id, debit: bal, credit: 0 });
+      else if (bal < 0) lines.push({ accountId: a.id, debit: 0, credit: -bal });
     }
     for (const a of expenseAccounts) {
       const bal = round2(accountBalance(a, inYear));
       if (bal > 0) lines.push({ accountId: a.id, debit: 0, credit: bal });
+      else if (bal < 0) lines.push({ accountId: a.id, debit: -bal, credit: 0 });
     }
     const totalRevenue = lines.reduce((s, l) => s + l.debit, 0);
     const totalExpenses = lines.reduce((s, l) => s + l.credit, 0);

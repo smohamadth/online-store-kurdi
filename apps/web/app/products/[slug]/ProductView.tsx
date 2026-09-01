@@ -21,6 +21,7 @@ import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
 import { LayoutRenderer } from '@/lib/layouts/render';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
+import { readStoredUser } from '@/lib/storedUser';
 import { useCompare } from '@/lib/compare';
 import { trackRecentlyViewed } from '@/lib/recentlyViewed';
 import { trackEvent } from '@/lib/tracking';
@@ -271,7 +272,7 @@ export default function ProductView() {
   const handleStockAlert = async () => {
     try {
       const token = localStorage.getItem('token');
-      const email = stockAlertEmail || localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}').email : '';
+      const email = stockAlertEmail || readStoredUser()?.email || '';
       
       if (!email && !stockAlertEmail) {
         setShowStockAlertForm(true);

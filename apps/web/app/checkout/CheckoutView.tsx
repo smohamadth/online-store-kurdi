@@ -29,6 +29,7 @@ import { authHttp } from '@/lib/http';
 import ShippingSelector from '@/components/ShippingSelector';
 import TaxCalculator from '@/components/TaxCalculator';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { readStoredUser } from '@/lib/storedUser';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -96,14 +97,17 @@ export default function CheckoutPage() {
     const token = localStorage.getItem('token');
 
     if (storedUser && token) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      setShippingInfo(prev => ({
-        ...prev,
-        firstName: userData.firstName || '',
-        lastName: userData.lastName || '',
-        email: userData.email || '',
-      }));
+      // Safe read: corrupt/foreign localStorage must not crash checkout.
+      const userData = readStoredUser();
+      if (userData) {
+        setUser(userData);
+        setShippingInfo(prev => ({
+          ...prev,
+          firstName: userData.firstName || '',
+          lastName: userData.lastName || '',
+          email: userData.email || '',
+        }));
+      }
     }
 
     // Load applied coupon

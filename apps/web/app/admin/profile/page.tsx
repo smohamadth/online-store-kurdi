@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { API_BASE, authHttp, errorMessage } from '@/lib/http';
+import { readStoredUser } from '@/lib/storedUser';
 
 export default function AdminProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -29,14 +30,17 @@ export default function AdminProfilePage() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      setProfileForm({
-        firstName: userData.firstName || '',
-        lastName: userData.lastName || '',
-        email: userData.email || '',
-        phone: userData.phone || '',
-      });
+      // Safe read: corrupt/foreign localStorage must not crash the page.
+      const userData = readStoredUser();
+      if (userData) {
+        setUser(userData);
+        setProfileForm({
+          firstName: userData.firstName || '',
+          lastName: userData.lastName || '',
+          email: userData.email || '',
+          phone: userData.phone || '',
+        });
+      }
     }
   }, []);
 

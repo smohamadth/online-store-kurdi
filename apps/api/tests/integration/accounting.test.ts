@@ -328,6 +328,46 @@ describe('reversing entries', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(400);
   });
+
+  it('400s when reversing a voided entry (phantom-offset guard)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const posted = await postSale(50);
+    const entryId = posted.body.data.id;
+
+    const voidRes = await request(app)
+      .post(`/api/accounting/entries/${entryId}/void`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(voidRes.status).toBe(200);
+
+    // Regression: the old code reversed ANY entry, so a reversal of a
+    // voided entry posted a live offset for an entry that no longer
+    // counts — distorting every balance and the balance sheet.
+    const rev = await request(app)
+      .post(`/api/accounting/entries/${entryId}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(rev.status).toBe(400);
+    expect(rev.body.code).toBe('REVERSE_FAILED');
+
+    // Nothing was posted: the journal has exactly the one (voided) entry.
+    const list = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    expect(list.body.data.filter((e: any) => !e.voided)).toHaveLength(0);
+  });
+
+  it('400s when reversing a closing entry', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    await postSale(200);
+    const close = await request(app)
+      .post('/api/accounting/entries/close-year/2024')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(close.status).toBe(200);
+
+    const rev = await request(app)
+      .post(`/api/accounting/entries/${close.body.data.id}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(rev.status).toBe(400);
+    expect(rev.body.code).toBe('REVERSE_FAILED');
+  });
 });
 
 describe('order → journal', () => {
@@ -507,6 +547,51 @@ describe('fiscal-year closing', () => {
       .send({});
     expect(again.status).toBe(400);
     expect(again.body.code).toBe('CLOSE_YEAR_FAILED');
+  });
+
+  it('closes contra (negative-balance) accounts too', async () => {
+    // A year where refunds exceed sales on the revenue account leaves it
+    // with a negative (debit) balance. Regression: the close-year logic
+    // only zeroed POSITIVE balances, so the negative carried into next
+    // year's P&L as if it were fresh activity.
+    const { token } = await authHeader({ role: 'admin' });
+    await postSale(100); // cash 100 / sales 100
+    const accs = (await adminGet('/api/accounting/accounts')).body.data;
+    const cash = await findAccount(accs, '1000');
+    const sales = await findAccount(accs, '4000');
+    // Refund-style entry: debit sales 150, credit cash 150.
+    const refund = await request(app)
+      .post('/api/accounting/entries')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2024-06-30',
+        memo: 'Big refund',
+        lines: [
+          { accountId: sales.id, debit: 150, credit: 0 },
+          { accountId: cash.id, debit: 0, credit: 150 },
+        ],
+      });
+    expect(refund.status).toBe(200);
+
+    const before = await adminGet('/api/accounting/reports/balances');
+    const salesBefore = before.body.data.find((b: any) => b.account.id === sales.id);
+    expect(salesBefore.balance).toBe(-50);
+
+    const close = await request(app)
+      .post('/api/accounting/entries/close-year/2024')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(close.status).toBe(200);
+
+    // The contra balance is zeroed by the closing entry, and the sheet
+    // balances with the loss folded into retained earnings.
+    const after = await adminGet('/api/accounting/reports/balances');
+    const salesAfter = after.body.data.find((b: any) => b.account.id === sales.id);
+    expect(salesAfter.balance).toBe(0);
+
+    const bs = await adminGet('/api/accounting/reports/balance-sheet');
+    expect(bs.body.data.balanced).toBe(true);
+    expect(bs.body.data.equity.total).toBe(-50);
   });
 });
 

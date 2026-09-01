@@ -642,3 +642,10 @@ decoded the entity. Theme custom CSS now blocks `</style>` breakouts
 (`</style><img onerror=...>` used to pass the old DANGEROUS_CSS regex
 and become live HTML on every storefront page; legacy rows are scrubbed
 on read). Review photo URLs reject scriptable/data: schemes.
+Accounting: closing a fiscal year now zeroes contra (negative-balance)
+revenue/expense accounts too (they used to bleed into next year's P&L),
+and reversing a voided or closing journal entry is refused (a reversal
+of a voided entry posted a live offset that distorted the books).
+Storefront/account pages read the localStorage 'user' blob through a
+safe helper — corrupt storage could white-screen checkout, the admin
+profile page, and break the stock-alert handler.
