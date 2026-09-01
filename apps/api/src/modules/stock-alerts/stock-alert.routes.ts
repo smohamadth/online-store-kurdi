@@ -29,6 +29,11 @@ const alertSchema = z.object({
   email: z.string().email().optional(),
 });
 
+/** Emails are case-insensitive identifiers: store and match the lowercase form. */
+function normalizeEmail(email: string | undefined): string {
+  return (email || '').trim().toLowerCase();
+}
+
 // The alert "key" as a prisma where-fragment: a product-level alert has
 // variantId null; a variant-level alert names the variant. Matching
 // variantId: null vs variantId: 'x' keeps the two levels apart, exactly
@@ -46,7 +51,7 @@ router.post('/', async (req, res, next) => {
   try {
     const data = alertSchema.parse(req.body);
     const userId = req.user?.id || 'anonymous';
-    const email = data.email || req.user?.email || '';
+    const email = normalizeEmail(data.email || req.user?.email);
 
     // Dedupe identity. Guests ALL share the 'anonymous' userId, so the
     // dedupe check must be keyed by EMAIL for guests — using the shared
@@ -127,16 +132,30 @@ router.delete('/:productId', async (req, res, next) => {
   try {
     const { productId } = req.params;
     const userId = req.user?.id || 'anonymous';
-    const email = req.user?.email || (req.query.email as string) || '';
+    const email = normalizeEmail((req.user?.email) || (req.query.email as string) || '');
 
     const variantId = req.query.variantId as string;
 
-    await prisma.stockAlertSubscription.deleteMany({
-      where: {
-        ...keyWhere(productId, variantId),
-        OR: [{ userId }, { email }],
-      },
-    });
+    // Identity predicate. Guests all share the 'anonymous' userId, so an
+    // OR between `userId` and `email` would let ANY guest delete every
+    // anonymous subscription on the product (including other guests').
+    // Match precisely: authenticated -> their userId; guest -> the
+    // anonymous userId AND their email; anonymous with no email -> there
+    // is nothing identifiable to remove, so no-op.
+    const identity = userId !== 'anonymous'
+      ? { userId }
+      : email
+        ? { userId: 'anonymous', email }
+        : null;
+
+    if (identity) {
+      await prisma.stockAlertSubscription.deleteMany({
+        where: {
+          ...keyWhere(productId, variantId),
+          ...identity,
+        },
+      });
+    }
 
     res.json({
       status: 'success',

@@ -735,3 +735,14 @@ unpaid orders with 402 ("available once the order is paid"), records an
 unlocks as soon as the merchant marks the order paid (staff /process or
 gateway settle). Refunded orders keep access (revoking after a refund
 is a merchant policy this store has not made).
+Stock-alert unsubscribe is scoped to the caller: the DELETE route used
+OR[{userId},{email}] on guests, who ALL share the 'anonymous' userId —
+any guest (even with no email at all) could wipe every anonymous
+subscription on a product, silently killing other customers' "notify
+me" requests. It now matches the caller's exact identity (user id for
+accounts, anonymous+email for guests) and no-ops for anonymous callers
+without an email. Newsletter and stock-alert emails are normalized to
+lowercase on write ('A@X.com' and 'a@x.com' used to create two
+subscriber rows). Menu items can no longer be reparented across menus
+or onto themselves through the UPDATE route (only create validated the
+parent, so an updated item could become invisible to both menus).

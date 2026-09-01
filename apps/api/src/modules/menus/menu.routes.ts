@@ -312,6 +312,29 @@ router.put('/items/:itemId', authenticate, authorize('admin', 'manager'), async 
       });
     }
 
+    // A parent must belong to the SAME menu (the create route enforces
+    // this too): a cross-menu parent makes the item invisible to both
+    // menus — the storefront renders top-level items + one level of
+    // children per menu, so an orphaned child never appears.
+    if (data.parentId && data.parentId !== itemId) {
+      const parent = await prisma.menuItem.findFirst({
+        where: { id: data.parentId, menuId: existing.menuId },
+      });
+      if (!parent) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Parent item not found in this menu',
+        });
+      }
+    }
+    // An item cannot be its own parent.
+    if (data.parentId === itemId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'An item cannot be its own parent',
+      });
+    }
+
     const item = await prisma.menuItem.update({
       where: { id: itemId },
       data,

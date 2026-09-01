@@ -25,10 +25,14 @@ const subscribeSchema = z.object({
 router.post('/subscribe', async (req, res, next) => {
   try {
     const { email } = subscribeSchema.parse(req.body);
+    // Emails are case-insensitive: 'A@X.com' and 'a@x.com' are the same
+    // mailbox, so store the lowercase form or one subscriber could end up
+    // on the list twice (two rows, two mailings).
+    const normalized = email.trim().toLowerCase();
 
     // Check if already subscribed
     const existing = await prisma.newsletterSubscriber.findUnique({
-      where: { email },
+      where: { email: normalized },
       select: { id: true },
     });
     if (existing) {
@@ -39,7 +43,7 @@ router.post('/subscribe', async (req, res, next) => {
     }
 
     await prisma.newsletterSubscriber.create({
-      data: { email },
+      data: { email: normalized },
     });
 
     logger.info(`Newsletter subscription: ${email}`);

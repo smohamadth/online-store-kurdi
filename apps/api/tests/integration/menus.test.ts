@@ -93,6 +93,37 @@ describe('Menu items', () => {
     expect(res.status).toBe(200);
   });
 
+  it('rejects a cross-menu or self parent on update (regression: only create validated parents)', async () => {
+    // The create route verifies parentId belongs to the same menu; the
+    // update route used to skip it, so an item could be reparented into
+    // another menu — invisible to both. Self-parenting was possible too.
+    const { token } = await authHeader({ role: 'admin' });
+    const menuA = await request(app).post('/api/menus').set('Authorization', `Bearer ${token}`).send(menuBody());
+    const menuB = await request(app).post('/api/menus').set('Authorization', `Bearer ${token}`).send(menuBody({ name: 'Second' }));
+    const parentA = await request(app).post(`/api/menus/${menuA.body.data.id}/items`).set('Authorization', `Bearer ${token}`).send(itemBody());
+    const parentB = await request(app).post(`/api/menus/${menuB.body.data.id}/items`).set('Authorization', `Bearer ${token}`).send(itemBody());
+
+    const cross = await request(app)
+      .put(`/api/menus/items/${parentA.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentId: parentB.body.data.id });
+    expect(cross.status).toBe(400);
+
+    const self = await request(app)
+      .put(`/api/menus/items/${parentA.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentId: parentA.body.data.id });
+    expect(self.status).toBe(400);
+
+    // And a same-menu parent is still accepted.
+    const child = await request(app).post(`/api/menus/${menuA.body.data.id}/items`).set('Authorization', `Bearer ${token}`).send(itemBody());
+    const ok = await request(app)
+      .put(`/api/menus/items/${child.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ parentId: parentA.body.data.id });
+    expect(ok.status).toBe(200);
+  });
+
   it('deletes an item', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const menu = await request(app).post('/api/menus').set('Authorization', `Bearer ${token}`).send(menuBody());

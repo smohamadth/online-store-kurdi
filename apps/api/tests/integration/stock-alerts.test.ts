@@ -84,4 +84,24 @@ describe('DELETE /api/stock-alerts/:productId', () => {
     const after = await request(app).get('/api/stock-alerts/check/pY');
     expect(after.body.data.hasAlerts).toBe(false);
   });
+
+  it('does not delete OTHER guests\' alerts (regression: OR on the shared anonymous userId)', async () => {
+    // Guests all share userId 'anonymous'; the old where clause was
+    // OR[{userId}, {email}] so ANY guest (even without an email) could
+    // wipe every anonymous subscription on the product.
+    await request(app).post('/api/stock-alerts').send({ productId: 'pZ', email: 'a@example.com' });
+    await request(app).post('/api/stock-alerts').send({ productId: 'pZ', email: 'b@example.com' });
+
+    // A guest with NO email: must be a no-op, not a mass unsubscribe.
+    const noEmail = await request(app).delete('/api/stock-alerts/pZ');
+    expect(noEmail.status).toBe(200);
+    let check = await request(app).get('/api/stock-alerts/check/pZ');
+    expect(check.body.data.alertCount).toBe(2);
+
+    // A guest with email a@example.com: only their own row goes.
+    const withEmail = await request(app).delete('/api/stock-alerts/pZ?email=a@example.com');
+    expect(withEmail.status).toBe(200);
+    check = await request(app).get('/api/stock-alerts/check/pZ');
+    expect(check.body.data.alertCount).toBe(1);
+  });
 });
