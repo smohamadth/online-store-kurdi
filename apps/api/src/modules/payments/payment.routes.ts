@@ -23,7 +23,7 @@ import { getStripe } from '../../config/stripe';
 import { env } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
-import { getGatewayById } from './gateways/registry';
+import { getGatewayById, isGatewayMethod } from './gateways/registry';
 import { sendPaymentConfirmation, sendRefundConfirmation } from '../../services/email.service';
 import { parsePagination } from '../../utils/pagination';
 import type Stripe from 'stripe';
@@ -52,31 +52,52 @@ export async function markOrderPaidByStripe(
   const stripePaymentId =
     (typeof session.payment_intent === 'string' ? session.payment_intent : null) ?? session.id;
 
-  await prisma.payment.create({
-    data: {
-      orderId,
-      amount: order.totalAmount,
-      currency: (session.currency || 'usd').toUpperCase(),
-      method: 'stripe',
-      status: 'completed',
-      transactionId: stripePaymentId,
-      gatewayResponse: JSON.stringify({
-        source: 'stripe_checkout',
-        sessionId: session.id,
-        paymentIntent: typeof session.payment_intent === 'string' ? session.payment_intent : null,
-        event: 'checkout.session.completed',
-        timestamp: new Date().toISOString(),
-      }),
-    },
-  });
+  // Create the Payment row and flip the order inside ONE transaction, and
+  // dedupe on the gateway's stable transaction id: a webhook retry after a
+  // crash between the two writes used to create a second Payment row for
+  // the same money (Stripe retries for days). If the row already exists
+  // but the order never flipped, repair the order instead of duplicating.
+  await prisma.$transaction(async (tx: any) => {
+    const dup = await tx.payment.findFirst({
+      where: { orderId, transactionId: stripePaymentId, status: 'completed' },
+    });
+    if (dup) {
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus: 'completed',
+          paymentIntentId: stripePaymentId,
+          status: 'processing',
+        },
+      });
+      return;
+    }
+    await tx.payment.create({
+      data: {
+        orderId,
+        amount: order.totalAmount,
+        currency: (session.currency || 'usd').toUpperCase(),
+        method: 'stripe',
+        status: 'completed',
+        transactionId: stripePaymentId,
+        gatewayResponse: JSON.stringify({
+          source: 'stripe_checkout',
+          sessionId: session.id,
+          paymentIntent: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+          event: 'checkout.session.completed',
+          timestamp: new Date().toISOString(),
+        }),
+      },
+    });
 
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      paymentStatus: 'completed',
-      paymentIntentId: stripePaymentId,
-      status: 'processing',
-    },
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        paymentStatus: 'completed',
+        paymentIntentId: stripePaymentId,
+        status: 'processing',
+      },
+    });
   });
 
   // Best-effort: when ACCOUNTING_AUTO_POST=true, post the sale entry. Never
@@ -278,6 +299,17 @@ router.post('/process', authenticate, async (req, res, next) => {
       throw new AppError('Order already paid', 400);
     }
 
+    // The settled method is written to the Payment ledger. `refund` must
+    // never be settable here: the refund route counts method='refund'
+    // rows to decide how much can still be refunded, so accepting it
+    // would mint a fake refund and shrink the order's remaining balance.
+    // Only known gateways and the manual settlement methods are allowed.
+    const ALLOWED_MANUAL_METHODS = new Set(['cash_on_delivery', 'bank_transfer']);
+    const method = paymentMethod == null ? 'stripe' : String(paymentMethod);
+    if (method.length > 50 || (!ALLOWED_MANUAL_METHODS.has(method) && !isGatewayMethod(method))) {
+      throw new AppError('Invalid payment method.', 400);
+    }
+
     // Mock payment processing
     const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const storeSettingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
@@ -289,7 +321,7 @@ router.post('/process', authenticate, async (req, res, next) => {
         orderId,
         amount: order.totalAmount,
         currency: storeCurrency,
-        method: paymentMethod || 'stripe',
+        method,
         status: 'completed',
         transactionId,
         // Stored as a JSON string column - serialise it. Passing the raw
@@ -348,6 +380,13 @@ router.post('/refund', authenticate, authorize('admin'), async (req, res, next) 
 
     if (order.paymentStatus !== 'completed' && order.paymentStatus !== 'partially_refunded') {
       throw new AppError('Order payment not completed', 400);
+    }
+
+    // The reason is embedded in the ledger's gatewayResponse JSON and
+    // emailed to the customer — cap it like the order-cancel reason so a
+    // multi-megabyte string cannot bloat the database or the email.
+    if (reason != null && (typeof reason !== 'string' || reason.length > 500)) {
+      throw new AppError('Refund reason must be a string of at most 500 characters.', 400);
     }
 
     // Cumulative amount already refunded across prior refund rows (this order

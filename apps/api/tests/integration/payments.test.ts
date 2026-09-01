@@ -68,6 +68,31 @@ describe('POST /api/payments/process', () => {
       .send({ orderId: o.id });
     expect(res.status).toBe(400);
   });
+
+  it('refuses to record a refund as a settled payment method (400)', async () => {
+    // Regression: paymentMethod was stored verbatim, so an admin (or, with
+    // PAYMENTS_ALLOW_MOCK=true, any customer) could POST method='refund' and
+    // mint a fake refund row — the refund route counts method='refund'
+    // rows to compute the remaining balance, shrinking what can actually
+    // be refunded.
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'pending', totalAmount: 50 });
+    const res = await request(app)
+      .post('/api/payments/process')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, paymentMethod: 'refund' });
+    expect(res.status).toBe(400);
+    expect(await mockPrisma.payment.findMany({ where: { orderId: o.id } })).toHaveLength(0);
+    expect((await mockPrisma.order.findUnique({ where: { id: o.id } }))?.paymentStatus).toBe('pending');
+
+    // Unknown methods are refused too.
+    const bogus = await request(app)
+      .post('/api/payments/process')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, paymentMethod: 'garbage' });
+    expect(bogus.status).toBe(400);
+  });
 });
 
 describe('POST /api/payments/refund (admin)', () => {
@@ -101,6 +126,21 @@ describe('POST /api/payments/refund (admin)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ orderId: o.id });
     expect(res.status).toBe(403);
+  });
+
+  it('rejects an oversized refund reason (400) and creates no refund row', async () => {
+    // Regression: the reason was stored unbounded into the ledger JSON
+    // and emailed to the customer; a multi-megabyte string bloated both.
+    const { token: admin } = await authHeader({ role: 'admin' });
+    const { user } = await authHeader();
+    const o = await createOrder(user.id, { paymentStatus: 'completed', totalAmount: 40 });
+    const res = await request(app)
+      .post('/api/payments/refund')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ orderId: o.id, reason: 'x'.repeat(501) });
+    expect(res.status).toBe(400);
+    expect(await mockPrisma.payment.findMany({ where: { orderId: o.id } })).toHaveLength(0);
+    expect((await mockPrisma.order.findUnique({ where: { id: o.id } }))?.paymentStatus).toBe('completed');
   });
 
   it('refuses to mark a gateway order refunded when the gateway is not enabled (400)', async () => {
@@ -492,6 +532,44 @@ describe('Stripe: webhook settles the order', () => {
     expect((await hit()).status).toBe(200); // Stripe retries on timeout
     const payments = await mockPrisma.payment.findMany({ where: { orderId: o.id } });
     expect(payments).toHaveLength(1);
+  });
+
+  it('does not duplicate the Payment row when a crash left one without the order flip (repairs instead)', async () => {
+    // Regression: the Payment row and the order flip were two separate
+    // writes. A retry after a crash between them used to create a SECOND
+    // completed Payment row for the same money (Stripe retries for days).
+    // Now the settle runs in one transaction, deduped on the gateway's
+    // stable transaction id, and the crash state is repaired.
+    const { user } = await authHeader();
+    const o = await (await import('../helpers/factories')).createOrder(user.id, {
+      paymentStatus: 'pending',
+      totalAmount: 25,
+    });
+    await mockPrisma.payment.create({
+      data: {
+        orderId: o.id,
+        amount: 25,
+        currency: 'USD',
+        method: 'stripe',
+        status: 'completed',
+        transactionId: 'pi_crash',
+      },
+    });
+    stripeMock.configured = true;
+    stripeMock.stripe = makeStripeWebhookStub();
+    stripeMock.nextEvent = {
+      id: 'evt_3',
+      type: 'checkout.session.completed',
+      data: { object: { id: 'cs_test_3', payment_intent: 'pi_crash', currency: 'usd', metadata: { orderId: o.id } } },
+    };
+    const res = await request(app)
+      .post('/api/payments/webhooks/stripe')
+      .set('Stripe-Signature', 't=1,v1=good')
+      .send({});
+    expect(res.status).toBe(200);
+    const payments = await mockPrisma.payment.findMany({ where: { orderId: o.id } });
+    expect(payments).toHaveLength(1);
+    expect((await mockPrisma.order.findUnique({ where: { id: o.id } }))?.paymentStatus).toBe('completed');
   });
 
   it('ignores session completions without order metadata', async () => {

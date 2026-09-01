@@ -685,3 +685,17 @@ and a case-mismatched login failed). Registration now stores the
 lowercase form, all three entry points resolve exact → normalized →
 case-insensitive (legacy rows registered with mixed case before the fix
 still authenticate, reset, and block duplicates).
+Payments settlement is now crash-safe and the ledger is write-guarded:
+the Stripe webhook, the gateway-verify settle, and the offline
+/process path each create the Payment row and flip the order inside ONE
+transaction, deduped on the gateway's stable transaction id — a retry
+after a crash between the two writes used to create a second completed
+Payment row for the same money (Stripe retries for days); the crash
+state (Payment row present, order still pending) is now repaired
+instead of duplicated. /process also allowlists the recorded method:
+method='refund' used to be stored verbatim, so an admin (or anyone
+with PAYMENTS_ALLOW_MOCK=true) could mint a fake refund row — and the
+refund route counts method='refund' rows to compute the remaining
+balance, silently shrinking what could actually be refunded. Refund
+reasons are capped at 500 chars (they are embedded in the ledger JSON
+and emailed to the customer).

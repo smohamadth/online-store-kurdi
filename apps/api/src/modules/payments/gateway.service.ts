@@ -166,27 +166,48 @@ export async function settleOrderPaid(args: {
   if (!order) return;
   if (order.paymentStatus === 'completed') return; // idempotent
 
-  await prisma.payment.create({
-    data: {
-      orderId: args.orderId,
-      amount: args.amount,
-      currency: args.currency,
-      method: args.method,
-      status: 'completed',
-      transactionId: args.transactionId,
-      gatewayResponse: JSON.stringify({
-        ...(args.gatewayResponse || {}),
-        ...(args.originalReference ? { originalReference: args.originalReference } : {}),
-      }),
-    },
-  });
-  await prisma.order.update({
-    where: { id: args.orderId },
-    data: {
-      paymentStatus: 'completed',
-      paymentIntentId: args.transactionId,
-      status: 'processing',
-    },
+  // Payment row + order flip in one transaction, deduped on the gateway's
+  // stable transaction id: a replayed verify (or a webhook racing the
+  // storefront) after a crash between the two writes used to create a
+  // second Payment row for the same money. If the row already exists but
+  // the order never flipped, repair the order instead of duplicating.
+  await prisma.$transaction(async (tx: any) => {
+    const dup = await tx.payment.findFirst({
+      where: { orderId: args.orderId, transactionId: args.transactionId, status: 'completed' },
+    });
+    if (dup) {
+      await tx.order.update({
+        where: { id: args.orderId },
+        data: {
+          paymentStatus: 'completed',
+          paymentIntentId: args.transactionId,
+          status: 'processing',
+        },
+      });
+      return;
+    }
+    await tx.payment.create({
+      data: {
+        orderId: args.orderId,
+        amount: args.amount,
+        currency: args.currency,
+        method: args.method,
+        status: 'completed',
+        transactionId: args.transactionId,
+        gatewayResponse: JSON.stringify({
+          ...(args.gatewayResponse || {}),
+          ...(args.originalReference ? { originalReference: args.originalReference } : {}),
+        }),
+      },
+    });
+    await tx.order.update({
+      where: { id: args.orderId },
+      data: {
+        paymentStatus: 'completed',
+        paymentIntentId: args.transactionId,
+        status: 'processing',
+      },
+    });
   });
   await autoPostOrder(args.orderId);
 
