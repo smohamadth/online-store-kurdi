@@ -40,6 +40,7 @@ export async function authHeader(opts: {
       lastName: opts.lastName ?? 'User',
       role,
       isActive: true,
+      isVerified: true, // mirror the register route (registration = verification)
     },
   });
   const { accessToken } = generateTokens({ id: user.id, email: user.email, role: user.role });

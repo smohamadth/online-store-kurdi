@@ -713,3 +713,16 @@ Honest-limits note: gift cards and store credit are currently
 issue/redeem/display-only — the checkout does NOT debit them yet
 (debitGiftCard/debitStoreCredit have no callers), and the wallet page
 no longer claims credit is applied at checkout.
+SECURITY: imported customer accounts no longer ship with a known
+password. Bulk customer/order import used to create every imported
+account with the hardcoded password 'Imported-Change-Me-123!' (public
+source) and login ignored the isVerified flag — anyone who read the
+code could log into every account a merchant imported. Imported users
+now get a RANDOM password nobody knows, stay isVerified=false, and the
+login route refuses unverified accounts (checked AFTER the password
+compare, so it can't be used to probe which accounts exist); the
+forgot-password reset flow is the activation path and now flips
+isVerified=true. Registration sets isVerified=true (this store has no
+email-verification flow, so self-registration IS verification) and the
+admin users module already created verified accounts — imported
+accounts were the only unverified population.

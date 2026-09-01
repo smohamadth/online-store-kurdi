@@ -99,6 +99,13 @@ router.post('/register', async (req, res, next) => {
         lastName,
         phone,
         role: 'customer',
+        // This store has no email-verification flow: self-registration IS
+        // verification. The schema defaults to false, so without this every
+        // registered account would be indistinguishable from an unverified
+        // imported one (and the login isVerified guard would lock everyone
+        // out). Imported (bulk) accounts are the deliberate exception - they
+        // stay false until the customer activates via forgot-password.
+        isVerified: true,
       },
       select: {
         id: true,
@@ -179,6 +186,17 @@ router.post('/login', async (req, res, next) => {
 
     if (!isPasswordValid) {
       throw new UnauthorizedError('Invalid email or password');
+    }
+
+    // Imported accounts (bulk customer/order import) are created unverified
+    // with a random password; the forgot-password flow activates them. Check
+    // AFTER the password compare so this branch is only reachable by someone
+    // who already knows the credentials — it never leaks account state to a
+    // password-guessing probe.
+    if (!user.isVerified) {
+      throw new UnauthorizedError(
+        'Account is not verified yet. Use the forgot-password flow to set your password and activate the account.',
+      );
     }
 
     // Generate tokens (the refresh token's jti makes it unique per login -
@@ -475,10 +493,12 @@ router.post('/reset-password', async (req, res, next) => {
 
     // Update user password and mark token as used - one transaction so the
     // token can never be "used" without the password actually changing.
+    // isVerified: true — a successful reset is the activation path for
+    // imported (unverified) accounts; without it they could never log in.
     await prisma.$transaction([
       prisma.user.update({
         where: { id: resetRecord.userId },
-        data: { password: hashedPassword },
+        data: { password: hashedPassword, isVerified: true },
       }),
       prisma.passwordReset.update({
         where: { id: resetRecord.id },

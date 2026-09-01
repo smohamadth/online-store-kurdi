@@ -29,7 +29,10 @@ export async function createUser(overrides: Partial<{
       lastName: overrides.lastName ?? 'User',
       role: overrides.role ?? 'customer',
       isActive: overrides.isActive ?? true,
-      isVerified: overrides.isVerified ?? false,
+      // Mirrors the register route: self-registration IS verification in
+      // this store (no email-verify flow), so fixture users default to
+      // verified. Tests that need an unverified account pass false.
+      isVerified: overrides.isVerified ?? true,
     },
   });
 }

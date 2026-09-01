@@ -16,6 +16,7 @@
  */
 import slugify from 'slugify';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import {
   extractRows,
@@ -34,12 +35,16 @@ import {
 } from './mappers';
 import { syncVariantAttributes } from '../products/variantAttributeIndex';
 
-// Placeholder password hashed onto a customer that is created purely by an
-// import (onboarding order history, not credentials). The admin/customer can
-// reset it via the normal forgot-password flow. Imported customers should not
-// be assumed able to log in with a known secret.
-const IMPORTED_CUSTOMER_PASSWORD = 'Imported-Change-Me-123!';
+// Imported customers (onboarding order history, not credentials) get a
+// RANDOM password — never a known constant. A hardcoded password
+// ('Imported-Change-Me-123!' used to ship here) is public source: anyone
+// could log into every account a merchant imported. With a random secret
+// nobody can sign in until the real customer goes through forgot-password
+// (which also flips isVerified, so the account activates properly).
 const BCRYPT_ROUNDS = 10;
+function randomImportedPassword(): string {
+  return crypto.randomBytes(24).toString('base64url');
+}
 
 export interface CommitError {
   row: number;
@@ -378,7 +383,7 @@ async function executeCustomers(
         }
         updated++;
       } else {
-        const password = await bcrypt.hash(IMPORTED_CUSTOMER_PASSWORD, BCRYPT_ROUNDS);
+        const password = await bcrypt.hash(randomImportedPassword(), BCRYPT_ROUNDS);
         const user = await tx.user.create({
           data: {
             email: plan.email,
@@ -426,7 +431,7 @@ async function executeOrders(rawRows: Record<string, unknown>[]): Promise<{ crea
     const variants = await tx.variant.findMany({ select: { id: true, sku: true, productId: true } });
     const variantBySku = new Map(variants.map((v) => [v.sku, v]));
 
-    const password = await bcrypt.hash(IMPORTED_CUSTOMER_PASSWORD, BCRYPT_ROUNDS);
+    const password = await bcrypt.hash(randomImportedPassword(), BCRYPT_ROUNDS);
 
     for (let i = 0; i < rawRows.length; i++) {
       const rowNo = i + 1;

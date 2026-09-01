@@ -812,6 +812,16 @@ describe('POST /api/import-export/commit (customers)', () => {
     // placeholder password is hashed, never stored in the clear
     expect(created.password).toMatch(/^\$2[aby]\$/);
     expect(created.password).not.toContain('Imported');
+    // Regression: the password must be RANDOM — the old hardcoded
+    // 'Imported-Change-Me-123!' was public source, so anyone could log
+    // into every account a merchant imported. Verify the constant no
+    // longer matches, and that a login with it is refused.
+    const bcrypt = (await import('bcryptjs')).default;
+    expect(await bcrypt.compare('Imported-Change-Me-123!', created.password)).toBe(false);
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'newcust@example.com', password: 'Imported-Change-Me-123!' });
+    expect(loginRes.status).toBe(401);
 
     const addr = peekMockStore('address').filter((a: any) => a.userId === created.id);
     expect(addr).toHaveLength(1);
@@ -911,6 +921,11 @@ describe('POST /api/import-export/commit (orders)', () => {
     expect(user).toBeDefined();
     expect(user.role).toBe('customer');
     expect(user.password).toMatch(/^\$2[aby]\$/); // placeholder, hashed
+    // The order-import customer gets the same random-password treatment:
+    // the old public constant must not authenticate.
+    const bcrypt = (await import('bcryptjs')).default;
+    expect(await bcrypt.compare('Imported-Change-Me-123!', user.password)).toBe(false);
+    expect(user.isVerified).toBe(false);
 
     const order = peekMockStore('order')[0];
     // auto-generated orderNumber when none provided

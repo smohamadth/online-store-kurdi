@@ -375,7 +375,7 @@ export default function AdminImportExportPage() {
             : entity === 'categories'
               ? 'Categories are matched by slug, then name (case-insensitive). The parent column links to an existing category name or slug.'
               : entity === 'customers'
-                ? 'Customers are matched by email (case-insensitive). On create they get a placeholder password to reset later.'
+                ? 'Customers are matched by email (case-insensitive). New accounts get a random password and stay unverified until the customer uses forgot-password to set their own.'
                 : 'Orders are matched by orderNumber; a new one creates the order. Items resolve by product SKU, the customer by email (auto-created if missing).'}
           {format === 'csv' ? ' One row per record; nested data (images, variants, items, addresses) travels as JSON strings in its column.' : ''}
         </p>

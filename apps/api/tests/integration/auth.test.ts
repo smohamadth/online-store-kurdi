@@ -136,6 +136,34 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(401);
   });
 
+  it('rejects an unverified account even with the right password (401)', async () => {
+    // Regression: imported customers are created isVerified=false, and
+    // login used to ignore the flag. Combined with the old hardcoded
+    // import password this made every imported account loginable by
+    // anyone who read the source. The check runs AFTER the password
+    // compare so it cannot be used to probe which accounts exist.
+    const u = await mockPrisma.user.create({
+      data: {
+        email: 'unverified@test.local',
+        password: await (await import('bcryptjs')).default.hash('Password123!', 4),
+        firstName: 'A',
+        lastName: 'B',
+        isVerified: false,
+      },
+    });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'unverified@test.local', password: 'Password123!' });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toMatch(/not verified/i);
+    // A wrong password still gets the generic message (no state leak).
+    const wrong = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'unverified@test.local', password: 'WrongPass123!' });
+    expect(wrong.status).toBe(401);
+    expect(wrong.body.message).toMatch(/Invalid/i);
+  });
+
   it('rejects a deactivated account', async () => {
     await mockPrisma.user.update({
       where: { email: 'newuser@test.local' },
@@ -329,6 +357,35 @@ describe('POST /api/auth/reset-password', () => {
     expect(res.status).toBe(200);
     const after = await mockPrisma.user.findUnique({ where: { id: user.id } });
     expect(after?.password).not.toBe('old-hash');
+  });
+
+  it('a successful reset activates an unverified (imported) account', async () => {
+    // Regression: imported customers start unverified with a random
+    // password; reset-password is their activation path, so it must flip
+    // isVerified — otherwise they could never log in.
+    const user = await mockPrisma.user.create({
+      data: {
+        email: 'imported@test.local',
+        password: 'old-hash',
+        firstName: 'A',
+        lastName: 'B',
+        isVerified: false,
+      },
+    });
+    await mockPrisma.passwordReset.create({
+      data: { userId: user.id, token: 'act-token', expiresAt: new Date(Date.now() + 60_000) },
+    });
+    const res = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: 'act-token', password: 'NewPassword123!' });
+    expect(res.status).toBe(200);
+    const after = await mockPrisma.user.findUnique({ where: { id: user.id } });
+    expect(after?.isVerified).toBe(true);
+    // And the account now logs in with the new password.
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'imported@test.local', password: 'NewPassword123!' });
+    expect(login.status).toBe(200);
   });
 
   it('rejects an unknown token (400)', async () => {
