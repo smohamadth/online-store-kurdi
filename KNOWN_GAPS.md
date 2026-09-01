@@ -415,9 +415,15 @@ deliberate design choices or niche gaps.
     If the cluster is unreachable the API logs a warning and falls back to
     the Postgres search for the affected request, so enabling it is safe
     before the cluster is up.
-12. **Socket.IO has no multi-instance adapter.** Fine single-instance; a
-    `@socket.io/redis-adapter` would be needed if real-time features are
-    used across several API instances.
+12. **Socket.IO real-time is multi-instance only when Redis is up.** At boot
+    the API tries to attach the `@socket.io/redis-adapter` (two dedicated
+    pub/sub connections from the optional Redis client), so N API instances
+    behind a load balancer share connected-client state and an emit on one
+    instance reaches sockets on another. If Redis is unreachable it logs a
+    warning and runs single-instance in-memory mode instead — the server
+    always boots. The default install has no Redis, so the single-instance
+    mode is the default and is fine for the documented one-server
+    deployment.
 13. **No continuous deployment.** There is a one-command install
     (`scripts/install-store.sh` + `docs/DEPLOYMENT.md`) but nothing
     auto-deploys, because there is no hosting account yet. See §8.

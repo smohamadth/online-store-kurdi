@@ -8,7 +8,7 @@
 // "my settings don't save" class of Windows/macOS problems.
 // ---------------------------------------------------------------------------
 import { createServer } from 'http';
-import { app, httpServer } from './app';
+import { app, httpServer, io } from './app';
 import { env } from './config/environment';
 import { connectDatabase, disconnectDatabase, prisma } from './config/database';
 import {
@@ -22,6 +22,7 @@ import {
   databaseUrlHelp,
 } from './config/verifyDatabaseUrl';
 import { connectRedis, disconnectRedis } from './config/redis';
+import { attachSocketIOAdapter } from './config/socketAdapter';
 import { connectSearch, disconnectSearch } from './modules/products/productSearch.service';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
@@ -120,9 +121,19 @@ async function startServer() {
     await connectDatabase();
     
     // Try to connect to Redis (optional, non-blocking)
-    connectRedis().catch(() => {
-      // Silently handle Redis connection failure
-    });
+    connectRedis()
+      .catch(() => {
+        // Silently handle Redis connection failure
+      })
+      .then(() => {
+        // Socket.IO multi-instance adapter (optional, non-blocking): with N
+        // API instances behind a load balancer, an emit on one instance must
+        // reach sockets connected to another — the Redis adapter gives all
+        // instances a shared view of who is connected. Without Redis the
+        // server keeps running single-instance (in-memory) mode, which is
+        // correct for the default one-server deployment. Never blocks boot.
+        attachSocketIOAdapter(io).catch(() => {});
+      });
 
     // Initialize the search backend (Postgres by default; Elasticsearch when
     // SEARCH_PROVIDER=elasticsearch. Fail-soft: an unreachable cluster logs a
