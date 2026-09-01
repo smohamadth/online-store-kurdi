@@ -14,11 +14,13 @@
  *   - refunds can credit back to store credit; cash refunds are capped
  *     at the amount actually paid in cash
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma, peekMockStore } from '../helpers/mockPrisma';
 import { createProduct, createCategory } from '../helpers/factories';
+import { AppError } from '../../src/middleware/errorHandler';
+import * as giftcardService from '../../src/modules/payments/giftcard.service';
 import type { Express } from 'express';
 
 let app: Express;
@@ -343,5 +345,48 @@ describe('refunds vs wallet credit', () => {
       .set('Authorization', `Bearer ${admin.token}`)
       .send({ orderId: placed.body.data.id, amount: 40 });
     expect(partial.status).toBe(200);
+  });
+});
+
+describe('mid-flight debit failure', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('reverses an already-applied store credit and deletes the order when the gift card debit fails', async () => {
+    // Simulate the narrow race: the card passed pre-validation but a
+    // concurrent order drained it before debitGiftCard ran. The store
+    // credit was already debited at that point, so the route must
+    // reverse it, delete the just-created order, and surface the error
+    // — otherwise the credit is spent on an order that never completed.
+    const spy = vi
+      .spyOn(giftcardService, 'debitGiftCard')
+      .mockRejectedValueOnce(new AppError('Insufficient balance: card has 0, requested 20', 400));
+
+    const { token, user } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const product = await createProduct({ price: 20, quantity: 5, categoryId: cat.id });
+    await grantStoreCredit(admin.token, user.id, 10);
+    const card = await issueGiftCard(admin.token, 50);
+
+    const res = await placeOrder(token, product.id, {
+      applyStoreCredit: true,
+      giftCardCode: card.code,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/insufficient/i);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // No order row survives (items cascade with it), the store credit
+    // is back at its pre-order balance, and the card was never debited.
+    expect(peekMockStore('order')).toHaveLength(0);
+    const credits = peekMockStore('storeCredit');
+    expect(credits[0].balance).toBe(10);
+    const txs = peekMockStore('storeCreditTransaction');
+    // The reversal is the adjust row linked to the (now deleted) order;
+    // the admin grant is also 'adjust' but has no orderId.
+    expect(txs.filter((t: any) => t.type === 'adjust' && t.amount === 10 && t.orderId)).toHaveLength(1);
+    const cards = peekMockStore('giftCard');
+    expect(cards[0].balance).toBe(50);
+    expect(peekMockStore('giftCardTransaction').some((t: any) => t.type === 'use')).toBe(false);
   });
 });

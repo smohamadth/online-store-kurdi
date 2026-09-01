@@ -460,6 +460,29 @@ export default function OrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
+            {/* Wallet credit applied at checkout: the order's totalAmount
+                keeps the FULL value, so the applied columns are shown here
+                as the part of the price that was covered by credit. */}
+            {(order.storeCreditApplied || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                <span style={{ color: 'var(--muted, #666)' }}>
+                  Paid with store credit
+                </span>
+                <span style={{ fontWeight: 500, color: '#16a34a' }}>
+                  -{formatPrice(order.storeCreditApplied, settings.currencySymbol)}
+                </span>
+              </div>
+            )}
+            {(order.giftCardApplied || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                <span style={{ color: 'var(--muted, #666)' }}>
+                  Paid with gift card{order.giftCardCode ? ` (${order.giftCardCode})` : ''}
+                </span>
+                <span style={{ fontWeight: 500, color: '#16a34a' }}>
+                  -{formatPrice(order.giftCardApplied, settings.currencySymbol)}
+                </span>
+              </div>
+            )}
             {/* An unpaid gateway order (pending, or failed/declined at the
                 gateway) can be re-attempted: re-runs the hosted payment page.
                 The retry API accepts both pending and failed. */}

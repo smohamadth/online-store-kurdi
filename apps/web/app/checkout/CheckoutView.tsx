@@ -67,7 +67,6 @@ export default function CheckoutPage() {
     currency: string;
   } | null>(null);
   const [giftCardError, setGiftCardError] = useState('');
-  const [walletError, setWalletError] = useState('');
 
   const [shippingInfo, setShippingInfo] = useState({
     firstName: '',
@@ -151,8 +150,7 @@ export default function CheckoutPage() {
 
     // Load the customer's store-credit balance (0 / null when they have
     // none, or the endpoint is unreachable - checkout must never break
-    // because the wallet is down).
-    const token = localStorage.getItem('token');
+    // because the wallet is down). Uses the `token` read above.
     if (token) {
       authHttp
         .get<any>('/store-credit')
@@ -603,11 +601,10 @@ export default function CheckoutPage() {
               )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', cursor: gatewayMethod ? 'not-allowed' : 'pointer', opacity: gatewayMethod ? 0.6 : 1 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={useStoreCredit}
-                    disabled={gatewayMethod}
                     onChange={(e) => setUseStoreCredit(e.target.checked)}
                   />
                   <span style={{ fontWeight: 500 }}>
@@ -626,7 +623,6 @@ export default function CheckoutPage() {
                       type="text"
                       placeholder="Gift card code"
                       value={giftCardCode}
-                      disabled={gatewayMethod}
                       onChange={(e) => {
                         setGiftCardCode(e.target.value);
                         setGiftCardInfo(null);
@@ -636,7 +632,7 @@ export default function CheckoutPage() {
                     />
                     <button
                       type="button"
-                      disabled={gatewayMethod || !giftCardCode.trim()}
+                      disabled={!giftCardCode.trim()}
                       onClick={checkGiftCard}
                       style={{ padding: '12px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#000', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '14px' }}
                     >
@@ -708,7 +704,7 @@ export default function CheckoutPage() {
                   subtotal={subtotal}
                   onTaxCalculated={setTaxInfo}
                 />
-                {useStoreCredit && storeCreditBalance !== null && walletApplied > 0.005 && (
+                {useStoreCredit && storeCreditBalance !== null && Math.min(creditBalance, walletApplied) > 0.005 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
                     <span>Store credit</span>
                     <span style={{ fontWeight: 600 }}>

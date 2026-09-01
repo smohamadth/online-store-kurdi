@@ -15,10 +15,12 @@ import {
   getGiftCardByCode,
   isRedeemable,
   debitGiftCard,
+  creditGiftCard,
 } from '../payments/giftcard.service';
 import {
   getStoreCreditBalance,
   debitStoreCredit,
+  creditStoreCredit,
 } from '../payments/storecredit.service';
 import { emit } from '../plugins/pluginHooks';
 import { calculateTaxForOrder } from '../tax/tax.service';
@@ -718,62 +720,98 @@ router.post('/', authenticate, async (req, res, next) => {
     let amountDue = finalTotalAmount;
     let storeCreditApplied = 0;
     let giftCardApplied = 0;
+    let appliedGiftCardId: string | null = null;
 
-    if (wantStoreCredit && amountDue > 0.005) {
-      const sc = await debitStoreCredit({
-        userId: req.user!.id,
-        amount: amountDue,
-        currency: storeCurrency,
-        orderId: order.id,
-        notes: `Order ${orderNumber}`,
-      });
-      storeCreditApplied = Math.round(sc.applied * 100) / 100;
-      amountDue = Math.round((amountDue - sc.applied) * 100) / 100;
-    }
-    if (giftCode && amountDue > 0.005) {
-      // Cap the debit at what the order still needs: a card with more
-      // balance than the order never leaves a residual on the order.
-      const card = await getGiftCardByCode(giftCode);
-      const giftAmount = Math.round(Math.min(card.balance, amountDue) * 100) / 100;
-      if (giftAmount > 0.005) {
-        await debitGiftCard({
-          code: giftCode,
-          amount: giftAmount,
+    try {
+      if (wantStoreCredit && amountDue > 0.005) {
+        const sc = await debitStoreCredit({
+          userId: req.user!.id,
+          amount: amountDue,
+          currency: storeCurrency,
           orderId: order.id,
           notes: `Order ${orderNumber}`,
         });
-        giftCardApplied = giftAmount;
-        amountDue = Math.round((amountDue - giftAmount) * 100) / 100;
+        storeCreditApplied = Math.round(sc.applied * 100) / 100;
+        amountDue = Math.round((amountDue - sc.applied) * 100) / 100;
       }
-    }
+      if (giftCode && amountDue > 0.005) {
+        // Cap the debit at what the order still needs: a card with more
+        // balance than the order never leaves a residual on the order.
+        const card = await getGiftCardByCode(giftCode);
+        const giftAmount = Math.round(Math.min(card.balance, amountDue) * 100) / 100;
+        if (giftAmount > 0.005) {
+          await debitGiftCard({
+            code: giftCode,
+            amount: giftAmount,
+            orderId: order.id,
+            notes: `Order ${orderNumber}`,
+          });
+          appliedGiftCardId = card.id;
+          giftCardApplied = giftAmount;
+          amountDue = Math.round((amountDue - giftAmount) * 100) / 100;
+        }
+      }
 
-    const walletApplied = Math.round((storeCreditApplied + giftCardApplied) * 100) / 100;
-    if (walletApplied > 0) {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          storeCreditApplied,
-          giftCardApplied,
-          giftCardCode: giftCardApplied > 0 ? giftCode : null,
-        },
-      });
-
-      // Fully covered by wallet credit: settle the order like any other
-      // payment — Payment ledger row (method 'store_credit' / 'gift_card'),
-      // paymentStatus completed, status processing, accounting auto-post,
-      // and the payment.settled plugin hook — all crash-safe and deduped
-      // on the stable transactionId by settleOrderPaid.
-      if (amountDue <= 0.005) {
-        await settleOrderPaid({
-          orderId: order.id,
-          orderNumber,
-          amount: walletApplied,
-          currency: storeCurrency,
-          method: storeCreditApplied > 0 ? 'store_credit' : 'gift_card',
-          transactionId: `wallet-${order.id}`,
-          gatewayResponse: { storeCreditApplied, giftCardApplied, giftCardCode: giftCode },
+      const walletApplied = Math.round((storeCreditApplied + giftCardApplied) * 100) / 100;
+      if (walletApplied > 0) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            storeCreditApplied,
+            giftCardApplied,
+            giftCardCode: giftCardApplied > 0 ? giftCode : null,
+          },
         });
+
+        // Fully covered by wallet credit: settle the order like any other
+        // payment — Payment ledger row (method 'store_credit' / 'gift_card'),
+        // paymentStatus completed, status processing, accounting auto-post,
+        // and the payment.settled plugin hook — all crash-safe and deduped
+        // on the stable transactionId by settleOrderPaid.
+        if (amountDue <= 0.005) {
+          await settleOrderPaid({
+            orderId: order.id,
+            orderNumber,
+            amount: walletApplied,
+            currency: storeCurrency,
+            method: storeCreditApplied > 0 ? 'store_credit' : 'gift_card',
+            transactionId: `wallet-${order.id}`,
+            gatewayResponse: { storeCreditApplied, giftCardApplied, giftCardCode: giftCode },
+          });
+        }
       }
+    } catch (err) {
+      // The wallet debits consume value, so a mid-way failure must not
+      // leave the money spent on an order that never completed. The only
+      // realistic failure is the gift-card debit: the card was validated
+      // above, but a concurrent order can drain its balance in between —
+      // debitGiftCard then rejects atomically. Undo whatever was already
+      // applied (store credit, then the card), delete the just-created
+      // order (OrderItems cascade; coupon usage, stock, cart, analytics
+      // and download mints all run later), and surface the error. The
+      // reversals are best-effort: if the store itself is failing they
+      // may fail too, but the original error is still reported.
+      if (storeCreditApplied > 0) {
+        await creditStoreCredit({
+          userId: req.user!.id,
+          amount: storeCreditApplied,
+          type: 'adjust',
+          orderId: order.id,
+          notes: `Reversal: order ${orderNumber} placement failed`,
+          createdById: req.user!.id,
+        }).catch(() => {});
+      }
+      if (appliedGiftCardId && giftCardApplied > 0) {
+        await creditGiftCard({
+          cardId: appliedGiftCardId,
+          amount: giftCardApplied,
+          type: 'adjust',
+          orderId: order.id,
+          notes: `Reversal: order ${orderNumber} placement failed`,
+        }).catch(() => {});
+      }
+      await prisma.order.delete({ where: { id: order.id } }).catch(() => {});
+      throw err;
     }
 
     // Analytics: record a purchase event per line item so the

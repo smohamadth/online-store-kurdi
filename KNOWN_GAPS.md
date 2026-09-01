@@ -725,7 +725,11 @@ the credit would be spent even if the customer abandoned the page) —
 combine credit with cash on delivery / bank transfer instead. Gift
 cards are validated (exists / redeemable / currency matches the store)
 BEFORE the order is created, so a bad code never leaves a half-created
-order. Refunds: `creditToStoreCredit=true` returns the money to the
+order; and if a debit fails mid-placement (a card drained by a
+concurrent order between validation and debit), the route reverses any
+credit already applied (ledgered as an adjust reversal) and deletes the
+just-created order, so wallet money is never spent on an order that
+never completed. Refunds: `creditToStoreCredit=true` returns the money to the
 customer's store-credit balance (no gateway movement); cash refunds
 are capped at the amount actually paid in cash (the wallet-credit
 portion was never cash). The checkout page has a Wallet Credit
