@@ -635,3 +635,7 @@ script URL would execute in every visitor's browser. Content
 translations of HTML-rendered fields (page/post bodies, product/category
 descriptions) are now sanitized on write — they previously bypassed the
 base-content sanitizers and rendered with dangerouslySetInnerHTML.
+Product descriptions now use the entity-decoding sanitizer
+(sanitizeRichText) instead of the weaker regex one — `java&#x73;cript:`
+hrefs used to survive the old regexes and execute after the browser
+decoded the entity.

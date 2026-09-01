@@ -269,6 +269,29 @@ describe('POST /api/products (admin)', () => {
     expect(stored?.description).not.toMatch(/javascript:/i);
   });
 
+  it('strips entity-obfuscated javascript: hrefs from description (XSS)', async () => {
+    // Regression: the old regex sanitizer did not entity-decode numeric
+    // character references, so <a href="java&#x73;cript:alert(1)"> passed
+    // through and the BROWSER decoded it into a live javascript: URL.
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Entity Pwn',
+        sku: 'PWN-2',
+        price: 1,
+        description:
+          '<a href="java&#x73;cript:alert(1)">x</a>' +
+          '<img src="data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+">',
+      });
+    expect(res.status).toBe(201);
+    const stored = await mockPrisma.product.findUnique({ where: { id: res.body.data.id } });
+    // The href must be neutralized to "#" — no javascript anywhere.
+    expect(stored?.description).not.toMatch(/java/i);
+    expect(stored?.description).not.toMatch(/data:image/i);
+  });
+
   it('accepts metaKeywords as an array and stores it as a JSON string', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const res = await request(app)
