@@ -649,7 +649,9 @@ subscriptions are deduped by email, not by the shared 'anonymous' userId
 advisory shipping/calculate endpoint tolerates hostile numeric payloads
 (NaN/Infinity/negative numbers previously poisoned the rate math — the
 authoritative order-placement path already recomputed rates server-side,
-so this only affects the checkout display).
+so this only affects the checkout display). The advisory tax/calculate
+endpoint gets the same defensive parsing, including hostile item
+price/quantity rows.
 Accounting: closing a fiscal year now zeroes contra (negative-balance)
 revenue/expense accounts too (they used to bleed into next year's P&L),
 and reversing a voided or closing journal entry is refused (a reversal

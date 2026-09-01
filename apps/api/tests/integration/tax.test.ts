@@ -46,6 +46,25 @@ describe('POST /api/tax/calculate (public)', () => {
       .send({ subtotal: 100, country: 'US' });
     expect(res.status).toBe(200);
   });
+
+  it('tolerates hostile numeric payloads (no NaN tax)', async () => {
+    // Regression: Number('abc') and Infinity flowed into the rate math
+    // (NaN * rate = NaN, returned as JSON null); item rows with bad
+    // price/quantity poisoned the whole calculation.
+    for (const payload of [
+      { country: 'US', subtotal: 'abc' },
+      { country: 'US', subtotal: 1e999 },
+      { country: 'US', subtotal: -100 },
+      { country: 'US', subtotal: 100, items: [{ price: 'x', quantity: 'y' }] },
+      { country: 'US', subtotal: 100, items: [{ price: 10, quantity: -2 }] },
+      { country: 'US', subtotal: 100, items: [{ price: Infinity, quantity: 1 }] },
+    ]) {
+      const res = await request(app).post('/api/tax/calculate').send(payload);
+      expect(res.status).toBe(200);
+      expect(res.body.data.taxAmount).toBeTypeOf('number');
+      expect(Number.isNaN(res.body.data.taxAmount)).toBe(false);
+    }
+  });
 });
 
 describe('GET /api/tax/summary (admin)', () => {

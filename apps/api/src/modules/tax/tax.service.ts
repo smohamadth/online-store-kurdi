@@ -51,7 +51,15 @@ export async function calculateTaxForOrder(params: {
   subtotal: number;
   items?: TaxLineItem[];
 }): Promise<TaxCalculation> {
-  const { country, state, city, zipCode, subtotal } = params;
+  const { country, state, city, zipCode } = params;
+  // Defensive parsing, same contract as shipping: the advisory endpoint
+  // accepts client JSON, and Number('abc') = NaN would poison every
+  // computation below (NaN * rate = NaN). Non-finite/negative -> 0.
+  const asNonNegative = (v: unknown): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const subtotal = asNonNegative(params.subtotal);
 
   // All active rates for the country, highest priority first.
   const taxRates = await prisma.taxRate.findMany({
@@ -107,13 +115,17 @@ export async function calculateTaxForOrder(params: {
         }
       }
 
-      const itemTaxAmount = item.price * item.quantity * itemRate;
+      // A hostile item (price: 'abc', quantity: null, negative numbers)
+      // must not NaN the whole calculation.
+      const itemPrice = asNonNegative(item.price);
+      const itemQty = asNonNegative(item.quantity);
+      const itemTaxAmount = itemPrice * itemQty * itemRate;
       totalTax += itemTaxAmount;
 
       itemTaxes.push({
         productId: item.productId,
-        price: item.price,
-        quantity: item.quantity,
+        price: itemPrice,
+        quantity: itemQty,
         taxClass: item.taxClass || 'standard',
         taxRate: itemRate,
         taxAmount: Math.round(itemTaxAmount * 100) / 100,
