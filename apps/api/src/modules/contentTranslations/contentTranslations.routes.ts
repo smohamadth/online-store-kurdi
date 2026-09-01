@@ -25,26 +25,13 @@ import { NotFoundError } from '../../middleware/errorHandler';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
 import {
   ContentEntityType,
+  HTML_RENDERED_FIELDS,
   isContentEntityType,
   isSupportedContentLocale,
   filterTranslatableFields,
 } from './translatableFields';
 
 const router = Router();
-
-// Fields whose base (default-language) values are stored sanitized and are
-// rendered with dangerouslySetInnerHTML on the storefront (page bodies,
-// post bodies, product descriptions, category descriptions). Translations
-// of these fields MUST get the same write-time sanitization — otherwise a
-// translation is an unsanitized HTML injection vector that bypasses the
-// base-content sanitizers (a compromised admin/manager account could
-// inject a store-wide script through a translated description).
-const HTML_RENDERED_FIELDS: Record<string, string[]> = {
-  page: ['content'],
-  blogPost: ['content'],
-  product: ['description'],
-  category: ['description'],
-};
 
 function sanitizeTranslatedData(
   entityType: ContentEntityType,

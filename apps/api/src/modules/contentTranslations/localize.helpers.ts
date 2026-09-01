@@ -11,7 +11,26 @@
 // are trivially unit-testable and used identically by every storefront read.
 // ---------------------------------------------------------------------------
 
-import { ContentEntityType, TRANSLATABLE_FIELDS, SupportedContentLocale } from './translatableFields';
+import { sanitizeRichText } from '../../utils/sanitizeRichText';
+import {
+  ContentEntityType,
+  HTML_RENDERED_FIELDS,
+  TRANSLATABLE_FIELDS,
+  SupportedContentLocale,
+} from './translatableFields';
+
+/**
+ * Sanitize one overlaid translation value when the field renders as HTML on
+ * the storefront. Legacy rows (written before write-time sanitization) can
+ * carry script-bearing markup, so the read path re-checks them — a malicious
+ * translation can never reach a dangerouslySetInnerHTML render untouched.
+ */
+function sanitizeOverlay(entityType: ContentEntityType, key: string, value: unknown): unknown {
+  if (typeof value === 'string' && (HTML_RENDERED_FIELDS[entityType] || []).includes(key)) {
+    return sanitizeRichText(value);
+  }
+  return value;
+}
 
 /**
  * Apply a translation object (already JSON-parsed) onto a row by mutating
@@ -27,13 +46,18 @@ export function localizeRow<T extends Record<string, unknown>>(
   translation: Record<string, unknown> | undefined | null,
   requestedLocale: string,
   fallbackLocale = 'en',
+  entityType?: ContentEntityType,
 ): T {
   if (!translation || requestedLocale === fallbackLocale) return row;
   for (const [key, value] of Object.entries(translation)) {
     // Only overlay fields the entity actually translates (belt & braces -
     // the writer already strips unknowns, but a hand-edited row should not
     // reach a response).
-    if (value !== undefined) (row as Record<string, unknown>)[key] = value;
+    if (value !== undefined) {
+      (row as Record<string, unknown>)[key] = entityType
+        ? sanitizeOverlay(entityType, key, value)
+        : value;
+    }
   }
   return row;
 }
@@ -76,7 +100,7 @@ export function localizeRows<T extends Record<string, unknown>>(
     const copy = { ...row };
     for (const [key, value] of Object.entries(tr)) {
       if (allowed.has(key) && value !== undefined) {
-        (copy as Record<string, unknown>)[key] = value;
+        (copy as Record<string, unknown>)[key] = sanitizeOverlay(entityType, key, value);
       }
     }
     return copy;

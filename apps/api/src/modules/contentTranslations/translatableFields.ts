@@ -29,6 +29,19 @@ export const TRANSLATABLE_FIELDS: Record<ContentEntityType, string[]> = {
   blogPost: ['title', 'content', 'excerpt', 'metaTitle', 'metaDescription'],
 };
 
+/**
+ * Fields whose values are rendered as HTML (dangerouslySetInnerHTML) on the
+ * storefront. Translations of these fields MUST be sanitized BOTH on write
+ * (contentTranslations PUT) and on read (localize helpers — legacy rows
+ * written before write-time sanitization still exist in the wild).
+ */
+export const HTML_RENDERED_FIELDS: Record<ContentEntityType, string[]> = {
+  page: ['content'],
+  blogPost: ['content'],
+  product: ['description'],
+  category: ['description'],
+};
+
 /** The locales the storefront can display (must stay in lockstep with the web's SUPPORTED_LOCALES). */
 export const SUPPORTED_CONTENT_LOCALES = ['en', 'ku', 'ar', 'fa', 'tr'] as const;
 export type SupportedContentLocale = (typeof SUPPORTED_CONTENT_LOCALES)[number];

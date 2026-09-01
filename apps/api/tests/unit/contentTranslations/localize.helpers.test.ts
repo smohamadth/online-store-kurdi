@@ -37,6 +37,24 @@ describe('localizeRow', () => {
     expect(localizeRow(row, null, 'ar').name).toBe('iPhone');
     expect(localizeRow(row, undefined, 'ar').name).toBe('iPhone');
   });
+
+  it('sanitizes HTML-rendered fields on read (legacy-row guard)', () => {
+    // Regression: rows written before write-time sanitization can still
+    // carry script markup; the READ path must neutralize it before the
+    // storefront renders it with dangerouslySetInnerHTML.
+    const row = { id: '1', title: 'P', content: '<p>ok</p>' };
+    const out = localizeRow(
+      row,
+      { title: 'پەڕە', content: '<p>hi</p><script>alert(1)</script>' },
+      'ku',
+      'en',
+      'page',
+    );
+    expect(out.content).toContain('<p>hi</p>');
+    expect(out.content).not.toContain('<script');
+    // Plain-text fields are untouched.
+    expect(out.title).toBe('پەڕە');
+  });
 });
 
 describe('localizeRows + indexTranslationsById', () => {
