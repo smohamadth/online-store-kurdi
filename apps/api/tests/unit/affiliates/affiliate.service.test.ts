@@ -38,6 +38,7 @@ import {
   rejectCommission,
   approvePayout,
   rejectPayout,
+  reversePayout,
   setAffiliateStatus,
   setAffiliateRate,
   trackClick,
@@ -444,6 +445,63 @@ describe('approvePayout / rejectPayout', () => {
     (prisma.affiliatePayout.updateMany as any).mockResolvedValue({ count: 1 });
     await rejectPayout('p1');
     expect(prisma.affiliate.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('reversePayout (money recovered off-platform)', () => {
+  it('reverses a PAID payout and claws back totalPaid', async () => {
+    (prisma.affiliatePayout.findUnique as any)
+      .mockResolvedValueOnce({ id: 'p1', affiliateId: 'aff1', status: 'paid', amount: 30, adminNotes: null })
+      .mockResolvedValueOnce({ id: 'p1', status: 'reversed' });
+    (prisma.affiliatePayout.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.affiliate.updateMany as any).mockResolvedValue({ count: 1 }); // gte guard passes
+
+    const result = await reversePayout('p1');
+
+    expect(prisma.affiliatePayout.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p1', status: 'paid' },
+      data: expect.objectContaining({ status: 'reversed' }),
+    });
+    expect(prisma.affiliate.updateMany).toHaveBeenCalledWith({
+      where: { id: 'aff1', totalPaid: { gte: 30 } },
+      data: { totalPaid: { decrement: 30 } },
+    });
+    expect(prisma.affiliate.update).not.toHaveBeenCalled(); // no zero-fallback
+    expect(result?.status).toBe('reversed');
+  });
+
+  it('floors totalPaid at 0 when it is somehow below the payout amount', async () => {
+    (prisma.affiliatePayout.findUnique as any)
+      .mockResolvedValueOnce({ id: 'p1', affiliateId: 'aff1', status: 'paid', amount: 30, adminNotes: null })
+      .mockResolvedValueOnce({ id: 'p1', status: 'reversed' });
+    (prisma.affiliatePayout.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.affiliate.updateMany as any).mockResolvedValue({ count: 0 }); // gte guard fails
+    (prisma.affiliate.update as any).mockResolvedValue({});
+
+    await reversePayout('p1');
+
+    expect(prisma.affiliate.update).toHaveBeenCalledWith({
+      where: { id: 'aff1' },
+      data: { totalPaid: 0 },
+    });
+  });
+
+  it('refuses to reverse anything but a paid payout', async () => {
+    (prisma.affiliatePayout.findUnique as any).mockResolvedValue({ id: 'p1', affiliateId: 'aff1', status: 'pending', amount: 30 });
+    await expect(reversePayout('p1')).rejects.toThrow(/only paid payouts/i);
+    expect(prisma.affiliatePayout.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the payout row is gone', async () => {
+    (prisma.affiliatePayout.findUnique as any).mockResolvedValue(null);
+    await expect(reversePayout('p1')).rejects.toThrow(/not found/i);
+  });
+
+  it('guards against a concurrent double-reversal (updateMany count 0)', async () => {
+    (prisma.affiliatePayout.findUnique as any).mockResolvedValue({ id: 'p1', affiliateId: 'aff1', status: 'paid', amount: 30, adminNotes: null });
+    (prisma.affiliatePayout.updateMany as any).mockResolvedValue({ count: 0 });
+    await expect(reversePayout('p1')).rejects.toThrow(/already resolved/i);
+    expect(prisma.affiliate.updateMany).not.toHaveBeenCalled();
   });
 });
 

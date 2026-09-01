@@ -292,4 +292,16 @@ describe('reverseEntry', () => {
     // The reversed entry itself is valid.
     expect(() => validateJournalEntry(accounts, reversed)).not.toThrow();
   });
+
+  it('caps the memo at 240 chars so a max-length memo can still be reversed', () => {
+    const long = entry('e1', [
+      { accountId: 'a-cash', debit: 100, credit: 0 },
+      { accountId: 'a-sales', credit: 100, debit: 0 },
+    ]);
+    long.memo = 'x'.repeat(240);
+    const reversed = reverseEntry(long);
+    expect(reversed.memo.length).toBeLessThanOrEqual(240);
+    // And it still passes validation (the memo cap is enforced there).
+    expect(() => validateJournalEntry(accounts, reversed)).not.toThrow();
+  });
 });

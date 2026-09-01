@@ -544,10 +544,39 @@ A lightweight, file-based double-entry bookkeeping module (see
    income to retained earnings via a `closing` entry that the income statement
    ignores but the balance sheet includes.
 
+**Review pass (2026-09) closed four more gaps:**
+
+1. **Sale debits now mirror how the order was actually paid.** The old code
+   debited the gateway account for EVERY paid order and only handled
+   fully-wallet-covered orders. Now the wallet-applied portion
+   (`storeCreditApplied` + `giftCardApplied`, authoritative on the order row)
+   debits customer deposits (2200) and the cash remainder debits the
+   method's asset (gateway 1200 / bank 1100 / cash 1000; unknown methods fall
+   back to the gateway, then any open asset). COD and bank-transfer money no
+   longer lands on the Stripe balance, and wallet+COD/bank orders no longer
+   overstate the cash asset. Refund auto-postings credit the same
+   method-mapped asset (or deposits for creditToStoreCredit refunds).
+2. **Order postings are validated like any other entry.** `postOrderEntry` now
+   runs the built entry through `validateJournalEntry` (suggest validates too),
+   so an order whose totals do not reconcile is refused with a clear 400
+   instead of writing an unbalanced row into the ledger.
+3. **A corrected posting can be re-posted.** The sale double-post guard now
+   ignores voided entries and reversed pairs, so post → void and post →
+   reverse no longer orphan the order from the ledger permanently.
+4. **Reversal pairs are explicit and safe.** The original carries
+   `reversedById`, the offset carries `reversalOf`; an entry with a live
+   reversal cannot be voided (phantom-offset guard — the same distortion class
+   as the earlier reverse-of-voided bug), voiding a reversal un-reverses the
+   original, reversing a reversal is refused, and reversing a max-length memo
+   no longer fails the 240-char cap.
+
 Remaining honest limits: multi-currency is per-ledger (no FX conversion), closing
 a year is permanent (adjust via normal entries in that year), auto-posting is
-opt-in via the env flag, and the cross-process lock needs the instances to share
-the same data directory.
+opt-in via the env flag, the cross-process lock needs the instances to share
+the same data directory, the customer-deposits liability is only auto-posted on
+its consumption side (admin goodwill credits / gift-card issuance must be posted
+manually — see docs/ACCOUNTING.md), and a payment received on an AR-posted
+order is not re-posted as a cash-in transfer (manual entry).
 
 The pure engine lives in `apps/api/src/modules/accounting/accountingEngine.ts`
 and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
@@ -898,7 +927,13 @@ Honest limits:
   commission manually (Admin → Affiliates → Commissions → Void). A
   clawback never recalls money already transferred out in a paid
   payout — it reduces the affiliate's future earnings to keep the
-  ledger consistent. Self-referral orders (the affiliate buying through
+  ledger consistent. A paid payout whose money came back off-platform
+  (returned wire, recovery after a clawback) can be marked **Reversed**
+  by the admin (`POST /api/affiliates/payouts/:id/reverse`): `totalPaid`
+  is clawed back atomically (floor at 0), which also stops the future
+  earnings from being withheld. The store still has to RECOVER the money
+  itself (the system records the reversal, it cannot pull a bank
+  transfer back). Self-referral orders (the affiliate buying through
   their own link) never earn a commission. List endpoints are bounded
   (limit capped at 100 for affiliate-facing lists, 500 for admin
   lists), and payout requests that round to sub-cent amounts are

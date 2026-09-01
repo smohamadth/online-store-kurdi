@@ -887,6 +887,158 @@ describe('Payouts', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
   });
+
+  it('reversing a PAID payout claws back totalPaid and restores availability', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    const earned = commission.amount;
+
+    // Payout the full balance and mark it paid.
+    const req = await request(app)
+      .post('/api/affiliates/me/payouts')
+      .set('Authorization', `Bearer ${affiliate}`)
+      .send({});
+    expect(req.status).toBe(201);
+    const payouts = await request(app).get('/api/affiliates/payouts').set('Authorization', `Bearer ${admin}`);
+    const payout = payouts.body.data[0];
+    await request(app)
+      .post(`/api/affiliates/payouts/${payout.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    let profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalPaid).toBe(earned);
+
+    // Money comes back off-platform -> reverse: totalPaid shrinks, and the
+    // still-approved commission becomes available again.
+    const rev = await request(app)
+      .post(`/api/affiliates/payouts/${payout.id}/reverse`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ adminNotes: 'wire returned' });
+    expect(rev.status).toBe(200);
+    expect(rev.body.data.status).toBe('reversed');
+
+    profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalPaid).toBe(0);
+
+    const stats = await request(app).get('/api/affiliates/me').set('Authorization', `Bearer ${affiliate}`);
+    expect(stats.body.data.stats.available).toBe(earned);
+  });
+
+  it('reversing a payout after a refund clawback leaves the books fully clean', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    const earned = commission.amount;
+
+    // Paid out...
+    await request(app)
+      .post('/api/affiliates/me/payouts')
+      .set('Authorization', `Bearer ${affiliate}`)
+      .send({});
+    const payouts = await request(app).get('/api/affiliates/payouts').set('Authorization', `Bearer ${admin}`);
+    await request(app)
+      .post(`/api/affiliates/payouts/${payouts.body.data[0].id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+
+    // ...then the customer returns the order (commission voided + clawed
+    // back), and the store recovers the transfer off-platform.
+    await refundOrder(admin, order.id);
+    const rev = await request(app)
+      .post(`/api/affiliates/payouts/${payouts.body.data[0].id}/reverse`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(rev.status).toBe(200);
+
+    const profile = await mockPrisma.affiliate.findUnique({ where: { id: affiliateId } });
+    expect(profile?.totalEarned ?? 0).toBe(0);
+    expect(profile?.totalPaid).toBe(0);
+    const stats = await request(app).get('/api/affiliates/me').set('Authorization', `Bearer ${affiliate}`);
+    expect(stats.body.data.stats.available).toBe(0);
+  });
+
+  it('refuses to reverse a payout that was not paid (pending / rejected)', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    await request(app)
+      .post('/api/affiliates/me/payouts')
+      .set('Authorization', `Bearer ${affiliate}`)
+      .send({});
+    const payouts = await request(app).get('/api/affiliates/payouts').set('Authorization', `Bearer ${admin}`);
+    const pending = payouts.body.data[0];
+
+    const rev = await request(app)
+      .post(`/api/affiliates/payouts/${pending.id}/reverse`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(rev.status).toBe(400);
+    expect(rev.body.message).toMatch(/only paid payouts/i);
+
+    // Rejecting stays the correct tool for pending; the row is untouched.
+    const row = await mockPrisma.affiliatePayout.findUnique({ where: { id: pending.id } });
+    expect(row?.status).toBe('pending');
+  });
+
+  it('a second reversal of the same payout is refused', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    await request(app)
+      .post('/api/affiliates/me/payouts')
+      .set('Authorization', `Bearer ${affiliate}`)
+      .send({});
+    const payouts = await request(app).get('/api/affiliates/payouts').set('Authorization', `Bearer ${admin}`);
+    const payout = payouts.body.data[0];
+    await request(app)
+      .post(`/api/affiliates/payouts/${payout.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+
+    const first = await request(app)
+      .post(`/api/affiliates/payouts/${payout.id}/reverse`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(first.status).toBe(200);
+    const second = await request(app)
+      .post(`/api/affiliates/payouts/${payout.id}/reverse`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(second.status).toBe(400);
+  });
+
+  it('payout reversal is admin-only (403 for the affiliate)', async () => {
+    const { admin, affiliate, code, affiliateId } = await approvedAffiliate();
+    const order = await placeOrder({ refCookie: `aff_ref=${encodeURIComponent(code)}` });
+    await settleOrder(admin, order.id);
+    const [commission] = await mockPrisma.affiliateCommission.findMany({ where: { affiliateId } });
+    await request(app)
+      .post(`/api/affiliates/commissions/${commission.id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+    await request(app)
+      .post('/api/affiliates/me/payouts')
+      .set('Authorization', `Bearer ${affiliate}`)
+      .send({});
+    const payouts = await request(app).get('/api/affiliates/payouts').set('Authorization', `Bearer ${admin}`);
+    await request(app)
+      .post(`/api/affiliates/payouts/${payouts.body.data[0].id}/approve`)
+      .set('Authorization', `Bearer ${admin}`);
+
+    const res = await request(app)
+      .post(`/api/affiliates/payouts/${payouts.body.data[0].id}/reverse`)
+      .set('Authorization', `Bearer ${affiliate}`);
+    expect(res.status).toBe(403);
+  });
 });
 
 // =====================================================================

@@ -31,6 +31,7 @@ import {
   listPayouts,
   approvePayout,
   rejectPayout,
+  reversePayout,
 } from '@/lib/affiliates';
 
 type Tab = 'affiliates' | 'commissions' | 'payouts';
@@ -41,7 +42,9 @@ const STATUS_LABEL: Record<string, string> = {
   suspended: 'Suspended',
   approved: 'Approved',
   rejected: 'Rejected',
+  voided: 'Voided',
   paid: 'Paid',
+  reversed: 'Reversed',
 };
 
 export default function AdminAffiliatesPage() {
@@ -377,6 +380,11 @@ export default function AdminAffiliatesPage() {
                         <>
                           {smallBtn('Mark paid', () => run(() => approvePayout(p.id), 'Payout marked paid.'))}
                           {smallBtn('Reject', () => run(() => rejectPayout(p.id), 'Payout rejected.'), true)}
+                        </>
+                      )}
+                      {p.status === 'paid' && (
+                        <>
+                          {smallBtn('Reverse', () => run(() => reversePayout(p.id), 'Payout reversed — totalPaid clawed back.'), true)}
                         </>
                       )}
                     </td>

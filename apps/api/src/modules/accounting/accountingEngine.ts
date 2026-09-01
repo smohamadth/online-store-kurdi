@@ -370,7 +370,9 @@ export function reverseEntry(entry: JournalEntry): NewJournalEntry {
   }));
   return {
     date: entry.date,
-    memo: `REVERSE — ${entry.memo}`,
+    // 'REVERSE — ' + a max-length memo would exceed the 240-char memo cap
+    // and the reversal would be rejected; trim to fit.
+    memo: `REVERSE — ${entry.memo}`.slice(0, 240),
     ...(entry.reference ? { reference: entry.reference } : {}),
     currency: entry.currency,
     kind: 'normal',

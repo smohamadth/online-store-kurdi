@@ -56,7 +56,7 @@ export interface AffiliatePayout {
   id: string;
   affiliateId: string;
   amount: number;
-  status: 'pending' | 'paid' | 'rejected';
+  status: 'pending' | 'paid' | 'rejected' | 'reversed';
   currency: string;
   notes: string | null;
   adminNotes: string | null;
@@ -203,6 +203,14 @@ export async function approvePayout(id: string, adminNotes?: string): Promise<Af
 
 export async function rejectPayout(id: string, adminNotes?: string): Promise<AffiliatePayout> {
   const res = await authHttp.post<AffiliatePayout>(`/affiliates/payouts/${id}/reject`, {
+    adminNotes: adminNotes || undefined,
+  });
+  return res.data;
+}
+
+/** Reverse a paid payout — money was recovered off-platform; totalPaid is clawed back. */
+export async function reversePayout(id: string, adminNotes?: string): Promise<AffiliatePayout> {
+  const res = await authHttp.post<AffiliatePayout>(`/affiliates/payouts/${id}/reverse`, {
     adminNotes: adminNotes || undefined,
   });
   return res.data;

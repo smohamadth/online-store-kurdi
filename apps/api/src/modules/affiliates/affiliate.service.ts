@@ -354,6 +354,48 @@ export async function rejectPayout(payoutId: string, adminNotes?: string | null)
   return prisma.affiliatePayout.findUnique({ where: { id: payoutId } });
 }
 
+/**
+ * Reverse a PAID payout — the "money came back" counterpart to voidCommission.
+ *
+ * Used when the store recovered a transfer off-platform (a clawed-back
+ * commission, a returned wire) and wants the books to match: the payout stops
+ * counting as paid, so `totalPaid` shrinks and the affiliate's available
+ * balance is restored (or, when the underlying commission was also voided,
+ * stays zero — exactly the refund-clawback scenario).
+ *
+ * paid -> reversed, atomic inside one transaction: the status flip plus a
+ * conditional `totalPaid` decrement (gte guard, floor at 0 — the balance can
+ * never go negative, and a concurrent commission-approval can never be lost).
+ * Pending payouts use reject; reversed is terminal.
+ */
+export async function reversePayout(payoutId: string, adminNotes?: string | null) {
+  const payout = await prisma.affiliatePayout.findUnique({ where: { id: payoutId } });
+  if (!payout) throw new AppError('Payout not found', 404);
+  if (payout.status !== 'paid') {
+    throw new AppError(`Only paid payouts can be reversed (this one is ${payout.status}).`, 400);
+  }
+  await prisma.$transaction(async (tx: any) => {
+    const result = await tx.affiliatePayout.updateMany({
+      where: { id: payoutId, status: 'paid' },
+      data: { status: 'reversed', resolvedAt: new Date(), adminNotes: adminNotes ?? payout.adminNotes ?? null },
+    });
+    if (result.count === 0) throw new AppError('Payout was already resolved.', 409);
+    const clawed = await tx.affiliate.updateMany({
+      where: { id: payout.affiliateId, totalPaid: { gte: payout.amount } },
+      data: { totalPaid: { decrement: payout.amount } },
+    });
+    if (clawed.count === 0) {
+      // totalPaid was somehow below the payout amount — zero it rather than
+      // drive the balance negative.
+      await tx.affiliate.update({
+        where: { id: payout.affiliateId },
+        data: { totalPaid: 0 },
+      });
+    }
+  });
+  return prisma.affiliatePayout.findUnique({ where: { id: payoutId } });
+}
+
 // ====================================================================
 // Affiliate status transitions (admin)
 // ====================================================================

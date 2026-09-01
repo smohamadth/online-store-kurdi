@@ -288,25 +288,38 @@ export async function postEntry(input: NewJournalEntry): Promise<JournalEntry> {
 /**
  * Post an exact-offset (reversing) entry for an existing one. This is how a
  * mistaken posting is corrected while keeping the journal append-only.
+ *
+ * The pair is linked: the original gets `reversedById` (so the sale
+ * double-post guard knows it is offset and the order can be re-posted) and
+ * the new entry gets `reversalOf` (so it is never mistaken for a posting).
  */
 export async function reversePostedEntry(id: string): Promise<JournalEntry> {
   return withStoreLock(async () => {
-    const entry = (await loadJournal()).find((e) => e.id === id);
+    const all = await loadJournal();
+    const idx = all.findIndex((e) => e.id === id);
+    const entry = all[idx];
     if (!entry) throw new Error('Entry not found');
     // Same guards as voidEntry: a voided entry no longer counts toward
     // balances, so posting its "reversal" would leave a phantom offset
     // that distorts the books; closing entries must stay immutable.
     if (entry.voided) throw new Error('Cannot reverse a voided entry');
     if (entry.kind === 'closing') throw new Error('Cannot reverse a closing entry');
+    // A reversal is itself an offset: reversing IT would recreate the
+    // original effect. Void the reversal instead (which un-reverses the
+    // original) or post a fresh offsetting entry.
+    if (entry.reversalOf) throw new Error('Cannot reverse a reversing entry — void it instead');
     const accounts = await readAccounts();
     const validated = validateJournalEntry(accounts, reverseEntry(entry));
     const reversed: JournalEntry = {
       ...validated,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
+      reversalOf: entry.id,
     };
-    const entries = await loadJournal();
-    await saveJsonAtomic(journalPath(), [...entries, reversed]);
+    const updated = [...all];
+    updated[idx] = { ...entry, reversedById: reversed.id };
+    updated.push(reversed);
+    await saveJsonAtomic(journalPath(), updated);
     return reversed;
   });
 }
@@ -336,6 +349,9 @@ interface OrderLike {
   discountAmount: number;
   totalAmount: number;
   paymentStatus: string;
+  paymentMethod?: string | null;
+  storeCreditApplied?: number | null;
+  giftCardApplied?: number | null;
   createdAt: Date;
 }
 
@@ -347,13 +363,53 @@ async function accountByCode(accounts: Account[], code: string, purpose: string)
   return a;
 }
 
-/** Build a balanced journal entry from an order (not yet posted). */
+/**
+ * Pick the asset account a payment method settles into, by chart code:
+ *
+ *   stripe / zarinpal / idpay / paypal / zaincash / fib  -> 1200 gateway
+ *   bank_transfer                                        -> 1100 bank
+ *   cash_on_delivery / cod                               -> 1000 cash
+ *
+ * The old code debited the gateway account for EVERY paid order, so a COD
+ * sale (cash collected at the door) or a bank transfer (money in the bank)
+ * was booked against the Stripe balance — the cash accounts never moved.
+ * Unknown methods fall back to the gateway account, then any open asset
+ * account, so a renamed/closed 1200 cannot block posting.
+ */
+function assetAccountForPaymentMethod(accounts: Account[], method?: string | null): Account {
+  const m = (method || '').toLowerCase();
+  const preferred =
+    m === 'bank_transfer' || m === 'bank'
+      ? '1100'
+      : m === 'cash_on_delivery' || m === 'cod'
+        ? '1000'
+        : '1200';
+  const found = accounts.find((x) => x.code === preferred && x.active);
+  if (found) return found;
+  const gateway = accounts.find((x) => x.code === '1200' && x.active);
+  if (gateway) return gateway;
+  const openAsset = accounts.find((x) => x.type === 'asset' && x.active);
+  if (openAsset) return openAsset;
+  throw new Error('No open asset account — add one (e.g. code 1200) to the chart of accounts');
+}
+
+/**
+ * Build a balanced journal entry from an order (not yet posted).
+ *
+ * The debit side reflects HOW the order was actually paid:
+ *   - the wallet-applied portion (store credit + gift card) consumed
+ *     prepaid customer value -> customer deposits (2200);
+ *   - the cash remainder lands in the account that matches the payment
+ *     method (gateway 1200 / bank 1100 / cash 1000) — or accounts
+ *     receivable (1300) when the order is not paid yet;
+ *   - a wallet-covered order with no deposits account falls back to the
+ *     cash asset so the revenue still gets recognized (documented).
+ */
 export async function buildOrderEntry(order: OrderLike): Promise<NewJournalEntry> {
   const accounts = await readAccounts();
   const sales = await accountByCode(accounts, '4000', 'product sales');
   const shipping = await accountByCode(accounts, '4100', 'shipping revenue');
   const tax = await accountByCode(accounts, '2100', 'sales tax payable');
-  const gateway = await accountByCode(accounts, '1200', 'payment gateway');
   const receivable = await accountByCode(accounts, '1300', 'accounts receivable');
 
   const paid = ['completed', 'paid'].includes(order.paymentStatus.toLowerCase());
@@ -362,21 +418,27 @@ export async function buildOrderEntry(order: OrderLike): Promise<NewJournalEntry
   const shippingAmount = Math.round((order.shippingAmount || 0) * 100) / 100;
   const taxAmount = Math.round((order.taxAmount || 0) * 100) / 100;
 
-  // A wallet-covered order (paid entirely by store credit / gift card)
-  // moved no cash: the debit side belongs to the customer-deposits
-  // liability (prepaid customer value), not the payment-gateway asset.
-  // Fall back to the gateway account only when a custom chart removed
-  // the deposits account, so the revenue still gets recognized.
-  let assetAccount = paid ? gateway : receivable;
-  if (paid) {
-    const walletPayment = await prisma.payment.findFirst({
-      where: { orderId: order.id, status: 'completed', method: { in: ['store_credit', 'gift_card'] } },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (walletPayment) {
-      const deposits = accounts.find((x) => x.code === '2200' && x.active);
-      if (deposits) assetAccount = deposits;
-    }
+  // Wallet-applied credit is authoritative on the order row (server-set at
+  // checkout). The old code probed the Payment rows and only handled the
+  // fully-covered case; a wallet+COD/bank order debited the WHOLE amount to
+  // the cash asset even though the wallet portion never moved cash.
+  const walletApplied = Math.min(
+    amount,
+    Math.round(((order.storeCreditApplied || 0) + (order.giftCardApplied || 0)) * 100) / 100,
+  );
+  const deposits = accounts.find((x) => x.code === '2200' && x.active);
+
+  const debitLines: JournalLine[] = [];
+  let cashRemainder = amount;
+  if (walletApplied > 0 && deposits) {
+    debitLines.push({ accountId: deposits.id, debit: walletApplied, credit: 0 });
+    cashRemainder = Math.round((amount - walletApplied) * 100) / 100;
+  }
+  if (cashRemainder > 0) {
+    const assetAccount = paid
+      ? assetAccountForPaymentMethod(accounts, order.paymentMethod)
+      : receivable;
+    debitLines.push({ accountId: assetAccount.id, debit: cashRemainder, credit: 0 });
   }
 
   return {
@@ -385,7 +447,7 @@ export async function buildOrderEntry(order: OrderLike): Promise<NewJournalEntry
     reference: order.orderNumber,
     currency: DEFAULT_CURRENCY,
     lines: [
-      { accountId: assetAccount.id, debit: amount, credit: 0 },
+      ...debitLines,
       { accountId: sales.id, debit: 0, credit: salesAmount },
       ...(shippingAmount > 0 ? [{ accountId: shipping.id, debit: 0, credit: shippingAmount }] : []),
       ...(taxAmount > 0 ? [{ accountId: tax.id, debit: 0, credit: taxAmount }] : []),
@@ -397,7 +459,10 @@ export async function buildOrderEntry(order: OrderLike): Promise<NewJournalEntry
 export async function suggestOrderEntry(orderId: string): Promise<{ order: OrderLike; entry: NewJournalEntry }> {
   const order = (await prisma.order.findUnique({ where: { id: orderId } })) as OrderLike | null;
   if (!order) throw new Error('Order not found');
-  const entry = await buildOrderEntry(order);
+  const built = await buildOrderEntry(order);
+  // Validate up-front so an order whose totals do not reconcile is flagged
+  // at review time (the entry would be refused at post time anyway).
+  const entry = validateJournalEntry(await readAccounts(), built);
   return { order, entry };
 }
 
@@ -405,6 +470,13 @@ export async function suggestOrderEntry(orderId: string): Promise<{ order: Order
  * Post the sale entry for an order. Guards against double-posting: an order
  * whose reference is already in the journal is refused, so re-running the
  * action cannot create a duplicate entry.
+ *
+ * The guard ignores entries that no longer represent the sale: VOIDED
+ * entries (the "never should have been posted" correction must allow a
+ * correct re-post), entries OFFSET by a reversal (`reversedById`), and the
+ * reversal entries themselves (`reversalOf` — they are offsets, not
+ * postings). Without this, post → reverse (or post → void) permanently
+ * orphaned the order from the ledger: every later attempt was refused.
  */
 export async function postOrderEntry(orderId: string): Promise<JournalEntry> {
   return withStoreLock(async () => {
@@ -412,14 +484,28 @@ export async function postOrderEntry(orderId: string): Promise<JournalEntry> {
     if (!order) throw new Error('Order not found');
 
     const existing = await loadJournal();
-    if (existing.some((e) => e.reference === order.orderNumber)) {
+    const alreadyPosted = existing.some(
+      (e) =>
+        e.reference === order.orderNumber &&
+        !e.voided &&
+        !e.reversedById &&
+        !e.reversalOf,
+    );
+    if (alreadyPosted) {
       throw new Error(`Order ${order.orderNumber} is already posted to the ledger`);
     }
 
     const built = await buildOrderEntry(order);
+    // Defense in depth: the double-entry invariant is enforced on every
+    // OTHER write path (postEntry runs validateJournalEntry), and the
+    // order path must not bypass it. An order whose totals do not
+    // reconcile (legacy data, a bug, tampering) is refused here with a
+    // clear message instead of corrupting the ledger with an unbalanced
+    // entry — auto-posting stays best-effort and just skips it.
+    const validated = validateJournalEntry(await readAccounts(), built);
     const entry: JournalEntry = {
-      ...built,
-      currency: built.currency || DEFAULT_CURRENCY,
+      ...validated,
+      currency: validated.currency || DEFAULT_CURRENCY,
       voided: false,
       kind: 'normal',
       id: crypto.randomUUID(),
@@ -438,6 +524,12 @@ export async function postOrderEntry(orderId: string): Promise<JournalEntry> {
  * Void a posted entry: mark it voided so it stops counting toward balances and
  * reports, while keeping the original row in the journal for the audit trail.
  * The append-only principle is preserved — nothing is deleted.
+ *
+ * Pair rules (a voided entry must never leave a phantom offset behind):
+ *   - an entry with a live reversal (`reversedById`) cannot be voided —
+ *     voiding it would leave the reversal counting with nothing to offset;
+ *   - voiding a REVERSAL entry un-reverses the original (its `reversedById`
+ *     pointer is cleared), so the original is live again.
  */
 export async function voidEntry(id: string): Promise<JournalEntry> {
   return withStoreLock(async () => {
@@ -446,7 +538,18 @@ export async function voidEntry(id: string): Promise<JournalEntry> {
     if (idx === -1) throw new Error('Entry not found');
     if (all[idx].voided) throw new Error('Entry is already voided');
     if (all[idx].kind === 'closing') throw new Error('Closing entries cannot be voided');
+    if (all[idx].reversedById) {
+      throw new Error('Entry has a live reversing entry — void the reversal first');
+    }
     const updated = [...all];
+    if (all[idx].reversalOf) {
+      const origIdx = all.findIndex((e) => e.id === all[idx].reversalOf);
+      if (origIdx !== -1 && updated[origIdx].reversedById === id) {
+        const orig = { ...updated[origIdx] };
+        delete orig.reversedById;
+        updated[origIdx] = orig;
+      }
+    }
     updated[idx] = { ...all[idx], voided: true };
     await saveJsonAtomic(journalPath(), updated);
     return updated[idx];
@@ -534,14 +637,17 @@ export async function autoPostOrder(orderId: string): Promise<JournalEntry | nul
 }
 
 /**
- * Best-effort refund posting: debit refunds/returns, credit the payment
- * gateway. Used when a completed payment is refunded. Never throws.
+ * Best-effort refund posting: debit refunds/returns, credit the account the
+ * money came from. Used when a completed payment is refunded. Never throws.
  *
- * `toStoreCredit` refunds return value to the customer's store-credit
+ * The credit side mirrors the ORIGINAL payment: a cash refund returns money
+ * to the asset it was paid from (gateway 1200 / bank 1100 / cash 1000 — the
+ * old code credited the gateway for every refund, so a bank-transferred or
+ * COD order's refund was booked against the Stripe balance). A
+ * `toStoreCredit` refund returns value to the customer's store-credit
  * balance — no cash moves — so the credit side is the customer-deposits
- * liability (2200) instead of the gateway account; if a custom chart
- * removed that account the posting is skipped rather than fabricating a
- * cash event.
+ * liability (2200); if a custom chart removed that account the posting is
+ * skipped rather than fabricating a cash event.
  */
 export async function autoPostRefund(
   orderId: string,
@@ -553,18 +659,28 @@ export async function autoPostRefund(
     return await withStoreLock(async () => {
       const accounts = await readAccounts();
       const refunds = await accountByCode(accounts, '4200', 'refunds & returns');
+      // The order row is fetched for its payment method + human order
+      // number (the memo/reference should say ORD-…, not a UUID). Fall
+      // back to the orderId when the row is somehow gone.
+      const order = (await prisma.order.findUnique({ where: { id: orderId } })) as OrderLike | null;
       let creditAccount: Account;
       if (opts?.toStoreCredit) {
         const deposits = accounts.find((x) => x.code === '2200' && x.active);
         if (!deposits) return null; // no deposit liability account: skip, don't fabricate cash
         creditAccount = deposits;
       } else {
-        creditAccount = await accountByCode(accounts, '1200', 'payment gateway');
+        creditAccount = order
+          ? assetAccountForPaymentMethod(accounts, order.paymentMethod)
+          : await accountByCode(accounts, '1200', 'payment gateway');
       }
       const entry: JournalEntry = {
         id: crypto.randomUUID(),
         date: new Date().toISOString().slice(0, 10),
-        memo: `Refund — order ${orderId}`,
+        memo: `Refund — order ${order?.orderNumber ?? orderId}`,
+        // The reference stays the order ID (NOT the order number): partial
+        // refunds legitimately share one order, and the sale entry's
+        // double-post guard matches on the order number — a refund entry
+        // must never look like the order's sale entry.
         reference: orderId,
         currency: DEFAULT_CURRENCY,
         lines: [

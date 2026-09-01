@@ -426,6 +426,347 @@ describe('order → journal', () => {
   });
 });
 
+describe('order → journal: debit mapping by payment method', () => {
+  async function adminToken() {
+    return (await authHeader({ role: 'admin' })).token;
+  }
+  async function chart() {
+    return (await adminGet('/api/accounting/accounts')).body.data;
+  }
+
+  it('debited the gateway for every paid order before this fix; now maps by method', async () => {
+    const token = await adminToken();
+    const accs = await chart();
+    const bank = accs.find((a: any) => a.code === '1100');
+    const cash = accs.find((a: any) => a.code === '1000');
+    const gateway = accs.find((a: any) => a.code === '1200');
+    const user = (await authHeader({ role: 'admin' })).user;
+
+    // Bank transfer -> bank account, not the gateway balance.
+    const bankOrder = await createOrder(user.id, { paymentStatus: 'paid', paymentMethod: 'bank_transfer', subtotal: 90, taxAmount: 10, totalAmount: 100 });
+    const bankPost = await request(app)
+      .post(`/api/accounting/orders/${bankOrder.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(bankPost.status).toBe(200);
+    expect(bankPost.body.data.lines.some((l: any) => l.accountId === bank.id && l.debit === 100)).toBe(true);
+    expect(bankPost.body.data.lines.some((l: any) => l.accountId === gateway.id)).toBe(false);
+
+    // COD -> cash on hand.
+    const codOrder = await createOrder(user.id, { paymentStatus: 'paid', paymentMethod: 'cash_on_delivery', subtotal: 50, taxAmount: 0, totalAmount: 50 });
+    const codPost = await request(app)
+      .post(`/api/accounting/orders/${codOrder.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(codPost.status).toBe(200);
+    expect(codPost.body.data.lines.some((l: any) => l.accountId === cash.id && l.debit === 50)).toBe(true);
+
+    // Gateway method -> gateway account (unchanged behaviour).
+    const gwOrder = await createOrder(user.id, { paymentStatus: 'paid', paymentMethod: 'stripe', subtotal: 30, taxAmount: 0, totalAmount: 30 });
+    const gwPost = await request(app)
+      .post(`/api/accounting/orders/${gwOrder.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(gwPost.status).toBe(200);
+    expect(gwPost.body.data.lines.some((l: any) => l.accountId === gateway.id && l.debit === 30)).toBe(true);
+  });
+
+  it('splits the debit: wallet-applied credit -> deposits, remainder -> method asset', async () => {
+    const token = await adminToken();
+    const accs = await chart();
+    const deposits = accs.find((a: any) => a.code === '2200');
+    const cash = accs.find((a: any) => a.code === '1000');
+    const user = (await authHeader({ role: 'admin' })).user;
+
+    // $100 COD order, $40 covered by gift card at checkout: the sale entry
+    // must debit deposits $40 (prepaid value consumed) and cash $60 — NOT
+    // cash $100 (the old behaviour booked money the store never collected).
+    const order = await createOrder(user.id, {
+      paymentStatus: 'paid',
+      paymentMethod: 'cash_on_delivery',
+      subtotal: 90,
+      taxAmount: 10,
+      totalAmount: 100,
+      giftCardApplied: 40,
+    });
+    const post = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(post.status).toBe(200);
+    const lines = post.body.data.lines;
+    expect(lines.some((l: any) => l.accountId === deposits.id && l.debit === 40)).toBe(true);
+    expect(lines.some((l: any) => l.accountId === cash.id && l.debit === 60)).toBe(true);
+
+    // The entry balances and the balance sheet stays balanced.
+    const debit = lines.reduce((s: number, l: any) => s + l.debit, 0);
+    const credit = lines.reduce((s: number, l: any) => s + l.credit, 0);
+    expect(debit).toBe(credit);
+  });
+
+  it('a fully wallet-covered order debits deposits only', async () => {
+    const token = await adminToken();
+    const accs = await chart();
+    const deposits = accs.find((a: any) => a.code === '2200');
+    const cash = accs.find((a: any) => a.code === '1000');
+    const user = (await authHeader({ role: 'admin' })).user;
+
+    const order = await createOrder(user.id, {
+      paymentStatus: 'paid',
+      paymentMethod: 'stripe', // selected card but fully covered by credit
+      subtotal: 80,
+      taxAmount: 0,
+      totalAmount: 80,
+      storeCreditApplied: 80,
+    });
+    const post = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(post.status).toBe(200);
+    const lines = post.body.data.lines;
+    expect(lines.some((l: any) => l.accountId === deposits.id && l.debit === 80)).toBe(true);
+    expect(lines.some((l: any) => l.accountId === cash.id)).toBe(false);
+  });
+
+  it('refuses to post an order whose totals do not reconcile (invariant defense)', async () => {
+    const token = await adminToken();
+    const user = (await authHeader({ role: 'admin' })).user;
+    // subtotal 100 + tax 10 = 110, but totalAmount says 100 — the built
+    // entry would be unbalanced. Regression: postOrderEntry used to skip
+    // validateJournalEntry and wrote the unbalanced entry straight into
+    // the ledger, breaking the double-entry invariant at the source.
+    const order = await createOrder(user.id, { paymentStatus: 'paid', subtotal: 100, taxAmount: 10, totalAmount: 100 });
+    const post = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(post.status).toBe(400);
+    expect(post.body.code).toBe('POST_ORDER_FAILED');
+    // Nothing was written.
+    const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    expect(entries.body.data).toHaveLength(0);
+  });
+
+  it('an unpaid wallet+COD order splits between deposits and accounts receivable', async () => {
+    const token = await adminToken();
+    const accs = await chart();
+    const deposits = accs.find((a: any) => a.code === '2200');
+    const ar = accs.find((a: any) => a.code === '1300');
+    const user = (await authHeader({ role: 'admin' })).user;
+
+    const order = await createOrder(user.id, {
+      paymentStatus: 'pending',
+      paymentMethod: 'cash_on_delivery',
+      subtotal: 90,
+      taxAmount: 10,
+      totalAmount: 100,
+      storeCreditApplied: 25,
+    });
+    const post = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(post.status).toBe(200);
+    const lines = post.body.data.lines;
+    expect(lines.some((l: any) => l.accountId === deposits.id && l.debit === 25)).toBe(true);
+    expect(lines.some((l: any) => l.accountId === ar.id && l.debit === 75)).toBe(true);
+  });
+});
+
+describe('re-posting an order after a correction (void / reverse)', () => {
+  async function postOrderAndReturnId() {
+    const token = (await authHeader({ role: 'admin' })).token;
+    const user = (await authHeader({ role: 'admin' })).user;
+    const order = await createOrder(user.id, { paymentStatus: 'paid', subtotal: 90, taxAmount: 10, totalAmount: 100 });
+    const post = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(post.status).toBe(200);
+    return { token, order, entryId: post.body.data.id };
+  }
+
+  it('post -> void -> post again: the correction must not orphan the order', async () => {
+    const { token, order } = await postOrderAndReturnId();
+    const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    const saleId = entries.body.data[0].id;
+
+    const voidRes = await request(app)
+      .post(`/api/accounting/entries/${saleId}/void`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(voidRes.status).toBe(200);
+
+    // Regression: the old double-post guard matched ANY row with the
+    // order's reference — including the voided one — so a corrected
+    // posting was impossible without hand-editing the journal file.
+    const repost = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(repost.status).toBe(200);
+    expect(repost.body.data.reference).toBe(order.orderNumber);
+  });
+
+  it('post -> reverse -> post again: a reversed order can be re-posted', async () => {
+    const { token, order } = await postOrderAndReturnId();
+    const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    const saleId = entries.body.data[0].id;
+
+    const rev = await request(app)
+      .post(`/api/accounting/entries/${saleId}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(rev.status).toBe(200);
+
+    const repost = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(repost.status).toBe(200);
+
+    // Exactly one live sale posting remains (original is offset).
+    const list = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    const liveSales = list.body.data.filter(
+      (e: any) => e.reference === order.orderNumber && !e.voided && !e.reversedById && !e.reversalOf,
+    );
+    expect(liveSales).toHaveLength(1);
+  });
+
+  it('voiding a reversal un-reverses the original (it counts again)', async () => {
+    const { token, order } = await postOrderAndReturnId();
+    const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    const saleId = entries.body.data[0].id;
+    const rev = await request(app)
+      .post(`/api/accounting/entries/${saleId}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+    const reversalId = rev.body.data.id;
+
+    const voidRev = await request(app)
+      .post(`/api/accounting/entries/${reversalId}/void`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(voidRev.status).toBe(200);
+
+    // The original is live again -> re-posting is refused (already posted).
+    const repost = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(repost.status).toBe(400);
+    expect(repost.body.code).toBe('POST_ORDER_FAILED');
+  });
+
+  it('refuses to void an entry that has a live reversal (phantom-offset guard)', async () => {
+    const { token } = await postOrderAndReturnId();
+    const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    const saleId = entries.body.data[0].id;
+    await request(app)
+      .post(`/api/accounting/entries/${saleId}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const voidRes = await request(app)
+      .post(`/api/accounting/entries/${saleId}/void`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(voidRes.status).toBe(400);
+    expect(voidRes.body.code).toBe('VOID_FAILED');
+  });
+
+  it('refuses to reverse a reversing entry', async () => {
+    const { token } = await postOrderAndReturnId();
+    const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+    const saleId = entries.body.data[0].id;
+    const rev = await request(app)
+      .post(`/api/accounting/entries/${saleId}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const again = await request(app)
+      .post(`/api/accounting/entries/${rev.body.data.id}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(again.status).toBe(400);
+    expect(again.body.code).toBe('REVERSE_FAILED');
+  });
+
+  it('reversing an entry with a max-length memo still works (memo cap)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const accs = await (await adminGet('/api/accounting/accounts')).body.data;
+    const cash = accs.find((a: any) => a.code === '1000');
+    const sales = accs.find((a: any) => a.code === '4000');
+    const longMemo = 'x'.repeat(240);
+    const post = await request(app)
+      .post('/api/accounting/entries')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        date: '2024-05-01',
+        memo: longMemo,
+        lines: [
+          { accountId: cash.id, debit: 10 },
+          { accountId: sales.id, credit: 10 },
+        ],
+      });
+    expect(post.status).toBe(200);
+
+    // Regression: 'REVERSE — ' + 240 chars exceeded the 240-char memo cap
+    // and the reversal was rejected, stranding the entry.
+    const rev = await request(app)
+      .post(`/api/accounting/entries/${post.body.data.id}/reverse`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(rev.status).toBe(200);
+    expect(rev.body.data.memo.length).toBeLessThanOrEqual(240);
+  });
+});
+
+describe('refund auto-posting credits the method asset', () => {
+  it('a bank-transfer order refunded in cash credits the bank account', async () => {
+    process.env.ACCOUNTING_AUTO_POST = 'true';
+    try {
+      const token = (await authHeader({ role: 'admin' })).token;
+      const user = (await authHeader({ role: 'admin' })).user;
+      const order = await createOrder(user.id, {
+        paymentStatus: 'completed',
+        paymentMethod: 'bank_transfer',
+        subtotal: 90,
+        taxAmount: 10,
+        totalAmount: 100,
+      });
+      const refund = await request(app)
+        .post('/api/payments/refund')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, reason: 'return' });
+      expect(refund.status).toBe(200);
+
+      const accs = (await adminGet('/api/accounting/accounts')).body.data;
+      const bank = accs.find((a: any) => a.code === '1100');
+      const gateway = accs.find((a: any) => a.code === '1200');
+      const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+      const refundEntry = entries.body.data.find((e: any) => e.memo.includes('Refund'));
+      expect(refundEntry).toBeTruthy();
+      expect(refundEntry.memo).toContain(order.orderNumber); // human-readable, not a UUID
+      expect(refundEntry.lines.some((l: any) => l.accountId === bank.id && l.credit === 100)).toBe(true);
+      expect(refundEntry.lines.some((l: any) => l.accountId === gateway.id)).toBe(false);
+    } finally {
+      delete process.env.ACCOUNTING_AUTO_POST;
+    }
+  });
+
+  it('a creditToStoreCredit refund credits customer deposits (not the gateway)', async () => {
+    process.env.ACCOUNTING_AUTO_POST = 'true';
+    try {
+      const token = (await authHeader({ role: 'admin' })).token;
+      const user = (await authHeader({ role: 'admin' })).user;
+      const order = await createOrder(user.id, {
+        paymentStatus: 'completed',
+        paymentMethod: 'stripe',
+        subtotal: 90,
+        taxAmount: 10,
+        totalAmount: 100,
+      });
+      const refund = await request(app)
+        .post('/api/payments/refund')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, reason: 'return', creditToStoreCredit: true });
+      expect(refund.status).toBe(200);
+
+      const accs = (await adminGet('/api/accounting/accounts')).body.data;
+      const deposits = accs.find((a: any) => a.code === '2200');
+      const gateway = accs.find((a: any) => a.code === '1200');
+      const entries = await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`);
+      const refundEntry = entries.body.data.find((e: any) => e.memo.includes('Refund'));
+      expect(refundEntry.lines.some((l: any) => l.accountId === deposits.id && l.credit === 100)).toBe(true);
+      expect(refundEntry.lines.some((l: any) => l.accountId === gateway.id)).toBe(false);
+    } finally {
+      delete process.env.ACCOUNTING_AUTO_POST;
+    }
+  });
+});
+
 describe('CSV export', () => {
   it('exports the trial balance as CSV', async () => {
     await postSale(50);

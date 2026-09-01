@@ -33,6 +33,7 @@ refer. It is **off by default** — enable it in **Admin → Affiliates**.
 | Commission       | `pending`/`approved` → `voided`   | refund clawback or manual admin reversal; `totalEarned -= amount` if it was approved (floored at 0) |
 | Payout request   | `pending` → `paid` (admin)        | `totalPaid += amount`            |
 | Payout request   | `pending` → `rejected` (admin)    | terminal; balance untouched      |
+| Payout request   | `paid` → `reversed` (admin)       | money recovered off-platform; `totalPaid -= amount` (floored at 0) — the affiliate's available balance is restored |
 
 - **Available balance** = sum of approved commissions − sum of paid
   payouts. Never negative (clamped).
@@ -49,6 +50,10 @@ refer. It is **off by default** — enable it in **Admin → Affiliates**.
   refund path never fails because of the affiliate ledger (best-effort).
   Partial refunds leave the commission alone; the admin can void it
   manually (Admin → Affiliates → Commissions → Void).
+- If a payout was already **paid** when the money comes back (returned
+  wire, recovery after a clawback), the admin marks it **Reversed**
+  (Admin → Affiliates → Payouts → Reverse): `totalPaid` shrinks so the
+  books match reality and future earnings stop being withheld.
 - Buying through your own link never earns: the affiliate is not their
   own customer.
 - Per-affiliate rate overrides: Admin → Affiliates → set a custom % for a
@@ -71,7 +76,7 @@ refer. It is **off by default** — enable it in **Admin → Affiliates**.
 | `GET /api/affiliates/commissions`     | admin   | commission ledger                    |
 | `POST /api/affiliates/commissions/:id/approve\|reject\|void` | admin | resolve / reverse a commission |
 | `GET /api/affiliates/payouts`         | admin   | payout requests                      |
-| `POST /api/affiliates/payouts/:id/approve\|reject`     | admin | resolve a payout     |
+| `POST /api/affiliates/payouts/:id/approve\|reject\|reverse` | admin | resolve / reverse a payout |
 
 Program settings live on `StoreSettings`: `affiliateEnabled` (bool) and
 `affiliateRate` (float, percent), editable via `PUT /api/settings`.

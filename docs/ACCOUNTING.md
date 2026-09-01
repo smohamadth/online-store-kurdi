@@ -67,11 +67,17 @@ deleted), two corrective tools exist:
 - **Reverse** — post an exact offset (every debit becomes a credit and
   vice-versa), backed by `POST /api/accounting/entries/:id/reverse`. Use this
   when the entry was *correct but shouldn't stay* (e.g. a miskeyed amount).
+  The pair is linked: the original carries `reversedById` and the new entry
+  `reversalOf`, so the sale double-post guard knows the original is offset
+  and the order can be re-posted. A reversal entry cannot itself be reversed
+  (void it instead).
 - **Void** — mark the entry `voided` so it stops counting toward balances and
   reports but stays in the journal for the audit trail, backed by
   `POST /api/accounting/entries/:id/void`. Use this when the entry was *never
   supposed to be posted*. Voided entries are excluded everywhere except the
-  journal list; closing entries cannot be voided.
+  journal list; closing entries cannot be voided, and an entry with a live
+  reversal cannot be voided (void the reversal first — that automatically
+  un-reverses the original).
 
 ## Posting from orders
 
@@ -80,16 +86,40 @@ hand-typing every leg. Paste an order id, preview the suggested entry, then post
 it. The engine derives a balanced entry from the order's own totals:
 
 ```
-Debit  payment gateway / accounts receivable   totalAmount
-Credit product sales                           subtotal − discount
-Credit shipping revenue                        shippingAmount
-Credit sales tax payable                       taxAmount
+Debit  customer deposits (wallet-applied portion)   storeCredit + giftCard applied
+Debit  method asset / accounts receivable           the remainder
+Credit product sales                                subtotal − discount
+Credit shipping revenue                             shippingAmount
+Credit sales tax payable                            taxAmount
 ```
 
-The debit account follows the order's payment status (paid ⇒ the payment-gateway
-asset; unpaid ⇒ accounts receivable), and accounts are matched by their chart
-code. Posting is **duplicate-guarded**: an order whose reference is already in
-the journal is refused, so re-running the action can't double-post a sale.
+The debit side mirrors how the order was actually paid:
+
+- the **wallet-applied portion** (store credit + gift card, read from the
+  order's authoritative `storeCreditApplied`/`giftCardApplied` columns)
+  consumed prepaid customer value → **customer deposits (2200)**;
+- the **cash remainder** lands in the account matching the payment method —
+  gateway **1200** (Stripe/Zarinpal/IDPay/PayPal/…), bank **1100**
+  (`bank_transfer`), cash **1000** (`cash_on_delivery`) — and a method that
+  maps nowhere falls back to the gateway account, then any open asset;
+- an **unpaid** order goes to accounts receivable **1300** (minus the wallet
+  portion).
+
+(Previously every paid order was debited to the gateway account regardless of
+method, so COD and bank-transfer money was booked against the Stripe balance,
+and wallet+COD orders overstated the cash asset by the wallet portion.)
+
+Accounts are matched by their chart code. Posting is **duplicate-guarded**: an
+order whose sale entry is already in the journal is refused, so re-running the
+action can't double-post a sale — and the guard ignores voided entries and
+reversed pairs, so a corrected posting (post → void, or post → reverse) can be
+re-posted afterwards. The built entry runs through the same double-entry
+validation as hand-posted entries: an order whose totals do not reconcile is
+refused (400) instead of writing an unbalanced row into the ledger.
+
+Refunds are auto-posted the same way: the credit side returns money to the
+asset it was paid from (gateway/bank/cash by method) — or to customer deposits
+for `creditToStoreCredit` refunds, which move no cash.
 
 ## Multi-currency
 
@@ -265,3 +295,15 @@ fails the payment settlement.
 - **Shared-filesystem requirement.** The cross-process lock needs all API
   instances to share the same data directory (NFS / mounted volume); it does not
   span separate databases.
+- **The customer-deposits liability only shows its consumption side
+  automatically.** Sale entries debit 2200 for the wallet-applied portion and
+  `creditToStoreCredit` refunds credit it — but the *issuance* of store credit /
+  gift cards by admin goodwill credits or card issuance is not auto-posted (the
+  account to debit is a business judgment, e.g. a marketing expense). Post those
+  manually with the entry composer (debit the expense/AR account, credit 2200)
+  or the deposits account drifts negative. Orders paid later from wallet credit
+  are always booked correctly against 2200.
+- **Payments received on an AR-posted order are not re-posted.** An order
+  posted while unpaid sits in accounts receivable; when it is later paid, no
+  "cash in, AR out" transfer entry is generated automatically — post it manually
+  (debit the method asset, credit 1300).

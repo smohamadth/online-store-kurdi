@@ -303,6 +303,9 @@ export async function createOrder(userId: string, overrides: Partial<{
   shippingAmount: number;
   totalAmount: number;
   paymentStatus: 'pending' | 'paid' | 'refunded' | 'failed';
+  paymentMethod?: string | null;
+  storeCreditApplied?: number;
+  giftCardApplied?: number;
 }> = {}) {
   const p = await prisma();
   return p.order.create({
@@ -315,6 +318,9 @@ export async function createOrder(userId: string, overrides: Partial<{
       shippingAmount: overrides.shippingAmount ?? 0,
       totalAmount: overrides.totalAmount ?? 110,
       paymentStatus: overrides.paymentStatus ?? 'pending',
+      paymentMethod: overrides.paymentMethod ?? null,
+      storeCreditApplied: overrides.storeCreditApplied ?? 0,
+      giftCardApplied: overrides.giftCardApplied ?? 0,
     },
   });
 }

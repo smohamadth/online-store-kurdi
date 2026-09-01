@@ -70,6 +70,19 @@ export interface JournalEntry {
   /** Voided entries are excluded from balances/reports but kept for the audit. */
   voided: boolean;
   kind: EntryKind;
+  /**
+   * Set on the ORIGINAL entry when a reversing entry is posted for it
+   * (the reverse is append-only, but the pointer keeps the pair explicit:
+   * the original stops counting as "the order's posting" so the order can
+   * be re-posted after a mistaken reverse).
+   */
+  reversedById?: string;
+  /**
+   * Set on a REVERSING entry: the id of the entry it offsets. A reversal
+   * entry is an offset, never a posting — the sale double-post guard and
+   * the reverse-of-reversal guard use this to tell them apart.
+   */
+  reversalOf?: string;
 }
 
 /** A journal entry as submitted by a client (before id/createdAt are set). */

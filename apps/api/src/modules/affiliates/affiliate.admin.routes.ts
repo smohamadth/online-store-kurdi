@@ -14,6 +14,9 @@
 //   GET  /api/affiliates/payouts            list payout requests (+ filter)
 //   POST /api/affiliates/payouts/:id/approve      pending -> paid
 //   POST /api/affiliates/payouts/:id/reject       pending -> rejected
+//   POST /api/affiliates/payouts/:id/reverse      paid -> reversed (money
+//                                                 recovered off-platform;
+//                                                 totalPaid clawed back)
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { z } from 'zod';
@@ -25,6 +28,7 @@ import {
   approvePayout,
   rejectCommission,
   rejectPayout,
+  reversePayout,
   setAffiliateRate,
   setAffiliateStatus,
   voidCommission,
@@ -169,6 +173,17 @@ router.post('/payouts/:id/reject', async (req, res, next) => {
   try {
     const body = payoutResolutionSchema.parse(req.body ?? {});
     const payout = await rejectPayout(req.params.id, body.adminNotes ?? null);
+    res.json({ status: 'success', data: payout });
+  } catch (err) { next(err); }
+});
+
+// POST /api/affiliates/payouts/:id/reverse — record that money came back
+// off-platform (returned wire, recovered after a refund clawback, …).
+// paid -> reversed; totalPaid is clawed back atomically (floor at 0).
+router.post('/payouts/:id/reverse', async (req, res, next) => {
+  try {
+    const body = payoutResolutionSchema.parse(req.body ?? {});
+    const payout = await reversePayout(req.params.id, body.adminNotes ?? null);
     res.json({ status: 'success', data: payout });
   } catch (err) { next(err); }
 });

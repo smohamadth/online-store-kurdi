@@ -21,6 +21,7 @@ const mockVoidCommission = vi.fn();
 const mockListPayouts = vi.fn();
 const mockApprovePayout = vi.fn();
 const mockRejectPayout = vi.fn();
+const mockReversePayout = vi.fn();
 vi.mock('@/lib/affiliates', () => ({
   listAffiliates: (...a: unknown[]) => mockListAffiliates(...a),
   approveAffiliate: (...a: unknown[]) => mockApproveAffiliate(...a),
@@ -33,6 +34,7 @@ vi.mock('@/lib/affiliates', () => ({
   listPayouts: (...a: unknown[]) => mockListPayouts(...a),
   approvePayout: (...a: unknown[]) => mockApprovePayout(...a),
   rejectPayout: (...a: unknown[]) => mockRejectPayout(...a),
+  reversePayout: (...a: unknown[]) => mockReversePayout(...a),
 }));
 
 const mockSettingsGet = vi.fn();
@@ -114,6 +116,7 @@ describe('Admin affiliates page', () => {
     mockListPayouts.mockReset();
     mockApprovePayout.mockReset();
     mockRejectPayout.mockReset();
+    mockReversePayout.mockReset();
     mockSettingsGet.mockReset();
     mockSettingsPut.mockReset();
 
@@ -221,6 +224,29 @@ describe('Admin affiliates page', () => {
     // The refresh shows the voided row: no approve/reject/void actions remain.
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it('reverses a paid payout (money recovered off-platform)', async () => {
+    mockListPayouts
+      .mockResolvedValueOnce([{ ...PENDING_PAYOUT, status: 'paid' }])
+      .mockResolvedValue([{ ...PENDING_PAYOUT, status: 'reversed' }]);
+    mockReversePayout.mockResolvedValue({ ...PENDING_PAYOUT, status: 'reversed' });
+    render(<AdminAffiliatesPage />);
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: /payouts \(0 pending\)/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('payouts-table')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^reverse$/i }));
+    await waitFor(() => {
+      expect(mockReversePayout).toHaveBeenCalledWith('p1');
+    });
+    // After the refresh the row is reversed: no action buttons remain.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /^reverse$/i })).not.toBeInTheDocument();
     });
   });
 
