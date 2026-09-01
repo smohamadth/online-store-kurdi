@@ -37,33 +37,33 @@ const variantCreateSchema = z.object({
   name: z.string().min(1).max(120),
   sku: z.string().min(1).max(100),
   slug: z.string().min(1).max(140).optional(),
-  price: z.number().positive(),
-  compareAtPrice: z.number().nonnegative().optional(),
-  quantity: z.number().int().min(0).optional(),
+  price: z.number().finite().positive(),
+  compareAtPrice: z.number().finite().nonnegative().optional(),
+  quantity: z.number().finite().int().min(0).optional(),
   attributes: attributesSchema,
   isActive: z.boolean().optional(),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().finite().int().optional(),
 });
 
 const variantPatchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   sku: z.string().min(1).max(100).optional(),
   slug: z.string().min(1).max(140).nullable().optional(),
-  price: z.number().positive().optional(),
-  compareAtPrice: z.number().nonnegative().nullable().optional(),
-  quantity: z.number().int().min(0).optional(),
+  price: z.number().finite().positive().optional(),
+  compareAtPrice: z.number().finite().nonnegative().nullable().optional(),
+  quantity: z.number().finite().int().min(0).optional(),
   attributes: attributesSchema,
   isActive: z.boolean().optional(),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().finite().int().optional(),
 });
 
 const optionInputSchema = z.object({
   name: z.string().min(1).max(60),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().finite().int().optional(),
   values: z.array(z.object({
     value: z.string().min(1).max(60),
     swatch: z.string().regex(/^#[0-9a-fA-F]{3,6}$/).optional().nullable(),
-    sortOrder: z.number().int().optional(),
+    sortOrder: z.number().finite().int().optional(),
   })).max(20),
 });
 

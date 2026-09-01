@@ -42,7 +42,7 @@ const createSchema = z.object({
   name: z.string().min(1).max(80),
   symbol: z.string().min(1).max(8),
   decimalPlaces: z.number().int().min(0).max(6).optional().nullable(),
-  rateToBase: z.number().positive(),
+  rateToBase: z.number().positive().finite(), // .finite(): JSON 1e999 parses to Infinity
   isEnabled: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(10000).optional(),
 });
@@ -51,7 +51,7 @@ const updateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   symbol: z.string().min(1).max(8).optional(),
   decimalPlaces: z.number().int().min(0).max(6).optional().nullable(),
-  rateToBase: z.number().positive().optional(),
+  rateToBase: z.number().positive().finite().optional(),
   manuallySet: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(10000).optional(),

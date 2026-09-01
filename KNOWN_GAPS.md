@@ -699,3 +699,17 @@ refund route counts method='refund' rows to compute the remaining
 balance, silently shrinking what could actually be refunded. Refund
 reasons are capped at 500 chars (they are embedded in the ledger JSON
 and emailed to the customer).
+Money/rate schemas reject non-finite values: z.number() (and
+parseFloat/parseInt) accept Infinity, and raw JSON `1e999` parses to
+Infinity — an issued gift card or store-credit adjust could get an
+infinite balance, a percentage coupon value of Infinity made EVERY
+checkout fail with a negative total, and Infinity product prices /
+shipping base rates / currency rates corrupted storefront math. All
+coupon, gift-card, store-credit, currency, shipping-method and
+product/variant price schemas now require finite numbers (and coupon
+types are enum-validated, dates must parse, usageLimit must be a
+positive integer). Gift-card cancel reasons are capped at 500 chars.
+Honest-limits note: gift cards and store credit are currently
+issue/redeem/display-only — the checkout does NOT debit them yet
+(debitGiftCard/debitStoreCredit have no callers), and the wallet page
+no longer claims credit is applied at checkout.

@@ -144,6 +144,45 @@ describe('POST /api/coupons (admin)', () => {
       .send({ code: 'X' });
     expect(res.status).toBe(400);
   });
+
+  it('rejects an Infinity value (1e999) — parseFloat used to store Infinity (400)', async () => {
+    // Regression: `parseFloat(value) || 0` turned JSON 1e999 into
+    // Infinity, and an Infinity percentage coupon made EVERY checkout
+    // fail with a negative total.
+    const { token } = await authHeader({ role: 'admin' });
+    // Raw JSON body: JSON.stringify would mangle Infinity into null, but
+    // a real hostile client sends the literal 1e999 token.
+    const res = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"code":"INF","type":"percentage","value":1e999}');
+    expect(res.status).toBe(400);
+    expect(await mockPrisma.coupon.findMany({ where: { code: 'INF' } })).toHaveLength(0);
+  });
+
+  it('rejects an unknown coupon type (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'HACK', type: 'unlimited_free_stuff', value: 100 });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a negative value and a NaN usageLimit (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'NEG', type: 'fixed', value: -5 });
+    expect(res.status).toBe(400);
+    const res2 = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'LIM', type: 'fixed', value: 5, usageLimit: 'abc' });
+    expect(res2.status).toBe(400);
+  });
 });
 
 describe('PUT /api/coupons/:id (admin)', () => {
@@ -157,6 +196,24 @@ describe('PUT /api/coupons/:id (admin)', () => {
     expect(res.status).toBe(200);
     const after = await mockPrisma.coupon.findUnique({ where: { id: c.id } });
     expect(after?.value).toBe(25);
+  });
+
+  it('rejects an Infinity or negative value on update (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const c = await createCoupon({ code: 'X2', value: 5 });
+    const res = await request(app)
+      .put(`/api/coupons/${c.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"value":1e999}');
+    expect(res.status).toBe(400);
+    const res2 = await request(app)
+      .put(`/api/coupons/${c.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ value: -5 });
+    expect(res2.status).toBe(400);
+    const after = await mockPrisma.coupon.findUnique({ where: { id: c.id } });
+    expect(after?.value).toBe(5); // unchanged
   });
 
   it('404 for unknown id', async () => {

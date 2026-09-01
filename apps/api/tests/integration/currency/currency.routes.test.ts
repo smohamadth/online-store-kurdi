@@ -109,6 +109,19 @@ describe('POST /api/currencies (admin)', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects an Infinity rateToBase (1e999) (400)', async () => {
+    // Regression: z.number().positive() accepts Infinity; an Infinity
+    // rate made every conversion in the storefront produce Infinity.
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/currencies')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"code":"INF","name":"Infinite","symbol":"INF","rateToBase":1e999}');
+    expect(res.status).toBe(400);
+    expect(await mockPrisma.currency.findUnique({ where: { code: 'INF' } })).toBeNull();
+  });
+
   it('rejects a duplicate code', async () => {
     const { token } = await authHeader({ role: 'admin' });
     await mockPrisma.currency.create({

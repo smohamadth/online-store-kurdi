@@ -42,7 +42,7 @@ const router = Router();
 // ====================================================================
 
 const issueSchema = z.object({
-  amount: z.number().positive(),
+  amount: z.number().positive().finite(), // .finite(): JSON 1e999 parses to Infinity
   currency: z.string().length(3).optional(),
   expiresAt: z.string().datetime().optional().nullable(),
   notes: z.string().max(500).optional(),
@@ -115,7 +115,11 @@ router.post('/gift-cards/:code/redeem', authenticate, async (req, res, next) => 
 // POST /api/gift-cards/:id/cancel - admin: void a card
 router.post('/gift-cards/:id/cancel', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const reason = (req.body?.reason as string) || 'Cancelled by admin';
+    const rawReason = (req.body as any)?.reason;
+    if (rawReason != null && (typeof rawReason !== 'string' || rawReason.length > 500)) {
+      throw new AppError('Cancellation reason must be a string of at most 500 characters.', 400);
+    }
+    const reason = rawReason || 'Cancelled by admin';
     const card = await cancelGiftCard(req.params.id, reason);
     res.json({ status: 'success', data: card });
   } catch (err) { next(err); }
@@ -125,7 +129,7 @@ router.post('/gift-cards/:id/cancel', authenticate, authorize('admin'), async (r
 router.post('/gift-cards/:id/credit', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const body = z.object({
-      amount: z.number().positive(),
+      amount: z.number().positive().finite(), // .finite(): JSON 1e999 parses to Infinity
       type: z.enum(['refund', 'adjust', 'issue']).optional(),
       orderId: z.string().uuid().optional(),
       notes: z.string().max(500).optional(),
@@ -161,7 +165,7 @@ router.get('/store-credit', authenticate, async (req, res, next) => {
 // POST /api/store-credit - admin: credit a user
 const creditSchema = z.object({
   userId: z.string().uuid(),
-  amount: z.number().positive(),
+  amount: z.number().positive().finite(), // .finite(): JSON 1e999 parses to Infinity
   currency: z.string().length(3).optional(),
   type: z.enum(['refund', 'goodwill', 'adjust']).optional(),
   orderId: z.string().uuid().optional(),
@@ -191,7 +195,7 @@ router.post('/store-credit', authenticate, authorize('admin', 'manager'), async 
 // POST /api/store-credit/adjust - admin: arbitrary adjust (positive or negative)
 const adjustSchema = z.object({
   userId: z.string().uuid(),
-  amount: z.number(),   // can be negative
+  amount: z.number().finite(), // .finite(): can be negative, but never Infinity/NaN
   currency: z.string().length(3).optional(),
   reason: z.string().min(1).max(500),
 });

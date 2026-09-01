@@ -68,7 +68,7 @@ export default function WalletPage() {
       // use it at checkout. We just confirm the card is valid here.
       setMessage({
         type: 'ok',
-        text: `Card is valid! You have ${balance.toFixed(2)} ${currency} available. Apply it at checkout.`,
+        text: `Card is valid! You have ${balance.toFixed(2)} ${currency} available. Redeeming it at checkout is coming soon.`,
       });
       setGiftCode('');
     } catch (err) {
@@ -84,7 +84,8 @@ export default function WalletPage() {
     <div>
       <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>Wallet</h1>
       <p style={{ color: '#666', marginBottom: '24px' }}>
-        Store credit and gift card balances. Credit is applied automatically at checkout.
+        Store credit and gift card balances issued to your account. Balances can be redeemed and are
+        tracked here; checkout support for spending them is coming soon.
       </p>
 
       {/* Store credit balance */}

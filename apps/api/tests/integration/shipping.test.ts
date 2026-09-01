@@ -37,6 +37,18 @@ describe('Shipping methods (admin)', () => {
     const res = await request(app).get('/api/shipping/methods').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
   });
+
+  it('rejects an Infinity baseRate (1e999) on create (400)', async () => {
+    // Regression: z.number().min(0) accepts Infinity; a stored Infinity
+    // rate poisoned every shipping quote for the zone.
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/shipping/methods')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"name":"Inf","type":"flat","baseRate":1e999}');
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('POST /api/shipping/calculate (public)', () => {

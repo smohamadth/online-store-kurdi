@@ -186,6 +186,19 @@ describe('POST /api/products (admin)', () => {
     expect(res.body.data.slug).toBe('new-product');
   });
 
+  it('rejects an Infinity price (1e999) (400)', async () => {
+    // Regression: z.number().positive() accepts Infinity; a stored
+    // Infinity price broke every checkout total that touched the product.
+    const { token } = await authHeader({ role: 'admin' });
+    const cat = await createCategory();
+    const res = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send(`{"name":"Inf","sku":"INF-1","price":1e999,"categoryId":"${cat.id}"}`);
+    expect(res.status).toBe(400);
+  });
+
   it('persists digital product fields and surfaces them on the response', async () => {
     // The storefront branches on `type === 'digital'`; if the
     // downloadUrl / downloadLimit / downloadExpiry fields
