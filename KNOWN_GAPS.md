@@ -432,12 +432,17 @@ deliberate design choices or niche gaps.
 **Status:** the visual theme & per-page layout builder is complete and tested
 (see `docs/THEME_STUDIO.md`). What is deliberately *not* done:
 
-1. **File-based themes need a rebuild.** The Studio writes `theme.json`
-   (tokens + per-page `layouts`) into `apps/web/themes/<key>/`, and the web
-   registry reads themes at **build time** — so a new/edited admin theme shows
-   on the live storefront only after the next web build. This is the accepted
-   trade-off of the file-based storage model (themes stay first-class,
-   reviewed code artifacts).
+1. **Custom `sections/*.tsx` code is build-time only.** [FIXED for tokens/
+   layouts] — the storefront now resolves theme tokens and per-page layouts
+   from the **disk catalog at runtime** (`GET /api/themes` +
+   `activeThemeConfig` on `GET /api/theme`, bridged by
+   `apps/web/lib/themeRuntime.ts`), so a theme saved in the Studio, installed
+   from a `.zip` (`POST /api/theme-studio/install`), or removed takes effect
+   on the next page load — no web rebuild. What remains build-time is custom
+   React `sections/` code: runtime-installed themes are **data-only** by
+   design (uploaded code is never executed); a theme that needs custom
+   sections must ship bundled with the platform. See
+   `docs/THEME_DEVELOPMENT.md` §2.
 2. **Home-page rich blocks render as custom/title sections.** The home page
    renders a themed layout through its home-specific section renderers, so a
    rich pre-built block (`cta`, `faq`, `steps`, `pricing`, …) placed on the
@@ -449,9 +454,10 @@ deliberate design choices or niche gaps.
    filter sidebar / pagination) is what renders — the admin's explicit
    composition wins. This is the intended behaviour of "full layout control",
    not a bug, but it changes the UX for pages the admin themes.
-4. **No runtime hot-reload / no marketplace.** Admin-created themes are not
-   hot-reloaded at runtime, and there is still no theme marketplace or license
-   enforcement for `paid` themes (see README §18).
+4. **No marketplace / license enforcement.** There is still no theme
+   marketplace or license enforcement for `paid` themes (see README §18).
+   (Admin-created and admin-installed themes DO now take effect at runtime —
+   see item 1 above.)
 5. **Config fields are authored in the Studio and trusted as authored.** The
    `/api/theme-studio` layer validates the theme envelope (key, semver,
    features, required fields) and strips unknown keys, but per-block `config`

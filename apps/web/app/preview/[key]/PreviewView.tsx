@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useTheme as useStoreTheme } from '@/lib/theme';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import { PreviewThemeProvider } from '@/lib/previewTheme';
+import type { ThemeConfig } from '@/lib/themeRegistry';
 import {
   PREVIEW_PRODUCTS,
   PREVIEW_CATEGORIES,
@@ -31,9 +32,16 @@ interface Props {
   themeKey: string;
   themeName: string;
   themeDescription: string;
+  /**
+   * The theme's config. Bundled themes resolve from the static registry;
+   * admin-installed themes are resolved server-side from the runtime
+   * catalog and passed down (the client has no build-time knowledge of
+   * them).
+   */
+  themeConfig: ThemeConfig;
 }
 
-export function PreviewView({ themeKey, themeName, themeDescription }: Props) {
+export function PreviewView({ themeKey, themeName, themeDescription, themeConfig }: Props) {
   // The store's currently-active theme. Pulled from the
   // outer ThemeContext (set by the platform's ThemeProvider
   // further up the tree). The PreviewThemeProvider uses it
@@ -44,6 +52,7 @@ export function PreviewView({ themeKey, themeName, themeDescription }: Props) {
   return (
     <PreviewThemeProvider
       themeKey={themeKey}
+      themeConfig={themeConfig}
       storeActiveTheme={storeTheme.activeTheme ?? null}
     >
       <PreviewChrome

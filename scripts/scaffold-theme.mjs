@@ -12,6 +12,7 @@
  * new theme; this script performs all of them:
  *
  *   1. apps/web/themes/<key>/theme.json          (valid vs themeConfigSchema)
+ *      + .bundled marker (platform theme flag) + README.md
  *   2. apps/web/themes/<key>/sections/{Hero,Featured,Categories}.tsx
  *      (contract-compliant, RTL-safe: no physical CSS properties)
  *   3. lib/themeRegistry.ts                      (import + THEMES entry)
@@ -132,6 +133,21 @@ const themeJson = {
 };
 writeFileSync(join(themeDir, 'theme.json'), JSON.stringify(themeJson, null, 2) + '\n');
 console.log(`    wrote themes/${key}/theme.json`);
+
+// 1b. bundled marker + README. The `.bundled` marker is what tells the API
+//     this theme is part of the platform release (not overwritable by an
+//     install, not deletable by an admin). The README is shown to merchants
+//     when the theme ships as a package (docs/THEME_DEVELOPMENT.md §1).
+writeFileSync(
+  join(themeDir, '.bundled'),
+  `Platform-bundled theme. This marker tells the API that "${key}" is part of the platform release: it cannot be overwritten by an install or removed by an admin.\n`
+);
+console.log(`    wrote themes/${key}/.bundled (platform theme marker)`);
+writeFileSync(
+  join(themeDir, 'README.md'),
+  `# ${name}\n\n${themeJson.description}\n\n## Tokens\n\nAdjust the design tokens in \`theme.json\` to define the theme's identity; the\nsection components read them via CSS variables.\n\n## Sections\n\nThis bundled theme ships custom \`sections/\` components (build-time only). To\nhand the theme to a store as an installable package, run:\n\n    npm run theme:pack -- ${key}\n\nSee docs/THEME_DEVELOPMENT.md for the full developer guide.\n`
+);
+console.log(`    wrote themes/${key}/README.md`);
 
 // ---------------------------------------------------------------------------
 // 2. section components

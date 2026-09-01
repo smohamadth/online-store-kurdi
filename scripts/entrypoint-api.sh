@@ -53,6 +53,27 @@ else
   exit 1
 fi
 
+echo "==> store-api: seeding bundled themes into \$THEMES_DIR"
+# The themes directory is a shared volume (docker-compose.prod.yml mounts
+# themes_data at /app/apps/web/themes). The API image bakes in the bundled
+# themes at /app/apps/web/themes; on a fresh volume only the bundled
+# themes exist, and admin-installed themes live alongside them. Copy any
+# bundled theme that is missing from the volume so the disk catalog (the
+# runtime source of truth for "what themes are installed") always contains
+# the platform themes. Keys that already exist are left untouched so an
+# edited bundled theme is never overwritten at boot.
+THEMES_DIR="${THEMES_DIR:-../web/themes}"
+SEED_DIR="${SEED_THEMES_DIR:-../web/themes}"
+mkdir -p "$THEMES_DIR"
+for d in "$SEED_DIR"/*/; do
+  [ -e "$d" ] || continue
+  key="$(basename "$d")"
+  if [ ! -e "$THEMES_DIR/$key/theme.json" ]; then
+    cp -R "$d" "$THEMES_DIR/$key"
+    echo "    seeded bundled theme: $key"
+  fi
+done
+
 echo "==> store-api: starting server on :${PORT:-3001}"
 # If a command was passed (e.g. `docker compose run --rm api prisma db
 # seed`), the DB-convergence steps above still run first, then we exec

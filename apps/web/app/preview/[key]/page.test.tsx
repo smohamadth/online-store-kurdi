@@ -1,15 +1,16 @@
 /**
  * /preview/<key> — page tests.
  *
- * The page is a server component that:
- *   - Validates the theme key against the registry.
+ * The page is an ASYNC server component that:
+ *   - Validates the theme key against the registry (bundled) or the
+ *     runtime catalog (admin-installed themes).
  *   - Generates noindex metadata.
  *   - Renders the PreviewView client component.
  *
  * The tests pin:
  *   - The page returns 404 for an unknown key (via notFound()).
  *   - The page renders the PreviewView for a known key.
- *   - The static params list contains every theme key.
+ *   - The static params list contains every bundled theme key.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -29,9 +30,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('/preview/<key> — page', () => {
-  it('renders the preview view for a known key', () => {
+  it('renders the preview view for a known key', async () => {
     const params = { key: 'bold' };
-    render(<ThemePreviewPage params={params} />);
+    // Async server component: await it, then render the element.
+    const page = await ThemePreviewPage({ params });
+    render(page);
     // The PreviewView's chrome shows the theme name.
     // Note: the "Previewing: Bold" text is rendered by the
     // client PreviewHeader. RTL with happy-dom mounts
@@ -41,25 +44,27 @@ describe('/preview/<key> — page', () => {
     expect(screen.getByTestId('preview-theme-name').textContent).toContain('Bold');
   });
 
-  it('renders the preview view for the default key', () => {
+  it('renders the preview view for the default key', async () => {
     const params = { key: 'default' };
-    render(<ThemePreviewPage params={params} />);
+    const page = await ThemePreviewPage({ params });
+    render(page);
     expect(screen.getByTestId('preview-header')).toBeInTheDocument();
     expect(screen.getByTestId('preview-theme-name').textContent).toContain('Default');
   });
 
-  it('throws NEXT_NOT_FOUND for an unknown key', () => {
+  it('throws NEXT_NOT_FOUND for an unknown key', async () => {
     const params = { key: 'does-not-exist' };
     // The page calls notFound() which our mock turns into a
     // thrown error. We catch and inspect.
-    expect(() => render(<ThemePreviewPage params={params} />)).toThrow('NEXT_NOT_FOUND');
+    await expect(ThemePreviewPage({ params })).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
-  it('handles URL-encoded keys', () => {
+  it('handles URL-encoded keys', async () => {
     // "bold" doesn't need encoding but the test is for the
     // decodeURIComponent path which the page runs.
     const params = { key: encodeURIComponent('minimal') };
-    render(<ThemePreviewPage params={params} />);
+    const page = await ThemePreviewPage({ params });
+    render(page);
     expect(screen.getByTestId('preview-theme-name').textContent).toContain('Minimal');
   });
 });

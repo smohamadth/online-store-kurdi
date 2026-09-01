@@ -263,35 +263,47 @@ never fails a request; admin writes are validated before touching the DB.
 
 A **theme** is a directory under `apps/web/themes/<key>/`:
 
-- `theme.json` — validated at **build time** by a strict Zod schema:
-  identity (key, name, author, semver), `features` (`rtl`, `darkMode`,
-  `paid`), `tokens` (colors, fonts, radius, container width, card shadow,
-  products-per-row, section toggles like `showTrustBar`), and an optional
-  `sections` override map
+- `theme.json` — validated by a strict Zod schema: identity (key, name,
+  author, semver), `features` (`rtl`, `darkMode`, `paid`), `tokens`
+  (colors, fonts, radius, container width, card shadow, products-per-row,
+  section toggles like `showTrustBar`), and optional per-page `layouts`
+  (Theme Studio grids)
 - `sections/*.tsx` — component overrides for home-page sections
-  (`hero`, `featured`, `categories`). Overriding replaces the platform
-  section wholesale (there is no "wrap" mode yet).
+  (`hero`, `featured`, `categories`). Build-time only: these are compiled
+  into the web bundle for **bundled** themes.
 
-**Bundled themes (5):** `default`, `minimal` (paid, text-first, serif),
-`bold`, `dawnlight`, `pulse`.
+**Two tiers, one runtime.** Bundled themes ship with the platform (5:
+`default`, `minimal`, `bold`, `dawnlight`, `pulse`). Admin-installed themes
+arrive as a developer-packed `.zip` and are **data-only** (tokens +
+layouts, rendered with the platform's built-in sections and the 33 Theme
+Studio block types) — no rebuild, no deploy. The API serves the on-disk
+catalog (`GET /api/themes`) and the storefront resolves tokens/layouts at
+runtime, so **install / edit / remove take effect immediately**, for both
+tiers.
 
-**Developer workflow for a new theme:**
+**Developer workflow** — full guide in
+**[docs/THEME_DEVELOPMENT.md](docs/THEME_DEVELOPMENT.md)**:
 
 ```bash
-node scripts/scaffold-theme.mjs solar --name "Solar"
+npm run theme:create -- solar --name "Solar"   # scaffold a bundled theme
+npm run theme:pack -- solar                    # validate + pack an installable .zip
 ```
 
 The scaffold performs every registration touch point (theme.json + three
-contract-compliant RTL-safe section stubs, registry entry, section
-component map, RTL test matrix, theme-picker test pin). Then edit tokens
-and sections; a malformed `theme.json` fails the **build** with a readable
-path; a forgotten RTL registration fails the test suite. Preview at
-`/preview/solar`; activate per store in **Admin → Appearance**.
+contract-compliant RTL-safe section stubs, `.bundled` platform marker,
+registry entry, section component map, RTL test matrix, theme-picker test
+pin). A malformed `theme.json` fails the **build** with a readable path; a
+forgotten RTL registration fails the test suite. Preview at
+`/preview/solar`; activate per store in **Admin → Appearance**, where an
+admin can also **Install** a `.zip` and **Remove** an installed theme
+(bundled themes and the `default` fallback are protected; removing the
+active theme switches the store back to `default`).
 Per-store token overrides layer on top of the active theme.
 
-**Limits (honest):** themes are versioned with the platform (code review,
-no runtime upload); `paid: true` is metadata only (no license check or
-marketplace yet); `darkMode` is a capability badge only.
+**Limits (honest):** `paid: true` is metadata only (no license check or
+marketplace yet); `darkMode` is a capability badge only; custom
+`sections/*.tsx` code is a build-time feature — runtime-installed themes
+are deliberately data-only (uploaded code is never executed).
 
 ### 9.1 Theme Studio — visual theme & layout builder
 
@@ -302,8 +314,10 @@ block's column/row start & span, reorder, hide, and click-to-edit its config —
 with a live preview rendered by the same component the storefront uses.
 
 - Themes are **file-based**: the Studio writes a `theme.json` (tokens +
-  per-page `layouts`) into `apps/web/themes/<key>/` via the `/api/theme-studio`
-  API. A new/edited theme takes effect on the **next web build**.
+  per-page `layouts`) into the themes dir via the `/api/theme-studio`
+  API. Edits are served at **runtime** (the storefront reads the disk
+  catalog on every load), so a saved change shows up on the next page
+  load — no rebuild.
 - Three groups of blocks: **marketing** (hero…newsletter), **rich pre-built**
   (cta, video, image, textImage, divider, faq, steps, logoStrip, pricing,
   quote, iconsGrid), and **page-native** (productDetail, productList,

@@ -5,9 +5,13 @@ import {
   THEMES,
   getDefaultTheme,
   getTheme,
-  isInstalledTheme,
   type ThemeConfig,
 } from './themeRegistry';
+import {
+  isInstalledThemeKey,
+  resolveThemeConfig,
+  setRuntimeThemeConfig,
+} from './themeRuntime';
 
 /**
  * The `Theme` interface is the *runtime* shape: the flattened,
@@ -283,8 +287,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           // response. Falls back to the bundled default if the column
           // doesn't exist (older API builds).
           const activeKey = (data.activeTheme as string) ?? 'default';
-          const safeKey = isInstalledTheme(activeKey) ? activeKey : 'default';
-          const config = getTheme(safeKey);
+          // The API returns the active theme's on-disk config (bundled or
+          // admin-installed). Cache it so tokens AND layouts resolve for
+          // installed themes without a web rebuild.
+          if (data.activeThemeConfig) {
+            setRuntimeThemeConfig(data.activeThemeConfig);
+          }
+          const safeKey = isInstalledThemeKey(activeKey) ? activeKey : 'default';
+          const config = resolveThemeConfig(safeKey);
           // Build the merged theme: tokens from the config, per-store
           // overrides from the API. The keys in `data` are the same
           // shape as `Theme` minus `activeTheme`; we filter the
@@ -321,8 +331,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (cached) {
           const parsed = JSON.parse(cached) as Partial<Theme>;
           const activeKey = parsed.activeTheme ?? 'default';
-          const safeKey = isInstalledTheme(activeKey) ? activeKey : 'default';
-          setTheme(tokensToTheme(getTheme(safeKey), parsed));
+          const safeKey = isInstalledThemeKey(activeKey) ? activeKey : 'default';
+          setTheme(tokensToTheme(resolveThemeConfig(safeKey), parsed));
         }
       } catch {
         /* ignore */
@@ -339,8 +349,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (cached) {
         const parsed = JSON.parse(cached) as Partial<Theme>;
         const activeKey = parsed.activeTheme ?? 'default';
-        const safeKey = isInstalledTheme(activeKey) ? activeKey : 'default';
-        setTheme(tokensToTheme(getTheme(safeKey), parsed));
+        const safeKey = isInstalledThemeKey(activeKey) ? activeKey : 'default';
+        setTheme(tokensToTheme(resolveThemeConfig(safeKey), parsed));
       }
     } catch {
       /* ignore */

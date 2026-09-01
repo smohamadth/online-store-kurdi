@@ -142,17 +142,35 @@ Pages opt in through one of two seams:
 - The **home page** reuses its existing rich section renderers: layout blocks
   are bridged to `HomeSection` rows via `lib/layouts/homeMapping.ts`.
 
-## 4. Deployment note (file-based model)
+## 4. Deployment note (file-based model, runtime-served)
 
-Admin-created themes are written as files under `apps/web/themes/<key>/`. The
-web registry (`lib/themeRegistry.ts`) reads themes at **build time**, so a new
-or edited admin theme takes effect on the **next web build/deploy**. This is the
-deliberate trade-off of the file-based storage model the admin chose — themes
-are first-class code artifacts, reviewed and versioned with the platform.
+Admin-created/installed themes are written as files under
+`apps/web/themes/<key>/` (`THEMES_DIR` env var, default `../web/themes`
+relative to the API cwd; override in tests to a temp dir). The web static
+registry (`lib/themeRegistry.ts`) still compiles the **bundled** themes into
+the bundle as the build-time fallback and the code-section source, but the
+**runtime source of truth is the disk catalog** the API serves:
 
-The API writes into the web themes directory via the `THEMES_DIR` env var
-(default `../web/themes`, relative to the API cwd; override in tests to a temp
-dir so tests never touch real themes).
+- `GET /api/theme` returns `activeThemeConfig` — the on-disk config of the
+  active theme — so the storefront paints installed themes on first load.
+- `GET /api/themes` lists every on-disk theme config (used by the admin
+  gallery, `/preview/<key>`, and the runtime resolution overlay in
+  `lib/themeRuntime.ts`).
+- `lib/themeRuntime.ts` resolves tokens/layouts at runtime: disk config wins,
+  static registry is the fallback, bundled tokens merge so a partial Studio
+  save can never strip a bundled theme's identity.
+
+**Consequence:** a theme saved in the Studio, installed from a `.zip`, or
+edited on disk takes effect on the **next page load — no web rebuild**. The
+only build-time feature left is custom `sections/*.tsx` code (bundled themes
+only; installed themes are data-only by design — see
+[docs/THEME_DEVELOPMENT.md](THEME_DEVELOPMENT.md) §2).
+
+In Docker production, `docker-compose.prod.yml` mounts a `themes_data` volume
+at `/app/apps/web/themes` for the API and sets `THEMES_DIR`; the API image
+bakes in the bundled themes and the entrypoint seeds them into the volume on
+first boot, so the catalog always contains the platform themes and installed
+themes survive restarts.
 
 ## 5. Extending the palette (developer guide)
 
@@ -192,7 +210,10 @@ guard: add a type without a renderer and the suite goes red.
 
 ## 7. Honest limitations
 
-- **File-based themes need a rebuild** to appear on the live storefront (see §4).
+- **Custom `sections/*.tsx` code is build-time only** (bundled themes).
+  Runtime-installed themes are data-only: tokens + layouts render with the
+  platform's built-in sections — see `docs/THEME_DEVELOPMENT.md` §2. Token
+  and layout edits themselves need no rebuild (see §4).
 - **Home page rich blocks**: the home page renders a themed layout through its
   home-specific section renderers, so a rich block (`cta`, `faq`, …) placed on
   the *home* page falls back to a custom/title section. Rich blocks render fully

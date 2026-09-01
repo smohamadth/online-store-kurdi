@@ -48,6 +48,13 @@ export interface ThemePickerProps {
    * double-click doesn't fire two PUTs.
    */
   disabled?: boolean;
+  /**
+   * The cards to render. Defaults to the bundled registry
+   * (THEMES). The parent may pass the bundled list merged
+   * with themes installed at runtime so they appear in the
+   * same gallery.
+   */
+  themes?: readonly ThemeConfig[];
 }
 
 /**
@@ -259,14 +266,15 @@ function ThemeCard({
   );
 }
 
-export function ThemePicker({ activeTheme, onSelect, disabled }: ThemePickerProps) {
-  // The list is read from the registry at module load, but
-  // rendering them in a stable order is a UX choice: sorted
-  // by `key` so the order is deterministic across renders.
-  // (The THEMES array's order is the source-of-truth order;
-  // this sort is a fallback in case future code adds themes
-  // out of order.)
-  const sorted = [...THEMES].sort((a, b) => a.key.localeCompare(b.key));
+export function ThemePicker({ activeTheme, onSelect, disabled, themes = THEMES }: ThemePickerProps) {
+  // The list is read from the registry at module load (merged
+  // with runtime-installed themes when the parent passes
+  // them), but rendering them in a stable order is a UX
+  // choice: sorted by `key` so the order is deterministic
+  // across renders. (The THEMES array's order is the
+  // source-of-truth order; this sort is a fallback in case
+  // future code adds themes out of order.)
+  const sorted = [...themes].sort((a, b) => a.key.localeCompare(b.key));
 
   // Track which card the user is hovering. The hover state
   // is a tiny detail (border colour shift) but it's the

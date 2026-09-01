@@ -19,7 +19,7 @@ import { api, Product, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { useIsMobile } from '@/lib/hooks';
-import { getTheme } from '@/lib/themeRegistry';
+import { resolveThemeConfig } from '@/lib/themeRuntime';
 import { blockToHomeSection } from '@/lib/layouts/homeMapping';
 import type { PageLayout } from '@/lib/layouts/types';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
@@ -208,7 +208,7 @@ export default function HomeView() {
    * admin creates a theme with a saved home layout.
    */
   const homeLayout: PageLayout | undefined = useMemo(() => {
-    const cfg = getTheme(theme.activeTheme);
+    const cfg = resolveThemeConfig(theme.activeTheme);
     return cfg?.layouts?.home as PageLayout | undefined;
   }, [theme.activeTheme]);
 

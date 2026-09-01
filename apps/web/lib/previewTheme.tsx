@@ -73,11 +73,19 @@ interface PreviewThemeProviderProps {
   /**
    * The theme key to preview. The provider assumes the
    * server-side page handler has already validated this
-   * (via isInstalledTheme) so an unknown key won't reach
-   * here in production. A defensive fallback to the
-   * default theme is included for safety.
+   * (via isInstalledTheme / the runtime catalog) so an
+   * unknown key won't reach here in production. A defensive
+   * fallback to the default theme is included for safety.
    */
   themeKey: string;
+  /**
+   * The theme's config. For bundled themes the provider falls
+   * back to the static registry; for admin-installed themes
+   * the server page passes the config it resolved from the
+   * runtime catalog (the client has no build-time knowledge
+   * of installed themes).
+   */
+  themeConfig?: ThemeConfig;
   /**
    * The store's currently active theme. Used to compute
    * `isPreviewing` (and to render a "Currently active" badge
@@ -90,6 +98,7 @@ interface PreviewThemeProviderProps {
 
 export function PreviewThemeProvider({
   themeKey,
+  themeConfig,
   storeActiveTheme,
   children,
 }: PreviewThemeProviderProps) {
@@ -98,13 +107,15 @@ export function PreviewThemeProvider({
   // The useMemo prevents re-computing on every render of the
   // children.
   const { theme, config, isPreviewing } = useMemo(() => {
-    // Defensive fallback: if the key isn't installed (e.g. a
-    // future theme was uninstalled between the server
-    // validation and the client render), fall back to the
-    // default. The page handler should 404 first, so this
-    // is a belt-and-suspenders.
-    const safeKey = isInstalledTheme(themeKey) ? themeKey : 'default';
-    const cfg = getTheme(safeKey);
+    // The server-passed config wins (installed themes); the
+    // static registry is the fallback for bundled themes.
+    // Defensive fallback: if the key isn't installed at all,
+    // fall back to the default. The page handler should 404
+    // first, so this is a belt-and-suspenders.
+    const cfg =
+      themeConfig ??
+      getTheme(isInstalledTheme(themeKey) ? themeKey : 'default');
+    const resolvedKey = cfg.key;
     const computed = tokensToTheme(cfg);
     // isPreviewing is the "this preview differs from the
     // store" flag. The CTA hides when isPreviewing is false
@@ -114,13 +125,13 @@ export function PreviewThemeProvider({
     // is the same as the store's future choice — so
     // isPreviewing should be false in that case.
     const isPreviewing =
-      storeActiveTheme !== null && safeKey !== storeActiveTheme;
+      storeActiveTheme !== null && resolvedKey !== storeActiveTheme;
     return {
       theme: computed,
       config: cfg,
       isPreviewing,
     };
-  }, [themeKey, storeActiveTheme]);
+  }, [themeKey, themeConfig, storeActiveTheme]);
 
   return (
     <PreviewThemeContext.Provider value={{ theme, config, isPreviewing }}>

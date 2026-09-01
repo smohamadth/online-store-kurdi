@@ -7,11 +7,25 @@
 // /api/theme endpoint (the same one the storefront uses), then look it up in
 // the registry.
 //
+// /api/theme now returns `activeThemeConfig` — the on-disk config of the
+// active theme — so installed themes resolve their layouts here WITHOUT a web
+// rebuild (the static registry is the fallback for bundled themes when the
+// config is absent, e.g. an older API).
+//
 // Safe to call from server components only (uses serverFetch).
 // ---------------------------------------------------------------------------
 import { serverFetch } from '@/lib/serverFetch';
 import { getTheme } from '@/lib/themeRegistry';
 import type { PageKey, PageLayout } from './types';
+
+interface ThemeApiConfig {
+  layouts?: Record<string, unknown>;
+}
+
+function hasBlocks(layout: unknown): layout is PageLayout {
+  const l = layout as PageLayout | undefined;
+  return !!l && Array.isArray(l.blocks) && l.blocks.length > 0;
+}
 
 /** Resolve the active theme's layout for a page, or undefined if none. */
 export async function getServerPageLayout(page: PageKey): Promise<PageLayout | undefined> {
@@ -21,8 +35,13 @@ export async function getServerPageLayout(page: PageKey): Promise<PageLayout | u
     const body = await res.json();
     const activeTheme = body?.data?.activeTheme as string | null | undefined;
     if (!activeTheme) return undefined;
-    const layout = getTheme(activeTheme)?.layouts?.[page] as PageLayout | undefined;
-    if (layout && Array.isArray(layout.blocks) && layout.blocks.length > 0) return layout;
+    const activeThemeConfig = body?.data?.activeThemeConfig as ThemeApiConfig | null | undefined;
+    // Disk config first (installed themes + Studio edits to bundled
+    // themes), static registry as fallback.
+    const layout = (activeThemeConfig?.layouts?.[page] ?? getTheme(activeTheme)?.layouts?.[page]) as
+      | PageLayout
+      | undefined;
+    if (hasBlocks(layout)) return layout;
     return undefined;
   } catch {
     return undefined;

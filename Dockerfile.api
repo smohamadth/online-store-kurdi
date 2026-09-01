@@ -37,6 +37,11 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api ./
 COPY --from=build /app/apps/web/package.json ./../web/package.json
 COPY --from=build /app/package.json ./../package.json
+# The bundled themes are baked in so the entrypoint can seed them into the
+# shared themes volume (docker-compose.prod.yml mounts themes_data there).
+# The web container gets its own copy at build time; the API container needs
+# these files so a fresh volume still contains the platform themes.
+COPY --from=build /app/apps/web/themes ./../web/themes
 COPY --from=build /app/scripts/entrypoint-api.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 EXPOSE 3001

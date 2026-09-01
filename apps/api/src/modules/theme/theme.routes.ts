@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { listThemeKeys, getThemeConfig } from '../themeStudio/themeStudio.service';
 
 const router = Router();
 
@@ -95,10 +96,22 @@ async function getOrCreate() {
 }
 
 // GET /api/theme - public: the storefront needs this to paint itself.
+//
+// The response now also carries `activeThemeConfig`: the on-disk config of
+// the store's active theme (bundled or admin-installed), validated. The
+// storefront uses it to render an installed theme's tokens/layouts without a
+// rebuild; the static registry in the web bundle remains the fallback when
+// the API is unreachable or the theme is only in the bundle.
 router.get('/', async (_req, res, next) => {
   try {
     const theme = await getOrCreate();
-    res.json({ status: 'success', data: theme });
+    let activeThemeConfig: unknown = null;
+    try {
+      activeThemeConfig = await getThemeConfig(theme.activeTheme);
+    } catch {
+      activeThemeConfig = null;
+    }
+    res.json({ status: 'success', data: { ...theme, activeThemeConfig } });
   } catch (err) {
     next(err);
   }
@@ -132,22 +145,18 @@ router.put('/', authenticate, authorize('admin', 'manager'), async (req, res, ne
     for (const [k, v] of Object.entries(data)) {
       if (v === undefined) continue;
       if (v === null && !NULLABLE.has(k)) continue;
-      // Validate activeTheme against the registry. The web app's
-      // themeRegistry.ts is the source of truth for "what themes
-      // are installed"; this whitelist is kept in sync. If the
-      // platforms diverge, a future change is to publish the
-      // registry as a shared package.
+      // Validate activeTheme against the on-disk theme catalog (the runtime
+      // source of truth: bundled themes + admin-installed themes). This used
+      // to be a hardcoded list that had to be kept in sync with the web
+      // registry by hand — a drift made an installed theme un-activatable
+      // with a confusing 400. The disk catalog can never drift: it IS the
+      // set of themes that actually exist.
       if (k === 'activeTheme' && v !== null) {
-        // Keep in sync with the web app's themeRegistry.ts (the source of
-        // truth). This list must match every key shipped under
-        // apps/web/themes/*/theme.json - a drift here makes an installed
-        // theme un-activatable from the admin picker (the picker lists the
-        // registry, the API would 400 the chosen theme).
-        const INSTALLED_THEMES = new Set(['default', 'minimal', 'bold', 'dawnlight', 'pulse']);
-        if (!INSTALLED_THEMES.has(v as string)) {
+        const installed = await listThemeKeys();
+        if (!installed.includes(v as string)) {
           return res.status(400).json({
             status: 'error',
-            message: `Unknown theme "${v}". Available themes: ${Array.from(INSTALLED_THEMES).join(', ')}.`,
+            message: `Unknown theme "${v}". Available themes: ${installed.join(', ') || '(none)'}.`,
             code: 'UNKNOWN_THEME',
           });
         }

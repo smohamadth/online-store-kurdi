@@ -26,6 +26,9 @@
     "docker:down": "cd docker && docker-compose down",
     "docker:logs": "cd docker && docker-compose logs -f",
     "setup": "npm install && npm run docker:up && npm run db:migrate && npm run db:seed",
+    "theme:create": "node scripts/scaffold-theme.mjs",
+    "theme:pack": "node scripts/theme-pack.mjs",
+    "theme:validate": "node scripts/theme-pack.mjs",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules",
     "lint": "npm run lint:api && npm run lint:web",
     "lint:api": "cd apps/api && npm run lint",
@@ -41,6 +44,7 @@
   },
   "devDependencies": {
     "@types/pdfkit": "^0.17.6",
+    "archiver": "^7.0.1",
     "concurrently": "^8.2.2",
     "happy-dom": "^20.11.6",
     "pdfkit": "^0.19.1",

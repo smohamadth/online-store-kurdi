@@ -49,6 +49,7 @@
     "stripe": "^22.6.0",
     "uuid": "^9.0.0",
     "winston": "^3.11.0",
+    "yauzl": "^3.4.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -63,9 +64,11 @@
     "@types/nodemailer": "^6.4.14",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^9.0.7",
+    "@types/yauzl": "^2.10.3",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "@vitest/coverage-v8": "^1.2.0",
+    "archiver": "^7.0.1",
     "eslint": "^8.56.0",
     "nodemon": "^3.0.2",
     "prisma": "^5.7.0",

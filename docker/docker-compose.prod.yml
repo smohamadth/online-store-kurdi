@@ -108,6 +108,11 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:8080}
       LOG_LEVEL: info
+      # Installed themes live in the shared volume; the entrypoint seeds the
+      # bundled themes into it on first boot (see scripts/entrypoint-api.sh).
+      THEMES_DIR: /app/apps/web/themes
+    volumes:
+      - themes_data:/app/apps/web/themes
     networks:
       - store-network
 
@@ -133,6 +138,10 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  # Shared with the web container's themes dir so themes the admin installs
+  # at runtime survive restarts and are readable by the storefront via the
+  # API catalog (GET /api/themes).
+  themes_data:
 
 networks:
   store-network:
