@@ -651,7 +651,11 @@ advisory shipping/calculate endpoint tolerates hostile numeric payloads
 authoritative order-placement path already recomputed rates server-side,
 so this only affects the checkout display). The advisory tax/calculate
 endpoint gets the same defensive parsing, including hostile item
-price/quantity rows.
+price/quantity rows. The MinIO storage routes are hardened: presigned
+URLs are admin-only (any authenticated user could previously mint a
+7-day URL for ANY bucket object, bypassing the private-prefix gating),
+upload folder prefixes are allowlisted, and presigned expiry is clamped
+to [1 minute, 7 days].
 Accounting: closing a fiscal year now zeroes contra (negative-balance)
 revenue/expense accounts too (they used to bleed into next year's P&L),
 and reversing a voided or closing journal entry is refused (a reversal
