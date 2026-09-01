@@ -659,7 +659,10 @@ to [1 minute, 7 days]. The coupon `POST /:id/apply` endpoint is removed:
 it let any authenticated customer increment ANY coupon's usedCount
 without checks (public /validate leaks the id), so it could be hammered
 to burn a coupon's usage limit — usage is only counted at order
-placement now.
+placement now. Wishlist move-to-cart validates quantity (integer 1..99999)
+and refuses to move archived/deleted products (dead wishlist rows
+self-clean) — a plain `quantity || 1` used to accept -5/1.5/'abc'/1e9
+straight into the cart.
 Accounting: closing a fiscal year now zeroes contra (negative-balance)
 revenue/expense accounts too (they used to bleed into next year's P&L),
 and reversing a voided or closing journal entry is refused (a reversal
