@@ -787,3 +787,17 @@ the cart (stored and shown as product P1 + variant V, then silently
 ignored at order placement, so cart and order disagreed); it now
 400s. Cart quantities are capped at 99999 to match the order-
 placement cap, so a checkout can never fail at the last step.
+
+Auth brute-force throttling is now in place for the public auth
+endpoints: 5 failed logins against the same email (or 20 failures
+from the same IP) within 15 minutes locks that identity for 15
+minutes, and the lockout applies to UNKNOWN emails too (the key is
+the attempted string), so it cannot be used to probe which accounts
+exist. Failed logins are counted on the unknown-user and wrong-
+password paths only — never on the deactivated/unverified branches
+(those only run with valid credentials, and counting them would let
+an attacker lock out a legit user). forgot-password is capped at 5
+per email per window (mailbox bombing / token spam) and reset-
+password at 20 invalid tokens per IP. All state is per-process
+in-memory, so on a multi-instance deployment the cap is per
+instance; windows are 15 minutes.

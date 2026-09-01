@@ -19,6 +19,12 @@ import { prisma } from '../../config/database';
 import { generateTokens, verifyRefreshToken, authenticate } from '../../middleware/auth';
 import { AppError, UnauthorizedError, ConflictError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import {
+  recordAuthFailure,
+  isAuthLocked,
+  clearAuthFailures,
+  pruneAuthFailures,
+} from '../../utils/authThrottle';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../services/email.service';
 import { emit } from '../plugins/pluginHooks';
 import { z } from 'zod';
@@ -166,6 +172,21 @@ router.post('/register', async (req, res, next) => {
 // POST /api/auth/login
 router.post('/login', async (req, res, next) => {
   try {
+    // Brute-force throttle BEFORE any bcrypt work: bcrypt.compare is
+    // deliberately expensive, so an unthrottled attacker burns CPU per
+    // attempt and grinds through passwords with no back-off. The email
+    // key is the attempted string (lowercased), never account state —
+    // unknown emails lock out exactly like known ones, so the lockout
+    // cannot be used to probe which accounts exist.
+    pruneAuthFailures();
+    const attemptEmail = String(req.body?.email || '').trim().toLowerCase();
+    const ip = req.ip || 'unknown';
+    if (isAuthLocked('email', attemptEmail) || isAuthLocked('ip', ip)) {
+      throw new UnauthorizedError(
+        'Too many failed attempts. Try again in about 15 minutes.',
+      );
+    }
+
     // Validate request body
     const validatedData = loginSchema.parse(req.body);
     const { email, password } = validatedData;
@@ -174,6 +195,10 @@ router.post('/login', async (req, res, next) => {
     const user = await findUserByEmail(email);
 
     if (!user) {
+      // Count against the attempted identity too: if only existing
+      // emails were counted, a probe could distinguish real accounts.
+      recordAuthFailure('email', attemptEmail);
+      recordAuthFailure('ip', ip);
       throw new UnauthorizedError('Invalid email or password');
     }
 
@@ -185,8 +210,15 @@ router.post('/login', async (req, res, next) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
+      // Count the failure (identity + IP). Same message as the
+      // unknown-user branch above so the two cannot be distinguished.
+      recordAuthFailure('email', attemptEmail);
+      recordAuthFailure('ip', ip);
       throw new UnauthorizedError('Invalid email or password');
     }
+
+    // Successful login: clear both counters for this identity.
+    clearAuthFailures('email', attemptEmail);
 
     // Imported accounts (bulk customer/order import) are created unverified
     // with a random password; the forgot-password flow activates them. Check
@@ -384,6 +416,20 @@ router.get('/me', authenticate, async (req, res, next) => {
 
 // POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res, next) => {
+  // Per-email + per-IP cap: the endpoint mints a reset token and emails
+  // it, so an unthrottled flood both spams a mailbox and writes a
+  // passwordReset row per request. The response is the same either
+  // way, so the throttle cannot be used to probe account existence.
+  const forgotEmail = String(req.body?.email || '').trim().toLowerCase();
+  const forgotIp = req.ip || 'unknown';
+  if (isAuthLocked('email', forgotEmail) || isAuthLocked('ip', forgotIp)) {
+    return res.status(429).json({
+      status: 'error',
+      message: 'Too many requests. Try again in about 15 minutes.',
+    });
+  }
+  recordAuthFailure('email', forgotEmail);
+  recordAuthFailure('ip', forgotIp);
   try {
     const { email } = req.body;
 
@@ -440,6 +486,17 @@ router.post('/forgot-password', async (req, res, next) => {
 
 // POST /api/auth/reset-password
 router.post('/reset-password', async (req, res, next) => {
+  // The reset endpoint runs a bcrypt hash on a guessable token, so it
+  // is a guessing target too; cap attempts per IP. (No per-email key:
+  // the token is a random 32-byte value, and the request doesn't carry
+  // the email.)
+  const resetIp = req.ip || 'unknown';
+  if (isAuthLocked('ip', resetIp)) {
+    return res.status(429).json({
+      status: 'error',
+      message: 'Too many requests. Try again in about 15 minutes.',
+    });
+  }
   try {
     const { token, password } = req.body;
 
@@ -464,6 +521,7 @@ router.post('/reset-password', async (req, res, next) => {
     });
 
     if (!resetRecord) {
+      recordAuthFailure('ip', resetIp);
       return res.status(400).json({
         status: 'error',
         message: 'Invalid or expired reset token',

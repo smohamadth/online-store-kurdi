@@ -16,12 +16,19 @@ import { describe, it, expect, beforeEach, afterAll, beforeAll } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
+import { resetAuthThrottle } from '../../src/utils/authThrottle';
 import type { Express } from 'express';
 
 let app: Express;
 beforeAll(async () => { app = await getTestApp(); });
 afterAll(async () => { await mockPrisma.$disconnect(); });
-beforeEach(async () => { await cleanDatabase(); });
+beforeEach(async () => {
+  await cleanDatabase();
+  // The throttle is per-process; without a reset, a lockout in one
+  // test would poison every later test in this file (and the IP
+  // counter is shared across the whole suite run).
+  resetAuthThrottle();
+});
 
 const registerPayload = (over: any = {}) => ({
   email: 'newuser@test.local',
@@ -174,6 +181,40 @@ describe('POST /api/auth/login', () => {
       .send({ email: 'newuser@test.local', password: 'Password123!' });
     expect(res.status).toBe(401);
     expect(res.body.message).toMatch(/deactivated/);
+  });
+
+  it('locks out an email after repeated failures (regression)', async () => {
+    // 5 failed attempts on the same identity locks that identity for
+    // 15 minutes, and the lockout applies to UNKNOWN emails too (the
+    // key is the attempted string), so it can't be used to probe which
+    // accounts exist. The 6th attempt is rejected before any bcrypt
+    // work, even with the correct password.
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'target@test.local', password: `wrong-${i}` });
+      expect(res.status).toBe(401);
+    }
+    const locked = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'target@test.local', password: 'Password123!' });
+    expect(locked.status).toBe(401);
+    expect(locked.body.message).toMatch(/Too many failed attempts/);
+  });
+
+  it('rate-limits forgot-password per email (regression)', async () => {
+    // The endpoint mints a token + emails it; the per-email cap (5 per
+    // window) stops mailbox bombing and token-spam. The response stays
+    // identical for known and unknown emails either way.
+    const attempts = Array.from({ length: 6 }, () =>
+      request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'spamme@test.local' })
+    );
+    const results = await Promise.all(attempts);
+    expect(results.slice(0, 5).every((r) => r.status === 200)).toBe(true);
+    expect(results[5].status).toBe(429);
+    expect(results[5].body.message).toMatch(/Too many requests/);
   });
 
   it('rejects an invalid email shape', async () => {
