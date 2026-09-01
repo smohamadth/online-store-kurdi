@@ -156,3 +156,52 @@ describe('AdminOrderDetailPage payment settlement', () => {
     expect(screen.queryByText('Mark as paid')).toBeNull();
   });
 });
+
+describe('AdminOrderDetailPage wallet credit', () => {
+  beforeEach(() => {
+    hoisted.api.getOrder.mockReset();
+    hoisted.authHttp.post.mockReset();
+    localStorage.clear();
+    localStorage.setItem('token', 'test-token');
+    hoisted.authHttp.post.mockResolvedValue({ status: 'success', data: {} });
+  });
+
+  it('shows the wallet-credit lines for an order paid with store credit / gift card', async () => {
+    hoisted.api.getOrder.mockResolvedValue({
+      data: {
+        ...codOrder,
+        paymentStatus: 'completed',
+        status: 'processing',
+        storeCreditApplied: 40,
+        giftCardApplied: 10,
+        giftCardCode: 'ABCD-1234',
+      },
+    });
+    render(<AdminOrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Paid with store credit')).toBeTruthy());
+    expect(screen.getByText('-$40.00')).toBeTruthy();
+    expect(screen.getByText('Paid with gift card (ABCD-1234)')).toBeTruthy();
+    expect(screen.getByText('-$10.00')).toBeTruthy();
+  });
+
+  it('sends creditToStoreCredit when the store-credit option is checked', async () => {
+    hoisted.api.getOrder.mockResolvedValue({
+      data: { ...codOrder, paymentStatus: 'completed', status: 'processing', storeCreditApplied: 59.99 },
+    });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AdminOrderDetailPage />);
+
+    await waitFor(() => expect(screen.getByText('Refund order')).toBeTruthy());
+    // Toggle the store-credit refund option, then refund.
+    screen.getByLabelText(/Return the value to the customer's store credit/i).click();
+    screen.getByText('Refund order').click();
+
+    await waitFor(() => expect(hoisted.authHttp.post).toHaveBeenCalled());
+    expect(hoisted.authHttp.post.mock.calls[0][1]).toMatchObject({
+      orderId: 'o-1',
+      creditToStoreCredit: true,
+    });
+    confirmSpy.mockRestore();
+  });
+});

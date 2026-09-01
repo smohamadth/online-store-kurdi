@@ -33,6 +33,10 @@ export default function AdminOrderDetailPage() {
   const [refundMsg, setRefundMsg] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [refundAmount, setRefundAmount] = useState('');
+  // When set, the refund returns value to the customer's store-credit
+  // balance instead of cash/gateway money (the only way to refund the
+  // wallet-credit portion of an order).
+  const [refundToCredit, setRefundToCredit] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
 
@@ -144,9 +148,11 @@ export default function AdminOrderDetailPage() {
         orderId,
         ...(parsedAmount !== undefined ? { amount: parsedAmount } : {}),
         reason: refundReason || 'Admin refund',
+        ...(refundToCredit ? { creditToStoreCredit: true } : {}),
       });
-      setRefundMsg('Refund issued.');
+      setRefundMsg(refundToCredit ? 'Refund issued to store credit.' : 'Refund issued.');
       setRefundAmount('');
+      setRefundToCredit(false);
       // A full refund marks the order refunded; a partial one leaves it
       // partially_refunded — reload to reflect the server's real state.
       await fetchOrder();
@@ -402,6 +408,27 @@ export default function AdminOrderDetailPage() {
                 {order.paymentStatus || 'pending'}
               </span>
             </div>
+            {/* Wallet credit applied at checkout: totalAmount keeps the
+                full order value, so the applied columns show how much of
+                it was covered by credit rather than cash. */}
+            {(order.storeCreditApplied || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                <span style={{ color: '#666' }}>Paid with store credit</span>
+                <span style={{ fontWeight: 500, color: '#16a34a' }}>
+                  -{formatPrice(order.storeCreditApplied)}
+                </span>
+              </div>
+            )}
+            {(order.giftCardApplied || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                <span style={{ color: '#666' }}>
+                  Paid with gift card{order.giftCardCode ? ` (${order.giftCardCode})` : ''}
+                </span>
+                <span style={{ fontWeight: 500, color: '#16a34a' }}>
+                  -{formatPrice(order.giftCardApplied)}
+                </span>
+              </div>
+            )}
             {(order.paymentStatus === 'pending' || order.paymentStatus === 'failed') && (
               <>
                 <button
@@ -435,7 +462,7 @@ export default function AdminOrderDetailPage() {
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder={`Refund amount (default: full ${formatPrice(order.totalAmount)})`}
+                    placeholder={`Refund amount (default: full ${formatPrice(order.totalAmount - (order.storeCreditApplied || 0) - (order.giftCardApplied || 0))})`}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '13px', marginBottom: '8px' }}
                   />
                   <input
@@ -444,6 +471,14 @@ export default function AdminOrderDetailPage() {
                     placeholder="Refund reason (optional)"
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: '6px', fontSize: '13px' }}
                   />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={refundToCredit}
+                      onChange={(e) => setRefundToCredit(e.target.checked)}
+                    />
+                    Return the value to the customer's store credit (instead of cash/gateway refund)
+                  </label>
                   <button
                     onClick={handleRefund}
                     disabled={refunding}
@@ -462,7 +497,7 @@ export default function AdminOrderDetailPage() {
                     {refunding ? 'Refunding…' : 'Refund order'}
                   </button>
                   <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
-                    Leave the amount blank to refund the full remaining balance. For online payments this refunds the customer at the gateway before marking the order refunded.
+                    Leave the amount blank to refund the full remaining balance. For online payments this refunds the customer at the gateway before marking the order refunded. Orders paid with store credit / gift cards have no cash to refund — use the store-credit option for the credit-covered portion.
                   </p>
                 </div>
               </>

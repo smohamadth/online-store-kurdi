@@ -129,6 +129,11 @@ export async function assembleReceiptData(orderId: string): Promise<ReceiptData>
       shippedAt: order.shippedAt ? new Date(order.shippedAt).toISOString() : null,
       trackingNumber: (order as any).trackingNumber ?? null,
       customerNote: (order as any).notes ?? null,
+      // Wallet credit applied at checkout: the total keeps the full order
+      // value, so the receipt shows how much of it was covered by credit.
+      storeCreditApplied: Number((order as any).storeCreditApplied ?? 0),
+      giftCardApplied: Number((order as any).giftCardApplied ?? 0),
+      giftCardCode: (order as any).giftCardCode ?? null,
     },
     customer: {
       id: order.user.id,

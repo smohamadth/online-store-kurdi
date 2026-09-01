@@ -89,6 +89,24 @@ describe('renderReceiptHtml', () => {
     expect(html).toContain('$12.00');
   });
 
+  it('renders the wallet-credit lines in the totals block when credit was applied', () => {
+    const html = renderReceiptHtml({
+      ...FIXTURE,
+      order: {
+        ...FIXTURE.order,
+        storeCreditApplied: 10,
+        giftCardApplied: 5,
+        giftCardCode: 'ABCD-1234',
+      },
+    });
+    expect(html).toContain('Paid with store credit');
+    expect(html).toContain('-$10.00');
+    expect(html).toContain('Paid with gift card (ABCD-1234)');
+    expect(html).toContain('-$5.00');
+    // The full order total is still shown; the credit lines are additive.
+    expect(html).toContain('$61.85');
+  });
+
   it('shows the backorder badge only for backorder items', () => {
     const html = renderReceiptHtml(FIXTURE);
     // Both items render; only the second one should carry the

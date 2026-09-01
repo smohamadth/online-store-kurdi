@@ -50,6 +50,9 @@ export interface ReceiptData {
     shippedAt?: string | null;
     trackingNumber?: string | null;
     customerNote?: string | null;
+    storeCreditApplied?: number;
+    giftCardApplied?: number;
+    giftCardCode?: string | null;
   };
   customer: {
     id: string;
@@ -231,6 +234,8 @@ export function renderReceiptHtml(d: ReceiptData): string {
     ${d.totals.discount > 0 ? `<div class="row"><span>Discount</span><span>-${fmtMoney(d.totals.discount)}</span></div>` : ''}
     <div class="row"><span>Shipping</span><span>${d.totals.shipping === 0 ? 'Free' : fmtMoney(d.totals.shipping)}</span></div>
     <div class="row"><span>Tax</span><span>${fmtMoney(d.totals.tax)}</span></div>
+    ${d.order.storeCreditApplied ? `<div class="row"><span>Paid with store credit</span><span>-${fmtMoney(d.order.storeCreditApplied)}</span></div>` : ''}
+    ${d.order.giftCardApplied ? `<div class="row"><span>Paid with gift card${d.order.giftCardCode ? ` (${esc(d.order.giftCardCode)})` : ''}</span><span>-${fmtMoney(d.order.giftCardApplied)}</span></div>` : ''}
     <div class="row total"><span>Total</span><span>${fmtMoney(d.totals.total)}</span></div>
   </div>
 
@@ -348,6 +353,15 @@ export function renderReceiptPdf(d: ReceiptData): Promise<Buffer> {
     if (d.totals.discount > 0) writeRow('Discount', `-${fmtMoney(d.totals.discount)}`);
     writeRow('Shipping', d.totals.shipping === 0 ? 'Free' : fmtMoney(d.totals.shipping));
     writeRow('Tax', fmtMoney(d.totals.tax));
+    if (d.order.storeCreditApplied) {
+      writeRow('Paid with store credit', `-${fmtMoney(d.order.storeCreditApplied)}`);
+    }
+    if (d.order.giftCardApplied) {
+      const label = d.order.giftCardCode
+        ? `Paid with gift card (${d.order.giftCardCode})`
+        : 'Paid with gift card';
+      writeRow(label, `-${fmtMoney(d.order.giftCardApplied)}`);
+    }
     doc.moveTo(380, doc.y).lineTo(545, doc.y).strokeColor('#111').lineWidth(1).stroke();
     doc.moveDown(0.4);
     writeRow('TOTAL', fmtMoney(d.totals.total), true);
