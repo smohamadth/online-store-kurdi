@@ -982,7 +982,12 @@ export default function ProductView() {
         }}
       >
         {[
-          { icon: '🚚', title: 'Free shipping', text: 'On orders over 50', href: '/help' },
+          // `/help` is NOT a route - only `/help/<slug>` exists (see
+          // app/help/[slug]). Pointing a <Link> at it made Next prefetch a
+          // 404 RSC payload and retry, which kept the page from ever reaching
+          // networkidle and timed out the browser regression sweep. /faq is
+          // the real shipping-info page.
+          { icon: '🚚', title: 'Free shipping', text: 'On orders over 50', href: '/faq' },
           { icon: '↩️', title: '30-day returns', text: 'Hassle-free refunds', href: '/returns' },
           { icon: '🔒', title: 'Secure checkout', text: 'Encrypted payments' },
           { icon: '💬', title: '24/7 support', text: 'We reply within hours', href: '/contact' },
