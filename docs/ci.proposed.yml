@@ -1,0 +1,332 @@
+name: CI
+
+# Runs the test suites on every push and pull request.
+#
+# Four jobs:
+#   static-checks - fastest (~3 min). Lint + typecheck + the whole vitest
+#                   suite (API unit/integration, web lib/components). No
+#                   server, no browser. This is the job that catches most
+#                   regressions, so it runs first and cheapest.
+#   api-checks    - fast (~4 min). Live API regression sweep + static audits.
+#   es-search     - Elasticsearch live search against a real cluster.
+#   ui-checks     - slower (~15 min). Builds the frontend and drives a real
+#                   browser through the page suites.
+#
+# They run in parallel. If any goes red the commit is marked failed on
+# GitHub, so a regression is caught before it is pulled onto a dev machine.
+
+on:
+  push:
+    # `main` plus the agent/working branches, so a plain push to a feature
+    # branch gets the same signal a PR would. Without the second pattern a
+    # push to arena/** ran nothing at all.
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+  # Lets you re-run the suites by hand from the Actions tab.
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the previous run rather than
+# queueing behind it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned: `npx prisma` resolves to a newer major by default, which errors
+  # against the v5 client this project depends on.
+  PRISMA_VERSION: 5.22.0
+
+jobs:
+  # ===================================================================
+  # 1. Lint, typecheck and the full vitest suite.
+  # ===================================================================
+  static-checks:
+    name: Lint, typecheck + vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # postinstall runs `prisma generate`, so the generated client is always
+        # in step with the schema. A stale client is the bug that made every
+        # admin page 500 with "Cannot read properties of undefined".
+        run: npm ci
+
+      - name: Configure environment
+        run: cp apps/api/.env.ci apps/api/.env
+
+      - name: Lint (API)
+        run: npm run lint:api
+
+      - name: Lint (web)
+        run: npm run lint:web
+
+      - name: Typecheck (web)
+        # `next build` fails on type errors, but that takes minutes in
+        # ui-checks. Failing here surfaces the same error in seconds.
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: API unit tests
+        run: npm run test:api:unit
+
+      - name: API integration tests
+        # In-memory mock Prisma: no database or network needed.
+        run: npm run test:api:integration
+
+      - name: Web tests (lib + components)
+        run: npm run test:web
+
+  # ===================================================================
+  # 2. Live API regression sweep + static audits.
+  # ===================================================================
+  api-checks:
+    name: API regression + static audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure environment
+        run: cp apps/api/.env.ci apps/api/.env
+
+      - name: Env templates match the schema provider
+        # Cheap and needs no server. Catches the shipped .env.example handing
+        # out a URL the schema cannot use.
+        run: python3 scripts/verify-env-config.py
+
+      - name: Apply migrations
+        working-directory: apps/api
+        run: npx prisma@${{ env.PRISMA_VERSION }} migrate deploy
+
+      - name: Seed database
+        working-directory: apps/api
+        run: npm run db:seed
+
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          nohup npx tsx src/server.ts > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/health)" = "200" ]; then
+              echo "API healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy within 60s"
+          cat /tmp/api.log
+          exit 1
+
+      - name: API regression suite
+        run: bash scripts/regression.sh
+
+      - name: Audit for silent admin write failures
+        run: python3 scripts/audit-silent-writes.py
+
+      - name: Commerce rules (coupons, orders, stock)
+        run: python3 scripts/verify-commerce.py
+
+      - name: API log
+        # Runs even when a previous step failed, so a red build shows why.
+        if: always()
+        run: tail -100 /tmp/api.log || true
+
+  # ===================================================================
+  # 3. Elasticsearch live search.
+  # ===================================================================
+  es-search:
+    name: Elasticsearch live search
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Boot a real Elasticsearch 8.11.0 (the same image as docker-compose.yml)
+    # as a service container. The live test talks to it over localhost:9200.
+    services:
+      elasticsearch:
+        image: elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        # Mark the service ready only once the cluster is actually up, so the
+        # test step doesn't race a half-started node. ES 8.11's image ships
+        # curl, so a health probe is reliable here.
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow >/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Elasticsearch live search suite
+        working-directory: apps/api
+        env:
+          # localhost resolves to the service container via the mapped port.
+          ELASTICSEARCH_URL: http://localhost:9200
+          ELASTICSEARCH_INDEX: products-ci-live
+        # The suite seeds products via the in-memory mock prisma, indexes them
+        # into the real cluster, and verifies search + index maintenance. It is
+        # gated on a reachability probe, so it runs for real here (ES is up)
+        # and skips on machines without a cluster.
+        run: npx vitest run --config vitest.integration.config.ts tests/integration/elasticsearch.live.test.ts
+
+  # ===================================================================
+  # 4. Browser regression.
+  # ===================================================================
+  ui-checks:
+    name: Browser regression
+    runs-on: ubuntu-latest
+    # Browser suites plus a Next.js production build. 25 was too tight once
+    # a slow step ate into it.
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        # `playwright install --with-deps` shells out to apt-get, which hung for
+        # 23 minutes on the runner and got killed by the job timeout - the pip
+        # install itself took 3 seconds. GitHub's ubuntu-latest image already
+        # ships the libraries headless Chromium needs, so we install the browser
+        # WITHOUT --with-deps and cap it so a hang fails fast and visibly
+        # instead of eating the whole job budget.
+        timeout-minutes: 8
+        run: |
+          pip install playwright
+          python3 -m playwright install chromium
+
+      - name: Configure environment
+        run: |
+          cp apps/api/.env.ci apps/api/.env
+          echo "NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api" > apps/web/.env.local
+
+      - name: Apply migrations
+        working-directory: apps/api
+        run: npx prisma@${{ env.PRISMA_VERSION }} migrate deploy
+
+      - name: Seed database
+        working-directory: apps/api
+        run: npm run db:seed
+
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          nohup npx tsx src/server.ts > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/health)" = "200" ]; then
+              echo "API healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy within 60s"
+          cat /tmp/api.log
+          exit 1
+
+      - name: Build frontend
+        working-directory: apps/web
+        run: npx next build
+
+      - name: Start frontend
+        working-directory: apps/web
+        run: |
+          nohup npx next start -H 127.0.0.1 -p 3000 > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000)" = "200" ]; then
+              echo "Web healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Frontend did not become healthy within 60s"
+          cat /tmp/web.log
+          exit 1
+
+      - name: Page sweep (public, admin, account)
+        run: python3 scripts/regression-ui.py
+
+      - name: Home page builder
+        run: python3 scripts/verify-home-builder.py
+
+      - name: Call-to-action banner
+        run: python3 scripts/verify-banner.py
+
+      - name: Home gallery
+        run: python3 scripts/verify-gallery.py
+
+      - name: HTTP status codes (soft-404 guard)
+        run: python3 scripts/verify-404.py
+
+      - name: Admin users editing + privilege guards
+        run: python3 scripts/verify-users.py
+
+      - name: Admin dashboard figures + empty states
+        run: python3 scripts/verify-dashboard.py
+
+      - name: Custom pages, admin layout + sidebar
+        run: python3 scripts/verify-pages.py
+
+      - name: Blog (API, SEO, storefront, admin)
+        run: python3 scripts/verify-blog.py
+
+      # Sidebar rail geometry across seven viewport heights. Two separate
+      # regressions have shipped as "a gap in the sidebar"; both were only
+      # visible at particular heights, which is why single-height checks
+      # missed them.
+      - name: Admin sidebar rail geometry
+        run: python3 scripts/verify-admin-rail.py
+
+      # Kurdish/Arabic titles must produce reachable URLs. A Latin-only
+      # slugifier turned them into an empty slug, and double-encoded route
+      # params made the page render "not found" behind an HTTP 200.
+      - name: Unicode slugs for pages and blog posts
+        run: python3 scripts/verify-page-slugs.py
+
+      - name: Server logs
+        if: always()
+        run: |
+          echo "----- API -----"; tail -100 /tmp/api.log || true
+          echo "----- WEB -----"; tail -60 /tmp/web.log || true
