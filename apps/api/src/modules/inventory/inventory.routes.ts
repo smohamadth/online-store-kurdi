@@ -1,3 +1,19 @@
+// ---------------------------------------------------------------------------
+// Inventory admin API (mounted at /api/inventory).
+//
+// Almost everything here is admin/manager-gated: stock adjustments,
+// bulk updates, the audit log, low/out-of-stock lists, warehouses +
+// transfers, stock takes, reorder rules + the draft pipeline they feed,
+// sales channels, and manual reservation management.
+//
+// Two public-adjacent pieces: POST /webhooks/3pl (a 3PL pushes stock
+// deltas; authenticity comes from the HMAC in the webhook secret, see
+// verifyWebhookSignature in inventory.helpers) and the reservation
+// endpoints the cart/order flows use internally.
+//
+// Business rules live in inventory.service.ts; this file is input
+// validation + auth + response shaping.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
@@ -22,6 +38,7 @@ import {
   verifyWebhookSignature,
   type StockTakeItemInput,
 } from './inventory.service';
+import { parsePagination } from '../../utils/pagination';
 
 const router = Router();
 
@@ -53,9 +70,7 @@ const stockAlertSchema = z.object({
 // GET /api/inventory - Get inventory overview
 router.get('/', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 50 });
     const status = req.query.status as string; // 'in_stock', 'low_stock', 'out_of_stock'
 
     // Build filter
@@ -145,7 +160,7 @@ router.post('/adjust', authenticate, authorize('admin', 'manager'), async (req, 
     // Get current quantity
     let currentQuantity: number;
     if (variantId) {
-      const variant = await prisma.productVariant.findUnique({
+      const variant = await prisma.variant.findUnique({
         where: { id: variantId },
         select: { quantity: true },
       });
@@ -177,7 +192,7 @@ router.post('/adjust', authenticate, authorize('admin', 'manager'), async (req, 
 
     // Update quantity
     if (variantId) {
-      await prisma.productVariant.update({
+      await prisma.variant.update({
         where: { id: variantId },
         data: { quantity: newQuantity },
       });
@@ -229,7 +244,7 @@ router.post('/bulk-update', authenticate, authorize('admin'), async (req, res, n
     for (const update of validatedData.updates) {
       try {
         if (update.variantId) {
-          await prisma.productVariant.update({
+          await prisma.variant.update({
             where: { id: update.variantId },
             data: { quantity: update.quantity },
           });
@@ -263,9 +278,7 @@ router.post('/bulk-update', authenticate, authorize('admin'), async (req, res, n
 // GET /api/inventory/logs - Get inventory logs
 router.get('/logs', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 50 });
     const productId = req.query.productId as string;
     const reason = req.query.reason as string;
 
@@ -365,7 +378,12 @@ router.post('/alerts', authenticate, authorize('admin'), async (req, res, next) 
 // GET /api/inventory/low-stock - Get low stock products
 router.get('/low-stock', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const threshold = parseInt(req.query.threshold as string) || 10;
+    // Clamped: a hostile ?threshold=-5 would be a Prisma validation
+    // error (gt:0 AND lte:-5) and ?threshold=1e999 parses to Infinity.
+    const raw = req.query.threshold;
+    const n = typeof raw === 'string' ? Number(raw) : NaN;
+    const threshold =
+      Number.isFinite(n) && Number.isInteger(n) && n >= 1 ? Math.min(n, 9999) : 10;
 
     const products = await prisma.product.findMany({
       where: {
@@ -955,10 +973,10 @@ router.post('/import-csv', authenticate, authorize('admin'), async (req, res, ne
         if (row.quantity >= 0) {
           // Positive: set absolute
           if (row.variantSku) {
-            const v = await prisma.productVariant.findFirst({ where: { sku: row.variantSku } });
+            const v = await prisma.variant.findFirst({ where: { sku: row.variantSku } });
             if (!v) throw new Error(`variant not found: ${row.variantSku}`);
             const previous = v.quantity;
-            await prisma.productVariant.update({ where: { id: v.id }, data: { quantity: row.quantity } });
+            await prisma.variant.update({ where: { id: v.id }, data: { quantity: row.quantity } });
             await prisma.inventoryLog.create({
               data: { productId: v.productId, variantId: v.id, quantityChange: row.quantity - previous, previousQuantity: previous, newQuantity: row.quantity, reason: 'restock', notes: 'csv import' },
             });
@@ -975,7 +993,7 @@ router.post('/import-csv', authenticate, authorize('admin'), async (req, res, ne
           // Negative: delta
           const abs = -row.quantity;
           if (row.variantSku) {
-            const v = await prisma.productVariant.findFirst({ where: { sku: row.variantSku } });
+            const v = await prisma.variant.findFirst({ where: { sku: row.variantSku } });
             if (!v) throw new Error(`variant not found: ${row.variantSku}`);
             await decrementStock({ productId: v.productId, variantId: v.id, quantity: abs, userId: req.user!.id });
           } else {
@@ -1027,6 +1045,7 @@ router.post('/restock', authenticate, authorize('admin', 'manager'), async (req,
 
 // Public (no auth) but signature-verified. The secret is looked up by
 // `provider`; a missing or rotated secret rejects with 401.
+// authz-ok: external 3PL callback; authenticated by shared-secret signature, not a session
 router.post('/webhooks/3pl', async (req, res, next) => {
   try {
     const provider = String(req.header('X-Provider') || '');
@@ -1036,7 +1055,15 @@ router.post('/webhooks/3pl', async (req, res, next) => {
     const secretRow = await prisma.webhookSecret.findFirst({ where: { provider, isActive: true } });
     if (!secretRow) throw new AppError('Unknown or rotated provider', 401);
     const body = (req as any).rawBody || JSON.stringify(req.body);
-    if (!verifyWebhookSignature(secretRow.secret, body, signature, { mockAccept: process.env.NODE_ENV !== 'production' })) {
+    // Always perform the real HMAC check. This used to pass
+    // `mockAccept: process.env.NODE_ENV !== 'production'`, which accepts ANY
+    // non-empty X-Signature. NODE_ENV defaults to 'development' (see
+    // config/environment.ts), so any deployment that did not explicitly set
+    // NODE_ENV=production had 3PL webhook authentication switched off
+    // entirely - an unauthenticated caller could post `X-Signature: x` and
+    // move stock levels for any SKU. The bypass must never be reachable from
+    // an ambient env default; unit tests exercise the flag directly instead.
+    if (!verifyWebhookSignature(secretRow.secret, body, signature)) {
       throw new AppError('Invalid signature', 401);
     }
     // Body schema: { events: [{ type, sku, quantity, variantSku, externalRef, reason }] }

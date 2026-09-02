@@ -59,6 +59,25 @@ describe('POST /api/products/:productId/reviews', () => {
     }
   });
 
+  it('rejects non-integer ratings and oversized text (regression)', async () => {
+    // A 3.5 rating used to 500 on the Int column (and 'abc' too); an
+    // unbounded title/comment was DB bloat.
+    const { token } = await authHeader();
+    const p = await createProduct();
+    for (const bad of [3.5, 'abc', {}, null, '4.5']) {
+      const res = await request(app)
+        .post(`/api/products/${p.id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: bad });
+      expect(res.status).toBe(400);
+    }
+    const big = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5, title: 'x'.repeat(300) });
+    expect(big.status).toBe(400);
+  });
+
   it('rejects a duplicate review from the same user', async () => {
     const { token, user } = await authHeader();
     const p = await createProduct();
@@ -92,6 +111,64 @@ describe('PUT /api/reviews/:reviewId', () => {
     expect(res.status).toBe(200);
     const after = await mockPrisma.review.findUnique({ where: { id: r.id } });
     expect(after?.rating).toBe(5);
+  });
+
+  it('rejects invalid ratings on update too (regression)', async () => {
+    // The old update path did `rating ? parseInt(rating) : undefined`,
+    // so 'abc' / 3.5 / 0 were silently dropped or mangled.
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({ data: { userId: user.id, productId: p.id, rating: 3 } });
+    for (const bad of [3.5, 'abc', 0]) {
+      const res = await request(app)
+        .put(`/api/reviews/${r.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: bad });
+      expect(res.status).toBe(400);
+    }
+    const after = await mockPrisma.review.findUnique({ where: { id: r.id } });
+    expect(after?.rating).toBe(3);
+  });
+
+  it('rejects out-of-range and non-numeric ratings on update', async () => {
+    // Boundary sweep around the 1..5 gate. `'4'` (a numeric string) is the
+    // one value in this list that must be ACCEPTED — form posts send strings.
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({ data: { userId: user.id, productId: p.id, rating: 3 } });
+
+    for (const bad of [-1, 6, 100, '', ' ', '5.5', 'NaN', null]) {
+      const res = await request(app)
+        .put(`/api/reviews/${r.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: bad });
+      expect(res.status, `rating=${JSON.stringify(bad)} should be rejected`).toBe(400);
+    }
+    expect((await mockPrisma.review.findUnique({ where: { id: r.id } }))?.rating).toBe(3);
+
+    const ok = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: '4' });
+    expect(ok.status).toBe(200);
+    expect((await mockPrisma.review.findUnique({ where: { id: r.id } }))?.rating).toBe(4);
+  });
+
+  it('leaves the rating untouched when the field is omitted', async () => {
+    // `rating: undefined` must mean "do not change", not "validate 0".
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({
+      data: { userId: user.id, productId: p.id, rating: 2, comment: 'before' },
+    });
+    const res = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ comment: 'after' });
+    expect(res.status).toBe(200);
+    const after = await mockPrisma.review.findUnique({ where: { id: r.id } });
+    expect(after?.rating).toBe(2);
+    expect(after?.comment).toBe('after');
   });
 
   it('lets an admin toggle isApproved', async () => {
@@ -199,6 +276,18 @@ describe('GET /api/reviews (admin queue)', () => {
     const res = await request(app).get('/api/reviews').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
   });
+
+  it('clamps hostile pagination (negative page cannot 500)', async () => {
+    // Regression: `page=-5` used to produce a negative `skip` and a
+    // Prisma error. It must now clamp to page 1 and return 200.
+    const { token: adminToken } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .get('/api/reviews?page=-5&limit=999999')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.limit).toBeLessThanOrEqual(200);
+  });
 });
 
 describe('GET /api/users/me/reviews', () => {
@@ -210,5 +299,232 @@ describe('GET /api/users/me/reviews', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].productName).toBe('Cool Hat');
+  });
+});
+
+/**
+ * Verified-purchaser badge.
+ *
+ * The previous route hard-coded `isVerified: true` on every
+ * review, which made the badge useless. These tests pin the
+ * new behaviour: the badge lights up only when the reviewer
+ * has a non-cancelled / non-refunded order containing the
+ * product.
+ */
+describe('POST /api/products/:productId/reviews: verified-purchaser badge', () => {
+  it('sets isVerified=true when the user has a non-cancelled order for the product', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    // A shipped order for this user containing this product.
+    const order = await mockPrisma.order.create({
+      data: { userId: user.id, orderNumber: 'ORD-1', status: 'shipped', subtotal: 10, totalAmount: 10 },
+    });
+    await mockPrisma.orderItem.create({
+      data: { orderId: order.id, productId: p.id, quantity: 1, unitPrice: 10, totalPrice: 10 },
+    });
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5 });
+    expect(res.status).toBe(201);
+    expect(res.body.data.isVerified).toBe(true);
+  });
+
+  it('sets isVerified=false when the user has no orders for the product', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    // An order for a *different* product should not count.
+    const otherProduct = await createProduct({ slug: 'other' });
+    const order = await mockPrisma.order.create({
+      data: { userId: user.id, orderNumber: 'ORD-1', status: 'shipped', subtotal: 10, totalAmount: 10 },
+    });
+    await mockPrisma.orderItem.create({
+      data: { orderId: order.id, productId: otherProduct.id, quantity: 1, unitPrice: 10, totalPrice: 10 },
+    });
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5 });
+    expect(res.status).toBe(201);
+    expect(res.body.data.isVerified).toBe(false);
+  });
+
+  it('sets isVerified=false when the only matching order is cancelled', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const order = await mockPrisma.order.create({
+      data: { userId: user.id, orderNumber: 'ORD-1', status: 'cancelled', subtotal: 10, totalAmount: 10 },
+    });
+    await mockPrisma.orderItem.create({
+      data: { orderId: order.id, productId: p.id, quantity: 1, unitPrice: 10, totalPrice: 10 },
+    });
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5 });
+    expect(res.body.data.isVerified).toBe(false);
+  });
+
+  it('sets isVerified=false when the only matching order is refunded', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const order = await mockPrisma.order.create({
+      data: { userId: user.id, orderNumber: 'ORD-1', status: 'refunded', subtotal: 10, totalAmount: 10 },
+    });
+    await mockPrisma.orderItem.create({
+      data: { orderId: order.id, productId: p.id, quantity: 1, unitPrice: 10, totalPrice: 10 },
+    });
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5 });
+    expect(res.body.data.isVerified).toBe(false);
+  });
+
+  it('counts any non-cancelled status (pending / processing / shipped / delivered)', async () => {
+    for (const status of ['pending', 'processing', 'shipped', 'delivered']) {
+      await cleanDatabase();
+      const { token, user } = await authHeader();
+      const p = await createProduct();
+      const order = await mockPrisma.order.create({
+        data: { userId: user.id, orderNumber: `O-${status}`, status, subtotal: 10, totalAmount: 10 },
+      });
+      await mockPrisma.orderItem.create({
+        data: { orderId: order.id, productId: p.id, quantity: 1, unitPrice: 10, totalPrice: 10 },
+      });
+      const res = await request(app)
+        .post(`/api/products/${p.id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: 5 });
+      expect(res.body.data.isVerified, `status=${status}`).toBe(true);
+    }
+  });
+});
+
+/**
+ * Review photos.
+ *
+ * Photos are uploaded through `POST /api/upload/image` (which
+ * returns a URL + thumbnail). The review POST / PUT just take
+ * a list of URLs and persist them as `ReviewPhoto` rows.
+ */
+describe('POST /api/products/:productId/reviews: photos', () => {
+  it('persists photos and returns them on the response', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        rating: 5,
+        photos: [
+          'https://cdn.example.com/a.jpg',
+          { url: 'https://cdn.example.com/b.jpg', thumbnail: 'https://cdn.example.com/b-thumb.jpg' },
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.photos).toHaveLength(2);
+    expect(res.body.data.photos[0].url).toBe('https://cdn.example.com/a.jpg');
+    expect(res.body.data.photos[1].thumbnail).toBe('https://cdn.example.com/b-thumb.jpg');
+    // Persisted as rows too.
+    const photos = await mockPrisma.reviewPhoto.findMany({ where: { review: { userId: user.id } } });
+    expect(photos).toHaveLength(2);
+  });
+
+  it('rejects more than the cap with a 400', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct();
+    const tooMany = Array.from({ length: 6 }, (_, i) => `https://x/${i}.jpg`);
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5, photos: tooMany });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/at most/);
+  });
+
+  it('rejects non-array photos with a 400', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct();
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5, photos: 'not-an-array' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects photo entries without a url with a 400', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct();
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5, photos: [{ thumbnail: 'x' }] });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('url is required');
+  });
+
+  it('allows a review with no photos', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct();
+    const res = await request(app)
+      .post(`/api/products/${p.id}/reviews`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 4 });
+    expect(res.status).toBe(201);
+    expect(res.body.data.photos).toEqual([]);
+  });
+});
+
+describe('PUT /api/reviews/:reviewId: photos', () => {
+  it('replaces the photo set when the request includes a new list', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({
+      data: { userId: user.id, productId: p.id, rating: 4, isVerified: true },
+    });
+    await mockPrisma.reviewPhoto.create({ data: { reviewId: r.id, url: 'old-1', sortOrder: 0 } });
+    await mockPrisma.reviewPhoto.create({ data: { reviewId: r.id, url: 'old-2', sortOrder: 1 } });
+    const res = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ photos: ['new-1', 'new-2', 'new-3'] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.photos.map((p: any) => p.url)).toEqual(['new-1', 'new-2', 'new-3']);
+    const persisted = await mockPrisma.reviewPhoto.findMany({ where: { reviewId: r.id } });
+    expect(persisted).toHaveLength(3);
+  });
+
+  it('removes all photos when the new list is empty', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({
+      data: { userId: user.id, productId: p.id, rating: 4 },
+    });
+    await mockPrisma.reviewPhoto.create({ data: { reviewId: r.id, url: 'old-1', sortOrder: 0 } });
+    const res = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ photos: [] });
+    expect(res.status).toBe(200);
+    const persisted = await mockPrisma.reviewPhoto.findMany({ where: { reviewId: r.id } });
+    expect(persisted).toHaveLength(0);
+  });
+
+  it('leaves photos alone when the request omits the key', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({
+      data: { userId: user.id, productId: p.id, rating: 4 },
+    });
+    await mockPrisma.reviewPhoto.create({ data: { reviewId: r.id, url: 'keep-me', sortOrder: 0 } });
+    const res = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: 5 });
+    expect(res.status).toBe(200);
+    const persisted = await mockPrisma.reviewPhoto.findMany({ where: { reviewId: r.id } });
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0].url).toBe('keep-me');
   });
 });

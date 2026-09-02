@@ -84,6 +84,23 @@ describe('Auth & authorization', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects an Infinity amount (1e999 in JSON) on issue (400)', async () => {
+    // Regression: z.number().positive() accepts Infinity, and JSON 1e999
+    // parses to Infinity — an issued card used to get balance=Infinity
+    // (never depletes, poisons every checkout that touches it).
+    const admin = await createUser({ role: 'admin' });
+    const token = await tokenFor(admin);
+    // Raw JSON body: JSON.stringify would mangle Infinity into null, but
+    // a real hostile client sends the literal 1e999 token.
+    const res = await request(app)
+      .post('/api/gift-cards')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"amount":1e999}');
+    expect(res.status).toBe(400);
+    expect(await mockPrisma.giftCard.findMany()).toHaveLength(0);
+  });
+
   it('GET /api/gift-cards is admin/manager only (customer -> 403)', async () => {
     const u = await createUser({});
     const token = await tokenFor(u);
@@ -146,6 +163,19 @@ describe('Issue and list', () => {
     const list = await request(app).get('/api/gift-cards?status=cancelled').set('Authorization', `Bearer ${token}`);
     expect(list.body.data).toHaveLength(1);
     expect(list.body.data[0].status).toBe('cancelled');
+  });
+
+  it('rejects a cancellation reason that is not a short string (400)', async () => {
+    // Regression: the reason was stored unbounded into the ledger notes.
+    const admin = await createUser({ role: 'admin' });
+    const token = await tokenFor(admin);
+    const c = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${token}`).send({ amount: 10 });
+    const res = await request(app)
+      .post(`/api/gift-cards/${c.body.data.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'x'.repeat(501) });
+    expect(res.status).toBe(400);
+    expect((await mockPrisma.giftCard.findUnique({ where: { id: c.body.data.id } }))?.status).toBe('active');
   });
 });
 
@@ -240,6 +270,52 @@ describe('Redeem', () => {
     const uToken = await tokenFor(u);
     const res = await request(app).post(`/api/gift-cards/${code}/redeem`).set('Authorization', `Bearer ${uToken}`);
     expect(res.status).toBe(400);
+  });
+
+  it('claims the card to the calling account (redeemedByUserId written)', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const created = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${aToken}`).send({ amount: 100 });
+    const u = await createUser({});
+    const uToken = await tokenFor(u);
+
+    const res = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${uToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.claimedByMe).toBe(true);
+
+    // The card row records the claimant.
+    const { peekMockStore } = await import('../helpers/mockPrisma');
+    const cards = peekMockStore('giftCard');
+    expect(cards[0].redeemedByUserId).toBe(u.id);
+    expect(cards[0].redeemedAt).toBeTruthy();
+  });
+
+  it('rejects redeem of a card already claimed by another account (403)', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const created = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${aToken}`).send({ amount: 100 });
+    const u1 = await createUser({});
+    const u2 = await createUser({});
+
+    const first = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${await tokenFor(u1)}`);
+    expect(first.status).toBe(200);
+
+    const second = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${await tokenFor(u2)}`);
+    expect(second.status).toBe(403);
+    expect(second.body.message).toMatch(/claimed by another account/i);
+  });
+
+  it('allows the claiming user to check the same card again', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const created = await request(app).post('/api/gift-cards').set('Authorization', `Bearer ${aToken}`).send({ amount: 100 });
+    const u = await createUser({});
+    const uToken = await tokenFor(u);
+
+    await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${uToken}`);
+    const again = await request(app).post(`/api/gift-cards/${created.body.data.code}/redeem`).set('Authorization', `Bearer ${uToken}`);
+    expect(again.status).toBe(200);
+    expect(again.body.data.availableBalance).toBe(100);
   });
 });
 
@@ -373,6 +449,25 @@ describe('Store credit: own balance + history', () => {
     expect(res.body.data.transactions).toHaveLength(2);
   });
 
+  it('reports every currency balance via allBalances so stranded credit is visible', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const u = await createUser({});
+    const uToken = await tokenFor(u);
+    // USD (store default) + EUR (granted before a currency switch).
+    await request(app).post('/api/store-credit').set('Authorization', `Bearer ${aToken}`).send({ userId: u.id, amount: 30 });
+    await request(app).post('/api/store-credit').set('Authorization', `Bearer ${aToken}`).send({ userId: u.id, amount: 20, currency: 'EUR' });
+
+    const res = await request(app).get('/api/store-credit').set('Authorization', `Bearer ${uToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.balance).toBe(30);
+    expect(res.body.data.currency).toBe('USD');
+    expect(res.body.data.allBalances).toEqual([
+      { currency: 'USD', balance: 30 },
+      { currency: 'EUR', balance: 20 },
+    ]);
+  });
+
   it('rejects credit to a non-existent user (400)', async () => {
     const admin = await createUser({ role: 'admin' });
     const aToken = await tokenFor(admin);
@@ -415,6 +510,23 @@ describe('Store credit: admin adjust', () => {
       .send({ userId: u.id, amount: -20, reason: 'refund reversal' });
     expect(res.status).toBe(200);
     expect(res.body.data.balance).toBe(30);
+  });
+
+  it('rejects an Infinity adjust amount (1e999 in JSON) (400)', async () => {
+    // Regression: z.number() accepts Infinity, so an adjust of 1e999 used
+    // to push the user's balance to Infinity.
+    const admin = await createUser({ role: 'admin' });
+    const aToken = await tokenFor(admin);
+    const u = await createUser({});
+    const res = await request(app)
+      .post('/api/store-credit/adjust')
+      .set('Authorization', `Bearer ${aToken}`)
+      .set('Content-Type', 'application/json')
+      .send(`{"userId":"${u.id}","amount":1e999,"reason":"hostile"}`);
+    expect(res.status).toBe(400);
+    expect((await mockPrisma.storeCredit.findUnique({
+      where: { userId_currency: { userId: u.id, currency: 'USD' } },
+    }))?.balance ?? 0).toBe(0);
   });
 
   it('rejects a negative adjust that would push the balance below zero (400)', async () => {

@@ -1,11 +1,25 @@
+// /admin/appearance - the look & feel editor, tabbed:
+//   - theme: pick a theme (bundled + installed via the runtime catalog;
+//     the API validates the active key against the on-disk catalog, so an
+//     installed theme is activatable immediately), install a theme .zip,
+//     and remove installed themes
+//   - colors / typography / layout / sections / announcement: the
+//     Theme fields, saved as one blob via PUT /api/theme (including
+//     the customCss tab, which the server scans for script tags)
+//   - home: the home-page block editor (the HomeSection rows)
+// The live preview at /preview/<key> renders the same theme with
+// sample data.
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useIsMobile } from '@/lib/hooks';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
-import { DEFAULT_THEME, FONT_STACKS, Theme } from '@/lib/theme';
+import { DEFAULT_THEME, FONT_LABELS, FONT_STACKS, Theme } from '@/lib/theme';
 import { API_BASE } from '@/lib/http';
 import HomeBuilder from '@/components/HomeBuilder';
+import { ThemePicker } from './ThemePicker';
+import { getTheme, THEMES, type ThemeConfig } from '@/lib/themeRegistry';
+import { fetchThemeCatalog, resolveThemeConfig } from '@/lib/themeRuntime';
 
 const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'primaryColor', label: 'Primary / buttons', hint: 'Buttons, active states, brand accents' },
@@ -69,7 +83,7 @@ const SECTIONS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'showNewsletter', label: 'Newsletter signup', hint: '' },
 ];
 
-type Tab = 'colors' | 'typography' | 'layout' | 'home' | 'sections' | 'announcement' | 'css';
+type Tab = 'theme' | 'colors' | 'typography' | 'layout' | 'home' | 'sections' | 'announcement' | 'css';
 
 export default function AdminAppearancePage() {
   const isMobile = useIsMobile();
@@ -77,9 +91,88 @@ export default function AdminAppearancePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
-  const [tab, setTab] = useState<Tab>('colors');
+  const [tab, setTab] = useState<Tab>('theme');
+
+  // Themes installed at runtime (developer .zip packages). They are not in
+  // the web bundle, so the picker merges them with the bundled registry;
+  // installing / removing goes through the API and refreshes this list.
+  const [installedThemes, setInstalledThemes] = useState<ThemeConfig[]>([]);
+  const [installing, setInstalling] = useState(false);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
 
   const token = () => localStorage.getItem('token');
+
+  const refreshInstalledThemes = async () => {
+    try {
+      const { themes } = await fetchThemeCatalog();
+      // Only themes the bundle doesn't know are "installed"; bundled keys
+      // stay managed by the platform registry.
+      const staticKeys = new Set(THEMES.map((t) => t.key));
+      setInstalledThemes(themes.filter((t) => !staticKeys.has(t.key)));
+    } catch {
+      setInstalledThemes([]);
+    }
+  };
+
+  useEffect(() => {
+    refreshInstalledThemes();
+  }, []);
+
+  /**
+   * Install a theme package (.zip) via the API. The package is validated
+   * end-to-end server-side (zip-slip, schema, bundled-key protection)
+   * before anything is written. On success the catalog refreshes and the
+   * storefront is told to reload its theme.
+   */
+  const installTheme = async (file: File | null) => {
+    if (!file) return;
+    setInstalling(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API_BASE}/theme-studio/install`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}` },
+        body: fd,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `Install failed (HTTP ${res.status}).`);
+      await refreshInstalledThemes();
+      notify('success', `Theme "${body?.data?.name ?? body?.data?.key}" installed — pick it above to activate.`);
+      window.dispatchEvent(new Event('themeChange'));
+    } catch (e: any) {
+      notify('error', e?.message || 'Could not install the theme.');
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  /**
+   * Remove an installed theme. The API refuses bundled themes; if the
+   * removed theme was the store's active one, the API switches the store
+   * back to the default theme and says so.
+   */
+  const removeTheme = async (key: string) => {
+    if (!window.confirm(`Remove theme "${key}"? This cannot be undone. If it is the store's active theme, the store will switch back to the default theme.`)) {
+      return;
+    }
+    setRemovingKey(key);
+    try {
+      const res = await fetch(`${API_BASE}/theme-studio/themes/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `Remove failed (HTTP ${res.status}).`);
+      await refreshInstalledThemes();
+      notify('success', body?.message || `Theme "${key}" removed.`);
+      window.dispatchEvent(new Event('themeChange'));
+    } catch (e: any) {
+      notify('error', e?.message || 'Could not remove the theme.');
+    } finally {
+      setRemovingKey(null);
+    }
+  };
 
   // `loadFailed` matters: if the GET fails we must NOT present the shipped
   // defaults as if they were the stored settings. Doing that made the page
@@ -191,6 +284,9 @@ export default function AdminAppearancePage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
+          <a href="/admin/theme-studio" style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontWeight: 600, textDecoration: 'none', color: '#111', display: 'inline-flex', alignItems: 'center' }}>
+            🧩 Theme Studio
+          </a>
           <button onClick={reset} disabled={saving} style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}>
             Reset
           </button>
@@ -222,6 +318,7 @@ export default function AdminAppearancePage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '6px', marginTop: '22px', flexWrap: 'wrap', borderBottom: '1px solid #e5e5e5', paddingBottom: '10px' }}>
         {([
+          ['theme', '🎨 Theme'],
           ['colors', '🎨 Colours'],
           ['typography', '🔤 Typography'],
           ['layout', '📐 Layout'],
@@ -241,11 +338,46 @@ export default function AdminAppearancePage() {
         ))}
       </div>
 
-      {/* The home page builder needs the full width - its rows are wide and
-          the small colour preview on the right is irrelevant to it. */}
-      {tab === 'home' ? (
+      {/* The home page builder and the theme picker both need the full
+          width - their content is wide and the small colour preview on
+          the right is irrelevant. Other tabs share the width with the
+          preview pane. */}
+      {tab === 'home' || tab === 'theme' ? (
         <div style={{ marginTop: '22px' }}>
-          <HomeBuilder />
+          {tab === 'home' ? (
+            <HomeBuilder />
+          ) : (
+            <ThemeTab
+              activeTheme={(theme as any).activeTheme as string | null}
+              installedThemes={installedThemes}
+              onPick={(key) => {
+                // Picking a theme is a state change: the
+                // store's tokens become the new theme's
+                // defaults, but the merchant's overrides
+                // (e.g. custom announcement text) are
+                // preserved. The activeTheme field is
+                // separate from the tokens. resolveThemeConfig
+                // covers installed themes too (runtime catalog
+                // first, static registry fallback).
+                const picked = resolveThemeConfig(key);
+                // We merge: picked tokens overwrite theme
+                // tokens, but other fields (announcement
+                // text, custom CSS) are preserved. The
+                // `activeTheme` is set to the picked key.
+                setTheme((t) => ({
+                  ...pickedTokensToTheme(picked),
+                  ...(t as any),
+                  activeTheme: key,
+                }));
+                notify('success', `Theme "${picked.name}" selected. Click Save to apply.`);
+              }}
+              onInstall={installTheme}
+              onRemove={removeTheme}
+              installing={installing}
+              removingKey={removingKey}
+              disabled={saving}
+            />
+          )}
         </div>
       ) : (
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: '22px', marginTop: '22px', alignItems: 'start' }}>
@@ -305,15 +437,24 @@ export default function AdminAppearancePage() {
                 <div>
                   <label style={label}>Font family</label>
                   <select value={theme.fontFamily} onChange={(e) => set('fontFamily', e.target.value)} style={input}>
-                    <option value="system">System (default)</option>
-                    <option value="inter">Inter / sans-serif</option>
-                    <option value="georgia">Georgia / serif</option>
-                    <option value="rounded">Trebuchet / rounded</option>
-                    <option value="tahoma">Tahoma</option>
-                    <option value="mono">Monospace</option>
+                    {/* Kurdish / Arabic-script faces first: this is a
+                        Kurdish store, and they are what make کوردی text
+                        render professionally. */}
+                    {Object.keys(FONT_STACKS).map((key) => (
+                      <option key={key} value={key}>
+                        {FONT_LABELS[key] || key}
+                      </option>
+                    ))}
                   </select>
-                  <p style={{ marginTop: '10px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily] }}>
+                  {/* Preview in BOTH scripts: the Latin line shows the
+                      face, the Kurdish line shows what the storefront
+                      will actually look like (the Arabic fallback in the
+                      stack is exercised here too). */}
+                  <p dir="ltr" style={{ marginTop: '10px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily] }}>
                     The quick brown fox jumps over the lazy dog — 0123456789
+                  </p>
+                  <p dir="rtl" style={{ marginTop: '8px', padding: '12px', border: '1px dashed #e0e0e0', borderRadius: '8px', fontFamily: FONT_STACKS[theme.fontFamily], fontSize: '17px' }}>
+                    دکانی ئۆنلاین — گەشتی خێرای بە ڕێگای لایەنی کەم
                   </p>
                 </div>
                 <div>
@@ -415,7 +556,7 @@ export default function AdminAppearancePage() {
                   <input type="text" value={theme.announcementLink || ''} placeholder="/deals"
                     onChange={(e) => set('announcementLink', e.target.value)} style={input} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
                   <div>
                     <label style={label}>Background</label>
                     <input type="color" value={theme.announcementBg}
@@ -510,4 +651,215 @@ export default function AdminAppearancePage() {
       )}
     </div>
   );
+}
+
+/**
+ * Theme tab content.
+ *
+ * Renders the ThemePicker (bundled + installed themes) plus the
+ * install / remove management for runtime-installed themes. Kept as a
+ * local component so the page's render function doesn't have
+ * to inline 30+ lines of JSX for one tab.
+ *
+ * The `onPick` callback is the parent's responsibility: it
+ * receives the theme key, looks up the new tokens, and
+ * updates the page's theme state. The picker is dumb on
+ * purpose.
+ */
+function ThemeTab({
+  activeTheme,
+  installedThemes,
+  onPick,
+  onInstall,
+  onRemove,
+  installing,
+  removingKey,
+  disabled,
+}: {
+  activeTheme: string | null;
+  installedThemes: ThemeConfig[];
+  onPick: (key: string) => void;
+  onInstall: (file: File | null) => void;
+  onRemove: (key: string) => void;
+  installing: boolean;
+  removingKey: string | null;
+  disabled: boolean;
+}) {
+  const [pickFile, setPickFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // The page persists `activeTheme` as a separate field on the
+  // theme record (added in the multi-theme migration). The
+  // picker reads it via props; this component is just the
+  // presentation layer.
+  //
+  // Why is the active theme not in local state? Because the
+  // page's `theme` state is the source of truth (it gets
+  // loaded from /theme, saved back to /theme). The picker is
+  // a controlled component: it renders what the parent
+  // tells it, and tells the parent when the user picked
+  // something.
+  return (
+    <div>
+      <div
+        style={{
+          padding: '20px',
+          backgroundColor: '#fff',
+          border: '1px solid #e5e5e5',
+          borderRadius: '10px',
+          marginBottom: '18px',
+        }}
+      >
+        <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Choose your theme</h3>
+        <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
+          Pick a starting point. Each theme sets the design tokens (colours, fonts,
+          layout). You can fine-tune individual values in the other tabs after picking.
+        </p>
+      </div>
+      <ThemePicker
+        activeTheme={activeTheme}
+        onSelect={onPick}
+        disabled={disabled}
+        themes={[...THEMES, ...installedThemes]}
+      />
+
+      {/* Install / remove runtime-installed themes */}
+      <div
+        style={{
+          marginTop: '18px',
+          padding: '20px',
+          backgroundColor: '#fff',
+          border: '1px solid #e5e5e5',
+          borderRadius: '10px',
+        }}
+      >
+        <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Install a theme</h3>
+        <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px' }}>
+          Upload a theme package (.zip) built with the developer toolkit. It is
+          validated on the server and appears in the gallery immediately — no
+          rebuild or deploy needed. Re-uploading the same key updates the theme.
+        </p>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".zip,application/zip,application/x-zip-compressed"
+            onChange={(e) => setPickFile(e.target.files?.[0] ?? null)}
+            style={{ fontSize: '13px' }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (pickFile) onInstall(pickFile);
+            }}
+            disabled={installing || !pickFile}
+            data-testid="install-theme-button"
+            style={{
+              minHeight: '36px',
+              padding: '8px 14px',
+              backgroundColor: installing || !pickFile ? '#f5f5f5' : '#111',
+              color: installing || !pickFile ? '#999' : '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: 700,
+              cursor: installing || !pickFile ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {installing ? 'Installing…' : 'Install theme'}
+          </button>
+        </div>
+
+        {installedThemes.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <h4 style={{ fontWeight: 700, margin: '0 0 4px', fontSize: '14px' }}>
+              Installed themes
+            </h4>
+            <p style={{ fontSize: '12px', color: '#888', margin: '0 0 8px' }}>
+              Bundled platform themes cannot be removed. Removing the active
+              theme switches the store back to the default theme.
+            </p>
+            {installedThemes.map((t) => (
+              <div
+                key={t.key}
+                data-testid={`installed-theme-${t.key}`}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 0',
+                  borderBottom: '1px solid #f0f0f0',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <strong style={{ fontSize: '14px' }}>{t.name}</strong>
+                  <span style={{ color: '#888', fontSize: '12px', marginLeft: '8px' }}>
+                    v{t.version} · {t.author}
+                  </span>
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: '12px',
+                      color: '#666',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {t.description}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(t.key)}
+                  disabled={removingKey === t.key}
+                  data-testid={`remove-theme-${t.key}`}
+                  style={{
+                    flexShrink: 0,
+                    minHeight: '32px',
+                    padding: '6px 12px',
+                    backgroundColor: removingKey === t.key ? '#f5f5f5' : '#fff',
+                    color: removingKey === t.key ? '#999' : '#dc2626',
+                    border: '1px solid #fecaca',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: removingKey === t.key ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {removingKey === t.key ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Convert a ThemeConfig's tokens to a Theme.
+ *
+ * The Theme interface (in lib/theme.tsx) is the runtime shape
+ * the storefront reads. The ThemeConfig (in
+ * lib/themeRegistry.ts) is the on-disk shape from theme.json.
+ * This function flattens the config's tokens into the
+ * runtime Theme, filling in any missing fields from the
+ * shipped default. Used by the theme picker so picking a
+ * theme in the admin updates the page's token state without
+ * losing per-store overrides on non-token fields.
+ */
+function pickedTokensToTheme(picked: ReturnType<typeof getTheme>): Theme {
+  const t = picked.tokens as Record<string, string | number | boolean>;
+  return {
+    ...DEFAULT_THEME,
+    ...t,
+    // activeTheme is a separate field, set by the caller.
+    // (Spread last so it wins over any token named
+    // "activeTheme" — there isn't one today, but the
+    // precedence is explicit.)
+    activeTheme: picked.key,
+  } as Theme;
 }

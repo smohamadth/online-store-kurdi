@@ -1,3 +1,6 @@
+// /account/orders - the customer's order history. Fetches
+// GET /api/orders (server scopes the list to the logged-in user) and
+// renders status + total per order; rows link to /account/orders/[id].
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -148,6 +151,16 @@ export default function OrdersPage() {
                     <p style={{ fontSize: '14px', color: '#22c55e', marginBottom: '4px' }}>
                       Discount: -{formatPrice(order.discountAmount, settings.currencySymbol)}
                       {order.couponCode && ` (${order.couponCode})`}
+                    </p>
+                  )}
+                  {(order.storeCreditApplied || 0) > 0 && (
+                    <p style={{ fontSize: '14px', color: '#16a34a', marginBottom: '4px' }}>
+                      Paid with store credit: -{formatPrice(order.storeCreditApplied, settings.currencySymbol)}
+                    </p>
+                  )}
+                  {(order.giftCardApplied || 0) > 0 && (
+                    <p style={{ fontSize: '14px', color: '#16a34a', marginBottom: '4px' }}>
+                      Paid with gift card{order.giftCardCode ? ` (${order.giftCardCode})` : ''}: -{formatPrice(order.giftCardApplied, settings.currencySymbol)}
                     </p>
                   )}
                   <span style={{ fontSize: '18px', fontWeight: 'bold' }}>

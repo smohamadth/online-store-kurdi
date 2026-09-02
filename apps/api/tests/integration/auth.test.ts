@@ -16,12 +16,19 @@ import { describe, it, expect, beforeEach, afterAll, beforeAll } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
+import { resetAuthThrottle } from '../../src/utils/authThrottle';
 import type { Express } from 'express';
 
 let app: Express;
 beforeAll(async () => { app = await getTestApp(); });
 afterAll(async () => { await mockPrisma.$disconnect(); });
-beforeEach(async () => { await cleanDatabase(); });
+beforeEach(async () => {
+  await cleanDatabase();
+  // The throttle is per-process; without a reset, a lockout in one
+  // test would poison every later test in this file (and the IP
+  // counter is shared across the whole suite run).
+  resetAuthThrottle();
+});
 
 const registerPayload = (over: any = {}) => ({
   email: 'newuser@test.local',
@@ -76,6 +83,23 @@ describe('POST /api/auth/register', () => {
     // bcrypt hashes start with $2a$ or $2b$ or $2y$
     expect(u?.password).toMatch(/^\$2[aby]\$/);
   });
+
+  it('normalizes email case on register (one account per mailbox)', async () => {
+    // Regression: 'User@X.com' and 'user@x.com' used to create TWO
+    // accounts for the same mailbox; case-mismatched logins also failed.
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send(registerPayload({ email: 'MiXeD@TeSt.LoCal' }));
+    expect(res.status).toBe(201);
+    const stored = await mockPrisma.user.findUnique({ where: { email: 'mixed@test.local' } });
+    expect(stored).toBeTruthy();
+
+    // A second registration with a different case is the SAME account.
+    const dup = await request(app)
+      .post('/api/auth/register')
+      .send(registerPayload({ email: 'MIXED@TEST.LOCAL', firstName: 'Other' }));
+    expect(dup.status).toBe(409);
+  });
 });
 
 describe('POST /api/auth/login', () => {
@@ -90,6 +114,17 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.user.email).toBe('newuser@test.local');
     expect(res.body.data.user.password).toBeUndefined();
+    expect(res.body.data.accessToken).toBeDefined();
+  });
+
+  it('logs in with a different email case (normalized lookup)', async () => {
+    // Regression: case-mismatched logins failed (findUnique is
+    // case-sensitive); now the exact value is tried first, then the
+    // lowercase form, so legacy mixed-case rows still resolve.
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'NEWUSER@TEST.LOCAL', password: 'Password123!' });
+    expect(res.status).toBe(200);
     expect(res.body.data.accessToken).toBeDefined();
   });
 
@@ -108,6 +143,34 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(401);
   });
 
+  it('rejects an unverified account even with the right password (401)', async () => {
+    // Regression: imported customers are created isVerified=false, and
+    // login used to ignore the flag. Combined with the old hardcoded
+    // import password this made every imported account loginable by
+    // anyone who read the source. The check runs AFTER the password
+    // compare so it cannot be used to probe which accounts exist.
+    const u = await mockPrisma.user.create({
+      data: {
+        email: 'unverified@test.local',
+        password: await (await import('bcryptjs')).default.hash('Password123!', 4),
+        firstName: 'A',
+        lastName: 'B',
+        isVerified: false,
+      },
+    });
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'unverified@test.local', password: 'Password123!' });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toMatch(/not verified/i);
+    // A wrong password still gets the generic message (no state leak).
+    const wrong = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'unverified@test.local', password: 'WrongPass123!' });
+    expect(wrong.status).toBe(401);
+    expect(wrong.body.message).toMatch(/Invalid/i);
+  });
+
   it('rejects a deactivated account', async () => {
     await mockPrisma.user.update({
       where: { email: 'newuser@test.local' },
@@ -118,6 +181,40 @@ describe('POST /api/auth/login', () => {
       .send({ email: 'newuser@test.local', password: 'Password123!' });
     expect(res.status).toBe(401);
     expect(res.body.message).toMatch(/deactivated/);
+  });
+
+  it('locks out an email after repeated failures (regression)', async () => {
+    // 5 failed attempts on the same identity locks that identity for
+    // 15 minutes, and the lockout applies to UNKNOWN emails too (the
+    // key is the attempted string), so it can't be used to probe which
+    // accounts exist. The 6th attempt is rejected before any bcrypt
+    // work, even with the correct password.
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'target@test.local', password: `wrong-${i}` });
+      expect(res.status).toBe(401);
+    }
+    const locked = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'target@test.local', password: 'Password123!' });
+    expect(locked.status).toBe(401);
+    expect(locked.body.message).toMatch(/Too many failed attempts/);
+  });
+
+  it('rate-limits forgot-password per email (regression)', async () => {
+    // The endpoint mints a token + emails it; the per-email cap (5 per
+    // window) stops mailbox bombing and token-spam. The response stays
+    // identical for known and unknown emails either way.
+    const attempts = Array.from({ length: 6 }, () =>
+      request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: 'spamme@test.local' })
+    );
+    const results = await Promise.all(attempts);
+    expect(results.slice(0, 5).every((r) => r.status === 200)).toBe(true);
+    expect(results[5].status).toBe(429);
+    expect(results[5].body.message).toMatch(/Too many requests/);
   });
 
   it('rejects an invalid email shape', async () => {
@@ -259,6 +356,18 @@ describe('POST /api/auth/forgot-password', () => {
     expect(row).toBeTruthy();
   });
 
+  it('finds the user for forgot-password with a different email case', async () => {
+    const u = await mockPrisma.user.create({
+      data: { email: 'LegacyCase@test.local', password: 'x', firstName: 'A', lastName: 'B' },
+    });
+    const res = await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: 'legacycase@test.local' });
+    expect(res.status).toBe(200);
+    const row = await mockPrisma.passwordReset.findFirst({ where: { userId: u.id } });
+    expect(row).toBeTruthy();
+  });
+
   it('invalidates previous tokens when a new one is requested', async () => {
     const user = await mockPrisma.user.create({
       data: { email: 'reset@test.local', password: 'x', firstName: 'A', lastName: 'B' },
@@ -289,6 +398,35 @@ describe('POST /api/auth/reset-password', () => {
     expect(res.status).toBe(200);
     const after = await mockPrisma.user.findUnique({ where: { id: user.id } });
     expect(after?.password).not.toBe('old-hash');
+  });
+
+  it('a successful reset activates an unverified (imported) account', async () => {
+    // Regression: imported customers start unverified with a random
+    // password; reset-password is their activation path, so it must flip
+    // isVerified — otherwise they could never log in.
+    const user = await mockPrisma.user.create({
+      data: {
+        email: 'imported@test.local',
+        password: 'old-hash',
+        firstName: 'A',
+        lastName: 'B',
+        isVerified: false,
+      },
+    });
+    await mockPrisma.passwordReset.create({
+      data: { userId: user.id, token: 'act-token', expiresAt: new Date(Date.now() + 60_000) },
+    });
+    const res = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: 'act-token', password: 'NewPassword123!' });
+    expect(res.status).toBe(200);
+    const after = await mockPrisma.user.findUnique({ where: { id: user.id } });
+    expect(after?.isVerified).toBe(true);
+    // And the account now logs in with the new password.
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'imported@test.local', password: 'NewPassword123!' });
+    expect(login.status).toBe(200);
   });
 
   it('rejects an unknown token (400)', async () => {

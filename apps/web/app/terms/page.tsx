@@ -1,3 +1,7 @@
+// /terms - the terms-of-service page (static content; the legal
+// pages under /legal/* are CMS-driven, this one is shipped with the
+// code).
+
 'use client';
 
 import Link from 'next/link';
@@ -16,7 +20,7 @@ export default function TermsPage() {
 
         <section style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>2. Account Registration</h2>
-          <ul style={{ paddingLeft: '24px' }}>
+          <ul style={{ paddingInlineStart: '24px' }}>
             <li>You must be at least 18 years old to create an account</li>
             <li>You are responsible for maintaining account security</li>
             <li>You must provide accurate and complete information</li>
@@ -26,7 +30,7 @@ export default function TermsPage() {
 
         <section style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>3. Orders and Payment</h2>
-          <ul style={{ paddingLeft: '24px' }}>
+          <ul style={{ paddingInlineStart: '24px' }}>
             <li>All prices are in USD unless otherwise noted</li>
             <li>We reserve the right to cancel orders for any reason</li>
             <li>Payment is required at time of purchase</li>

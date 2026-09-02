@@ -1,3 +1,8 @@
+// Terminal 404 for the API: mounted LAST in app.ts (after every route and
+// before errorHandler), so any /api/* path that matched nothing lands here.
+// The response deliberately lists the top-level endpoints: during the
+// "wrong base URL" era of this project, a 404 that said nothing made
+// misconfigured storefronts very hard to diagnose.
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 

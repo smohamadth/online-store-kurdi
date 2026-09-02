@@ -1,3 +1,11 @@
+// ---------------------------------------------------------------------------
+// Zod validation middleware + a small HTML-escaping toolkit.
+//
+// validate() runs a schema over req.body|query|params and REPLACES the
+// original with the parsed (coerced + defaulted) value, so handlers read
+// clean, typed data. A schema failure becomes a ValidationError (400 via
+// the global error handler) - a bad request never reaches the route.
+// ---------------------------------------------------------------------------
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { ValidationError } from './errorHandler';
@@ -38,7 +46,8 @@ export const validateQuery = (schema: ZodSchema) => validate(schema, 'query');
 // Validate URL parameters
 export const validateParams = (schema: ZodSchema) => validate(schema, 'params');
 
-// Common validation schemas
+// Common validation schemas (regex/pattern helpers, not Zod schemas -
+// used inline where a full schema would be overkill).
 export const commonSchemas = {
   // UUID parameter
   uuidParam: {
@@ -58,7 +67,9 @@ export const commonSchemas = {
   },
 };
 
-// Sanitize HTML content
+// HTML-escape a string. This is OUTPUT escaping for values rendered into
+// HTML (e.g. email subjects) - it is NOT a rich-text sanitizer; the
+// storefront's rich text goes through utils/sanitizeRichText.ts instead.
 export const sanitizeHtml = (str: string): string => {
   return str
     .replace(/&/g, '&amp;')

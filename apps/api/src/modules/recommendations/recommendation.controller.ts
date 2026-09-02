@@ -1,6 +1,26 @@
+// Thin HTTP layer over RecommendationService (mounted by
+// recommendation.routes.ts). Parses limit params, shapes responses; the
+// auth (the /history endpoint) and opt-in semantics live on the routes.
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { RecommendationService } from './recommendation.service';
 import { logger } from '../../utils/logger';
+import { parsePagination, parseDays } from '../../utils/pagination';
+
+// Public endpoint: every field lands verbatim in a DB row, so unbounded
+// strings are a free DB-bloat attack (a megabyte-long recommendationType
+// per click). Cap all of them.
+const CLICK_LOG_SCHEMA = z.object({
+  // `recommendationType` is a REQUIRED, non-null column on RecommendationLog.
+  // It used to be `.optional()`, so a payload that omitted it passed
+  // validation and then handed `undefined` to Prisma — the insert threw, the
+  // service swallowed the error in its catch, and the click was lost with a
+  // 200 returned to the caller. Defaulting keeps the endpoint lenient while
+  // guaranteeing the row is writable.
+  recommendationType: z.string().min(1).max(50).default('unknown'),
+  productId: z.string().min(1).max(100),
+  algorithmVersion: z.string().min(1).max(50).default('v1'),
+});
 
 export class RecommendationController {
   private recommendationService: RecommendationService;
@@ -13,7 +33,7 @@ export class RecommendationController {
   getAlsoBought = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { productId } = req.params;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 6;
+      const { limit } = parsePagination(req.query, { limit: 6 });
       const recommendations = await this.recommendationService.getAlsoBought(productId, limit);
 
       res.json({
@@ -37,7 +57,7 @@ export class RecommendationController {
         });
       }
 
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 6;
+      const { limit } = parsePagination(req.query, { limit: 6 });
       const recommendations = await this.recommendationService.getBasedOnHistory(userId, limit);
 
       res.json({
@@ -53,7 +73,7 @@ export class RecommendationController {
   // Get "Trending products" recommendations
   getTrending = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
       const recommendations = await this.recommendationService.getTrending(limit);
 
       res.json({
@@ -69,7 +89,7 @@ export class RecommendationController {
   // Get "New arrivals" recommendations
   getNewArrivals = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const { limit } = parsePagination(req.query, { limit: 10 });
       const recommendations = await this.recommendationService.getNewArrivals(limit);
 
       res.json({
@@ -86,7 +106,7 @@ export class RecommendationController {
   getFrequentlyBoughtTogether = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { productId } = req.params;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
+      const { limit } = parsePagination(req.query, { limit: 4 });
       const recommendations = await this.recommendationService.getFrequentlyBoughtTogether(productId, limit);
 
       res.json({
@@ -103,7 +123,7 @@ export class RecommendationController {
   getPersonalizedRecommendations = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 12;
+      const { limit } = parsePagination(req.query, { limit: 12 });
       const recommendations = await this.recommendationService.getPersonalizedRecommendations(userId, limit);
 
       res.json({
@@ -119,8 +139,11 @@ export class RecommendationController {
   // Log recommendation click
   logClick = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { recommendationType, productId, algorithmVersion } = req.body;
-      const sessionId = req.headers['x-session-id'] as string || `session-${Date.now()}`;
+      // Public endpoint: every field lands verbatim in a DB row, so
+      // unbounded strings are a free DB-bloat attack (a megabyte-long
+      // recommendationType per click). Cap all of them.
+      const { recommendationType, productId, algorithmVersion } = CLICK_LOG_SCHEMA.parse(req.body);
+      const sessionId = String(req.headers['x-session-id'] || '').slice(0, 200) || `session-${Date.now()}`;
 
       await this.recommendationService.logRecommendationClick(
         req.user?.id || null,
@@ -150,8 +173,8 @@ export class RecommendationController {
         });
       }
 
-      const { recommendationType, productId } = req.body;
-      const sessionId = req.headers['x-session-id'] as string || `session-${Date.now()}`;
+      const { recommendationType, productId } = CLICK_LOG_SCHEMA.parse(req.body);
+      const sessionId = String(req.headers['x-session-id'] || '').slice(0, 200) || `session-${Date.now()}`;
 
       await this.recommendationService.logRecommendationPurchase(
         userId,
@@ -172,7 +195,7 @@ export class RecommendationController {
   // Get recommendation analytics (admin only)
   getAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const analytics = await this.recommendationService.getRecommendationAnalytics(days);
 
       res.json({

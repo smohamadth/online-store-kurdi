@@ -1,9 +1,63 @@
+// ---------------------------------------------------------------------------
+// Coupons: admin CRUD + the public "validate this code" endpoint the
+// checkout calls.
+//
+// Validation (POST /coupons/validate, shared with order placement via
+// coupon.service) is where the business rules live: active flag,
+// start/end dates, min-spend, and usage limits (usageLimit). It returns
+// the computed discount so the client renders the savings before placing
+// the order. At order time order.routes re-runs the same validation and
+// recomputes the discount server-side, so the discountAmount in the order
+// body is never trusted and an invalid coupon fails the order instead of
+// being silently recorded.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
+import { AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
+import { validateCoupon, CouponValidationError } from './coupon.service';
 
 const router = Router();
+
+const COUPON_TYPES = new Set(['percentage', 'fixed', 'free_shipping']);
+
+/**
+ * Coerce a coupon money field. Accepts numbers and numeric strings (the
+ * admin UI sends strings). Empty/absent -> fallback (null: unset). A value
+ * that is not finite, or is negative, is rejected: parseFloat('1e999')
+ * yields Infinity and `parseFloat(x) || 0` used to silently turn garbage
+ * into a 0-value coupon — and Infinity percentage coupons broke every
+ * checkout with a negative total.
+ */
+function couponNumber(v: unknown, fallback: number | null = null): number | null {
+  if (v === undefined || v === null || v === '') return fallback;
+  const n = typeof v === 'number' ? v : Number(String(v));
+  if (!Number.isFinite(n) || n < 0) {
+    throw new AppError('Coupon amount fields must be non-negative finite numbers', 400);
+  }
+  return n;
+}
+
+/** Parse a coupon date; rejects unparseable values instead of storing Invalid Date. */
+function couponDate(v: unknown): Date | null {
+  if (v === undefined || v === null || v === '') return null;
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) {
+    throw new AppError('Coupon dates must be valid dates', 400);
+  }
+  return d;
+}
+
+/** Parse the usage limit: positive integer, or null when unset. */
+function couponUsageLimit(v: unknown): number | null {
+  if (v === undefined || v === null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v));
+  if (!Number.isInteger(n) || n < 1) {
+    throw new AppError('usageLimit must be a positive integer', 400);
+  }
+  return n;
+}
 
 // GET /api/coupons - Get all coupons (admin only)
 router.get('/coupons', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
@@ -46,7 +100,11 @@ router.get('/coupons/:id', authenticate, authorize('admin', 'manager'), async (r
   }
 });
 
-// POST /api/coupons/validate - Validate a coupon code (public)
+// POST /api/coupons/validate - Validate a coupon code (public; advisory).
+// The business rules live in coupon.service, which order placement ALSO
+// calls at order time - so the discount the customer saw is the discount
+// the order gets, and a code that stops being valid cannot be replayed.
+// authz-ok: checkout validates a code before the customer logs in
 router.post('/coupons/validate', async (req, res, next) => {
   try {
     const { code, subtotal } = req.body;
@@ -58,99 +116,26 @@ router.post('/coupons/validate', async (req, res, next) => {
       });
     }
 
-    // Find coupon
-    const coupon = await prisma.coupon.findUnique({
-      where: { code: code.toUpperCase() },
-    });
-
-    if (!coupon) {
-      return res.json({
-        status: 'success',
-        data: { valid: false, error: 'Invalid coupon code' },
-      });
-    }
-
-    // Check if active
-    if (!coupon.isActive) {
-      return res.json({
-        status: 'success',
-        data: { valid: false, error: 'This coupon is no longer active' },
-      });
-    }
-
-    // Check expiry
-    if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
-      return res.json({
-        status: 'success',
-        data: { valid: false, error: 'This coupon has expired' },
-      });
-    }
-
-    // Check start date
-    if (coupon.startsAt && new Date(coupon.startsAt) > new Date()) {
-      return res.json({
-        status: 'success',
-        data: { valid: false, error: 'This coupon is not yet active' },
-      });
-    }
-
-    // Check usage limit
-    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
-      return res.json({
-        status: 'success',
-        data: { valid: false, error: 'This coupon has reached its usage limit' },
-      });
-    }
-
-    // Check minimum order amount
-    if (coupon.minOrderAmount && subtotal < Number(coupon.minOrderAmount)) {
-      return res.json({
+    try {
+      const result = await validateCoupon({ code, subtotal: Number(subtotal || 0) });
+      const coupon = await prisma.coupon.findUnique({ where: { id: result.coupon.id } });
+      res.json({
         status: 'success',
         data: {
-          valid: false,
-          error: `Minimum order amount is $${Number(coupon.minOrderAmount).toFixed(2)}`,
+          valid: true,
+          coupon,
+          discount: result.discount,
         },
       });
+    } catch (err) {
+      if (err instanceof CouponValidationError) {
+        return res.json({
+          status: 'success',
+          data: { valid: false, error: err.message },
+        });
+      }
+      throw err;
     }
-
-    // Calculate discount
-    let discount = 0;
-    const orderAmount = subtotal || 0;
-
-    switch (coupon.type) {
-      case 'percentage':
-        discount = orderAmount * (Number(coupon.value) / 100);
-        if (coupon.maxDiscountAmount) {
-          discount = Math.min(discount, Number(coupon.maxDiscountAmount));
-        }
-        break;
-
-      case 'fixed':
-        discount = Number(coupon.value);
-        break;
-
-      case 'free_shipping':
-        discount = 0; // Handled separately
-        break;
-    }
-
-    // Never discount more than the order is worth.
-    //
-    // A fixed 50 coupon against a 10 subtotal returned a discount of 50, which
-    // produces a NEGATIVE order total - i.e. the store paying the customer.
-    // Percentage coupons were already bounded by the subtotal, but a fixed
-    // amount had no cap at all. Clamped here, at the single place the discount
-    // is computed.
-    discount = Math.max(0, Math.min(discount, orderAmount));
-
-    res.json({
-      status: 'success',
-      data: {
-        valid: true,
-        coupon,
-        discount: Math.round(discount * 100) / 100,
-      },
-    });
   } catch (err) {
     next(err);
   }
@@ -178,6 +163,15 @@ router.post('/coupons', authenticate, authorize('admin'), async (req, res, next)
         message: 'Code and type are required',
       });
     }
+    if (typeof code !== 'string' || !code.trim()) {
+      return res.status(400).json({ status: 'error', message: 'Code is required' });
+    }
+    if (typeof type !== 'string' || !COUPON_TYPES.has(type)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Type must be one of: percentage, fixed, free_shipping',
+      });
+    }
 
     // Check if code already exists
     const existingCoupon = await prisma.coupon.findUnique({
@@ -191,18 +185,20 @@ router.post('/coupons', authenticate, authorize('admin'), async (req, res, next)
       });
     }
 
-    // Create coupon
+    // Create coupon — amounts/dates/limits are strictly validated (see the
+    // helpers above): parseFloat used to accept Infinity and NaN, storing
+    // coupons that broke every checkout or silently did nothing.
     const coupon = await prisma.coupon.create({
       data: {
         code: code.toUpperCase(),
         type,
-        value: parseFloat(value) || 0,
-        minOrderAmount: minOrderAmount ? parseFloat(minOrderAmount) : null,
-        maxDiscountAmount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : null,
-        usageLimit: usageLimit ? parseInt(usageLimit) : null,
-        startsAt: startsAt ? new Date(startsAt) : null,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-        isActive: isActive !== undefined ? isActive : true,
+        value: couponNumber(value, 0) ?? 0,
+        minOrderAmount: couponNumber(minOrderAmount),
+        maxDiscountAmount: couponNumber(maxDiscountAmount),
+        usageLimit: couponUsageLimit(usageLimit),
+        startsAt: couponDate(startsAt),
+        expiresAt: couponDate(expiresAt),
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
       },
     });
 
@@ -259,19 +255,26 @@ router.put('/coupons/:id', authenticate, authorize('admin'), async (req, res, ne
       }
     }
 
-    // Update coupon
+    if (type !== undefined && (typeof type !== 'string' || !COUPON_TYPES.has(type))) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Type must be one of: percentage, fixed, free_shipping',
+      });
+    }
+
+    // Update coupon — same strict coercion as create.
     const coupon = await prisma.coupon.update({
       where: { id },
       data: {
-        code: code ? code.toUpperCase() : undefined,
+        code: code ? String(code).toUpperCase() : undefined,
         type: type || undefined,
-        value: value !== undefined ? parseFloat(value) : undefined,
-        minOrderAmount: minOrderAmount !== undefined ? (minOrderAmount ? parseFloat(minOrderAmount) : null) : undefined,
-        maxDiscountAmount: maxDiscountAmount !== undefined ? (maxDiscountAmount ? parseFloat(maxDiscountAmount) : null) : undefined,
-        usageLimit: usageLimit !== undefined ? (usageLimit ? parseInt(usageLimit) : null) : undefined,
-        startsAt: startsAt !== undefined ? (startsAt ? new Date(startsAt) : null) : undefined,
-        expiresAt: expiresAt !== undefined ? (expiresAt ? new Date(expiresAt) : null) : undefined,
-        isActive: isActive !== undefined ? isActive : undefined,
+        value: value !== undefined ? (couponNumber(value, 0) ?? 0) : undefined,
+        minOrderAmount: minOrderAmount !== undefined ? couponNumber(minOrderAmount) : undefined,
+        maxDiscountAmount: maxDiscountAmount !== undefined ? couponNumber(maxDiscountAmount) : undefined,
+        usageLimit: usageLimit !== undefined ? couponUsageLimit(usageLimit) : undefined,
+        startsAt: startsAt !== undefined ? couponDate(startsAt) : undefined,
+        expiresAt: expiresAt !== undefined ? couponDate(expiresAt) : undefined,
+        isActive: isActive !== undefined ? Boolean(isActive) : undefined,
       },
     });
 
@@ -318,40 +321,4 @@ router.delete('/coupons/:id', authenticate, authorize('admin'), async (req, res,
 });
 
 // POST /api/coupons/:id/apply - Apply coupon to order (used internally)
-router.post('/coupons/:id/apply', authenticate, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    const coupon = await prisma.coupon.findUnique({
-      where: { id },
-    });
-
-    if (!coupon) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Coupon not found',
-      });
-    }
-
-    // Increment usage count
-    await prisma.coupon.update({
-      where: { id },
-      data: {
-        usedCount: {
-          increment: 1,
-        },
-      },
-    });
-
-    logger.info(`Coupon applied: ${coupon.code}`);
-
-    res.json({
-      status: 'success',
-      message: 'Coupon applied successfully',
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 export default router;

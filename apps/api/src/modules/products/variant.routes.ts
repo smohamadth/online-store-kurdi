@@ -1,90 +1,77 @@
 /**
- * Product-variant routes.
+ * Standalone variant routes (mounted at /api/variants only).
  *
- * This router is mounted at TWO prefixes by app.ts:
- *   /api/variants   - serves /:id (the standalone lookup)
- *   /api/products   - serves /:productId/variants (the nested CRUD)
+ *   GET    /                  - list with filters
+ *   GET    /:idOrSlug         - by id OR url slug
+ *   POST   /                  - top-level create
+ *   PATCH  /:id               - update
+ *   DELETE /:id               - soft delete by default; ?force=true
+ *   PUT    /:id/options       - replace this variant's chosen option values
+ *   GET    /:id/options       - read this variant's chosen option values
  *
- * The paths declared here are relative to those mounts. The
- * /:id route works under /api/variants; the /:productId/variants
- * routes only make sense under /api/products. Express handles the
- * cross-mount routing - the router itself doesn't know which
- * mount it's on.
- *
- * The list/create endpoints are public (the storefront reads
- * variants as part of the product page); the write endpoints
- * require admin/manager.
+ * The product-nested routes (mounted at /api/products) live in
+ * product-variant.routes.ts. They share the service layer.
  */
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize, optionalAuth } from '../../middleware/auth';
 import { AppError } from '../../middleware/errorHandler';
 import {
-  listVariants,
-  getVariant,
-  createVariant,
-  updateVariant,
-  deleteVariant,
+  listAllVariants, findByIdOrSlug, createVariant,
+  updateVariant, deleteVariant,
+  setVariantOptionValues, getVariantOptionValues,
   parseAttributes,
 } from './variant.service';
 
 const router = Router();
 
-// Zod schema for write bodies. `attributes` accepts an object OR a
-// JSON string; we don't normalise here because the service layer
-// does the round-trip.
 const attributesSchema = z
   .union([
     z.record(z.unknown()),
-    z.string().refine(
-      (s) => {
-        try { JSON.parse(s); return true; } catch { return false; }
-      },
-      { message: 'attributes must be a valid JSON string' }
-    ),
+    z.string().refine((s) => { try { JSON.parse(s); return true; } catch { return false; } },
+      { message: 'attributes must be a valid JSON string' }),
   ])
   .optional();
 
 const variantCreateSchema = z.object({
   name: z.string().min(1).max(120),
   sku: z.string().min(1).max(100),
-  price: z.number().positive(),
-  quantity: z.number().int().min(0).optional(),
+  slug: z.string().min(1).max(140).optional(),
+  price: z.number().finite().positive(),
+  compareAtPrice: z.number().finite().nonnegative().optional(),
+  quantity: z.number().finite().int().min(0).optional(),
   attributes: attributesSchema,
   isActive: z.boolean().optional(),
+  sortOrder: z.number().finite().int().optional(),
 });
 
 const variantPatchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   sku: z.string().min(1).max(100).optional(),
-  price: z.number().positive().optional(),
-  quantity: z.number().int().min(0).optional(),
+  slug: z.string().min(1).max(140).nullable().optional(),
+  price: z.number().finite().positive().optional(),
+  compareAtPrice: z.number().finite().nonnegative().nullable().optional(),
+  quantity: z.number().finite().int().min(0).optional(),
   attributes: attributesSchema,
   isActive: z.boolean().optional(),
+  sortOrder: z.number().finite().int().optional(),
 });
 
-// GET /api/variants/:id - fetch one (e.g. for a direct product link).
-// Only reachable when this router is mounted at /api/variants; the
-// /:id pattern would otherwise conflict with /api/products/:id.
-router.get('/:id', optionalAuth, async (req, res, next) => {
+router.get('/', optionalAuth, async (req, res, next) => {
   try {
-    const v = await getVariant(req.params.id);
-    res.json({
-      status: 'success',
-      data: { ...v, attributes: parseAttributes(v.attributes) },
+    const q = req.query as Record<string, string | undefined>;
+    const list = await listAllVariants({
+      productId: q.productId,
+      isActive: q.isActive === 'true' ? true : q.isActive === 'false' ? false : undefined,
+      sku: q.sku,
+      minPrice: q.minPrice ? Number(q.minPrice) : undefined,
+      maxPrice: q.maxPrice ? Number(q.maxPrice) : undefined,
+      inStock: q.inStock === 'true' ? true : q.inStock === 'false' ? false : undefined,
+      optionValueId: q.optionValueId,
+      search: q.search,
+      skip: q.skip ? Number(q.skip) : undefined,
+      take: q.take ? Number(q.take) : undefined,
     });
-  } catch (err) { next(err); }
-});
-
-// The remaining routes are only meaningful when the router is
-// mounted at /api/products. Mounting at /api/variants would
-// expose them at /api/variants/:productId/variants, which is
-// nonsensical and we explicitly don't want.
-
-// GET /api/products/:productId/variants
-router.get('/:productId/variants', optionalAuth, async (req, res, next) => {
-  try {
-    const list = await listVariants(req.params.productId);
     res.json({
       status: 'success',
       data: list.map((v) => ({ ...v, attributes: parseAttributes(v.attributes) })),
@@ -92,33 +79,32 @@ router.get('/:productId/variants', optionalAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/products/:productId/variants
-router.post('/:productId/variants', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+router.get('/:idOrSlug', optionalAuth, async (req, res, next) => {
   try {
-    const body = variantCreateSchema.parse(req.body);
-    const v = await createVariant(req.params.productId, body);
-    res.status(201).json({
-      status: 'success',
-      data: { ...v, attributes: parseAttributes(v.attributes) },
-    });
+    const v = await findByIdOrSlug(req.params.idOrSlug);
+    res.json({ status: 'success', data: { ...v, attributes: parseAttributes(v.attributes) } });
   } catch (err) { next(err); }
 });
 
-// PATCH /api/products/:productId/variants/:id
-router.patch('/:productId/variants/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const productId = req.body?.productId;
+    if (!productId) throw new AppError('productId is required for top-level variant create', 400);
+    const body = variantCreateSchema.parse(req.body);
+    const v = await createVariant(productId, body);
+    res.status(201).json({ status: 'success', data: { ...v, attributes: parseAttributes(v.attributes) } });
+  } catch (err) { next(err); }
+});
+
+router.patch('/:id', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const body = variantPatchSchema.parse(req.body);
     const v = await updateVariant(req.params.id, body);
-    res.json({
-      status: 'success',
-      data: { ...v, attributes: parseAttributes(v.attributes) },
-    });
+    res.json({ status: 'success', data: { ...v, attributes: parseAttributes(v.attributes) } });
   } catch (err) { next(err); }
 });
 
-// DELETE /api/products/:productId/variants/:id
-// Soft-delete by default; ?force=true to actually delete the row.
-router.delete('/:productId/variants/:id', authenticate, authorize('admin'), async (req, res, next) => {
+router.delete('/:id', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const force = req.query.force === 'true';
     const result = await deleteVariant(req.params.id, { force });
@@ -126,4 +112,24 @@ router.delete('/:productId/variants/:id', authenticate, authorize('admin'), asyn
   } catch (err) { next(err); }
 });
 
+const variantOptionsBody = z.object({
+  optionValueIds: z.array(z.string().uuid()).max(20),
+});
+
+router.put('/:id/options', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
+  try {
+    const body = variantOptionsBody.parse(req.body);
+    const out = await setVariantOptionValues(req.params.id, body.optionValueIds);
+    res.json({ status: 'success', data: out });
+  } catch (err) { next(err); }
+});
+
+router.get('/:id/options', optionalAuth, async (req, res, next) => {
+  try {
+    const out = await getVariantOptionValues(req.params.id);
+    res.json({ status: 'success', data: out });
+  } catch (err) { next(err); }
+});
+
+export { parseAttributes };
 export default router;

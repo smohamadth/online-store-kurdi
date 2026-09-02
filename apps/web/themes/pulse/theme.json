@@ -1,0 +1,52 @@
+{
+  "key": "pulse",
+  "name": "Pulse",
+  "description": "A modern, rounded theme in the spirit of the Medusa Next.js storefront, one of the most-starred open commerce starters: off-white canvas, white cards with soft shadows and generous corner radii, an indigo accent, pill buttons and a dark footer. For new brands, apps, and anything that should feel current.",
+  "version": "1.0.0",
+  "author": "Store Builder Platform",
+  "preview": "/themes/pulse/preview.png",
+  "features": {
+    "rtl": true,
+    "darkMode": false,
+    "paid": false
+  },
+  "tokens": {
+    "primaryColor": "#0f172a",
+    "primaryTextColor": "#ffffff",
+    "accentColor": "#4f46e5",
+    "bodyBg": "#f8fafc",
+    "cardBg": "#ffffff",
+    "bodyText": "#0f172a",
+    "mutedText": "#64748b",
+    "borderColor": "#e2e8f0",
+    "headerBg": "#ffffff",
+    "headerText": "#0f172a",
+    "footerBg": "#0f172a",
+    "footerText": "#e2e8f0",
+    "priceColor": "#0f172a",
+    "saleColor": "#dc2626",
+    "fontFamily": "system",
+    "baseFontSize": 16,
+    "headingWeight": 700,
+    "radius": 16,
+    "buttonRadius": 999,
+    "containerWidth": 1280,
+    "cardShadow": "soft",
+    "productsPerRow": 3,
+    "showTrustBar": true,
+    "showTestimonials": true,
+    "showStats": true,
+    "showNewsletter": true,
+    "showDealCountdown": true,
+    "showCategories": true,
+    "showFeatured": true,
+    "showNewArrivals": true,
+    "announcementBg": "#4f46e5",
+    "announcementText2": "#ffffff"
+  },
+  "sections": {
+    "hero": "@/themes/pulse/sections/Hero",
+    "featured": "@/themes/pulse/sections/Featured",
+    "categories": "@/themes/pulse/sections/Categories"
+  }
+}

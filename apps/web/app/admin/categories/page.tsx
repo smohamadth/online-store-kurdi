@@ -1,7 +1,15 @@
+// /admin/categories - the category tree editor (name, slug, image,
+// parent for one level of nesting, sort order, active flag). Delete
+// is refused by the API while products reference the category, so the
+// error here is expected behaviour, not a bug.
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { http, authHttp, errorMessage } from '@/lib/http';
+import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
+import { CATEGORY_TRANSLATION_FIELDS } from '@/lib/translationFields';
+import { useIsMobile } from '@/lib/hooks';
 
 interface Category {
   id: string;
@@ -17,6 +25,9 @@ interface Category {
 }
 
 export default function AdminCategoriesPage() {
+  // Used to collapse the name/slug row of the category form on mobile
+  // so the inputs get the full viewport width.
+  const isMobile = useIsMobile(640);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -149,16 +160,32 @@ export default function AdminCategoriesPage() {
           <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Categories</h2>
           <p style={{ color: '#666', fontSize: '14px' }}>{categories.length} categories</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setEditingCategory(null); setShowModal(true); }}
-          style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
-        >
-          + Add Category
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link
+            href="/admin/import-export"
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'white',
+              color: '#000',
+              border: '1px solid #000',
+              borderRadius: '6px',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            ⇅ Import / Export
+          </Link>
+          <button
+            onClick={() => { resetForm(); setEditingCategory(null); setShowModal(true); }}
+            style={{ padding: '10px 20px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            + Add Category
+          </button>
+        </div>
       </div>
 
       {/* Categories Table */}
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflow: 'hidden' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #e5e5e5' }}>
@@ -217,8 +244,8 @@ export default function AdminCategoriesPage() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '32px', width: '500px', maxHeight: '80vh', overflow: 'auto' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: isMobile ? 'flex-start' : 'center', zIndex: 1000, overflow: 'auto' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: isMobile ? '16px' : '32px', width: isMobile ? 'calc(100vw - 24px)' : '500px', maxWidth: '100%', maxHeight: isMobile ? 'none' : '80vh', minHeight: isMobile ? '100vh' : 'auto', overflow: 'auto' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>
               {editingCategory ? 'Edit Category' : 'Add New Category'}
             </h2>
@@ -249,7 +276,7 @@ export default function AdminCategoriesPage() {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Sort Order</label>
                   <input type="number" value={formData.sortOrder} onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }} />
@@ -261,6 +288,12 @@ export default function AdminCategoriesPage() {
                   </label>
                 </div>
               </div>
+
+              <ContentTranslationsEditor
+                entityType="category"
+                entityId={editingCategory ? editingCategory.id : null}
+                fields={CATEGORY_TRANSLATION_FIELDS}
+              />
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => { setShowModal(false); setEditingCategory(null); }} style={{ padding: '10px 20px', backgroundColor: '#f5f5f5', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>

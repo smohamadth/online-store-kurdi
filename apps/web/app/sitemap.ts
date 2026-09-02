@@ -142,18 +142,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // API unavailable at build time - ship without rather than fail the build.
   }
 
-  // Admin-authored pages. These were added in the CMS work but never reached
-  // the sitemap, so nothing was discovering them.
+  // Admin-authored pages. Each row's `pageType` picks the
+  // URL prefix (info | legal | help). We only emit pages whose
+  // type is one of the three recognised prefixes; a row with a
+  // missing or unknown type would render at a 404 URL and is
+  // excluded from the sitemap so crawlers don't try to index
+  // it.
   let customPages: MetadataRoute.Sitemap = [];
   try {
     const res = await serverFetch('/pages');
     if (res.ok) {
-      customPages = ((await res.json()).data || []).map((p: any) => ({
-        url: `${baseUrl}/p/${p.slug}`,
-        lastModified: new Date(p.updatedAt || Date.now()),
-        changeFrequency: 'monthly' as const,
-        priority: 0.5,
-      }));
+      customPages = ((await res.json()).data || [])
+        .filter(
+          (p: any) =>
+            p.pageType === 'info' ||
+            p.pageType === 'legal' ||
+            p.pageType === 'help',
+        )
+        .map((p: any) => ({
+          url: `${baseUrl}/${p.pageType}/${p.slug}`,
+          lastModified: new Date(p.updatedAt || Date.now()),
+          changeFrequency: 'monthly' as const,
+          priority: 0.5,
+        }));
     }
   } catch {
     /* as above */

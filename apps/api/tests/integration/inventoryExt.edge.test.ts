@@ -26,6 +26,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
+import { signWebhookBody } from '../helpers/signWebhook';
 import {
   createProduct,
   createCategory,
@@ -577,10 +578,11 @@ describe('Edge: 3PL webhook', () => {
     }
     await createChannel({ name: 'shipbob', displayName: 'ShipBob' });
     const events = products.map((p) => ({ sku: p.sku, quantity: -1, type: 'order' }));
+    const batchBody = { events };
     const res = await request(app).post('/api/inventory/webhooks/3pl')
       .set('X-Provider', 'shipbob')
-      .set('X-Signature', 'somesig')
-      .send({ events });
+      .set('X-Signature', signWebhookBody('shared', batchBody))
+      .send(batchBody);
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(50);
     const okCount = res.body.data.filter((r: { ok: boolean }) => r.ok).length;
@@ -592,10 +594,11 @@ describe('Edge: 3PL webhook', () => {
     const cat = await createCategory({ slug: 'c', name: 'C' });
     const p = await createProduct({ name: 'A', slug: 'a', sku: 'SKU-OVR', price: 1, quantity: 10, categoryId: cat.id });
     const other = await createChannel({ name: 'custom_chan', displayName: 'Custom' });
+    const ovrBody = { events: [{ sku: 'SKU-OVR', quantity: -3, type: 'order', channel: 'custom_chan' }] };
     const res = await request(app).post('/api/inventory/webhooks/3pl')
       .set('X-Provider', 'shipbob')
-      .set('X-Signature', 'somesig')
-      .send({ events: [{ sku: 'SKU-OVR', quantity: -3, type: 'order', channel: 'custom_chan' }] });
+      .set('X-Signature', signWebhookBody('shared', ovrBody))
+      .send(ovrBody);
     expect(res.status).toBe(200);
     expect(res.body.data[0].ok).toBe(true);
     const stock = await mockPrisma.channelStock.findFirst({ where: { channelId: other.id, productId: p.id } });

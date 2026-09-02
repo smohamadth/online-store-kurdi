@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// Server-side cart (login required - there is no guest cart on the API).
+//
+// The storefront keeps a localStorage cart while the customer is signed
+// out and POST /sync replaces the DB cart with it on login; from then on
+// the CartView drives these endpoints directly.
+//
+// Stock holds: adding to the cart creates a StockReservation
+// (reason 'cart_hold', 15-minute TTL) so two carts cannot both grab the
+// last unit; the reservation is extended on every re-add, refreshed on
+// quantity change, and consumed (releasedAt stamped) when the order is
+// placed - see the inventory module for the release/expire side.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';
@@ -8,14 +21,17 @@ import { createReservation, availableQuantity } from '../inventory/inventory.ser
 const router = Router();
 
 // Validation schemas
+// The quantity cap mirrors the order-placement cap: a cart can never
+// hold more than an order could ever place, so a checkout can't fail
+// at the last step with "quantity too large".
 const addToCartSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid().optional(),
-  quantity: z.number().int().min(1).default(1),
+  quantity: z.number().int().min(1).max(99999).default(1),
 });
 
 const updateCartItemSchema = z.object({
-  quantity: z.number().int().min(1),
+  quantity: z.number().int().min(1).max(99999),
 });
 
 // GET /api/cart - Get user's cart
@@ -125,9 +141,9 @@ router.post('/', authenticate, async (req, res, next) => {
 
     // Check variant if provided
     if (variantId) {
-      const variant = await prisma.productVariant.findUnique({
+      const variant = await prisma.variant.findUnique({
         where: { id: variantId },
-        select: { id: true, quantity: true, isActive: true },
+        select: { id: true, quantity: true, isActive: true, productId: true },
       });
 
       if (!variant) {
@@ -136,6 +152,17 @@ router.post('/', authenticate, async (req, res, next) => {
 
       if (!variant.isActive) {
         return res.status(400).json({ status: 'error', message: 'Variant is not available' });
+      }
+
+      // The variant must belong to the product being added. A mismatched
+      // pair used to be stored (and shown as product P1 with variant V's
+      // attributes); order placement silently ignored such variants, so
+      // the cart and the order disagreed about what was bought.
+      if (variant.productId !== productId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Variant does not belong to this product',
+        });
       }
 
       // Use available quantity (subtracts active reservations) so
@@ -398,7 +425,18 @@ router.delete('/', authenticate, async (req, res, next) => {
   }
 });
 
-// POST /api/cart/sync - Sync local cart with database
+// POST /api/cart/sync - replace the DB cart with the client's local cart
+// (called after login, to import the localStorage cart).
+//
+// Semantics: the existing DB cart is DELETED and the local items are
+// recreated - it is a replace, not a merge. The per-item "existing"
+// lookup below can therefore only ever match a row created earlier in
+// THIS loop (duplicate entries in the local list), which is why their
+// quantities add up instead of overwriting.
+//
+// Note: the sync path does not create stock reservations (unlike
+// POST /), so a just-synced cart holds no inventory until the customer
+// re-adds or the order is placed.
 router.post('/sync', authenticate, async (req, res, next) => {
   try {
     const userId = req.user?.id;
@@ -412,49 +450,41 @@ router.post('/sync', authenticate, async (req, res, next) => {
       return res.status(400).json({ status: 'error', message: 'Invalid items' });
     }
 
-    // Clear existing cart
+    // Clear existing cart (replace semantics - see header note)
     await prisma.cartItem.deleteMany({
       where: { userId },
     });
 
-    // Add items from local cart
-    const cartItems = [];
+    // Merge duplicates inside the incoming list in JS, then insert the
+    // merged rows in ONE createMany. The old code did a findFirst +
+    // create/update per incoming row (2N round trips) to handle the only
+    // duplicates that can exist after the delete - rows created earlier
+    // in the same loop. Same end state, 2 queries total.
+    // `quantity || 1` mirrors the old create/update: a zero/missing
+    // quantity meant "one" and still does.
+    const merged = new Map<string, { productId: string; variantId: string | null; quantity: number }>();
     for (const item of items) {
-      // Check if item already exists
-      const existing = await prisma.cartItem.findFirst({
-        where: {
-          userId,
-          productId: item.productId,
-          variantId: item.variantId || null,
-        },
-      });
+      const key = `${item.productId}|${item.variantId || ''}`;
+      const qty = item.quantity || 1;
+      const existing = merged.get(key);
+      if (existing) existing.quantity += qty;
+      else merged.set(key, { productId: item.productId, variantId: item.variantId || null, quantity: qty });
+    }
+    const rows = [...merged.values()];
 
-      if (existing) {
-        // Update quantity
-        const updated = await prisma.cartItem.update({
-          where: { id: existing.id },
-          data: { quantity: existing.quantity + (item.quantity || 1) },
-        });
-        cartItems.push(updated);
-      } else {
-        // Create new item
-        const cartItem = await prisma.cartItem.create({
-          data: {
-            userId,
-            productId: item.productId,
-            variantId: item.variantId || null,
-            quantity: item.quantity || 1,
-          },
-        });
-        cartItems.push(cartItem);
-      }
+    if (rows.length > 0) {
+      await prisma.cartItem.createMany({
+        data: rows.map((r) => ({ userId, productId: r.productId, variantId: r.variantId, quantity: r.quantity })),
+      });
     }
 
-    logger.info(`Cart synced for user ${userId}: ${cartItems.length} items`);
+    logger.info(`Cart synced for user ${userId}: ${rows.length} items`);
 
+    // The response rows are the merged inputs (no DB ids) - the client
+    // ignores the body and the cart is re-fetched for display.
     res.json({
       status: 'success',
-      data: cartItems,
+      data: rows,
     });
   } catch (err) {
     next(err);

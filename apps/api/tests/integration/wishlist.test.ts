@@ -125,4 +125,40 @@ describe('POST /api/wishlist/move-to-cart', () => {
       .send({ productId: p.id, quantity: 1 });
     expect(res.status).toBe(404);
   });
+
+  it('rejects a hostile quantity (400, nothing written)', async () => {
+    // Regression: `quantity || 1` stored -5/1.5/'abc'/1e9 straight into
+    // the cart — the cart add route validates int>=1; move-to-cart must
+    // match that contract.
+    const { token, user } = await authHeader();
+    const p = await createProduct({ quantity: 50 });
+    await createWishlistItem(user.id, p.id);
+    for (const quantity of [-5, 1.5, 'abc', 0, 1000000, null]) {
+      const res = await request(app)
+        .post('/api/wishlist/move-to-cart')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ productId: p.id, quantity });
+      expect(res.status).toBe(400);
+      // The wishlist row must survive the rejection.
+      const wish = await mockPrisma.wishlistItem.findMany({ where: { userId: user.id } });
+      expect(wish).toHaveLength(1);
+    }
+    const cart = await mockPrisma.cartItem.findMany({ where: { userId: user.id } });
+    expect(cart).toHaveLength(0);
+  });
+
+  it('404 + cleanup when the product is no longer active', async () => {
+    const { token, user } = await authHeader();
+    const p = await createProduct({ quantity: 50 });
+    await createWishlistItem(user.id, p.id);
+    await mockPrisma.product.update({ where: { id: p.id }, data: { status: 'archived' } });
+    const res = await request(app)
+      .post('/api/wishlist/move-to-cart')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: p.id, quantity: 1 });
+    expect(res.status).toBe(404);
+    // Dead wishlist rows self-clean.
+    const wish = await mockPrisma.wishlistItem.findMany({ where: { userId: user.id } });
+    expect(wish).toHaveLength(0);
+  });
 });

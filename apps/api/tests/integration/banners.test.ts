@@ -55,6 +55,15 @@ describe('POST /api/banners (admin/manager)', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.title).toBe('Big Sale');
   });
+
+  it('rejects a javascript: linkUrl (stored XSS guard)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/banners')
+      .set('Authorization', `Bearer ${token}`)
+      .send(bannerBody({ linkUrl: 'javascript:alert(1)' }));
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('PUT /api/banners/:id (admin)', () => {

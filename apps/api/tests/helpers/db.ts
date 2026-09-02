@@ -40,6 +40,7 @@ export async function authHeader(opts: {
       lastName: opts.lastName ?? 'User',
       role,
       isActive: true,
+      isVerified: true, // mirror the register route (registration = verification)
     },
   });
   const { accessToken } = generateTokens({ id: user.id, email: user.email, role: user.role });
@@ -54,6 +55,14 @@ export async function authHeader(opts: {
 export async function cleanDatabase(): Promise<void> {
   const { mockPrisma, resetMockPrisma } = await import('./mockPrisma');
   resetMockPrisma();
+  // The redis mock is stateful (see tests/setup-integration.ts), so it has to
+  // be emptied alongside the database or cached values leak between tests.
+  try {
+    const redisMod: any = await import('../../src/config/redis');
+    await redisMod.cache?.clear?.();
+  } catch {
+    // Not every suite mocks redis; nothing to clear then.
+  }
   // the reset already clears; nothing else to do for the mock.
   return;
   // keep a reference so tree-shakers don't drop the import

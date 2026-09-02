@@ -1,0 +1,52 @@
+{
+  "key": "dawnlight",
+  "name": "Dawnlight",
+  "description": "A clean, light, flat theme in the spirit of Shopify's Dawn reference theme: white canvas, near-black type, hairline borders, square corners, generous whitespace. Marketing chrome kept to a minimum so the catalogue does the talking.",
+  "version": "1.0.0",
+  "author": "Store Builder Platform",
+  "preview": "/themes/dawnlight/preview.png",
+  "features": {
+    "rtl": true,
+    "darkMode": false,
+    "paid": false
+  },
+  "tokens": {
+    "primaryColor": "#121212",
+    "primaryTextColor": "#ffffff",
+    "accentColor": "#121212",
+    "bodyBg": "#ffffff",
+    "cardBg": "#ffffff",
+    "bodyText": "#121212",
+    "mutedText": "#5c5c5c",
+    "borderColor": "#e6e6e6",
+    "headerBg": "#ffffff",
+    "headerText": "#121212",
+    "footerBg": "#f5f5f5",
+    "footerText": "#121212",
+    "priceColor": "#121212",
+    "saleColor": "#b42318",
+    "fontFamily": "system",
+    "baseFontSize": 16,
+    "headingWeight": 600,
+    "radius": 0,
+    "buttonRadius": 0,
+    "containerWidth": 1200,
+    "cardShadow": "none",
+    "productsPerRow": 4,
+    "showTrustBar": true,
+    "showTestimonials": false,
+    "showStats": false,
+    "showNewsletter": true,
+    "showDealCountdown": false,
+    "showCategories": true,
+    "showFeatured": true,
+    "showNewArrivals": true,
+    "announcementBg": "#121212",
+    "announcementText2": "#ffffff"
+  },
+  "sections": {
+    "hero": "@/themes/dawnlight/sections/Hero",
+    "featured": "@/themes/dawnlight/sections/Featured",
+    "categories": "@/themes/dawnlight/sections/Categories"
+  }
+}

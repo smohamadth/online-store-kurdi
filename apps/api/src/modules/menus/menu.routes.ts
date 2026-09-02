@@ -1,8 +1,24 @@
+// ---------------------------------------------------------------------------
+// Site menus (mounted at /api/menus) - the header/footer/sidebar nav the
+// admin edits.
+//
+// One Menu per location ('header' | 'footer' | 'sidebar'); items form a
+// two-level tree (top-level items + one level of children - the
+// storefront nav renders dropdowns from that). The public read is
+// GET /location/:location, which returns ONLY active items; everything
+// else is admin/manager.
+//
+// A child item's parentId must belong to the same menu (checked on
+// create - a cross-menu parent would make the item invisible to both
+// menus). Items order by sortOrder within their level; the reorder
+// endpoint rewrites the whole level's order in one request.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { isSafeLinkUrl } from '../../utils/safeUrl';
 
 const router = Router();
 
@@ -15,7 +31,11 @@ const menuSchema = z.object({
 
 const menuItemSchema = z.object({
   label: z.string().min(1).max(100),
-  url: z.string().min(1).max(500),
+  url: z
+    .string()
+    .min(1)
+    .max(500)
+    .refine(isSafeLinkUrl, { message: 'URL must be http(s), mailto, tel or a relative path' }),
   // Normalize '' -> null so empty form fields do not persist as empty strings.
   // (parentId is fine as-is: .uuid() rejects '', so its .or() branch does fire.)
   icon: z
@@ -289,6 +309,29 @@ router.put('/items/:itemId', authenticate, authorize('admin', 'manager'), async 
       return res.status(404).json({
         status: 'error',
         message: 'Menu item not found',
+      });
+    }
+
+    // A parent must belong to the SAME menu (the create route enforces
+    // this too): a cross-menu parent makes the item invisible to both
+    // menus — the storefront renders top-level items + one level of
+    // children per menu, so an orphaned child never appears.
+    if (data.parentId && data.parentId !== itemId) {
+      const parent = await prisma.menuItem.findFirst({
+        where: { id: data.parentId, menuId: existing.menuId },
+      });
+      if (!parent) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Parent item not found in this menu',
+        });
+      }
+    }
+    // An item cannot be its own parent.
+    if (data.parentId === itemId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'An item cannot be its own parent',
       });
     }
 

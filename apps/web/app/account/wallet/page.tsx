@@ -7,6 +7,9 @@ interface StoreCredit {
   balance: number;
   currency: string;
   transactions: StoreCreditTransaction[];
+  // Every balance the user holds, in every currency (the store may have
+  // changed currency after a balance was granted).
+  allBalances?: { currency: string; balance: number }[];
 }
 
 interface StoreCreditTransaction {
@@ -28,11 +31,10 @@ const TYPE_LABELS: Record<string, string> = {
 /**
  * Account > Wallet page.
  *
- * Shows the customer's store credit balance + history. They can
- * also redeem a gift card here, which adds the card's balance to
- * their account as store credit. (The "redeem to store credit"
- * path is the most common UX; a "redeem at checkout" path is
- * also available via the API but not exposed in this UI yet.)
+ * Shows the customer's store credit balance + history, and lets them
+ * check a gift-card code. Both are usable at checkout: the checkout
+ * page has a "Wallet Credit" section where store credit is applied
+ * with a toggle and gift-card codes are entered directly.
  */
 export default function WalletPage() {
   const [credit, setCredit] = useState<StoreCredit | null>(null);
@@ -59,16 +61,15 @@ export default function WalletPage() {
     setRedeeming(true);
     setMessage(null);
     try {
-      // The redeem endpoint validates the code and returns metadata.
+      // The redeem endpoint validates the code and returns the balance.
+      // The card is spent at checkout (enter the code there) — nothing
+      // is debited or linked to the account from this page.
       const res = await authHttp.post<any>(`/gift-cards/${encodeURIComponent(giftCode.trim())}/redeem`);
       const balance = res.data.availableBalance as number;
       const currency = res.data.currency as string;
-      // Now "apply" it as store credit. There's no dedicated endpoint
-      // for that yet - the customer can see the card balance and
-      // use it at checkout. We just confirm the card is valid here.
       setMessage({
         type: 'ok',
-        text: `Card is valid! You have ${balance.toFixed(2)} ${currency} available. Apply it at checkout.`,
+        text: `Card is valid and linked to your account! You have ${balance.toFixed(2)} ${currency} available. It will be applied automatically at checkout.`,
       });
       setGiftCode('');
     } catch (err) {
@@ -84,7 +85,8 @@ export default function WalletPage() {
     <div>
       <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>Wallet</h1>
       <p style={{ color: '#666', marginBottom: '24px' }}>
-        Store credit and gift card balances. Credit is applied automatically at checkout.
+        Store credit and gift card balances issued to your account. Balances can be redeemed and are
+        tracked here; spend them at checkout (Wallet Credit section).
       </p>
 
       {/* Store credit balance */}
@@ -105,6 +107,41 @@ export default function WalletPage() {
         <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
           Applied automatically at checkout. No card or code needed.
         </p>
+        {/* Balances in other currencies: the store switched currency after
+            these were granted, so they can't be spent at checkout anymore.
+            Show them honestly instead of letting the value silently vanish. */}
+        {(credit?.allBalances || [])
+          .filter((b) => b.currency !== credit?.currency && b.balance > 0)
+          .length > 0 && (
+          <div
+            data-testid="other-currency-balances"
+            style={{
+              marginTop: '12px',
+              padding: '12px 14px',
+              backgroundColor: '#fef3c7',
+              border: '1px solid #fde68a',
+              borderRadius: '6px',
+              fontSize: '13px',
+              color: '#92400e',
+            }}
+          >
+            <strong>Balances in other currencies</strong>
+            <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {(credit?.allBalances || [])
+                .filter((b) => b.currency !== credit?.currency && b.balance > 0)
+                .map((b) => (
+                  <span key={b.currency}>
+                    {b.balance.toFixed(2)} {b.currency}
+                  </span>
+                ))}
+            </div>
+            <p style={{ marginTop: '6px', fontSize: '12px' }}>
+              This credit was granted before the store switched to{' '}
+              {credit?.currency ?? 'the current currency'}. It can't be spent at
+              checkout — contact the store to convert it.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Gift card redemption */}
@@ -192,7 +229,7 @@ export default function WalletPage() {
               <tr style={{ background: '#f9f9f9' }}>
                 <th style={th}>Date</th>
                 <th style={th}>Type</th>
-                <th style={{ ...th, textAlign: 'right' }}>Amount</th>
+                <th style={{ ...th, textAlign: 'end' }}>Amount</th>
                 <th style={th}>Note</th>
               </tr>
             </thead>
@@ -204,7 +241,7 @@ export default function WalletPage() {
                   <td
                     style={{
                       ...td,
-                      textAlign: 'right',
+                      textAlign: 'end',
                       color: t.amount > 0 ? '#22c55e' : '#ef4444',
                       fontWeight: 500,
                     }}
@@ -223,5 +260,5 @@ export default function WalletPage() {
   );
 }
 
-const th: React.CSSProperties = { padding: '8px 12px', textAlign: 'left', fontSize: '12px', fontWeight: 600 };
+const th: React.CSSProperties = { padding: '8px 12px', textAlign: 'start', fontSize: '12px', fontWeight: 600 };
 const td: React.CSSProperties = { padding: '8px 12px', fontSize: '14px' };

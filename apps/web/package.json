@@ -13,14 +13,18 @@
     "test:watch": "vitest",
     "test:components": "vitest run --config vitest.components.config.ts",
     "test:components:watch": "vitest --config vitest.components.config.ts",
-    "test:all": "npm run test && npm run test:components"
+    "test:all": "npm run test && npm run test:components",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "next": "14.1.0",
+    "@sentry/nextjs": "^10.71.0",
+    "next": "14.2.35",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.6.6",
@@ -28,7 +32,7 @@
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "eslint": "^8.56.0",
-    "eslint-config-next": "14.1.0",
+    "eslint-config-next": "14.2.35",
     "typescript": "^5.3.3"
   }
 }

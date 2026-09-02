@@ -1,8 +1,16 @@
+// /returns - the static returns/exchanges policy page (plain content,
+// no CMS). Kept as its own route so the footer can deep-link it.
+
 'use client';
 
 import Link from 'next/link';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function ReturnsPage() {
+  // The "How to start a return" / "When you'll be refunded" cards
+  // sit side by side at 1fr/1fr. Stack under 640px so the prose
+  // inside each card gets the full viewport width.
+  const isMobile = useIsMobile(640);
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 20px' }}>
       <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '8px' }}>Return Policy</h1>
@@ -58,10 +66,10 @@ export default function ReturnsPage() {
       {/* Return Conditions */}
       <section style={{ marginBottom: '32px' }}>
         <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '16px' }}>Return Conditions</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
           <div style={{ padding: '20px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
             <h3 style={{ fontWeight: 600, marginBottom: '12px', color: '#22c55e' }}>Eligible for Return</h3>
-            <ul style={{ paddingLeft: '20px', fontSize: '14px', color: '#555' }}>
+            <ul style={{ paddingInlineStart: '20px', fontSize: '14px', color: '#555' }}>
               <li>Unused and in original condition</li>
               <li>Original packaging included</li>
               <li>Tags still attached</li>
@@ -70,7 +78,7 @@ export default function ReturnsPage() {
           </div>
           <div style={{ padding: '20px', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
             <h3 style={{ fontWeight: 600, marginBottom: '12px', color: '#ef4444' }}>Not Eligible for Return</h3>
-            <ul style={{ paddingLeft: '20px', fontSize: '14px', color: '#555' }}>
+            <ul style={{ paddingInlineStart: '20px', fontSize: '14px', color: '#555' }}>
               <li>Used or worn items</li>
               <li>Digital products (after download)</li>
               <li>Personalized/custom items</li>

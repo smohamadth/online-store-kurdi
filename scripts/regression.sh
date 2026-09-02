@@ -75,6 +75,16 @@ echo "== CATEGORY BY SLUG =="
 chk "category by slug"  "$(curl -s -o /dev/null -w '%{http_code}' $API/categories/clothing)" "200"
 chk "unknown slug 404"  "$(curl -s -o /dev/null -w '%{http_code}' $API/categories/nope-nope)" "404"
 
+echo "== ANALYTICS (private by default) =="
+# The track endpoints store a visitor's IP + user agent per event, so
+# they must not exist unless the store sets ANALYTICS_TRACKING_ENABLED.
+# CI runs without the flag: both must 404, and the public trending
+# endpoint (derived data only) stays available.
+chk "track 404 when tracking disabled" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/analytics/track -H 'Content-Type: application/json' -d '{"eventType":"view"}')" "404"
+chk "track batch 404 when disabled"    "$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/analytics/track/batch -H 'Content-Type: application/json' -d '{"events":[]}')" "404"
+chk "trending public (200)"            "$(curl -s -o /dev/null -w '%{http_code}' $API/analytics/trending)" "200"
+chk "user behavior needs auth"         "$(curl -s -o /dev/null -w '%{http_code}' $API/analytics/user/behavior)" "401"
+
 echo
 echo "===== $pass passed, $fail failed ====="
 

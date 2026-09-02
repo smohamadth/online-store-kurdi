@@ -1,7 +1,23 @@
+// ---------------------------------------------------------------------------
+// Tax: admin CRUD for rates + tax classes, and the public POST
+// /api/tax/calculate the checkout calls before placing an order.
+//
+// Rate matching (in /calculate): rates are looked up per country,
+// ordered by priority, and the first whose state/city/zip constraints
+// ALL match wins; with no precise match it falls back to the
+// country-level general rate (no state/city/zip set). Per-item rates can
+// be overridden by the item's tax class (e.g. 'zero'/'digital' -> 0%).
+// Rates are fractions (0.1 = 10%), not percentages.
+//
+// Note: calculate is advisory (drives the checkout display); order
+// placement recomputes the same numbers server-side via tax.service
+// (see order.routes.ts), so the client's taxAmount is never trusted.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { calculateTaxForOrder } from './tax.service';
 import { z } from 'zod';
 
 const router = Router();
@@ -234,7 +250,9 @@ router.delete('/classes/:id', authenticate, authorize('admin'), async (req, res,
 // TAX CALCULATION
 // ============================================
 
-// POST /api/tax/calculate - Calculate tax for order
+// POST /api/tax/calculate - Calculate tax for order (advisory; order
+// placement recomputes the same numbers server-side via tax.service).
+// authz-ok: guest checkout must quote tax before login
 router.post('/calculate', async (req, res, next) => {
   try {
     const { country, state, city, zipCode, subtotal, items } = req.body;
@@ -246,113 +264,18 @@ router.post('/calculate', async (req, res, next) => {
       });
     }
 
-    // Find all matching tax rates for the location
-    const taxRates = await prisma.taxRate.findMany({
-      where: {
-        isActive: true,
-        country: country,
-      },
-      orderBy: { priority: 'desc' },
+    const result = await calculateTaxForOrder({
+      country,
+      state,
+      city,
+      zipCode,
+      subtotal: Number(subtotal || 0),
+      items,
     });
-
-    // Function to find the best matching tax rate for a location
-    const findTaxRate = (targetState?: string, targetCity?: string, targetZip?: string) => {
-      for (const rate of taxRates) {
-        // Check state match
-        if (rate.state && rate.state !== targetState) continue;
-        
-        // Check city match
-        if (rate.city && rate.city !== targetCity) continue;
-        
-        // Check zip code match
-        if (rate.zipCode && targetZip && !targetZip.startsWith(rate.zipCode)) continue;
-
-        // This rate matches
-        return rate;
-      }
-
-      // Fallback: find a general rate for the country
-      return taxRates.find(r => !r.state && !r.city && !r.zipCode) || null;
-    };
-
-    // Find the base tax rate for this location
-    const baseTaxRate = findTaxRate(state, city, zipCode);
-    const baseRate = baseTaxRate ? Number(baseTaxRate.rate) : 0;
-    const baseTaxName = baseTaxRate?.name || 'Tax';
-
-    // Calculate tax per item (considering tax class)
-    let itemTaxes: any[] = [];
-    let totalTax = 0;
-
-    if (items && Array.isArray(items) && items.length > 0) {
-      // Calculate tax for each item based on its tax class
-      for (const item of items) {
-        let itemRate = baseRate;
-        let itemTaxName = baseTaxName;
-
-        // If item has a specific tax class, find the matching rate
-        if (item.taxClass && item.taxClass !== 'standard') {
-          // Find tax rate for this specific tax class
-          const classRate = taxRates.find(r => 
-            r.taxClass === item.taxClass && 
-            (!r.state || r.state === state) &&
-            (!r.city || r.city === city)
-          );
-
-          if (classRate) {
-            itemRate = Number(classRate.rate);
-            itemTaxName = classRate.name;
-          } else {
-            // If no specific rate found, check if tax class has 0% rate
-            // (e.g., digital products, reduced rate items)
-            const taxClassInfo = await prisma.taxClass.findUnique({
-              where: { name: item.taxClass },
-            });
-
-            if (taxClassInfo) {
-              // Use 0% for zero-tax classes
-              if (taxClassInfo.name === 'zero' || taxClassInfo.name === 'digital') {
-                itemRate = 0;
-                itemTaxName = `${taxClassInfo.name} tax`;
-              }
-            }
-          }
-        }
-
-        const itemTaxAmount = (item.price * item.quantity) * itemRate;
-        totalTax += itemTaxAmount;
-
-        itemTaxes.push({
-          productId: item.productId,
-          price: item.price,
-          quantity: item.quantity,
-          taxClass: item.taxClass || 'standard',
-          taxRate: itemRate,
-          taxAmount: Math.round(itemTaxAmount * 100) / 100,
-          taxName: itemTaxName,
-        });
-      }
-    } else {
-      // If no items provided, calculate on subtotal
-      totalTax = subtotal * baseRate;
-    }
 
     res.json({
       status: 'success',
-      data: {
-        taxRate: baseRate,
-        taxName: baseTaxName,
-        taxAmount: Math.round(totalTax * 100) / 100,
-        subtotal: subtotal || 0,
-        totalWithTax: Math.round(((subtotal || 0) + totalTax) * 100) / 100,
-        itemTaxes,
-        location: {
-          country,
-          state,
-          city,
-          zipCode,
-        },
-      },
+      data: result,
     });
   } catch (err) {
     next(err);
@@ -362,12 +285,16 @@ router.post('/calculate', async (req, res, next) => {
 // GET /api/tax/summary - Get tax summary for reporting
 router.get('/summary', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const startDate = req.query.startDate 
-      ? new Date(req.query.startDate as string) 
-      : new Date(new Date().setDate(1)); // First day of current month
-    const endDate = req.query.endDate 
-      ? new Date(req.query.endDate as string) 
-      : new Date();
+    // Strict date parsing: `new Date('abc')` is Invalid Date, which
+    // Prisma rejects with a 500 on { gte: Invalid Date }. Bad or
+    // missing values fall back to the defaults (first of month / now).
+    const parseDate = (v: unknown): Date | null => {
+      if (typeof v !== 'string' || v === '') return null;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const startDate = parseDate(req.query.startDate) ?? new Date(new Date().setDate(1));
+    const endDate = parseDate(req.query.endDate) ?? new Date();
 
     // Get orders with tax
     const orders = await prisma.order.findMany({

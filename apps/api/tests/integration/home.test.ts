@@ -82,6 +82,40 @@ describe('POST /api/home-sections (admin)', () => {
       .send({ key: 'custom-block', type: 'richText' });
     expect(res.status).toBe(201);
   });
+
+  it('creates the admin-designed custom section type', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/home-sections')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        key: 'design-band',
+        type: 'custom',
+        config: {
+          html: '<p>safe<script>evil()</script></p>',
+          background: 'brand',
+          padding: 'large',
+          width: 'centered',
+        },
+      });
+    expect(res.status).toBe(201);
+
+    // The html is sanitised on write, same contract as richText.
+    const list = await request(app).get('/api/home-sections');
+    const band = list.body.data.find((s: any) => s.key === 'design-band');
+    expect(band).toBeTruthy();
+    expect(band.config.html).not.toContain('<script>');
+    expect(band.config.background).toBe('brand');
+  });
+
+  it('still rejects unknown types', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/home-sections')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ key: 'warp', type: 'warp-drive' });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('POST /api/home-sections/reset (admin)', () => {

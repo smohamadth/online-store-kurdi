@@ -4,6 +4,16 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { sanitizeRichText } from '../../utils/sanitizeRichText';
+import { serializeContentBlocks, parseBlocksColumn } from '../../utils/contentBlocks';
+import { viewBumpAllowed } from '../../utils/viewThrottle';
+import { localizeRows } from '../contentTranslations/localize.helpers';
+import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
+
+/** Overlay blog translations (title/content/excerpt) for `?lang=`. */
+async function localizePosts(posts: any[], lang: unknown): Promise<any[]> {
+  const map = await localizedMapFor('blogPost', posts.map((p) => p.id), lang);
+  return localizeRows(posts, map, 'blogPost', typeof lang === 'string' ? lang.toLowerCase() : 'en');
+}
 
 const router = Router();
 
@@ -53,6 +63,20 @@ const baseSchema = {
   isFeatured: z.boolean().optional(),
   metaTitle: z.string().max(200).optional().nullable(),
   metaDescription: z.string().max(400).optional().nullable(),
+  // Layout blocks (same model as the page CMS). Unknown types are
+  // accepted here and dropped client-side, so a newer admin bundle can
+  // save block types an older API doesn't know yet without a 400.
+  blocks: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(40),
+        type: z.string().min(1).max(40),
+        config: z.record(z.any()).optional().nullable(),
+      }),
+    )
+    .max(100)
+    .optional()
+    .nullable(),
 };
 
 const createSchema = z.object({ slug: slugField, ...baseSchema });
@@ -64,7 +88,7 @@ const updateSchema = z.object({
 
 /** Text fields an admin must be able to CLEAR. */
 const NULLABLE = new Set([
-  'excerpt', 'coverImage', 'author', 'tags', 'metaTitle', 'metaDescription',
+  'excerpt', 'coverImage', 'author', 'tags', 'metaTitle', 'metaDescription', 'blocks',
 ]);
 
 /** Rough reading time, shown on the list and the post. */
@@ -86,11 +110,14 @@ function parseTags(raw: string | null): string[] {
 }
 
 function fromRow(row: any, opts: { withContent?: boolean } = {}) {
-  const { content, tags, ...rest } = row;
+  const { content, tags, blocks, ...rest } = row;
   return {
     ...rest,
     tags: parseTags(tags),
     readingMinutes: readingMinutes(content || ''),
+    // Hand the client a parsed block array (or null), never the raw JSON
+    // column - mirrors the page API.
+    blocks: parseBlocksColumn(blocks),
     ...(opts.withContent === false ? {} : { content }),
   };
 }
@@ -103,6 +130,8 @@ function buildData(parsed: Record<string, unknown>) {
 
     if (k === 'content' && typeof v === 'string') {
       data[k] = sanitizeRichText(v);
+    } else if (k === 'blocks') {
+      data[k] = serializeContentBlocks(v);
     } else if (k === 'tags') {
       // Normalise: lowercase, trimmed, de-duplicated, stored as JSON.
       if (v === null) {
@@ -162,7 +191,7 @@ router.get('/', async (req, res, next) => {
     res.json({
       status: 'success',
       // The list does not need full post bodies - they can be tens of KB each.
-      data: rows.map((r) => fromRow(r, { withContent: false })),
+      data: await localizePosts(rows.map((r) => fromRow(r, { withContent: false })), req.query.lang),
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
   } catch (err) {
@@ -218,17 +247,18 @@ router.get('/slug/:slug', async (req, res, next) => {
         .json({ status: 'error', message: 'Post not found', code: 'NOT_FOUND' });
     }
 
-    // Two most recent other posts, for "keep reading".
+    // Three most recent other posts, for the "keep reading" card grid.
     const related = await prisma.blogPost.findMany({
       where: { status: 'published', id: { not: post.id } },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-      take: 2,
+      take: 3,
     });
 
+    const localized = (await localizePosts([fromRow(post)], req.query.lang))[0];
     res.json({
       status: 'success',
       data: {
-        ...fromRow(post),
+        ...localized,
         related: related.map((r) => fromRow(r, { withContent: false })),
       },
     });
@@ -239,12 +269,19 @@ router.get('/slug/:slug', async (req, res, next) => {
 
 // Fire-and-forget view counter. Never fails the caller: an analytics blip must
 // not stop a reader seeing the article.
+// authz-ok: anonymous view counter; abuse-limited by viewThrottle
 router.post('/slug/:slug/view', async (req, res) => {
   try {
-    await prisma.blogPost.updateMany({
-      where: { slug: req.params.slug, status: 'published' },
-      data: { viewCount: { increment: 1 } },
-    });
+    // Public + unauthenticated: without a throttle, flooding this
+    // endpoint queues an UPDATE per request (a write-DoS on SQLite and
+    // unbounded counter inflation). One bump per slug per minute keeps
+    // real page views honest and caps the write rate.
+    if (viewBumpAllowed(`blog:${req.params.slug}`)) {
+      await prisma.blogPost.updateMany({
+        where: { slug: req.params.slug, status: 'published' },
+        data: { viewCount: { increment: 1 } },
+      });
+    }
   } catch {
     /* ignore */
   }

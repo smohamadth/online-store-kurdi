@@ -144,6 +144,45 @@ describe('POST /api/coupons (admin)', () => {
       .send({ code: 'X' });
     expect(res.status).toBe(400);
   });
+
+  it('rejects an Infinity value (1e999) — parseFloat used to store Infinity (400)', async () => {
+    // Regression: `parseFloat(value) || 0` turned JSON 1e999 into
+    // Infinity, and an Infinity percentage coupon made EVERY checkout
+    // fail with a negative total.
+    const { token } = await authHeader({ role: 'admin' });
+    // Raw JSON body: JSON.stringify would mangle Infinity into null, but
+    // a real hostile client sends the literal 1e999 token.
+    const res = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"code":"INF","type":"percentage","value":1e999}');
+    expect(res.status).toBe(400);
+    expect(await mockPrisma.coupon.findMany({ where: { code: 'INF' } })).toHaveLength(0);
+  });
+
+  it('rejects an unknown coupon type (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'HACK', type: 'unlimited_free_stuff', value: 100 });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a negative value and a NaN usageLimit (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'NEG', type: 'fixed', value: -5 });
+    expect(res.status).toBe(400);
+    const res2 = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ code: 'LIM', type: 'fixed', value: 5, usageLimit: 'abc' });
+    expect(res2.status).toBe(400);
+  });
 });
 
 describe('PUT /api/coupons/:id (admin)', () => {
@@ -157,6 +196,24 @@ describe('PUT /api/coupons/:id (admin)', () => {
     expect(res.status).toBe(200);
     const after = await mockPrisma.coupon.findUnique({ where: { id: c.id } });
     expect(after?.value).toBe(25);
+  });
+
+  it('rejects an Infinity or negative value on update (400)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const c = await createCoupon({ code: 'X2', value: 5 });
+    const res = await request(app)
+      .put(`/api/coupons/${c.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json')
+      .send('{"value":1e999}');
+    expect(res.status).toBe(400);
+    const res2 = await request(app)
+      .put(`/api/coupons/${c.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ value: -5 });
+    expect(res2.status).toBe(400);
+    const after = await mockPrisma.coupon.findUnique({ where: { id: c.id } });
+    expect(after?.value).toBe(5); // unchanged
   });
 
   it('404 for unknown id', async () => {
@@ -187,5 +244,36 @@ describe('DELETE /api/coupons/:id (admin)', () => {
       .delete('/api/coupons/nope')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/coupons/:id/apply (removed)', () => {
+  it('no longer exists — usage is only counted at order placement', async () => {
+    // Regression: this endpoint let ANY authenticated customer increment
+    // ANY coupon's usedCount (no active/expiry check, no order link, no
+    // rate limit). The coupon id is public (returned by /validate), so
+    // the endpoint could be hammered to burn a coupon's usage limit and
+    // deny legitimate customers. It is gone; the storefront only uses
+    // /coupons/validate and order placement counts usage in its
+    // transaction.
+    const { token } = await authHeader();
+    const admin = await authHeader({ role: 'admin' });
+    const created = await request(app)
+      .post('/api/coupons')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ code: 'SAVE10', type: 'percentage', value: 10, usageLimit: 5 });
+    const couponId = created.body.data.id;
+    expect(couponId).toBeTruthy();
+
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .post(`/api/coupons/${couponId}/apply`)
+        .set('Authorization', `Bearer ${token}`);
+      expect([400, 404]).toContain(res.status);
+    }
+
+    // The usage count must be untouched by the removed endpoint.
+    const stored = await mockPrisma.coupon.findUnique({ where: { id: couponId } });
+    expect(stored.usedCount).toBe(0);
   });
 });

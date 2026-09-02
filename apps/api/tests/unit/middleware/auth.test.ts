@@ -124,6 +124,23 @@ describe('authenticate', () => {
     expect(next.mock.calls[0][0].message).toMatch(/Invalid token/);
   });
 
+  it('rejects a refresh token used as an access token (401)', async () => {
+    // Regression: jwt.verify only proves the signature — a long-lived
+    // refresh token would sail through authenticate and could be used
+    // directly as an access token, bypassing refresh rotation/replay
+    // detection. Access tokens must not carry type=refresh.
+    const { refreshToken } = generateTokens({ id: 'u1', email: 'a@b.c', role: 'admin' });
+    const next = makeNext();
+    await authenticate(
+      makeReq({ headers: { authorization: `Bearer ${refreshToken}` } }),
+      makeRes(),
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].message).toMatch(/Invalid token/);
+    expect(mockPrismaUser.findUnique).not.toHaveBeenCalled();
+  });
+
   it('rejects when the user is no longer in the database', async () => {
     const { accessToken } = generateTokens({ id: 'u1', email: 'a@b.c', role: 'customer' });
     mockPrismaUser.findUnique.mockResolvedValue(null);
@@ -156,6 +173,16 @@ describe('optionalAuth', () => {
     const next = makeNext();
     await optionalAuth(makeReq(), makeRes(), next);
     expect(next).toHaveBeenCalledWith();
+  });
+
+  it('does not attach user when a refresh token is presented', async () => {
+    const { refreshToken } = generateTokens({ id: 'u1', email: 'a@b.c', role: 'customer' });
+    const req = makeReq({ headers: { authorization: `Bearer ${refreshToken}` } });
+    const next = makeNext();
+    await optionalAuth(req, makeRes(), next);
+    expect(next).toHaveBeenCalledWith();
+    expect(req.user).toBeUndefined();
+    expect(mockPrismaUser.findUnique).not.toHaveBeenCalled();
   });
 
   it('attaches user when the token is valid and the user exists', async () => {

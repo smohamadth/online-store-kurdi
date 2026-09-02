@@ -1,0 +1,1 @@
+Platform-bundled theme. This marker tells the API that "dawnlight" is part of the platform release: it cannot be overwritten by an install or removed by an admin.

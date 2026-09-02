@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Environment loading + validation (Zod).
+//
+// This is the single gate between "someone's .env" and the running server:
+// a missing/invalid variable makes the process EXIT AT IMPORT TIME with the
+// field names, instead of surfacing later as a confusing 500. .env.ci in
+// apps/api is the canonical set of values that must keep passing here -
+// scripts/verify-env-config.py checks the templates against this schema.
+// ---------------------------------------------------------------------------
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -14,6 +23,15 @@ const envSchema = z.object({
   
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  
+  // Search provider. 'postgres' is the default and needs nothing extra:
+  // product search runs a Prisma `contains` query. 'elasticsearch' turns on
+  // the optional Elasticsearch-backed search (index maintained on product
+  // writes); if Elasticsearch is unreachable the server logs and falls back
+  // to the Postgres search for the affected request, it never hard-fails.
+  SEARCH_PROVIDER: z.enum(['postgres', 'elasticsearch']).default('postgres'),
+  ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
+  ELASTICSEARCH_INDEX: z.string().default('products'),
   
   // JWT
   JWT_SECRET: z.string().min(32),
@@ -37,6 +55,12 @@ const envSchema = z.object({
   
   // Frontend
   FRONTEND_URL: z.string().url(),
+
+  // Public base URL of the API (e.g. https://api.example.com/api), used to
+  // build absolute links that leave the server (digital-download links in
+  // order emails). Optional: without it those fall back to localhost,
+  // which is only right for local development.
+  API_URL: z.string().url().optional(),
   
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
@@ -49,6 +73,10 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+  // Error tracking (optional): with no DSN the app runs with Sentry
+  // fully disabled - it is an observability add-on, never a dependency.
+  SENTRY_DSN: z.string().url().optional(),
   
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -57,9 +85,21 @@ const envSchema = z.object({
   // Security
   BCRYPT_ROUNDS: z.string().default('12'),
   CORS_ORIGIN: z.string(),
+
+  // Theme studio: where admin-created themes are stored (as theme.json files).
+  // Defaults to the web app's themes dir so a generated theme is picked up by
+  // the registry on the next build. Overridable in tests to a temp dir.
+  THEMES_DIR: z.string().default('../web/themes'),
+
+  // Plugins: where installed plugins + their state live (file-based, no DB).
+  // Bundled plugins are code in the repo; installed plugins are data-only
+  // (signed webhooks). Overridable in tests to a temp dir.
+  PLUGINS_DIR: z.string().default('plugins'),
 });
 
-// Validate environment variables
+// Validate environment variables. console (not the logger) is deliberate:
+// the logger itself depends on validated env (LOG_LEVEL), so using it here
+// would be circular.
 const envParse = envSchema.safeParse(process.env);
 
 if (!envParse.success) {
@@ -70,7 +110,98 @@ if (!envParse.success) {
 
 export const env = envParse.data;
 
+// ---------------------------------------------------------------------------
+// Refuse to boot a PRODUCTION server on placeholder credentials.
+//
+// `.env.example` ships working-looking values so a developer can copy it and
+// have the stack run immediately. Two of them are dangerous if they survive
+// to production:
+//
+//   JWT_SECRET=your-super-secret-jwt-key-change-in-production
+//   MINIO_SECRET_KEY=minioadmin
+//
+// The JWT placeholder is 46 characters, so `z.string().min(32)` above accepts
+// it happily. Anyone who copies .env.example, deploys, and forgets to rotate
+// is signing tokens with a value published in this repository - an attacker
+// can mint a token with `role: "admin"` and the API will honour it. Length
+// validation cannot catch this; only a value check can.
+//
+// Enforced only when NODE_ENV=production so local dev and CI are unaffected.
+// ---------------------------------------------------------------------------
+
+/** Credentials that must never reach production, lowercased for comparison. */
+const PLACEHOLDER_VALUES = new Set([
+  'your-super-secret-jwt-key-change-in-production',
+  'change-in-production',
+  'changeme',
+  'minioadmin',
+  'secret',
+  'password',
+  'sk_test_your_stripe_secret_key',
+  'whsec_your_webhook_secret',
+]);
+
+/** Substrings that mark a value as an unedited template. */
+const PLACEHOLDER_MARKERS = [
+  'your-',
+  'your_',
+  'change-in-production',
+  'changeme',
+  'replace-me',
+  'xxxxx',
+];
+
+export function isPlaceholderSecret(value: string | undefined): boolean {
+  if (!value) return false;
+  const v = value.trim().toLowerCase();
+  if (PLACEHOLDER_VALUES.has(v)) return true;
+  return PLACEHOLDER_MARKERS.some((m) => v.includes(m));
+}
+
+if (env.NODE_ENV === 'production') {
+  const offenders: string[] = [];
+  const guarded: Array<[string, string | undefined]> = [
+    ['JWT_SECRET', env.JWT_SECRET],
+    ['MINIO_SECRET_KEY', env.MINIO_SECRET_KEY],
+    ['MINIO_ACCESS_KEY', env.MINIO_ACCESS_KEY],
+    ['STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY],
+    ['STRIPE_WEBHOOK_SECRET', process.env.STRIPE_WEBHOOK_SECRET],
+    ['SMTP_PASS', env.SMTP_PASS],
+  ];
+  for (const [name, value] of guarded) {
+    if (isPlaceholderSecret(value)) offenders.push(name);
+  }
+
+  if (offenders.length > 0) {
+    console.error(
+      '❌ Refusing to start in production with placeholder credentials:\n' +
+        offenders.map((o) => `   - ${o} is still the .env.example value`).join('\n') +
+        '\n   Generate a real secret, e.g.  openssl rand -hex 32',
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * Should POST /api/auth/forgot-password echo the reset token in its response?
+ *
+ * Debug aid for local work when mail goes to MailHog. Requires an EXPLICIT
+ * EXPOSE_RESET_TOKEN=true and is hard-refused in production, because the
+ * token grants account takeover for the named address. Deliberately not keyed
+ * off NODE_ENV: that variable defaults to 'development', so an operator who
+ * simply forgets to set it would otherwise be publishing reset tokens.
+ */
+export function exposeResetToken(): boolean {
+  // Read process.env live rather than the parsed `env` snapshot: the snapshot
+  // is frozen at import time, which would make the production refusal below
+  // impossible to exercise in a test (and therefore unverifiable).
+  if (process.env.NODE_ENV === 'production') return false;
+  return process.env.EXPOSE_RESET_TOKEN === 'true';
+}
+
 // Environment helpers
+// env-default-ok: a plain label, not a gate. Security decisions must test
+// for production explicitly rather than trusting this to be false.
 export const isDevelopment = env.NODE_ENV === 'development';
 export const isProduction = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';

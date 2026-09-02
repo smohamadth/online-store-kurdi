@@ -1,3 +1,15 @@
+// ---------------------------------------------------------------------------
+// /category/[slug] - the category listing page (filter sidebar + grid).
+//
+// Everything the user can do (filter, sort, page) is URL state, so the
+// page is shareable and back-navigable - see setParam below. The sort
+// values must stay in lockstep with the API's sort enum (a mismatch is
+// a 400 from Zod). Structured data (ItemList + BreadcrumbList) is
+// emitted inline for the visible page of products.
+//
+// Data: GET /api/categories/:id for the header, GET /api/products with
+// the category + page/sort params for the grid.
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -6,10 +18,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api, Product, Category, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
+import { SITE } from '@/lib/seo';
+import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 import ProductCard from '@/components/ProductCard';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, contentUrl } from '@/lib/http';
 import { encodeRouteParam } from '@/lib/routeParam';
+import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
+import { LayoutRenderer } from '@/lib/layouts/render';
 
 // These values must match the API's sort enum exactly
 // (price_asc | price_desc | name_asc | name_desc | newest | popular),
@@ -65,19 +81,25 @@ export default function CategoryView({ slug }: { slug: string }) {
         // Existence is verified by the server component in page.tsx, which
         // returns a real HTTP 404 for unknown slugs. This fetch only needs the
         // display data.
-        const catRes = await fetch(`${API_BASE}/categories/${encodeRouteParam(slug)}`);
+        //
+        // The category and its products are independent, so we fetch them in
+        // parallel instead of serially - a serial pair of round-trips on a slow
+        // connection nearly doubles the perceived load time of a category page.
+        const [catRes, res] = await Promise.all([
+          fetch(contentUrl(`${API_BASE}/categories/${encodeRouteParam(slug)}`)),
+          // Filtering happens on the SERVER. The previous page pulled the first
+          // 100 products and filtered in the browser, so any store with more
+          // than 100 products silently dropped items from category pages.
+          api.getProducts({
+            category: slug,
+            limit: PAGE_SIZE,
+            page,
+            sort: sort === 'newest' ? undefined : sort,
+          } as any),
+        ]);
+
         const catJson = await catRes.json();
         if (!cancelled) setCategory(catJson.data);
-
-        // Filtering happens on the SERVER. The previous page pulled the first
-        // 100 products and filtered in the browser, so any store with more
-        // than 100 products silently dropped items from category pages.
-        const res = await api.getProducts({
-          category: slug,
-          limit: PAGE_SIZE,
-          page,
-          sort: sort === 'newest' ? undefined : sort,
-        } as any);
 
         if (!cancelled) {
           setProducts(res.data || []);
@@ -106,8 +128,44 @@ export default function CategoryView({ slug }: { slug: string }) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const title = category?.name || slug.replace(/-/g, ' ');
 
+  // Theme Studio override: render the active theme's `layouts.category` grid
+  // with the live category products when it exists.
+  const layout = useActiveLayout('category');
+  if (layout) {
+    return <LayoutRenderer layout={layout} data={{ products, title, categories: allCategories }} />;
+  }
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px 64px' }}>
+      {/* Structured data: ItemList of the visible products + the
+          category breadcrumb (same pattern as /products). */}
+      {products.length > 0 && (
+        <script
+          type="application/ld+json"
+          data-testid="json-ld-category"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              asGraph([
+                buildItemListJsonLd(
+                  title,
+                  products.slice(0, 50).map((p, i) => ({
+                    url: `${SITE}/products/${p.slug}`,
+                    name: p.name,
+                    image: p.images?.[0] ? getImageUrl(p.images[0].url) : undefined,
+                    position: i + 1,
+                  })),
+                  `${SITE}/category/${slug}`,
+                ),
+                buildBreadcrumbJsonLd([
+                  { name: 'Home', url: `${SITE}/` },
+                  { name: 'Products', url: `${SITE}/products` },
+                  { name: title, url: `${SITE}/category/${slug}` },
+                ]),
+              ]),
+            ),
+          }}
+        />
+      )}
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted, #666)' }}>
         <Link href="/" style={{ color: 'var(--muted, #666)', textDecoration: 'none' }}>

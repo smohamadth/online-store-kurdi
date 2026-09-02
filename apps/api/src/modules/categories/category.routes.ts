@@ -1,8 +1,27 @@
+// ---------------------------------------------------------------------------
+// Categories (mounted at /api/categories). Public read (the storefront
+// nav + /category/:slug pages), admin/manager write.
+//
+// Categories form a one-level-deep tree (parentId); product filtering
+// expands a chosen category to its direct children (see
+// productFilter.service.ts). Delete is refused while products still
+// reference the category (no cascade - the storefront links must never
+// dangle), and DELETE accepts a slug as well as a UUID because the admin
+// UI passes what the URL bar shows.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
+import { localizeRows } from '../contentTranslations/localize.helpers';
+import { localizedMapFor } from '../contentTranslations/contentTranslations.service';
+
+/** Overlay category translations for `?lang=`; returns a new array. */
+async function localizeCategories(categories: any[], lang: unknown): Promise<any[]> {
+  const map = await localizedMapFor('category', categories.map((c) => c.id), lang);
+  return localizeRows(categories, map, 'category', typeof lang === 'string' ? lang.toLowerCase() : 'en');
+}
 
 const router = Router();
 
@@ -32,7 +51,7 @@ router.get('/categories', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: categories,
+      data: await localizeCategories(categories, req.query.lang),
     });
   } catch (err) {
     next(err);
@@ -68,7 +87,7 @@ router.get('/categories/:id', async (req, res, next) => {
 
     res.json({
       status: 'success',
-      data: category,
+      data: (await localizeCategories([category], req.query.lang))[0],
     });
   } catch (err) {
     next(err);
@@ -134,6 +153,26 @@ router.put('/categories/:id', authenticate, authorize('admin', 'manager'), async
         return res.status(400).json({
           status: 'error',
           message: 'Category with this slug already exists',
+        });
+      }
+    }
+
+    // A category cannot be its own parent (create can't hit this — the id
+    // does not exist yet — but update can; a self-loop breaks the tree
+    // renderers). Child-parent cycles are equally rejected: with a
+    // one-level tree a cycle makes both rows render inside each other.
+    if (data.parentId) {
+      if (data.parentId === id) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'A category cannot be its own parent',
+        });
+      }
+      const parent = await prisma.category.findUnique({ where: { id: data.parentId } });
+      if (!parent || parent.parentId === id) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid parent category',
         });
       }
     }

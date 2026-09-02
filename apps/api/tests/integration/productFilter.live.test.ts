@@ -32,20 +32,27 @@ describe('Live exercise', () => {
   it('showcases the contract', async () => {
     const clothing = await createCategory({ slug: 'clothing', name: 'Clothing' });
     const books = await createCategory({ slug: 'books', name: 'Books' });
+    // One shared timestamp for every product: the pagination case
+    // below asserts on INSERTION order, which requires all createdAt
+    // values to be equal. The wall clock does not guarantee that
+    // (four sequential creates can straddle a millisecond boundary),
+    // which is exactly how this test started flaking.
+    const T = new Date();
     const shirt = await createProduct({
       name: 'Cool Shirt', slug: 'cool-shirt', price: 20, compareAtPrice: 30,
-      quantity: 10, categoryId: clothing.id,
+      quantity: 10, categoryId: clothing.id, createdAt: T,
     });
     const hoodie = await createProduct({
       name: 'Plain Hoodie', slug: 'plain-hoodie', price: 50, quantity: 0,
-      categoryId: clothing.id,
+      categoryId: clothing.id, createdAt: T,
     });
     const book = await createProduct({
       name: 'TS Handbook', slug: 'ts-handbook', price: 35, quantity: 5,
-      categoryId: books.id,
+      categoryId: books.id, createdAt: T,
     });
     const ebook = await createProduct({
       name: 'eBook PDF', slug: 'ebook', price: 9.99, quantity: 100, type: 'digital',
+      createdAt: T,
     });
     await createVariant(shirt.id, { name: 'M-red', sku: 'shirt-m', attributes: { size: 'M', color: 'red' } });
     await createVariant(shirt.id, { name: 'L-blue', sku: 'shirt-l', attributes: { size: 'L', color: 'blue' } });

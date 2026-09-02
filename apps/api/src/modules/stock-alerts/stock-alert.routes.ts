@@ -1,20 +1,27 @@
+// ---------------------------------------------------------------------------
+// Stock alerts ("notify me when back in stock").
+//
+// Subscriptions are DB rows (StockAlertSubscription), keyed per product
+// and optionally per product+variant (the variant level is stricter: a
+// variant-level alert does not fire for the product as a whole). The
+// data used to live in an in-memory Map - lost on restart, per-process,
+// so a deploy or a second API instance silently wiped every
+// subscription and the "N people want this" counters.
+//
+// Mounted at /api/stock-alerts with NO auth at the route or mount level -
+// the authenticate import below is currently unused (kept for the day a
+// guard is added), which also means any caller can subscribe on a user's
+// behalf. Treat as public-but-durable until a guard lands.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { z } from 'zod';
 
-const router = Router();
+void authenticate; // imported for the (not-yet-added) auth guard - see header
 
-// In-memory stock alert subscriptions
-const stockAlerts: Map<string, Array<{
-  id: string;
-  userId: string;
-  email: string;
-  productId: string;
-  variantId?: string;
-  createdAt: Date;
-}>> = new Map();
+const router = Router();
 
 const alertSchema = z.object({
   productId: z.string(),
@@ -22,23 +29,50 @@ const alertSchema = z.object({
   email: z.string().email().optional(),
 });
 
-// POST /api/stock-alerts - Subscribe to stock alert
+/** Emails are case-insensitive identifiers: store and match the lowercase form. */
+function normalizeEmail(email: string | undefined): string {
+  return (email || '').trim().toLowerCase();
+}
+
+// The alert "key" as a prisma where-fragment: a product-level alert has
+// variantId null; a variant-level alert names the variant. Matching
+// variantId: null vs variantId: 'x' keeps the two levels apart, exactly
+// like the old "<productId>" vs "<productId>-<variantId>" string keys.
+const keyWhere = (productId: string, variantId?: string) => ({
+  productId,
+  variantId: variantId || null,
+});
+
+// POST /api/stock-alerts - Subscribe to a stock alert.
+// Authenticated users subscribe by user id; guests by email. A duplicate
+// (same user OR same email on the same key) is a no-op that returns
+// success, so the UI can safely re-send.
+// authz-ok: guests subscribe by email; identity is scoped per-email in the handler
 router.post('/', async (req, res, next) => {
   try {
     const data = alertSchema.parse(req.body);
     const userId = req.user?.id || 'anonymous';
-    const email = data.email || req.user?.email || '';
+    const email = normalizeEmail(data.email || req.user?.email);
 
-    const key = data.variantId ? `${data.productId}-${data.variantId}` : data.productId;
-    
-    if (!stockAlerts.has(key)) {
-      stockAlerts.set(key, []);
-    }
+    // Dedupe identity. Guests ALL share the 'anonymous' userId, so the
+    // dedupe check must be keyed by EMAIL for guests — using the shared
+    // userId would make the first guest subscription on a product
+    // silently block every later guest with a different email (they'd
+    // get "already subscribed" and never an alert).
+    const identityWhere = userId !== 'anonymous'
+      ? { userId }
+      : email
+        ? { email }
+        : { userId: '' }; // no usable identity: never collides
 
-    const alerts = stockAlerts.get(key)!;
-    
-    // Check if already subscribed
-    const existing = alerts.find(a => a.userId === userId || (email && a.email === email));
+    // Check if already subscribed (same key: product + optional variant)
+    const existing = await prisma.stockAlertSubscription.findFirst({
+      where: {
+        ...keyWhere(data.productId, data.variantId),
+        ...identityWhere,
+      },
+      select: { id: true },
+    });
     if (existing) {
       return res.json({
         status: 'success',
@@ -46,13 +80,13 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    alerts.push({
-      id: Date.now().toString(),
-      userId,
-      email,
-      productId: data.productId,
-      variantId: data.variantId,
-      createdAt: new Date(),
+    await prisma.stockAlertSubscription.create({
+      data: {
+        userId,
+        email,
+        productId: data.productId,
+        variantId: data.variantId || null,
+      },
     });
 
     logger.info(`Stock alert subscription: ${email} for product ${data.productId}`);
@@ -66,20 +100,23 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// GET /api/stock-alerts/check/:productId - Check if product has alerts
+// GET /api/stock-alerts/check/:productId - Does anyone have an alert on this
+// product/variant? (No auth: the storefront shows a "N people want this"
+// style hint.) Returns a count, never the subscriber identities.
 router.get('/check/:productId', async (req, res, next) => {
   try {
     const { productId } = req.params;
     const variantId = req.query.variantId as string;
-    
-    const key = variantId ? `${productId}-${variantId}` : productId;
-    const alerts = stockAlerts.get(key) || [];
+
+    const alertCount = await prisma.stockAlertSubscription.count({
+      where: keyWhere(productId, variantId),
+    });
 
     res.json({
       status: 'success',
       data: {
-        hasAlerts: alerts.length > 0,
-        alertCount: alerts.length,
+        hasAlerts: alertCount > 0,
+        alertCount,
       },
     });
   } catch (error) {
@@ -87,20 +124,39 @@ router.get('/check/:productId', async (req, res, next) => {
   }
 });
 
-// DELETE /api/stock-alerts/:productId - Unsubscribe from stock alert
+// DELETE /api/stock-alerts/:productId - Unsubscribe.
+// Removes EVERY alert for the caller (matched by user id OR email) on that
+// key, so re-subscribing after an unsubscribe starts fresh. Guests pass
+// their email as a query param because they have no user id. Always returns
+// success - unsubscribing something you were never subscribed to is fine.
+// authz-ok: guests unsubscribe by email; identity is scoped per-email in the handler
 router.delete('/:productId', async (req, res, next) => {
   try {
     const { productId } = req.params;
     const userId = req.user?.id || 'anonymous';
-    const email = req.user?.email || req.query.email as string;
-    
+    const email = normalizeEmail((req.user?.email) || (req.query.email as string) || '');
+
     const variantId = req.query.variantId as string;
-    const key = variantId ? `${productId}-${variantId}` : productId;
-    
-    if (stockAlerts.has(key)) {
-      const alerts = stockAlerts.get(key)!;
-      const filtered = alerts.filter(a => a.userId !== userId && a.email !== email);
-      stockAlerts.set(key, filtered);
+
+    // Identity predicate. Guests all share the 'anonymous' userId, so an
+    // OR between `userId` and `email` would let ANY guest delete every
+    // anonymous subscription on the product (including other guests').
+    // Match precisely: authenticated -> their userId; guest -> the
+    // anonymous userId AND their email; anonymous with no email -> there
+    // is nothing identifiable to remove, so no-op.
+    const identity = userId !== 'anonymous'
+      ? { userId }
+      : email
+        ? { userId: 'anonymous', email }
+        : null;
+
+    if (identity) {
+      await prisma.stockAlertSubscription.deleteMany({
+        where: {
+          ...keyWhere(productId, variantId),
+          ...identity,
+        },
+      });
     }
 
     res.json({

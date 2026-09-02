@@ -31,8 +31,15 @@ export function verifyWebhookSignature(
   opts: { mockAccept?: boolean } = {}
 ): boolean {
   if (!signature) return false;
-  if (opts.mockAccept) {
-    // Test environment: accept any non-empty signature.
+  // `mockAccept` short-circuits the HMAC and accepts any non-empty signature.
+  // It exists for unit tests only. It is ignored when NODE_ENV=production so
+  // that a future caller wiring it to an ambient default (as the 3PL webhook
+  // route once did with `NODE_ENV !== 'production'`) cannot silently disable
+  // webhook authentication on a real deployment.
+  // env-default-ok: this is the fail-CLOSED direction. The ambient default
+  // ('development') cannot switch the hatch ON by itself - the caller must
+  // also pass mockAccept, which only unit tests do.
+  if (opts.mockAccept && process.env.NODE_ENV !== 'production') {
     return signature.length > 0;
   }
   if (!secret || !body) return false;

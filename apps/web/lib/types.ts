@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Shared web types (the type dictionary for views/components).
+//
+// Covers user, product, cart, order, review, coupon, shipping, settings,
+// and API-envelope shapes. A few types overlap with lib/api.ts (which
+// defines its own Product/CartItem next to its client) - api.ts is the
+// older home; new imports should come from here. Keep the two in sync
+// when the API shape changes, or check which one the caller uses.
+// ---------------------------------------------------------------------------
+
 // User types
 export interface User {
   id: string;
@@ -47,6 +57,15 @@ export interface Product {
   variants: ProductVariant[];
   averageRating: number;
   reviewCount: number;
+  /** Digital product fields. Populated when `type === 'digital'`,
+   * but always present in the API response. `downloadUrl` is only
+   * populated for admin/manager sessions (the public API strips the raw
+   * file URL; the derived `fileFormat` is public instead). */
+  downloadUrl: string | null;
+  fileFormat: string | null;
+  downloadLimit: number | null;
+  /** Number of days the per-order link is valid. */
+  downloadExpiry: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,10 +82,13 @@ export interface ProductVariant {
   id: string;
   name: string;
   sku: string;
+  slug?: string | null;
   price: number;
+  compareAtPrice?: number | null;
   quantity: number;
   attributes: Record<string, string>;
   isActive: boolean;
+  sortOrder?: number;
 }
 
 export interface Category {
@@ -94,6 +116,10 @@ export interface CartItem {
   variantId?: string;
   category: string;
   image?: string;
+  /** When `'digital'`, the cart UX can skip shipping and show
+   * "instant delivery". Optional so existing localStorage carts
+   * (pre-this-feature) still load. */
+  type?: 'physical' | 'digital';
 }
 
 // Order types
@@ -107,6 +133,12 @@ export interface Order {
   shippingAmount: number;
   discountAmount: number;
   totalAmount: number;
+  /** Wallet credit applied at checkout. totalAmount stays the full
+   * order value; the amount still due is totalAmount - storeCreditApplied
+   * - giftCardApplied. */
+  storeCreditApplied?: number;
+  giftCardApplied?: number;
+  giftCardCode?: string | null;
   shippingAddressId?: string;
   shippingAddress?: UserAddress;
   shippingMethodId?: string;
@@ -135,12 +167,40 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  /** Digital-line snapshot. Mirrored from the product at order
+   * time so changes to the underlying product don't rewrite
+   * history. `downloadUrl` is the source URL; the per-order token
+   * is delivered separately by the order confirmation. */
+  downloadUrl?: string | null;
+  downloadCount?: number;
+  downloadLimit?: number | null;
+  downloadExpiry?: Date | string | null;
+  /** Active ProductDownload rows for this order item. Minted at
+   * order creation and returned in the order response so the
+   * storefront can render the "Download now" buttons. */
+  downloads?: Array<{
+    id: string;
+    token: string;
+    expiresAt: string | null;
+    downloadLimit: number | null;
+    downloadCount: number;
+    sourceUrl: string;
+  }>;
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 
 // Review types
+export interface ReviewPhoto {
+  id: string;
+  reviewId: string;
+  url: string;
+  thumbnail: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface Review {
   id: string;
   userId: string;
@@ -149,8 +209,15 @@ export interface Review {
   rating: number;
   title?: string;
   comment?: string;
+  /**
+   * True when the reviewer has a non-cancelled / non-refunded
+   * order containing this product. The route sets this server-
+   * side; the storefront just renders the badge.
+   */
   isVerified: boolean;
   isApproved: boolean;
+  /** Photo gallery, sorted ascending by sortOrder. */
+  photos: ReviewPhoto[];
   createdAt: string;
   updatedAt: string;
 }

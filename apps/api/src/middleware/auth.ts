@@ -1,6 +1,22 @@
+// ---------------------------------------------------------------------------
+// JWT authentication + role authorization - the middleware pair most
+// routes are built from:
+//
+//   authenticate  - Bearer token -> verify -> load user -> req.user.
+//                   Also rejects DEACTIVATED accounts (a revoked user's
+//                   still-valid token must not work).
+//   optionalAuth  - same, but a missing/invalid token is simply ignored
+//                   (routes that personalise when logged in).
+//   authorize     - role gate, used AFTER authenticate.
+//
+// generateTokens/verifyRefreshToken implement the token pair: short
+// stateless access tokens + long-lived refresh tokens with a unique jti
+// (the refresh half is session-backed and rotated - see auth.routes.ts).
+// ---------------------------------------------------------------------------
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import { env } from '../config/environment';
 import { prisma } from '../config/database';
 import { UnauthorizedError, ForbiddenError } from './errorHandler';
@@ -26,6 +42,10 @@ interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  // Refresh tokens carry type + jti (see generateTokens); access tokens
+  // do not, hence optional.
+  type?: string;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -48,6 +68,14 @@ export const authenticate = async (
 
     // Verify token
     const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
+
+    // An access token must not be a refresh token: refresh tokens are
+    // long-lived (30d) and session-rotated, so accepting one here would
+    // let a stolen refresh token be used directly as an access token,
+    // bypassing the rotation/replay detection on /auth/refresh.
+    if (decoded.type === 'refresh') {
+      throw new UnauthorizedError('Invalid token');
+    }
 
     // Get user from database
     const user = await prisma.user.findUnique({
@@ -108,6 +136,12 @@ export const optionalAuth = async (
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
 
+    // Same refresh-token rejection as authenticate: optionalAuth must not
+    // treat a long-lived refresh token as an access token either.
+    if (decoded.type === 'refresh') {
+      return next();
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -162,7 +196,7 @@ export const generateTokens = (user: { id: string; email: string; role: string }
       role: user.role,
     },
     env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN }
+    { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] }
   );
 
   // `jti` makes every refresh token unique.
@@ -180,7 +214,7 @@ export const generateTokens = (user: { id: string; email: string; role: string }
       jti: crypto.randomUUID(),
     },
     env.JWT_SECRET,
-    { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
+    { expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'] }
   );
 
   return { accessToken, refreshToken };

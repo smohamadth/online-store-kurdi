@@ -12,6 +12,7 @@
  */
 import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/errorHandler';
+import { autoPostDepositIssuance } from '../accounting/accounting.service';
 
 // ---------------------------------------------------------------------
 // Balance arithmetic
@@ -53,19 +54,28 @@ export async function creditStoreCredit(args: {
   orderId?: string;
   notes?: string;
   createdById?: string;
+  /** Optional chart-account code for the contra side of the auto-posted journal entry. */
+  accountCode?: string;
 }) {
   if (args.amount <= 0) throw new AppError('Credit amount must be positive', 400);
-  return prisma.$transaction(async (tx: any) => {
-    const credit = await getOrCreateStoreCredit(args.userId, args.currency);
-    const updated = await tx.storeCredit.update({
-      where: { id: credit.id },
-      data: { balance: credit.balance + args.amount },
+  const currency = args.currency ?? 'USD';
+  const type = args.type ?? 'adjust';
+  const result = await prisma.$transaction(async (tx: any) => {
+    // Upsert keeps the get-or-create race-free: two concurrent first-time
+    // credits can never create two balance rows (the old read-then-create
+    // could), and the increment is a single atomic UPDATE, so concurrent
+    // credits/debits can never lose an update (a read-modify-write in two
+    // transactions both computing the same new balance could).
+    const updated = await tx.storeCredit.upsert({
+      where: { userId_currency: { userId: args.userId, currency } },
+      update: { balance: { increment: args.amount } },
+      create: { userId: args.userId, currency, balance: args.amount },
     });
     await tx.storeCreditTransaction.create({
       data: {
-        storeCreditId: credit.id,
+        storeCreditId: updated.id,
         amount: args.amount,
-        type: args.type ?? 'adjust',
+        type,
         orderId: args.orderId ?? null,
         notes: args.notes ?? null,
         createdById: args.createdById ?? null,
@@ -73,6 +83,22 @@ export async function creditStoreCredit(args: {
     });
     return updated;
   });
+
+  // Best-effort journal posting (ACCOUNTING_AUTO_POST gate; never throws):
+  // the deposits liability grew, so the ledger must reflect it.
+  // 'refund' is skipped — the refund flow already posts it via
+  // autoPostRefund(toStoreCredit) and posting again would double-count.
+  if (type !== 'refund') {
+    await autoPostDepositIssuance({
+      amount: args.amount,
+      currency,
+      type,
+      orderId: args.orderId,
+      memo: `Store credit ${type}${args.notes ? ` — ${args.notes}` : ''}`,
+      accountCode: args.accountCode,
+    });
+  }
+  return result;
 }
 
 /**
@@ -80,6 +106,12 @@ export async function creditStoreCredit(args: {
  * chooses "apply store credit". Returns the updated row plus the
  * amount actually debited (which may be less than the requested
  * amount if the balance is smaller than the order subtotal).
+ *
+ * Race-safe: the balance is decremented with an atomic conditional
+ * UPDATE (`WHERE balance >= amount`), so two concurrent checkouts can
+ * never spend the same balance twice. The partial case re-reads the
+ * current balance and uses a compare-and-swap, retrying if a
+ * concurrent transaction moved it between the read and the write.
  */
 export async function debitStoreCredit(args: {
   userId: string;
@@ -89,26 +121,62 @@ export async function debitStoreCredit(args: {
   notes?: string;
 }): Promise<{ credit: any; applied: number }> {
   if (args.amount <= 0) return { credit: null, applied: 0 };
+  const currency = args.currency ?? 'USD';
   return prisma.$transaction(async (tx: any) => {
-    const credit = await getOrCreateStoreCredit(args.userId, args.currency);
+    // Race-free get-or-create (see creditStoreCredit).
+    const credit = await tx.storeCredit.upsert({
+      where: { userId_currency: { userId: args.userId, currency } },
+      update: {},
+      create: { userId: args.userId, currency, balance: 0 },
+    });
     if (credit.balance <= 0) {
       return { credit, applied: 0 };
     }
-    const applied = Math.min(credit.balance, args.amount);
-    const updated = await tx.storeCredit.update({
-      where: { id: credit.id },
-      data: { balance: credit.balance - applied },
+
+    let applied = 0;
+    // Full amount first: conditional atomic decrement. In a real
+    // database this is `UPDATE ... SET balance = balance - ? WHERE
+    // id = ? AND balance >= ?` — the WHERE is evaluated at update
+    // time, so a concurrent debit that commits first makes this
+    // match nothing instead of overspending.
+    const full = await tx.storeCredit.updateMany({
+      where: { id: credit.id, balance: { gte: args.amount } },
+      data: { balance: { decrement: args.amount } },
     });
-    await tx.storeCreditTransaction.create({
-      data: {
-        storeCreditId: credit.id,
-        amount: -applied,
-        type: 'order_use',
-        orderId: args.orderId ?? null,
-        notes: args.notes ?? null,
-      },
-    });
-    return { credit: updated, applied };
+    if (full.count === 1) {
+      applied = args.amount;
+    } else {
+      // Balance is less than requested: take what is left, with a
+      // compare-and-swap on the exact balance so a concurrent change
+      // between the read and the write is retried, never clobbered.
+      for (let attempt = 0; attempt < 3 && applied === 0; attempt++) {
+        const row = await tx.storeCredit.findUnique({ where: { id: credit.id } });
+        const balance = row?.balance ?? 0;
+        if (balance <= 0) break;
+        const take = Math.min(balance, args.amount);
+        if (take <= 0) break;
+        const cas = await tx.storeCredit.updateMany({
+          where: { id: credit.id, balance },
+          data: { balance: { decrement: take } },
+        });
+        if (cas.count === 1) applied = take;
+      }
+    }
+
+    if (applied > 0) {
+      await tx.storeCreditTransaction.create({
+        data: {
+          storeCreditId: credit.id,
+          amount: -applied,
+          type: 'order_use',
+          orderId: args.orderId ?? null,
+          notes: args.notes ?? null,
+        },
+      });
+      const updated = await tx.storeCredit.findUnique({ where: { id: credit.id } });
+      return { credit: updated ?? credit, applied };
+    }
+    return { credit, applied: 0 };
   });
 }
 

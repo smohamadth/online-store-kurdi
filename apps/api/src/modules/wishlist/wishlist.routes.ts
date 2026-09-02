@@ -1,3 +1,13 @@
+// ---------------------------------------------------------------------------
+// Wishlist (mounted at /api/wishlist) - always logged-in (the account
+// page), one row per (userId, productId) via the composite key.
+//
+// POST /move-to-cart is the "move to cart" button: it creates the cart
+// row and deletes the wishlist row. Like POST /api/cart/sync it does NOT
+// take a stock reservation (a plain cartItem.create), so the hold is only
+// established when the customer re-adds the item through the normal cart
+// flow or places the order.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { prisma } from '../../config/database';
@@ -202,6 +212,26 @@ router.post('/move-to-cart', authenticate, async (req, res, next) => {
 
     const { productId, quantity } = req.body;
 
+    // Same quantity contract as the cart add route: a plain `quantity || 1`
+    // would let -5, 1.5, 'abc' or 1e9 land in the cart (negative/fractional
+    // quantities corrupt the reservation flow and the totals shown at
+    // checkout). Missing/undefined -> 1; anything else must be an integer
+    // in [1, 99999] (null included — it fails, like the cart schema).
+    const parsedQuantity = z
+      .number()
+      .int()
+      .min(1)
+      .max(99999)
+      .optional()
+      .safeParse(quantity);
+    if (!parsedQuantity.success) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'quantity must be an integer between 1 and 99999',
+      });
+    }
+    const qty = parsedQuantity.data ?? 1;
+
     // Check if in wishlist
     const wishlistItem = await prisma.wishlistItem.findUnique({
       where: {
@@ -216,12 +246,31 @@ router.post('/move-to-cart', authenticate, async (req, res, next) => {
       return res.status(404).json({ status: 'error', message: 'Product not in wishlist' });
     }
 
+    // The product must still exist and be purchasable — wishlist rows
+    // are not cleaned up when a product is archived/deleted, and the
+    // cart-add route enforces the same gate.
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, status: true },
+    });
+    if (!product || product.status !== 'active') {
+      await prisma.wishlistItem.delete({
+        where: {
+          userId_productId: { userId, productId },
+        },
+      });
+      return res.status(404).json({
+        status: 'error',
+        message: 'Product is no longer available and was removed from your wishlist',
+      });
+    }
+
     // Add to cart
     const cartItem = await prisma.cartItem.create({
       data: {
         userId,
         productId,
-        quantity: quantity || 1,
+        quantity: qty,
       },
     });
 

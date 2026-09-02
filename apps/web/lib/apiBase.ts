@@ -18,3 +18,20 @@
  * existing client imports keep working unchanged.
  */
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+/**
+ * API base for BROWSER code (re-exported as `API_BASE` from lib/http.ts).
+ *
+ * A loopback base - the dev default `http://localhost:3001/api` or any
+ * 127.0.0.1 variant - is only reachable on the machine where the API
+ * process runs, i.e. the server. From a user's browser it points at
+ * THEIR machine and every call fails (this is what made proxied/preview
+ * deployments appear broken: the page rendered, then all data fetches
+ * died). When the configured base is loopback, browser code falls back
+ * to the same origin ("/api/...") and the Next server proxies it to the
+ * API (see the /api rewrite in next.config.js), where loopback works.
+ * Absolute non-loopback bases pass through unchanged.
+ */
+const LOOPBACK_BASE =
+  /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?(\/\S*)?$/;
+export const CLIENT_API_BASE = LOOPBACK_BASE.test(API_BASE) ? '/api' : API_BASE;

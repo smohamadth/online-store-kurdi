@@ -29,7 +29,10 @@ export async function createUser(overrides: Partial<{
       lastName: overrides.lastName ?? 'User',
       role: overrides.role ?? 'customer',
       isActive: overrides.isActive ?? true,
-      isVerified: overrides.isVerified ?? false,
+      // Mirrors the register route: self-registration IS verification in
+      // this store (no email-verify flow), so fixture users default to
+      // verified. Tests that need an unverified account pass false.
+      isVerified: overrides.isVerified ?? true,
     },
   });
 }
@@ -70,12 +73,19 @@ export async function createProduct(overrides: Partial<{
   allowBackorder: boolean;
   backorderLimit: number | null;
   expectedRestockAt: Date | null;
+  // Digital product fields
+  downloadUrl: string | null;
+  downloadLimit: number | null;
+  downloadExpiry: number | null;
+  /** Tests that assert on ordering can pin an explicit timestamp. */
+  createdAt?: Date;
 }> = {}) {
   const p = await prisma();
   const slug = overrides.slug ?? uniq('p');
   return p.product.create({
     data: {
       name: overrides.name ?? slug,
+      createdAt: overrides.createdAt ?? undefined,
       slug,
       description: overrides.description ?? 'A test product',
       shortDescription: 'short',
@@ -93,6 +103,9 @@ export async function createProduct(overrides: Partial<{
       allowBackorder: overrides.allowBackorder ?? false,
       backorderLimit: overrides.backorderLimit ?? null,
       expectedRestockAt: overrides.expectedRestockAt ?? null,
+      downloadUrl: overrides.downloadUrl ?? null,
+      downloadLimit: overrides.downloadLimit ?? null,
+      downloadExpiry: overrides.downloadExpiry ?? null,
     },
   });
 }
@@ -135,7 +148,7 @@ export async function createVariant(productId: string, overrides: Partial<{
       ? overrides.attributes
       : JSON.stringify(overrides.attributes);
   }
-  return p.productVariant.create({
+  const created = await p.productVariant.create({
     data: {
       productId,
       name: overrides.name ?? 'Default',
@@ -146,6 +159,27 @@ export async function createVariant(productId: string, overrides: Partial<{
       isActive: overrides.isActive ?? true,
     },
   });
+  // Mirror the variant's attributes into the (key, value) query index,
+  // the same way the real write sites do (syncVariantAttributes).
+  // Without this, fixture variants would be invisible to the SQL
+  // attribute filter and the facet tally.
+  try {
+    const parsed = JSON.parse(attrs);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const rows = Object.entries(parsed).map(([key, value]) => ({
+        variantId: created.id,
+        key,
+        value: String(value),
+      }));
+      if (rows.length > 0) {
+        await p.variantAttribute.createMany({ data: rows });
+      }
+    }
+  } catch {
+    // attrs was invalid JSON - no index rows (matches syncVariantAttributes'
+    // parseAttributes returning {}).
+  }
+  return created;
 }
 
 export async function createCoupon(overrides: Partial<{
@@ -269,6 +303,9 @@ export async function createOrder(userId: string, overrides: Partial<{
   shippingAmount: number;
   totalAmount: number;
   paymentStatus: 'pending' | 'paid' | 'refunded' | 'failed';
+  paymentMethod?: string | null;
+  storeCreditApplied?: number;
+  giftCardApplied?: number;
 }> = {}) {
   const p = await prisma();
   return p.order.create({
@@ -281,6 +318,9 @@ export async function createOrder(userId: string, overrides: Partial<{
       shippingAmount: overrides.shippingAmount ?? 0,
       totalAmount: overrides.totalAmount ?? 110,
       paymentStatus: overrides.paymentStatus ?? 'pending',
+      paymentMethod: overrides.paymentMethod ?? null,
+      storeCreditApplied: overrides.storeCreditApplied ?? 0,
+      giftCardApplied: overrides.giftCardApplied ?? 0,
     },
   });
 }
@@ -291,6 +331,12 @@ export async function createOrderItem(orderId: string, productId: string, overri
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  // Digital product fields
+  downloadUrl?: string | null;
+  downloadCount?: number;
+  downloadLimit?: number | null;
+  downloadExpiry?: Date | null;
+  isBackorder?: boolean;
 }> = {}) {
   const p = await prisma();
   return p.orderItem.create({
@@ -301,6 +347,33 @@ export async function createOrderItem(orderId: string, productId: string, overri
       quantity: overrides.quantity ?? 1,
       unitPrice: overrides.unitPrice ?? 10,
       totalPrice: overrides.totalPrice ?? 10,
+      downloadUrl: overrides.downloadUrl ?? null,
+      downloadCount: overrides.downloadCount ?? 0,
+      downloadLimit: overrides.downloadLimit ?? null,
+      downloadExpiry: overrides.downloadExpiry ?? null,
+      isBackorder: overrides.isBackorder ?? false,
+    },
+  });
+}
+
+/** Factory for the per-purchase download token. Mirrors the model
+ *  added for the digital-products work. */
+export async function createProductDownload(orderItemId: string, overrides: Partial<{
+  token: string;
+  expiresAt: Date | null;
+  downloadCount: number;
+  downloadLimit: number | null;
+  sourceUrl: string;
+}> = {}) {
+  const p = await prisma();
+  return p.productDownload.create({
+    data: {
+      orderItemId,
+      token: overrides.token ?? uniq('dl-token'),
+      expiresAt: overrides.expiresAt ?? null,
+      downloadCount: overrides.downloadCount ?? 0,
+      downloadLimit: overrides.downloadLimit ?? null,
+      sourceUrl: overrides.sourceUrl ?? 'https://example.com/files/ebook.pdf',
     },
   });
 }
@@ -429,4 +502,50 @@ export async function createStockTake(overrides: Partial<{
       status: overrides.status ?? 'in_progress',
     },
   });
+}
+
+/* ------------------------------------------------------------------
+ * Factories for the typed-options system (first-class variants)
+ * ----------------------------------------------------------------- */
+
+/** Create an Option (e.g. "Color", "Size") on a product. */
+export async function createOption(productId: string, overrides: Partial<{
+  name: string;
+  sortOrder: number;
+}> = {}) {
+  const p = await prisma();
+  return p.option.create({
+    data: {
+      productId,
+      name: overrides.name ?? 'Color',
+      sortOrder: overrides.sortOrder ?? 0,
+    },
+  });
+}
+
+/** Create an OptionValue (e.g. "Red", "Small") on an Option. */
+export async function createOptionValue(optionId: string, overrides: Partial<{
+  value: string;
+  swatch: string | null;
+  sortOrder: number;
+}> = {}) {
+  const p = await prisma();
+  return p.optionValue.create({
+    data: {
+      optionId,
+      value: overrides.value ?? 'Default',
+      swatch: overrides.swatch ?? null,
+      sortOrder: overrides.sortOrder ?? 0,
+    },
+  });
+}
+
+/** Link a variant to a list of OptionValue ids via VariantOptionValue. */
+export async function setVariantOptionValues(variantId: string, optionValueIds: string[]) {
+  const p = await prisma();
+  for (const optionValueId of optionValueIds) {
+    await p.variantOptionValue.create({
+      data: { variantId, optionValueId },
+    });
+  }
 }

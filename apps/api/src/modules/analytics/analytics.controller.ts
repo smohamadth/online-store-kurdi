@@ -1,6 +1,38 @@
+// Thin HTTP layer over AnalyticsService (mounted by analytics.routes.ts):
+// validates the event payload shape, maps service results to the standard
+// response envelope. Auth/gating is the ROUTE's job - the controller
+// trusts that trackingGate (opt-in flag) and authorize() already ran.
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { AnalyticsService } from './analytics.service';
 import { logger } from '../../utils/logger';
+import { parsePagination, parseDays } from '../../utils/pagination';
+
+/**
+ * Event payload schema for the PUBLIC ingestion endpoints (when the
+ * store opts in via ANALYTICS_TRACKING_ENABLED). Every field lands
+ * verbatim in a UserEvent row, so unbounded client strings were free
+ * DB bloat (a megabyte searchQuery per event), and an unbounded batch
+ * let one request insert thousands of rows. Metadata is flat in the
+ * storefront client (slug, section, ...), so a flat record schema with
+ * capped values and a 50-key limit is compatible.
+ */
+const TRACK_EVENT_SCHEMA = z.object({
+  eventType: z.string().min(1).max(50),
+  productId: z.string().min(1).max(100).optional(),
+  categoryId: z.string().min(1).max(100).optional(),
+  searchQuery: z.string().max(300).optional(),
+  metadata: z
+    .record(z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]))
+    .refine((m) => Object.keys(m).length <= 50, { message: 'metadata may have at most 50 keys' })
+    .optional(),
+});
+
+function sessionIdHeader(req: Request): string {
+  const raw = req.headers['x-session-id'];
+  const s = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : '';
+  return s.slice(0, 200) || `session-${Date.now()}`;
+}
 
 export class AnalyticsController {
   private analyticsService: AnalyticsService;
@@ -12,15 +44,10 @@ export class AnalyticsController {
   // Track event
   trackEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const {
-        eventType,
-        productId,
-        categoryId,
-        searchQuery,
-        metadata,
-      } = req.body;
+      const { eventType, productId, categoryId, searchQuery, metadata } =
+        TRACK_EVENT_SCHEMA.parse(req.body);
 
-      const sessionId = req.headers['x-session-id'] as string || `session-${Date.now()}`;
+      const sessionId = sessionIdHeader(req);
 
       await this.analyticsService.trackEvent({
         userId: req.user?.id,
@@ -46,8 +73,12 @@ export class AnalyticsController {
   // Track multiple events
   trackEvents = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { events } = req.body;
-      const sessionId = req.headers['x-session-id'] as string || `session-${Date.now()}`;
+      // Cap the batch: a thousand-event body used to insert a thousand
+      // rows in one request when tracking was enabled.
+      const { events } = z
+        .object({ events: z.array(TRACK_EVENT_SCHEMA).min(1).max(50) })
+        .parse(req.body);
+      const sessionId = sessionIdHeader(req);
 
       const enrichedEvents = events.map((event: any) => ({
         ...event,
@@ -79,7 +110,7 @@ export class AnalyticsController {
         });
       }
 
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const behavior = await this.analyticsService.getUserBehavior(userId, days);
 
       res.json({
@@ -95,7 +126,7 @@ export class AnalyticsController {
   getProductAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const analytics = await this.analyticsService.getProductAnalytics(id, days);
 
       res.json({
@@ -110,7 +141,7 @@ export class AnalyticsController {
   // Get search analytics (admin only)
   getSearchAnalytics = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const days = parseDays(req.query.days, 30);
       const analytics = await this.analyticsService.getSearchAnalytics(days);
 
       res.json({
@@ -125,8 +156,8 @@ export class AnalyticsController {
   // Get trending products
   getTrendingProducts = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const { limit } = parsePagination(req.query, { limit: 10 });
+      const days = parseDays(req.query.days, 7);
       const products = await this.analyticsService.getTrendingProducts(limit, days);
 
       res.json({

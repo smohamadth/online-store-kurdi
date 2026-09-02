@@ -1,3 +1,18 @@
+// ---------------------------------------------------------------------------
+// Store settings for the storefront (client-side).
+//
+// Read model: localStorage is the cache of record - loadStoreSettings()
+// is synchronous so the very first paint has the store name/currency.
+// useStoreSettings() hydrates from that cache, then silently re-fetches
+// from the API and republishes via a 'settingsChange' event (plus the
+// cross-tab 'storage' event, so the admin editing settings in another
+// tab is reflected live). When the API is unreachable the cached
+// values are used - the store must render without the backend.
+//
+// (This is the STORE's public settings; the admin form talks to
+// /api/settings directly. formatPrice() is the legacy two-argument
+// formatter - multi-currency pages use lib/currency.tsx instead.)
+// ---------------------------------------------------------------------------
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -21,6 +36,25 @@ interface StoreSettings {
   youtubeUrl: string;
   maintenanceMode: boolean;
   maintenanceMessage: string;
+  /** True when the store has Stripe configured (server capability flag). */
+  stripeEnabled: boolean;
+  /**
+   * Secret-free payment gateway metadata from /api/settings. `enabled` tells
+   * the checkout which hosted gateways to offer. Never contains credentials.
+   */
+  paymentGateways: {
+    id: string;
+    name: string;
+    label: string;
+    country: 'IR' | 'IQ' | 'global';
+    enabled: boolean;
+    currencyHint?: string;
+    description?: string;
+  }[];
+  /** Affiliate marketing program switch (opt-in, default off). */
+  affiliateEnabled: boolean;
+  /** Default commission % on paid referred orders. */
+  affiliateRate: number;
 }
 
 const DEFAULT_SETTINGS: StoreSettings = {
@@ -42,6 +76,10 @@ const DEFAULT_SETTINGS: StoreSettings = {
   youtubeUrl: '',
   maintenanceMode: false,
   maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
+  stripeEnabled: false,
+  paymentGateways: [],
+  affiliateEnabled: false,
+  affiliateRate: 10,
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -92,6 +130,13 @@ async function fetchSettingsFromAPI(): Promise<StoreSettings | null> {
         youtubeUrl: data.data.youtubeUrl || DEFAULT_SETTINGS.youtubeUrl,
         maintenanceMode: data.data.maintenanceMode ?? DEFAULT_SETTINGS.maintenanceMode,
         maintenanceMessage: data.data.maintenanceMessage || DEFAULT_SETTINGS.maintenanceMessage,
+        stripeEnabled: data.data.stripeEnabled === true,
+        paymentGateways: Array.isArray(data.data.paymentGateways)
+          ? data.data.paymentGateways
+          : DEFAULT_SETTINGS.paymentGateways,
+        affiliateEnabled: data.data.affiliateEnabled === true,
+        affiliateRate:
+          typeof data.data.affiliateRate === 'number' ? data.data.affiliateRate : DEFAULT_SETTINGS.affiliateRate,
       };
       
       // Update localStorage with API data

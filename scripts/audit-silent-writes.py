@@ -9,7 +9,16 @@ import sys
 import glob
 import re
 
-files = sorted(glob.glob('apps/web/app/admin/**/*.tsx', recursive=True))
+# Only audit the real admin pages. Skip test/spec files: their
+# `expect.objectContaining({ method: 'POST' })` lines assert what request a
+# page SHOULD make, so they trip the "surfaces/checks" heuristic without being
+# a write operation in production code. The silent-write bug class this script
+# exists to catch lives in the pages themselves.
+files = sorted(
+    f
+    for f in glob.glob('apps/web/app/admin/**/*.tsx', recursive=True)
+    if not re.search(r'(^|/)[^/]*\.(test|spec)\.(tsx|ts|jsx|js)$', f)
+)
 problems = []
 
 for f in files:
@@ -24,12 +33,36 @@ for f in files:
         if not is_write:
             continue
 
-        # look ahead for how the result is handled
+        # look ahead for how the result is handled. "Surfaces" means the
+        # error reaches the user: a dialog/notification, a re-throw, or a
+        # state setter whose name says message/error and which the page
+        # renders (the admin pages use setMsg/setMessage/setLoadError/...
+        # and display the state as a banner, so match that whole family
+        # rather than an ever-growing list of individual names).
         window = '\n'.join(lines[i:i + 30])
         surfaces = bool(
-            re.search(r"alert\(|setMessage\(|setSaveError\(|setError\(|notify\(|throw ", window)
+            re.search(
+                r"alert\(|notify\(|throw |set[A-Za-z]*(Message|Msg|Error|Errors|Alert)\(",
+                window,
+            )
         )
-        checks_ok = bool(re.search(r"res\.ok|response\.ok|!res\.ok|!response\.ok", window))
+        # A guarded write is one that inspects the outcome before treating it
+        # as success. Two idioms are in use:
+        #   1. the fetch Response flag  -> `if (!res.ok)`
+        #   2. an explicit status code  -> `if (status !== 200)`, `res.status !== 201`
+        # Only the first was recognised, so every page built on a helper that
+        # returns `{ status, body }` (admin/plugins uses one) was reported as a
+        # silent write even though it checks the status and calls setError on
+        # every branch. Those five false positives made the audit exit 1 on a
+        # clean tree, which trains people to ignore it.
+        checks_ok = bool(
+            re.search(
+                r"(res|response)\.ok"
+                r"|\bstatus\s*(!==|===|!=|==|<|>=)\s*\d{3}"
+                r"|\.status\s*(!==|===|!=|==|<|>=)\s*\d{3}",
+                window,
+            )
+        )
         uses_client = 'authHttp.' in line
 
         # authHttp throws on failure, so it's safe *if* something surfaces it

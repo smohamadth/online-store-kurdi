@@ -24,7 +24,7 @@ const router = Router();
  */
 
 /** Insert any shipped block whose key is missing. Never overwrites edits. */
-async function ensureSeeded() {
+export async function ensureSeeded() {
   const existing = await prisma.homeSection.findMany({ select: { key: true } });
   const have = new Set(existing.map((s) => s.key));
   const missing = HOME_SECTION_SEED.filter((s) => !have.has(s.key));
@@ -53,7 +53,7 @@ async function ensureSeeded() {
 }
 
 /** Parse the stored JSON string; a corrupt value must not break the page. */
-function fromRow(row: any) {
+export function fromRow(row: any) {
   let config: unknown = {};
   if (row.config) {
     try {
@@ -74,7 +74,9 @@ const configSchema = z.record(z.any()).optional().nullable();
  * else in `config` is read as data, never as markup.
  */
 function scrubConfig(type: string, config: Record<string, any>): Record<string, any> {
-  if (type === 'richText' && typeof config.html === 'string') {
+  // richText and the admin-designed `custom` section both carry config.html
+  // rendered with dangerouslySetInnerHTML - both are sanitised on write.
+  if ((type === 'richText' || type === 'custom') && typeof config.html === 'string') {
     return { ...config, html: sanitizeRichText(config.html) };
   }
   return config;

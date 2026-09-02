@@ -1,3 +1,12 @@
+// ---------------------------------------------------------------------------
+// Analytics API (mounted at /api/analytics).
+//
+// Two audiences: the storefront's event pipeline (POST /track, /track/batch
+// - gated behind ANALYTICS_TRACKING_ENABLED, see trackingGate) and the
+// admin analytics pages (trending, product/search analytics, real-time
+// stats - admin/manager only). The controller holds no Prisma access;
+// the service does.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { AnalyticsController } from './analytics.controller';
 import { authenticate, authorize } from '../../middleware/auth';
@@ -7,11 +16,23 @@ const analyticsController = new AnalyticsController();
 
 // Public routes (no authentication required)
 
-// POST /api/analytics/track - Track single event
-router.post('/track', analyticsController.trackEvent);
+// Event tracking is opt-in per store (ANALYTICS_TRACKING_ENABLED=true).
+// The endpoint stores IP address, user agent and session per event, so it
+// must not exist unless the store owner deliberately turns it on - the
+// /privacy page documents the flag's off-by-default behaviour, and a 404
+// (not a 403) keeps the surface unadvertised when it is closed.
+const trackingGate = (req: any, res: any, next: any) => {
+  if (process.env.ANALYTICS_TRACKING_ENABLED !== 'true') {
+    return res.status(404).json({ status: 'error', message: 'Not found' });
+  }
+  next();
+};
 
-// POST /api/analytics/track/batch - Track multiple events
-router.post('/track/batch', analyticsController.trackEvents);
+// POST /api/analytics/track - Track single event (only when enabled)
+router.post('/track', trackingGate, analyticsController.trackEvent);
+
+// POST /api/analytics/track/batch - Track multiple events (only when enabled)
+router.post('/track/batch', trackingGate, analyticsController.trackEvents);
 
 // GET /api/analytics/trending - Get trending products
 router.get('/trending', analyticsController.getTrendingProducts);

@@ -1,3 +1,8 @@
+// /admin/coupons - the coupon manager (list + create/edit/enable-
+// disable). Uses the lib/coupons client, so the DB is the only source
+// of truth (the old sample-coupon fallback is gone). The three coupon
+// types map to the server's validate logic (percentage / fixed /
+// free_shipping, with min order + usage limits).
 'use client';
 
 import { useStoreSettings, formatPrice } from '@/lib/settings';
@@ -5,9 +10,15 @@ import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useState, useEffect } from 'react';
 import { getCoupons, createCoupon, updateCoupon, deleteCoupon, Coupon, formatDiscount } from '@/lib/coupons';
 import { errorMessage } from '@/lib/http';
+import { useIsMobile } from '@/lib/hooks';
 
 export default function AdminCouponsPage() {
   const { settings } = useStoreSettings();
+  // The coupon form has three side-by-side field rows (code/type,
+  // discount/value, dates). Each row splits in half, which gives the
+  // inputs less than half a phone screen on a 360px viewport. Stack
+  // the rows under 640px so the inputs each get the full width.
+  const isMobile = useIsMobile(640);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -156,7 +167,7 @@ export default function AdminCouponsPage() {
         }}>
           <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
           <p style={{ fontSize: '14px', color: '#92400e', marginTop: '4px' }}>
-            Showing sample coupons. Start API to manage database coupons: <code>npm run dev:api</code>
+            Could not load coupons from the database. Start the API to manage coupons: <code>npm run dev:api</code>
           </p>
         </div>
       )}
@@ -200,7 +211,9 @@ export default function AdminCouponsPage() {
         backgroundColor: 'white',
         borderRadius: '8px',
         border: '1px solid #e5e5e5',
-        overflow: 'hidden',
+        // `overflow: 'auto'` (not 'hidden'): nine columns at min-content
+        // exceed a ~360px phone; scroll inside the card instead of clipping.
+        overflow: 'auto',
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -316,8 +329,8 @@ export default function AdminCouponsPage() {
           <div style={{
             backgroundColor: 'white',
             borderRadius: '8px',
-            padding: '32px',
-            width: '500px',
+            padding: isMobile ? '16px' : '32px',
+            width: isMobile ? 'calc(100vw - 24px)' : '500px',
             maxHeight: '80vh',
             overflow: 'auto',
           }}>
@@ -338,7 +351,7 @@ export default function AdminCouponsPage() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Type *</label>
                   <select
@@ -367,7 +380,7 @@ export default function AdminCouponsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Min Order Amount ($)</label>
                   <input
@@ -403,7 +416,7 @@ export default function AdminCouponsPage() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Start Date</label>
                   <input

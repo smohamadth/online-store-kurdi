@@ -14,6 +14,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { seedEmailTemplates } from './seed-email-templates';
+import { seedContentTranslations } from './seed-translations';
 
 const prisma = new PrismaClient();
 
@@ -34,7 +35,7 @@ async function main() {
   await prisma.wishlistItem.deleteMany();
   await prisma.review.deleteMany();
   await prisma.productImage.deleteMany();
-  await prisma.productVariant.deleteMany();
+  await prisma.variant.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
   await prisma.session.deleteMany();
@@ -93,6 +94,18 @@ async function main() {
 
   // Create categories
   const categories = await Promise.all([
+    prisma.category.create({
+      // Default bucket for the bulk import: a product row without a
+      // `category` column lands here (see modules/importExport/commit.ts).
+      // Keep the name/slug in sync with SAMPLE_PRODUCT in
+      // modules/importExport/routes.ts.
+      data: {
+        name: 'General',
+        slug: 'general',
+        description: 'Uncategorised products and import default',
+        sortOrder: 0,
+      },
+    }),
     prisma.category.create({
       data: {
         name: 'Electronics',
@@ -412,6 +425,10 @@ async function main() {
   await seedEmailTemplates();
   const bannerCount = await seedBanners();
   await seedShipping();
+  const cmsCount = await seedCmsContent();
+  // Multilingual fixtures. Runs last: it resolves entities by slug, so every
+  // product / category / page / blog post must already exist.
+  const translationCount = await seedContentTranslations(prisma);
 
   console.log('✅ Database seeded successfully!');
   console.log('\n📋 Summary:');
@@ -423,6 +440,81 @@ async function main() {
   console.log(`   - Analytics events: 50`);
   console.log(`   - Banners (homepage gallery): ${bannerCount}`);
   console.log(`   - Shipping: 1 zone, 2 methods`);
+  console.log(`   - CMS pages + blog posts: ${cmsCount}`);
+  console.log(`   - Content translations: ${translationCount} (ku, ar, fa, tr)`);
+}
+
+// CMS pages and a blog post.
+//
+// These exist so the storefront's /info, /help and /blog routes have real
+// content on a fresh install, and so the multilingual fixtures in
+// seed-translations.ts have entities to attach to (they resolve by slug).
+async function seedCmsContent() {
+  const pages = [
+    {
+      slug: 'our-story',
+      title: 'About Us',
+      pageType: 'info',
+      status: 'published',
+      excerpt: 'Who we are and what we do',
+      content:
+        '<h2>About Us</h2><p>We are an online store offering a wide range of products at the best prices. Our goal is fast, reliable service for every customer.</p>',
+      metaTitle: 'About Us | Store',
+      metaDescription: 'Information about our store and the services we provide.',
+      showInFooter: true,
+      sortOrder: 0,
+    },
+    {
+      slug: 'delivery-information',
+      title: 'Shipping Policy',
+      pageType: 'help',
+      status: 'published',
+      excerpt: 'Information about shipping',
+      content:
+        '<h2>Shipping Policy</h2><p>Orders are prepared within 1-2 business days.</p><ul><li>Standard shipping: 3-7 days</li><li>Express shipping: 1-2 days</li></ul>',
+      metaTitle: 'Shipping Policy',
+      metaDescription: 'Everything you need to know about shipping and delivery times.',
+      showInFooter: true,
+      sortOrder: 1,
+    },
+  ];
+
+  let pageCount = 0;
+  for (const data of pages) {
+    // Upsert keeps the seed idempotent: re-running refreshes the copy instead
+    // of failing on the unique slug.
+    await prisma.page.upsert({ where: { slug: data.slug }, update: data, create: data });
+    pageCount++;
+  }
+
+  const posts = [
+    {
+      slug: 'welcome-to-our-store',
+      title: 'Welcome to Our Store',
+      status: 'published',
+      author: 'Store Team',
+      excerpt: 'Start shopping in our online store',
+      content:
+        '<p>Welcome! In this post we explain how to shop easily and make the most of our discounts and offers.</p>',
+      // Deliberately neutral tags, and not featured. scripts/verify-blog.py
+      // asserts exact tag-cloud counts ("news" == 3) and that the post it
+      // pins is first in the listing; a seeded post sharing those tags or
+      // holding the featured slot would break both.
+      tags: JSON.stringify(['welcome']),
+      isFeatured: false,
+      metaTitle: 'Welcome to Our Store',
+      metaDescription: 'A getting-started guide to shopping in our online store.',
+      publishedAt: new Date(),
+    },
+  ];
+
+  let postCount = 0;
+  for (const data of posts) {
+    await prisma.blogPost.upsert({ where: { slug: data.slug }, update: data, create: data });
+    postCount++;
+  }
+
+  return pageCount + postCount;
 }
 
 // Homepage gallery (hero slider + promo tiles).

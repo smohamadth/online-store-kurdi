@@ -1,5 +1,14 @@
+// ---------------------------------------------------------------------------
+// API entry point: startup checks, listen, schedulers, graceful shutdown.
+//
+// The two pre-boot guards (DATABASE_URL/provider mismatch, stale Prisma
+// client) exist because both failure modes used to surface as baffling
+// 500s after a "successful" boot. The dual IPv4/IPv6 loopback bind and
+// the listen-error handling are documented inline - they fix the
+// "my settings don't save" class of Windows/macOS problems.
+// ---------------------------------------------------------------------------
 import { createServer } from 'http';
-import { app, httpServer } from './app';
+import { app, httpServer, io } from './app';
 import { env } from './config/environment';
 import { connectDatabase, disconnectDatabase, prisma } from './config/database';
 import {
@@ -13,18 +22,29 @@ import {
   databaseUrlHelp,
 } from './config/verifyDatabaseUrl';
 import { connectRedis, disconnectRedis } from './config/redis';
+import { attachSocketIOAdapter } from './config/socketAdapter';
+import { connectSearch, disconnectSearch } from './modules/products/productSearch.service';
 import { initializeMinIO } from './config/minio';
 import { logger } from './utils/logger';
 import { startScheduler, stopScheduler } from './jobs/inventory-scheduler';
+// Both schedulers export the same startScheduler/stopScheduler names, so
+// alias the currency side. (An unaliased import of a non-existent
+// startCurrencyScheduler made the entry point fail at import time - the
+// API never bound its port and CI's health poll timed out.)
+import {
+  startScheduler as startCurrencyScheduler,
+  stopScheduler as stopCurrencyScheduler,
+} from './jobs/currency.scheduler';
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
   logger.info(`${signal} received. Starting graceful shutdown...`);
   
   try {
-    // Stop the inventory scheduler first so no new ticks fire
+    // Stop the schedulers first so no new ticks fire
     // while we're tearing down.
     stopScheduler();
+    stopCurrencyScheduler();
 
     // Close HTTP server
     httpServer.close(() => {
@@ -34,6 +54,7 @@ async function gracefulShutdown(signal: string) {
     // Disconnect from databases
     await disconnectDatabase();
     await disconnectRedis();
+    await disconnectSearch();
 
     logger.info('✅ Graceful shutdown completed');
     process.exit(0);
@@ -100,9 +121,24 @@ async function startServer() {
     await connectDatabase();
     
     // Try to connect to Redis (optional, non-blocking)
-    connectRedis().catch(() => {
-      // Silently handle Redis connection failure
-    });
+    connectRedis()
+      .catch(() => {
+        // Silently handle Redis connection failure
+      })
+      .then(() => {
+        // Socket.IO multi-instance adapter (optional, non-blocking): with N
+        // API instances behind a load balancer, an emit on one instance must
+        // reach sockets connected to another — the Redis adapter gives all
+        // instances a shared view of who is connected. Without Redis the
+        // server keeps running single-instance (in-memory) mode, which is
+        // correct for the default one-server deployment. Never blocks boot.
+        attachSocketIOAdapter(io).catch(() => {});
+      });
+
+    // Initialize the search backend (Postgres by default; Elasticsearch when
+    // SEARCH_PROVIDER=elasticsearch. Fail-soft: an unreachable cluster logs a
+    // warning and search falls back to Postgres.)
+    await connectSearch();
 
     // Try to initialize MinIO storage (optional)
     try {
@@ -138,10 +174,11 @@ async function startServer() {
 
     httpServer.listen(port, host, () => {
       logger.info(`✅ Server running on http://${host}:${port}`);
-      // Start the inventory background jobs (auto-reorder,
-      // reservation release) after the server is accepting traffic
-      // so the first tick doesn't compete with startup.
+      // Start the background jobs (inventory, currency refresh)
+      // after the server is accepting traffic so the first tick
+      // doesn't compete with startup.
       startScheduler();
+      startCurrencyScheduler();
       if (alsoBindIpv6Loopback) {
         // net.Server can only listen once, so open a twin server that feeds
         // the same Express app.
@@ -163,6 +200,7 @@ async function startServer() {
       logger.info(`🔗 API URL: http://localhost:${port}/api`);
       logger.info(`💚 Health check: http://localhost:${port}/health`);
       
+      // env-default-ok: prints local tool URLs to the log; grants nothing.
       if (env.NODE_ENV === 'development') {
         logger.info(`📊 Prisma Studio: npx prisma studio`);
         logger.info(`📧 MailHog: http://localhost:8025`);

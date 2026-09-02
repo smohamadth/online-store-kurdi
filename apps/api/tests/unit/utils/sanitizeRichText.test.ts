@@ -147,3 +147,40 @@ describe('sanitizeRichText', () => {
     expect(out).not.toMatch(/\son\w+\s*=/i);
   });
 });
+
+describe('sanitizeRichText — obfuscated URL schemes', () => {
+  // Regression: the scheme regex used to run on the RAW attribute value, so
+  // "java&#x73;cript:alert(1)" (which the browser decodes to a real
+  // javascript: URL before the href is interpreted) sailed straight through.
+  it('neutralises entity-encoded javascript: URLs in href', () => {
+    const html = '<a href="java&#x73;cript:alert(1)">x</a>';
+    const out = sanitizeRichText(html);
+    expect(out).not.toContain('javascript');
+    expect(out).not.toContain('java&#x73;cript');
+    expect(out).toContain('href="#"');
+  });
+
+  it('neutralises decimal-entity and hex-entity data: URLs in src', () => {
+    const html = '<img src="&#x64;ata:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+" />';
+    const out = sanitizeRichText(html);
+    expect(out).not.toContain('data:');
+    expect(out).toContain('src="#"');
+  });
+
+  it('neutralises control-character-padded javascript: URLs', () => {
+    const html = '<a href="&#9;javascript:alert(1)">x</a>';
+    const out = sanitizeRichText(html);
+    expect(out).not.toContain('javascript');
+    expect(out).toContain('href="#"');
+  });
+
+  it('neutralises vbscript: URLs, quoted and unquoted', () => {
+    expect(sanitizeRichText('<a href="vbscript:msgbox(1)">x</a>')).toContain('href="#"');
+    expect(sanitizeRichText('<a href=vbscript:msgbox(1)>x</a>')).toContain('href="#"');
+  });
+
+  it('leaves safe URLs alone (http/https/relative/uploads)', () => {
+    const safe = '<a href="https://example.com">a</a><a href="/products/x">b</a><img src="/uploads/p/1/thumb.webp" />';
+    expect(sanitizeRichText(safe)).toBe(safe);
+  });
+});

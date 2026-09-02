@@ -74,6 +74,36 @@ describe('Wallet page', () => {
     });
   });
 
+  it('surfaces balances stranded in other currencies after a store currency switch', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        balance: 30,
+        currency: 'USD',
+        transactions: [],
+        allBalances: [
+          { currency: 'USD', balance: 30 },
+          { currency: 'EUR', balance: 20 },
+        ],
+      },
+    });
+    render(<WalletPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('other-currency-balances')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('other-currency-balances')).toHaveTextContent('20.00 EUR');
+    expect(screen.getByTestId('other-currency-balances')).toHaveTextContent(/can't be spent at checkout/i);
+  });
+
+  it('does not show the other-currency note when there is nothing stranded', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { balance: 30, currency: 'USD', transactions: [], allBalances: [{ currency: 'USD', balance: 30 }] },
+    });
+    render(<WalletPage />);
+    await waitFor(() => screen.getByTestId('credit-balance'));
+    expect(screen.queryByTestId('other-currency-balances')).toBeNull();
+  });
+
   it('submits a gift card code to the redeem endpoint', async () => {
     mockPost.mockResolvedValueOnce({
       data: { code: 'ABCD-1234-5678-90EF', availableBalance: 100, currency: 'USD' },

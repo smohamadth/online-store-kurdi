@@ -19,6 +19,8 @@ import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
+import { signWebhookBody } from '../helpers/signWebhook';
+import { decrementStock, incrementStock } from '../../src/modules/inventory/inventory.service';
 import {
   createProduct,
   createCategory,
@@ -543,11 +545,53 @@ describe('3PL webhook (#5)', () => {
     const res = await request(app)
       .post('/api/inventory/webhooks/3pl')
       .set('X-Provider', 'shipbob')
-      .set('X-Signature', 'somesig')
+      .set('X-Signature', signWebhookBody('shared-secret-123', body))
       .send(body);
     expect(res.status).toBe(200);
     const pAfter = await mockPrisma.product.findUnique({ where: { id: p.id } });
     expect(pAfter!.quantity).toBe(8);
+  });
+
+  it('rejects a forged signature and applies nothing', async () => {
+    // Regression: the route used to pass `mockAccept: NODE_ENV !== 'production'`
+    // to verifyWebhookSignature, which accepts ANY non-empty signature. Since
+    // NODE_ENV defaults to 'development', an unauthenticated caller could move
+    // stock on any deployment that had not explicitly set NODE_ENV=production.
+    await createWebhookSecret({ provider: 'shipbob', secret: 'shared-secret-123' });
+    const cat = await createCategory({ slug: 'c', name: 'C' });
+    const p = await createProduct({ name: 'A', slug: 'a', sku: 'SKU-A', price: 5, quantity: 10, categoryId: cat.id });
+    await createChannel({ name: 'shipbob', displayName: 'ShipBob' });
+
+    const body = { events: [{ sku: 'SKU-A', quantity: -2, type: 'order' }] };
+    const res = await request(app)
+      .post('/api/inventory/webhooks/3pl')
+      .set('X-Provider', 'shipbob')
+      .set('X-Signature', 'somesig')
+      .send(body);
+
+    expect(res.status).toBe(401);
+    // The stock must be untouched.
+    const after = await mockPrisma.product.findUnique({ where: { id: p.id } });
+    expect(after!.quantity).toBe(10);
+  });
+
+  it('rejects a signature computed over a different body', async () => {
+    await createWebhookSecret({ provider: 'shipbob', secret: 'shared-secret-123' });
+    const cat = await createCategory({ slug: 'c', name: 'C' });
+    const p = await createProduct({ name: 'A', slug: 'a', sku: 'SKU-A', price: 5, quantity: 10, categoryId: cat.id });
+    await createChannel({ name: 'shipbob', displayName: 'ShipBob' });
+
+    const signed = { events: [{ sku: 'SKU-A', quantity: -1, type: 'order' }] };
+    const tampered = { events: [{ sku: 'SKU-A', quantity: -9, type: 'order' }] };
+    const res = await request(app)
+      .post('/api/inventory/webhooks/3pl')
+      .set('X-Provider', 'shipbob')
+      .set('X-Signature', signWebhookBody('shared-secret-123', signed))
+      .send(tampered);
+
+    expect(res.status).toBe(401);
+    const after = await mockPrisma.product.findUnique({ where: { id: p.id } });
+    expect(after!.quantity).toBe(10);
   });
 
   it('returns per-event ok/err status for batched events', async () => {
@@ -562,7 +606,7 @@ describe('3PL webhook (#5)', () => {
     const res = await request(app)
       .post('/api/inventory/webhooks/3pl')
       .set('X-Provider', 'shipbob')
-      .set('X-Signature', 'somesig')
+      .set('X-Signature', signWebhookBody('shared-secret-123', body))
       .send(body);
     expect(res.status).toBe(200);
     const events = res.body.data;
@@ -665,5 +709,81 @@ describe('Restock / return flow (#9)', () => {
       .set('Authorization', `Bearer ${auth}`);
     expect(cancel.status).toBe(200);
     expect((await mockPrisma.product.findUnique({ where: { id: p.id } }))!.quantity).toBe(10);
+  });
+});
+
+describe('Stock alerts (auto-triggered, #BUG-4)', () => {
+  it('raises an alert when a sale crosses the low-stock threshold downward', async () => {
+    const cat = await createCategory({ slug: 'cat', name: 'Cat' });
+    const p = await createProduct({
+      name: 'Cup', slug: 'cup', price: 5,
+      quantity: 12, lowStockThreshold: 10, categoryId: cat.id,
+    });
+    const res = await decrementStock({ productId: p.id, quantity: 3 });
+    expect(res.newQuantity).toBe(9);
+    expect(res.stockAlertRaised).toBe(true);
+    const alert = await mockPrisma.stockAlert.findUnique({ where: { productId: p.id } });
+    expect(alert).toBeTruthy();
+    expect(alert!.lowStockThreshold).toBe(10);
+    expect(alert!.isActive).toBe(true);
+  });
+
+  it('does not re-raise on sales that stay below the threshold (edge-triggered)', async () => {
+    const cat = await createCategory({ slug: 'cat', name: 'Cat' });
+    const p = await createProduct({
+      name: 'Cup', slug: 'cup', price: 5,
+      quantity: 9, lowStockThreshold: 10, categoryId: cat.id,
+    });
+    // Already below: first sale raises, the next must not spam.
+    const first = await decrementStock({ productId: p.id, quantity: 1 });
+    expect(first.stockAlertRaised).toBe(true);
+    const second = await decrementStock({ productId: p.id, quantity: 1 });
+    expect(second.newQuantity).toBe(7);
+    expect(second.stockAlertRaised).toBe(false);
+    const alerts = await mockPrisma.stockAlert.findMany({ where: { productId: p.id } });
+    expect(alerts).toHaveLength(1);
+  });
+
+  it('does not raise while stock stays above the threshold', async () => {
+    const cat = await createCategory({ slug: 'cat', name: 'Cat' });
+    const p = await createProduct({
+      name: 'Cup', slug: 'cup', price: 5,
+      quantity: 50, lowStockThreshold: 10, categoryId: cat.id,
+    });
+    const res = await decrementStock({ productId: p.id, quantity: 5 });
+    expect(res.stockAlertRaised).toBe(false);
+    expect(await mockPrisma.stockAlert.findUnique({ where: { productId: p.id } })).toBeNull();
+  });
+
+  it('re-arms after a restock above the threshold', async () => {
+    const cat = await createCategory({ slug: 'cat', name: 'Cat' });
+    const p = await createProduct({
+      name: 'Cup', slug: 'cup', price: 5,
+      quantity: 9, lowStockThreshold: 10, categoryId: cat.id,
+    });
+    await decrementStock({ productId: p.id, quantity: 1 }); // 8 -> raised
+    await incrementStock({ productId: p.id, quantity: 5, reason: 'return' }); // 13
+    const again = await decrementStock({ productId: p.id, quantity: 6 }); // 7 -> crossed again
+    expect(again.stockAlertRaised).toBe(true);
+  });
+
+  it('stamps lastAlertSent when the admin has an email on the alert', async () => {
+    const cat = await createCategory({ slug: 'cat', name: 'Cat' });
+    const p = await createProduct({
+      name: 'Cup', slug: 'cup', price: 5,
+      quantity: 11, lowStockThreshold: 10, categoryId: cat.id,
+    });
+    await mockPrisma.stockAlert.create({
+      data: {
+        productId: p.id,
+        lowStockThreshold: 10,
+        notifyEmail: 'buyer-ops@example.com',
+        isActive: true,
+      },
+    });
+    const res = await decrementStock({ productId: p.id, quantity: 2 }); // 9 -> crossed
+    expect(res.stockAlertRaised).toBe(true);
+    const alert = await mockPrisma.stockAlert.findUnique({ where: { productId: p.id } });
+    expect(alert!.lastAlertSent).toBeTruthy();
   });
 });

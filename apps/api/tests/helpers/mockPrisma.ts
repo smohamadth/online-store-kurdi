@@ -40,10 +40,36 @@ const idCounters: Record<string, number> = {};
 
 // Relation name -> Model name. Prisma lets you write `include: { variant: ... }`
 // where the relation is named `variant` but the underlying model is
-// `ProductVariant`. This map is consulted by storeFor so the include
+// `Variant`. This map is consulted by storeFor so the include
 // can find the right store.
 const RELATION_TO_MODEL: Record<string, string> = {
-  variant: 'ProductVariant',
+  variant: 'Variant',
+  // Back-compat: legacy code still says `productVariant`. Same
+  // store as `variant`/`variants`/`Variant`.
+  productVariant: 'Variant',
+  productVariants: 'Variant',
+  variants: 'Variant',
+  // The Option model relations. `values` is the relation name on
+  // Option (Option.values -> OptionValue). `optionValues` is the
+  // relation on Variant (-> OptionValue via VariantOptionValue).
+  values: 'OptionValue',
+  // Contextual: Option.values is OptionValue.
+  'Option.values': 'OptionValue',
+  option: 'Option',
+  options: 'Option',
+  optionValue: 'OptionValue',
+  optionValues: 'OptionValue',
+  // Contextual: Variant.optionValues is the join table
+  // VariantOptionValue, not OptionValue directly.
+  'Variant.optionValues': 'VariantOptionValue',
+  // Contextual: VariantOptionValue.optionValue -> OptionValue.
+  'VariantOptionValue.optionValue': 'OptionValue',
+  variantOptionValue: 'VariantOptionValue',
+  variantOptionValues: 'VariantOptionValue',
+  variantValues: 'VariantOptionValue',
+  // Variant gallery.
+  image: 'VariantImage',
+  images: 'VariantImage',
   productImage: 'ProductImage',
   product: 'Product',
   products: 'Product',
@@ -64,6 +90,13 @@ const RELATION_TO_MODEL: Record<string, string> = {
   items: 'OrderItem',
   review: 'Review',
   reviews: 'Review',
+  // Photos attached to a review.
+  reviewPhoto: 'ReviewPhoto',
+  reviewPhotos: 'ReviewPhoto',
+  photo: 'ReviewPhoto',
+  photos: 'ReviewPhoto',
+  'Review.photos': 'ReviewPhoto',
+  'review.photos': 'ReviewPhoto',
   cartItem: 'CartItem',
   cartItems: 'CartItem',
   wishlistItem: 'WishlistItem',
@@ -75,9 +108,6 @@ const RELATION_TO_MODEL: Record<string, string> = {
   session: 'Session',
   sessions: 'Session',
   passwordReset: 'PasswordReset',
-  productVariant: 'ProductVariant',
-  productVariants: 'ProductVariant',
-  variants: 'ProductVariant',
   images: 'ProductImage',
   children: 'Category',
   child: 'Category',
@@ -155,6 +185,44 @@ const RELATION_TO_MODEL: Record<string, string> = {
   webhookSecret: 'WebhookSecret',
   'GiftCard.transactions': 'GiftCardTransaction',
   'StoreCredit.transactions': 'StoreCreditTransaction',
+  // Digital products
+  productDownload: 'ProductDownload',
+  productDownloads: 'ProductDownload',
+  download: 'ProductDownload',
+  downloads: 'ProductDownload',
+  'OrderItem.downloads': 'ProductDownload',
+  'OrderItem.download': 'ProductDownload',
+  'orderitem.downloads': 'ProductDownload',
+  'orderitem.download': 'ProductDownload',
+  downloadLog: 'DownloadLog',
+  downloadLogs: 'DownloadLog',
+  // Recommendation / ML subsystem. The schema adds `ProductEmbedding`
+  // (one embedding per product) and `ProductSimilarity` (a precomputed
+  // edge in the product graph). The route layer in
+  // `apps/api/src/modules/recommendations/` reads and writes both.
+  // The map entries are needed so `include: { productEmbedding: true }`
+  // and `include: { product1: true }` resolve to the right store.
+  productEmbedding: 'ProductEmbedding',
+  productEmbeddings: 'ProductEmbedding',
+  productSimilarity: 'ProductSimilarity',
+  productSimilarities: 'ProductSimilarity',
+  product1: 'Product',
+  product2: 'Product',
+  // ShippingZone.methods -> ShippingMethod (child FK is `zoneId`, see
+  // HAS_MANY_FK below). Both casing forms are needed so the in-memory
+  // include resolver routes `include: { methods }` to the right store.
+  'shippingzone.methods': 'ShippingMethod',
+  'ShippingZone.methods': 'ShippingMethod',
+};
+
+/**
+ * Explicit foreign-key names for has-many relations whose child column
+ * doesn't follow the `<Parent>Id` convention (e.g. `ShippingZone.methods`
+ * -> `ShippingMethod.zoneId`). Without an entry the in-memory include
+ * resolver can't wire the relation up and the field comes back undefined.
+ */
+const HAS_MANY_FK: Record<string, string> = {
+  'ShippingZone.methods': 'zoneId',
 };
 
 /**
@@ -214,8 +282,40 @@ function nowId(_model: string): string {
   return crypto.randomUUID();
 }
 
-function match(row: Row, where: any): boolean {
+/**
+ * Apply a Prisma `data` object to a row. Plain values are merged;
+ * numeric operators (`decrement` / `increment` / `multiply` / `divide`)
+ * and `set` are applied like the real client does. Shared by `update`
+ * and `updateMany` so atomic balance movements behave identically in
+ * both.
+ */
+function applyUpdateData(row: Row, data: any): Row {
+  const merged: any = { ...row };
+  for (const [k, v] of Object.entries(data || {})) {
+    // Prisma semantics: `undefined` in an update payload means "leave this
+    // column alone" (only an explicit `null` clears it). The mock used to
+    // assign it, so `data: { rating: undefined }` WIPED the stored value.
+    // That made the mock diverge from production and hid real "field is
+    // silently cleared on partial update" regressions.
+    if (v === undefined) continue;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      if ('decrement' in v) merged[k] = (merged[k] ?? 0) - Number(v.decrement);
+      else if ('increment' in v) merged[k] = (merged[k] ?? 0) + Number(v.increment);
+      else if ('multiply' in v) merged[k] = (merged[k] ?? 0) * Number(v.multiply);
+      else if ('divide' in v) merged[k] = (merged[k] ?? 0) / Number(v.divide);
+      else if ('set' in v) merged[k] = v.set;
+      else merged[k] = v;
+    } else {
+      merged[k] = v;
+    }
+  }
+  merged.updatedAt = new Date();
+  return merged;
+}
+
+function match(row: Row, where: any, parentModel: string = ''): boolean {
   if (!where) return true;
+  const singular = parentModel;
   for (const [k, v] of Object.entries(where)) {
     // Prisma's compound key syntax: `userId_productId: { userId, productId }`.
     // Split on the underscore and treat as nested equality.
@@ -246,9 +346,12 @@ function match(row: Row, where: any): boolean {
       if (isOperatorObj) {
         if ('contains' in v) {
           const s = String(actual ?? '');
-          if (v.mode === 'insensitive') {
-            if (!s.toLowerCase().includes(String(v.contains).toLowerCase())) return false;
-          } else if (!s.includes(String(v.contains))) return false;
+          // The SQLite provider (which this schema targets) does
+          // case-insensitive `contains` matching for ASCII out of the box;
+          // `mode: 'insensitive'` is a PostgreSQL-only Prisma option that
+          // SQLite ignores. Mirror the real provider unconditionally so
+          // tests don't diverge from production behaviour.
+          if (!s.toLowerCase().includes(String(v.contains).toLowerCase())) return false;
         }
         if ('gte' in v && actual < v.gte) return false;
         if ('lte' in v && actual > v.lte) return false;
@@ -266,7 +369,57 @@ function match(row: Row, where: any): boolean {
       } else {
         // plain object: treat as equality match on each key.
         for (const [subK, subV] of Object.entries(v)) {
-          if (subK === 'isActive' || subK === 'isNot' || subK === 'every' || subK === 'some' || subK === 'none') continue;
+          if (subK === 'isNot') {
+            // `isNot: { x: 'y' }` - the row must NOT match the inner
+            // predicate. We delegate to a nested match call.
+            if (match(actual ?? {}, subV)) return false;
+            continue;
+          }
+          if (subK === 'some' || subK === 'every' || subK === 'none') {
+            // `some`: at least one related row matches `subV`.
+            // `every`: every related row matches `subV`.
+            // `none`: no related row matches `subV`.
+            //
+            // The related store is looked up by the relation name
+            // (the outer key `k`). Children carry an FK that
+            // points at this row; we try a few naming conventions.
+            //
+            // The relation is contextual: `optionValues` on
+            // `Variant` is the join table `VariantOptionValue`,
+            // while `values` on `Option` is the actual
+            // `OptionValue` rows. The `storeFor(parent, k)` call
+            // resolves these via the contextual entries in
+            // `RELATION_TO_MODEL`.
+            const childStore = storeFor(k, singular);
+            // Identify the model the rows came from. We use the
+            // contextual lookup to get the model name; fall back
+            // to a capitalised first letter if not mapped.
+            const childModelName =
+              RELATION_TO_MODEL[`${singular}.${k}`] ||
+              RELATION_TO_MODEL[`${singular.toLowerCase()}.${k}`] ||
+              RELATION_TO_MODEL[k] ||
+              (k.charAt(0).toUpperCase() + k.slice(1).replace(/s$/, ''));
+            const fkCandidates = [
+              `${singular.toLowerCase()}Id`,
+              `${singular.charAt(0).toLowerCase() + singular.slice(1)}Id`,
+              `${singular}Id`,
+            ];
+            const matches = [];
+            for (const childRow of childStore.values()) {
+              if (fkCandidates.some((fk) => childRow[fk] === row.id)) {
+                matches.push(childRow);
+              }
+            }
+            if (subK === 'some') {
+              if (!matches.some((r) => match(r, subV, childModelName))) return false;
+            } else if (subK === 'every') {
+              if (matches.length === 0) return false;
+              if (!matches.every((r) => match(r, subV, childModelName))) return false;
+            } else if (subK === 'none') {
+              if (matches.some((r) => match(r, subV, childModelName))) return false;
+            }
+            continue;
+          }
           // We match on the FK column the relation resolves to.
           // Examples we support:
           //   category: { slug: 'x' }    -> look up row.categoryId in Category
@@ -378,8 +531,12 @@ function applyInclude(rows: any, include: any, select?: any, parentModel: string
         const parentFk = `${parentModel}Id`;
         // FK is conventionally camelCase (productId, userId, orderId) but the
         // parent model is plural-cased in different ways. Try the most likely
-        // variants.
+        // variants, plus any explicit per-relation override (a child whose
+        // FK doesn't follow the `<parent>Id` convention, e.g.
+        // `ShippingZone.methods` -> `zoneId`).
+        const explicitFk = HAS_MANY_FK[`${parentModel}.${k}`];
         const fkCandidates = [
+          ...(explicitFk ? [explicitFk] : []),
           parentFk,
           `${parentModel.toLowerCase()}Id`,
           // camelCase: productId, orderId, userId, addressId, cartItemId
@@ -423,7 +580,17 @@ function applyInclude(rows: any, include: any, select?: any, parentModel: string
             }
           }
         }
-        if (many.length) out[k] = many;
+        if (many.length) {
+          out[k] = many;
+        } else if (
+          // Real Prisma returns [] (never undefined) for a has-many
+          // include. Detect the has-many convention - at least one child
+          // row carries the parent FK - and emit the empty array.
+          // Belongs-to includes keep their undefined/null value.
+          [...contextualStore.values()].some((row) => fkCandidates.some((fk) => fk in row))
+        ) {
+          out[k] = [];
+        }
       }
     }
   }
@@ -494,6 +661,14 @@ function compareOrder(a: any, b: any, ob: any): number {
   for (const [k, dir] of Object.entries(ob)) {
     const av = a[k], bv = b[k];
     if (av === bv) continue;
+    // Date objects created in the same millisecond are different
+    // references but must compare as EQUAL. Returning -1 for both
+    // (a,b) and (b,a) makes the comparator inconsistent, and the
+    // sorted order of "equal" rows becomes algorithm-dependent -
+    // that is how pagination tests started flaking. Compare by
+    // value so equal timestamps sort as 0 and the stable sort
+    // preserves insertion order.
+    if (av instanceof Date && bv instanceof Date && av.getTime() === bv.getTime()) continue;
     const cmp = av > bv ? 1 : -1;
     return dir === 'desc' ? -cmp : cmp;
   }
@@ -506,20 +681,20 @@ function makeDelegate(model: string) {
     findUnique: vi.fn(async ({ where, include, select }: any = {}) => {
       const store = storeFor(singular);
       for (const row of store.values()) {
-        if (match(row, where)) return applyInclude(row, include, select, singular);
+        if (match(row, where, singular)) return applyInclude(row, include, select, singular);
       }
       return null;
     }),
     findFirst: vi.fn(async ({ where, include, orderBy, select }: any = {}) => {
       const store = storeFor(singular);
-      const found = [...store.values()].filter((r) => match(r, where));
+      const found = [...store.values()].filter((r) => match(r, where, singular));
       if (!found.length) return null;
       const [first] = applyOrderBy(found, orderBy);
       return applyInclude(first, include, select, singular);
     }),
     findMany: vi.fn(async ({ where, include, orderBy, skip, take, select }: any = {}) => {
       const store = storeFor(singular);
-      const filtered = [...store.values()].filter((r) => match(r, where || {}));
+      const filtered = [...store.values()].filter((r) => match(r, where || {}, singular));
       const sorted = applyOrderBy(filtered, orderBy);
       const sliced = typeof skip === 'number' || typeof take === 'number'
         ? sorted.slice(skip || 0, (skip || 0) + (take || sorted.length))
@@ -528,11 +703,11 @@ function makeDelegate(model: string) {
     }),
     count: vi.fn(async ({ where }: any = {}) => {
       const store = storeFor(singular);
-      return [...store.values()].filter((r) => match(r, where || {})).length;
+      return [...store.values()].filter((r) => match(r, where || {}, singular)).length;
     }),
     aggregate: vi.fn(async ({ where, _sum, _avg, _min, _max, _count }: any = {}) => {
       const store = storeFor(singular);
-      const filtered = [...store.values()].filter((r) => match(r, where || {}));
+      const filtered = [...store.values()].filter((r) => match(r, where || {}, singular));
       const out: any = { _count: filtered.length };
       const sumValues = (_sum as Record<string, any>) || {};
       for (const [k, v] of Object.entries(sumValues)) {
@@ -575,7 +750,7 @@ function makeDelegate(model: string) {
     }),
     groupBy: vi.fn(async ({ where, by, _count, orderBy }: any = {}) => {
       const store = storeFor(singular);
-      const filtered = [...store.values()].filter((r) => match(r, where || {}));
+      const filtered = [...store.values()].filter((r) => match(r, where || {}, singular));
       const groups = new Map<string, { rows: any[]; count: number }>();
       for (const row of filtered) {
         const keyParts = (by as string[]).map((b) => String(row[b] ?? ''));
@@ -631,6 +806,13 @@ function makeDelegate(model: string) {
       // time; the mock prisma drops undefined values during create,
       // so without this guard tests would see the wrong value.
       if (singular === 'OrderItem' && row.isBackorder === undefined) row.isBackorder = false;
+      // Page.pageType defaults to "info" in the real schema so
+      // legacy callers (and the migration) don't need to set it.
+      // The mock prisma drops undefined values during create, so
+      // without this guard a test that omits the field would
+      // read back `undefined` and the pageType-aware routes
+      // would 404 a perfectly valid page.
+      if (singular === 'Page' && row.pageType === undefined) row.pageType = 'info';
       if (singular === 'Coupon' && row.usedCount === undefined) row.usedCount = 0;
       if (singular === 'Coupon' && row.isActive === undefined) row.isActive = true;
       if (singular === 'Coupon' && row.code === row.code) row.code = (row.code || '').toUpperCase();
@@ -678,24 +860,8 @@ function makeDelegate(model: string) {
     update: vi.fn(async ({ where, data, include, select }: any) => {
       const store = storeFor(singular);
       for (const [id, row] of store) {
-        if (match(row, where)) {
-          // Apply special operators like `decrement` / `increment` / `multiply`
-          // that the real client understands. We do a shallow copy + merge
-          // for plain values and apply numeric ops when we recognise them.
-          const merged: any = { ...row };
-          for (const [k, v] of Object.entries(data || {})) {
-            if (v && typeof v === 'object' && !Array.isArray(v)) {
-              if ('decrement' in v) merged[k] = (merged[k] ?? 0) - Number(v.decrement);
-              else if ('increment' in v) merged[k] = (merged[k] ?? 0) + Number(v.increment);
-              else if ('multiply' in v) merged[k] = (merged[k] ?? 0) * Number(v.multiply);
-              else if ('divide' in v) merged[k] = (merged[k] ?? 0) / Number(v.divide);
-              else if ('set' in v) merged[k] = v.set;
-              else merged[k] = v;
-            } else {
-              merged[k] = v;
-            }
-          }
-          merged.updatedAt = new Date();
+        if (match(row, where, singular)) {
+          const merged = applyUpdateData(row, data);
           store.set(id, merged);
           return applyInclude(merged, include, select, singular);
         }
@@ -706,8 +872,8 @@ function makeDelegate(model: string) {
       const store = storeFor(singular);
       let count = 0;
       for (const [id, row] of store) {
-        if (match(row, where)) {
-          store.set(id, { ...row, ...data, updatedAt: new Date() });
+        if (match(row, where, singular)) {
+          store.set(id, applyUpdateData(row, data));
           count++;
         }
       }
@@ -716,8 +882,8 @@ function makeDelegate(model: string) {
     upsert: vi.fn(async ({ where, create, update, include, select }: any) => {
       const store = storeFor(singular);
       for (const [id, row] of store) {
-        if (match(row, where)) {
-          const updated = { ...row, ...update, updatedAt: new Date() };
+        if (match(row, where, singular)) {
+          const updated = applyUpdateData(row, update);
           store.set(id, updated);
           return applyInclude(updated, include, select, singular);
         }
@@ -731,7 +897,7 @@ function makeDelegate(model: string) {
     delete: vi.fn(async ({ where }: any) => {
       const store = storeFor(singular);
       for (const [id, row] of store) {
-        if (match(row, where)) {
+        if (match(row, where, singular)) {
           store.delete(id);
           return row;
         }
@@ -742,7 +908,7 @@ function makeDelegate(model: string) {
       const store = storeFor(singular);
       let count = 0;
       for (const [id, row] of store) {
-        if (match(row, where || {})) {
+        if (match(row, where || {}, singular)) {
           store.delete(id);
           count++;
         }
@@ -756,23 +922,51 @@ function makeDelegate(model: string) {
 // we haven't listed will throw on first access, with a clear pointer.
 const KNOWN_MODELS = [
   'user', 'session', 'passwordReset', 'address', 'order', 'orderItem',
-  'review', 'wishlistItem', 'cartItem', 'userEvent', 'userPreference',
-  'inventoryLog', 'product', 'productImage', 'productVariant', 'category',
+  'review', 'reviewPhoto', 'wishlistItem', 'cartItem', 'userEvent', 'userPreference',
+  'inventoryLog', 'product', 'productImage', 'variant', 'category',
   'coupon', 'payment', 'recommendationLog', 'searchQuery', 'emailTemplate',
   'shippingMethod', 'shippingZone', 'taxClass', 'taxRate', 'storeSettings',
   'themeSettings', 'homeSection', 'menu', 'menuItem', 'banner', 'page',
   'post', 'postTag', 'blogPost', 'stockAlert',
+  // Storefront forms (durable since the in-memory stores moved to the DB)
+  'stockAlertSubscription', 'contactMessage', 'newsletterSubscriber',
+  // CSRF token store (middleware/csrf.ts - unmounted guard, durable store)
+  'csrfToken',
+  // Variant subsystem (first-class)
+  'option', 'optionValue', 'variantOptionValue', 'variantImage',
+  // Attribute query index (variantAttributeIndex.ts)
+  'variantAttribute',
+  // Digital products
+  'productDownload', 'downloadLog',
   // Inventory extensions
   'warehouse', 'warehouseStock', 'warehouseTransfer', 'stockReservation',
   'stockTake', 'stockTakeItem', 'reorderRule', 'reorderDraft',
   'channel', 'channelStock', 'threePLSyncEvent', 'webhookSecret',
   'giftCard', 'giftCardTransaction', 'storeCredit', 'storeCreditTransaction',
+  // Affiliate marketing
+  'affiliate', 'affiliateClick', 'affiliateCommission', 'affiliatePayout',
+  // Multi-currency
+  'currency', 'exchangeRateSnapshot',
+  // Content translations (per-locale overrides for product/category/page/blog)
+  'contentTranslation',
+  // Recommendation / ML (schema-defined; no test references yet but
+  // the routes in `modules/recommendations/` will hit these as soon
+  // as we add the integration tests)
+  'productEmbedding', 'productSimilarity',
 ];
 
 const prisma: any = {};
 for (const m of KNOWN_MODELS) {
   prisma[m] = makeDelegate(m);
 }
+
+// Back-compat alias: `prisma.productVariant` is the same delegate
+// as `prisma.variant`. Every existing call site
+// (`prisma.productVariant.findUnique({ where: { id } })`) keeps
+// working unchanged while the route layer migrates to the new
+// name. Same object, so side effects on one are reflected on
+// the other.
+prisma.productVariant = prisma.variant;
 
 prisma.$connect = vi.fn(async () => {});
 prisma.$disconnect = vi.fn(async () => {});
@@ -803,9 +997,13 @@ export function resetMockPrisma() {
   (prisma.$transaction as any).mockClear?.();
 }
 
-/** Inspect what the mock holds for a given model (for assertions). */
+/** Inspect what the mock holds for a given model (for assertions).
+ *  Accepts both the new name (Variant) and the legacy alias
+ *  (ProductVariant); both resolve to the same store. */
 export function peekMockStore(model: string): Row[] {
-  return [...(stores[model.charAt(0).toUpperCase() + model.slice(1)]?.values() || [])];
+  const normalized = model.charAt(0).toUpperCase() + model.slice(1);
+  const canonical = normalized === 'ProductVariant' ? 'Variant' : normalized;
+  return [...(stores[canonical]?.values() || [])];
 }
 
 export { prisma as mockPrisma, RELATION_TO_MODEL };

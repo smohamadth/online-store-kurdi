@@ -1,0 +1,52 @@
+{
+  "key": "bold",
+  "name": "Bold",
+  "description": "A loud, image-first theme for fashion and lifestyle stores. Full-bleed hero, oversized photography, dark mode by default. Marketing chrome on — the storefront that says LOOK AT ME.",
+  "version": "1.0.0",
+  "author": "Platform Team",
+  "preview": "/themes/bold/preview.png",
+  "features": {
+    "rtl": false,
+    "darkMode": true,
+    "paid": true
+  },
+  "tokens": {
+    "primaryColor": "#f97316",
+    "primaryTextColor": "#0a0a0a",
+    "accentColor": "#facc15",
+    "bodyBg": "#0a0a0a",
+    "cardBg": "#171717",
+    "bodyText": "#fafafa",
+    "mutedText": "#a1a1aa",
+    "borderColor": "#262626",
+    "headerBg": "#0a0a0a",
+    "headerText": "#fafafa",
+    "footerBg": "#000000",
+    "footerText": "#fafafa",
+    "priceColor": "#facc15",
+    "saleColor": "#ef4444",
+    "fontFamily": "rounded",
+    "baseFontSize": 16,
+    "headingWeight": 900,
+    "radius": 0,
+    "buttonRadius": 0,
+    "containerWidth": 1400,
+    "cardShadow": "strong",
+    "productsPerRow": 2,
+    "showTrustBar": true,
+    "showTestimonials": true,
+    "showStats": true,
+    "showNewsletter": true,
+    "showDealCountdown": true,
+    "showCategories": true,
+    "showFeatured": true,
+    "showNewArrivals": true,
+    "announcementBg": "#f97316",
+    "announcementText2": "#0a0a0a"
+  },
+  "sections": {
+    "hero": "@/themes/bold/sections/Hero",
+    "featured": "@/themes/bold/sections/Featured",
+    "categories": "@/themes/bold/sections/Categories"
+  }
+}

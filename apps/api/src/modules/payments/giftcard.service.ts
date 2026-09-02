@@ -12,6 +12,7 @@
  */
 import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/errorHandler';
+import { autoPostDepositIssuance } from '../accounting/accounting.service';
 import {
   generateGiftCardCode,
   normaliseCode,
@@ -39,6 +40,8 @@ export interface IssueGiftCardInput {
   expiresAt?: Date | null;
   notes?: string;
   createdById?: string;
+  /** Optional chart-account code for the contra side of the auto-posted journal entry. */
+  accountCode?: string;
 }
 
 export interface GiftCardRow {
@@ -71,7 +74,7 @@ export async function issueGiftCard(input: IssueGiftCardInput): Promise<GiftCard
     const code = generateGiftCardCode();
     const dup = await prisma.giftCard.findUnique({ where: { code } });
     if (!dup) {
-      return prisma.giftCard.create({
+      const card = await prisma.giftCard.create({
         data: {
           code,
           initialAmount: input.amount,
@@ -83,6 +86,16 @@ export async function issueGiftCard(input: IssueGiftCardInput): Promise<GiftCard
           createdById: input.createdById ?? null,
         },
       });
+      // Best-effort journal posting (ACCOUNTING_AUTO_POST gate; never
+      // throws): issuing a card creates a customer-deposits liability.
+      await autoPostDepositIssuance({
+        amount: input.amount,
+        currency: card.currency,
+        type: 'issue',
+        memo: `Gift card issued ${card.code}${input.notes ? ` — ${input.notes}` : ''}`,
+        accountCode: input.accountCode,
+      });
+      return card;
     }
   }
   throw new AppError('Could not generate a unique gift card code after 3 attempts', 500);
@@ -128,15 +141,32 @@ export async function debitGiftCard(args: {
     if (!isRedeemable(card)) {
       throw new AppError(`Gift card is not redeemable (status=${card.status}, balance=${card.balance})`, 400);
     }
-    if (card.balance < args.amount) {
-      throw new AppError(`Insufficient balance: card has ${card.balance}, requested ${args.amount}`, 400);
-    }
-    const newBalance = card.balance - args.amount;
-    const newStatus = newBalance <= 0 ? 'depleted' : card.status;
-    const updated = await tx.giftCard.update({
-      where: { id: card.id },
-      data: { balance: newBalance, status: newStatus },
+    // Atomic conditional decrement (`UPDATE ... SET balance = balance - ?
+    // WHERE id = ? AND balance >= ?`): the old read-modify-write let two
+    // concurrent orders both read the same balance and both write it down
+    // by their own amount, spending the same money twice. The WHERE is
+    // evaluated at update time, so the second transaction matches nothing.
+    const res = await tx.giftCard.updateMany({
+      where: { id: card.id, balance: { gte: args.amount } },
+      data: { balance: { decrement: args.amount } },
     });
+    if (res.count !== 1) {
+      const fresh = await tx.giftCard.findUnique({ where: { id: card.id } });
+      throw new AppError(
+        `Insufficient balance: card has ${fresh?.balance ?? 0}, requested ${args.amount}`,
+        400,
+      );
+    }
+    // The status flip is a separate statement: re-read the balance so the
+    // decision is based on the actual post-decrement value, not the stale
+    // pre-read (a concurrent debit could have lowered it further).
+    const after = await tx.giftCard.findUnique({ where: { id: card.id } });
+    if (after && after.balance <= 0 && after.status !== 'depleted') {
+      await tx.giftCard.update({
+        where: { id: card.id },
+        data: { status: 'depleted' },
+      });
+    }
     await tx.giftCardTransaction.create({
       data: {
         giftCardId: card.id,
@@ -146,7 +176,7 @@ export async function debitGiftCard(args: {
         notes: args.notes ?? null,
       },
     });
-    return updated;
+    return (await tx.giftCard.findUnique({ where: { id: card.id } })) ?? card;
   });
 }
 
@@ -159,9 +189,12 @@ export async function creditGiftCard(args: {
   type?: 'refund' | 'adjust' | 'issue';
   orderId?: string;
   notes?: string;
+  /** Optional chart-account code for the contra side of the auto-posted journal entry. */
+  accountCode?: string;
 }) {
   if (args.amount <= 0) throw new AppError('Credit amount must be positive', 400);
-  return prisma.$transaction(async (tx: any) => {
+  const type = args.type ?? 'adjust';
+  const result = await prisma.$transaction(async (tx: any) => {
     const card = await tx.giftCard.findUnique({ where: { id: args.cardId } });
     if (!card) throw new AppError('Gift card not found', 404);
     const newBalance = card.balance + args.amount;
@@ -174,13 +207,27 @@ export async function creditGiftCard(args: {
       data: {
         giftCardId: card.id,
         amount: args.amount,
-        type: args.type ?? 'adjust',
+        type,
         orderId: args.orderId ?? null,
         notes: args.notes ?? null,
       },
     });
     return updated;
   });
+
+  // Best-effort journal posting (ACCOUNTING_AUTO_POST gate; never throws):
+  // a top-up grows the deposits liability. Unlike store credit there is no
+  // paired refund posting here (the refund flow only credits store credit),
+  // so 'refund' type is posted too — against refunds & returns (4200).
+  await autoPostDepositIssuance({
+    amount: args.amount,
+    currency: result.currency,
+    type,
+    orderId: args.orderId,
+    memo: `Gift card ${type} ${result.code}${args.notes ? ` — ${args.notes}` : ''}`,
+    accountCode: args.accountCode,
+  });
+  return result;
 }
 
 /**

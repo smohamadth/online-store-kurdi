@@ -1,38 +1,45 @@
 /**
- * Product-variant service.
+ * Variant service (first-class).
  *
- * Wraps CRUD on the ProductVariant model. The route layer
- * (`variant.routes.ts`) is thin - it handles HTTP, auth, and
- * input shape; this file is where the business rules live.
+ * The variant is now a first-class entity with its own slug,
+ * gallery, URL, and typed option linkage. The product is a
+ * "container" that groups related variants; the customer
+ * usually decides on a specific variant (size, color, etc.) not
+ * on the product as a whole.
  *
- * Why a separate service:
- *   - The variants table is the most-mutated child of Product, and
- *     the operations (sku uniqueness, attribute round-trip, price
- *     floor, on-delete cascade to cart/order reservations) deserve
- *     a single place to test them.
- *   - The bulk-import path in inventory.routes.ts reuses
- *     `parseAttributes` and `serializeAttributes` instead of
- *     reinventing the JSON handling.
+ * This file is the single home for variant business rules:
+ *   - SKU uniqueness (the schema also enforces @unique, but we
+ *     surface a 409 with a useful message)
+ *   - Slug uniqueness (parallel to SKU)
+ *   - Price > 0
+ *   - compareAtPrice >= price (the "was" cannot be less than the "is")
+ *   - Quantity >= 0
+ *   - Attributes JSON round-trip
+ *   - Soft delete by default (variants have FK references from
+ *     OrderItem, CartItem, and StockReservation)
+ *   - "First-class lookup" - findByIdOrSlug accepts either the
+ *     primary key or the URL slug.
  */
 import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/errorHandler';
 import { serializeAttributes, parseAttributes } from './variant.helpers';
+import { syncVariantAttributes, deleteVariantAttributes } from './variantAttributeIndex';
 
-// Re-export the pure helpers so the route layer and the test file
-// keep working without learning a new import path.
 export { serializeAttributes, parseAttributes };
-
-// ---------------------------------------------------------------------
-// CRUD
-// ---------------------------------------------------------------------
 
 export interface VariantInput {
   name: string;
   sku: string;
+  // slug/compareAtPrice accept null: variantPatchSchema emits them
+  // nullable, and null means "clear the column" (the service maps
+  // null/'' to a NULL column value).
+  slug?: string | null;
+  compareAtPrice?: number | null;
   price: number;
   quantity?: number;
   attributes?: Record<string, unknown> | string;
   isActive?: boolean;
+  sortOrder?: number;
 }
 
 export interface VariantRow {
@@ -40,96 +47,130 @@ export interface VariantRow {
   productId: string;
   name: string;
   sku: string;
+  slug: string | null;
   price: number;
+  compareAtPrice: number | null;
   quantity: number;
   attributes: string;
   isActive: boolean;
+  sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * List all variants for a product. Returns active and inactive
- * both (admin views the inactive ones too); the storefront
- * filters on its end.
- */
-export async function listVariants(productId: string): Promise<VariantRow[]> {
-  const product = await prisma.product.findUnique({ where: { id: productId } });
-  if (!product) throw new AppError('Product not found', 404);
-  return prisma.productVariant.findMany({
-    where: { productId },
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+/** First-class lookup: by primary key OR by URL slug. */
+export async function findByIdOrSlug(idOrSlug: string): Promise<VariantRow> {
+  const v = await prisma.variant.findFirst({
+    where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
   });
-}
-
-export async function getVariant(id: string): Promise<VariantRow> {
-  const v = await prisma.productVariant.findUnique({ where: { id } });
   if (!v) throw new AppError('Variant not found', 404);
   return v;
 }
 
-/**
- * Create a variant. Validates:
- *   - product exists
- *   - sku is unique across the whole table (the schema enforces
- *     @unique, but we surface a 409 with a useful message)
- *   - price > 0
- *   - quantity >= 0
- *   - attributes round-trips through JSON cleanly
- *
- * `attributes` is stored as a string; the helper above handles the
- * conversion. The return value includes the JSON-parsed `attributes`
- * for the consumer's convenience.
- */
-export async function createVariant(
-  productId: string,
-  input: VariantInput
-): Promise<VariantRow> {
+export async function getVariant(id: string): Promise<VariantRow> {
+  const v = await prisma.variant.findUnique({ where: { id } });
+  if (!v) throw new AppError('Variant not found', 404);
+  return v;
+}
+
+export interface VariantListFilters {
+  productId?: string;
+  isActive?: boolean;
+  sku?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  optionValueId?: string;
+  search?: string;
+  skip?: number;
+  take?: number;
+}
+export async function listAllVariants(filters: VariantListFilters = {}): Promise<VariantRow[]> {
+  const where: Record<string, unknown> = {};
+  if (filters.productId) where.productId = filters.productId;
+  if (filters.isActive !== undefined) where.isActive = filters.isActive;
+  if (filters.sku) where.sku = { contains: filters.sku };
+  if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+    where.price = {
+      ...(filters.minPrice !== undefined ? { gte: filters.minPrice } : {}),
+      ...(filters.maxPrice !== undefined ? { lte: filters.maxPrice } : {}),
+    };
+  }
+  if (filters.inStock === true) where.quantity = { gt: 0 };
+  if (filters.inStock === false) where.quantity = 0;
+  if (filters.optionValueId) {
+    where.optionValues = { some: { optionValueId: filters.optionValueId } };
+  }
+  if (filters.search) {
+    where.OR = [
+      { name: { contains: filters.search } },
+      { sku: { contains: filters.search } },
+    ];
+  }
+  return prisma.variant.findMany({
+    where,
+    orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    skip: filters.skip,
+    take: filters.take,
+  });
+}
+
+export async function listVariants(productId: string): Promise<VariantRow[]> {
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new AppError('Product not found', 404);
-  if (input.price <= 0) {
-    throw new AppError('price must be a positive number', 400);
+  return prisma.variant.findMany({
+    where: { productId },
+    orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+  });
+}
+
+export async function createVariant(productId: string, input: VariantInput): Promise<VariantRow> {
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw new AppError('Product not found', 404);
+  if (input.price <= 0) throw new AppError('price must be a positive number', 400);
+  // null = "clear the was-price", so skip validation for null (and
+  // undefined).
+  if (input.compareAtPrice != null) {
+    if (input.compareAtPrice < 0) throw new AppError('compareAtPrice must be >= 0', 400);
+    if (input.compareAtPrice > 0 && input.compareAtPrice < input.price) {
+      throw new AppError('compareAtPrice must be >= price (the "was" cannot be less than the "is")', 400);
+    }
   }
   const qty = input.quantity ?? 0;
   if (qty < 0 || !Number.isInteger(qty)) {
     throw new AppError('quantity must be a non-negative integer', 400);
   }
-  if (!input.name?.trim()) {
-    throw new AppError('name is required', 400);
-  }
-  if (!input.sku?.trim()) {
-    throw new AppError('sku is required', 400);
-  }
-  const dup = await prisma.productVariant.findUnique({ where: { sku: input.sku } });
-  if (dup) {
-    throw new AppError(`Variant with SKU "${input.sku}" already exists`, 409);
+  if (!input.name?.trim()) throw new AppError('name is required', 400);
+  if (!input.sku?.trim()) throw new AppError('sku is required', 400);
+  const dup = await prisma.variant.findUnique({ where: { sku: input.sku } });
+  if (dup) throw new AppError(`Variant with SKU "${input.sku}" already exists`, 409);
+  if (input.slug?.trim()) {
+    const slugDup = await prisma.variant.findUnique({ where: { slug: input.slug } });
+    if (slugDup) throw new AppError(`Variant with slug "${input.slug}" already exists`, 409);
   }
   const attrs = serializeAttributes(input.attributes);
-  return prisma.productVariant.create({
+  const created = await prisma.variant.create({
     data: {
       productId,
       name: input.name.trim(),
       sku: input.sku.trim(),
+      slug: input.slug?.trim() || null,
       price: input.price,
+      compareAtPrice: input.compareAtPrice ?? null,
       quantity: qty,
       attributes: attrs,
       isActive: input.isActive ?? true,
+      sortOrder: input.sortOrder ?? 0,
     },
   });
+  // Keep the (key, value) query index in step with the JSON column so
+  // the /products attribute filter can find this variant in SQL.
+  await syncVariantAttributes(prisma, created.id, attrs);
+  return created;
 }
 
-/**
- * Update a variant. All fields are optional; the caller sends
- * only what they want to change.
- *
- * Sku uniqueness is re-checked: a PATCH that changes the sku to
- * one another variant already uses returns 409.
- */
-export async function updateVariant(
-  id: string,
-  input: Partial<VariantInput>
-): Promise<VariantRow> {
-  const existing = await prisma.productVariant.findUnique({ where: { id } });
+export async function updateVariant(id: string, input: Partial<VariantInput>): Promise<VariantRow> {
+  const existing = await prisma.variant.findUnique({ where: { id } });
   if (!existing) throw new AppError('Variant not found', 404);
   if (input.price !== undefined && input.price <= 0) {
     throw new AppError('price must be a positive number', 400);
@@ -138,38 +179,135 @@ export async function updateVariant(
     throw new AppError('quantity must be a non-negative integer', 400);
   }
   if (input.sku !== undefined && input.sku !== existing.sku) {
-    const dup = await prisma.productVariant.findUnique({ where: { sku: input.sku } });
+    const dup = await prisma.variant.findUnique({ where: { sku: input.sku } });
     if (dup) throw new AppError(`Variant with SKU "${input.sku}" already exists`, 409);
+  }
+  if (input.slug !== undefined && input.slug !== existing.slug && input.slug !== null && input.slug !== '') {
+    const dup = await prisma.variant.findUnique({ where: { slug: input.slug } });
+    if (dup) throw new AppError(`Variant with slug "${input.slug}" already exists`, 409);
+  }
+  // null = "clear the was-price", so skip validation for null/undefined.
+  if (input.compareAtPrice != null) {
+    if (input.compareAtPrice < 0) throw new AppError('compareAtPrice must be >= 0', 400);
+    const effectivePrice = input.price ?? existing.price;
+    if (input.compareAtPrice > 0 && input.compareAtPrice < effectivePrice) {
+      throw new AppError('compareAtPrice must be >= price', 400);
+    }
   }
   const data: Record<string, unknown> = {};
   if (input.name !== undefined) data.name = input.name.trim();
   if (input.sku !== undefined) data.sku = input.sku.trim();
+  if (input.slug !== undefined) data.slug = input.slug?.trim() || null;
   if (input.price !== undefined) data.price = input.price;
+  if (input.compareAtPrice !== undefined) data.compareAtPrice = input.compareAtPrice;
   if (input.quantity !== undefined) data.quantity = input.quantity;
   if (input.isActive !== undefined) data.isActive = input.isActive;
+  if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder;
   if (input.attributes !== undefined) data.attributes = serializeAttributes(input.attributes);
-  return prisma.productVariant.update({ where: { id }, data });
+  const updated = await prisma.variant.update({ where: { id }, data });
+  if (input.attributes !== undefined) {
+    // Rebuild the index for the new attribute set (same JSON we just stored).
+    await syncVariantAttributes(prisma, id, data.attributes as string);
+  }
+  return updated;
 }
 
-/**
- * Delete a variant.
- *
- * Soft delete (set isActive=false) is the default because variants
- * typically have FK references from OrderItem, CartItem, and
- * StockReservation that would otherwise leave dangling rows. The
- * `force: true` option bypasses the soft path and issues a real
- * DELETE - use this only for variants that have no history
- * (typically brand-new test fixtures).
- */
 export async function deleteVariant(id: string, opts: { force?: boolean } = {}): Promise<VariantRow | { id: string; deleted: true }> {
-  const existing = await prisma.productVariant.findUnique({ where: { id } });
+  const existing = await prisma.variant.findUnique({ where: { id } });
   if (!existing) throw new AppError('Variant not found', 404);
   if (opts.force) {
-    await prisma.productVariant.delete({ where: { id } });
+    // The real database cascades the index rows via FK; the explicit
+    // delete keeps the (non-cascading) test mock consistent too.
+    await deleteVariantAttributes(prisma, id);
+    await prisma.variant.delete({ where: { id } });
     return { id, deleted: true };
   }
-  return prisma.productVariant.update({
+  return prisma.variant.update({
     where: { id },
     data: { isActive: false, quantity: 0 },
+  });
+}
+
+export interface OptionInput {
+  name: string;
+  sortOrder?: number;
+  // swatch is nullable in optionInputSchema (null clears it); stored as NULL.
+  values: { value: string; swatch?: string | null; sortOrder?: number }[];
+}
+
+export async function setProductOptions(productId: string, options: OptionInput[]) {
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw new AppError('Product not found', 404);
+  // Drop the existing options. Cascades to OptionValue and
+  // VariantOptionValue.
+  await prisma.option.deleteMany({ where: { productId } });
+  for (let i = 0; i < options.length; i++) {
+    const o = options[i];
+    if (!o.name?.trim()) throw new AppError(`Option ${i} has no name`, 400);
+    const created = await prisma.option.create({
+      data: { productId, name: o.name.trim(), sortOrder: o.sortOrder ?? i },
+    });
+    for (let j = 0; j < o.values.length; j++) {
+      const v = o.values[j];
+      if (!v.value?.trim()) throw new AppError(`Option "${o.name}" value ${j} has no value`, 400);
+      await prisma.optionValue.create({
+        data: {
+          optionId: created.id,
+          value: v.value.trim(),
+          swatch: v.swatch || null,
+          sortOrder: v.sortOrder ?? j,
+        },
+      });
+    }
+  }
+  return prisma.option.findMany({
+    where: { productId },
+    orderBy: { sortOrder: 'asc' },
+    include: { values: { orderBy: { sortOrder: 'asc' } } },
+  });
+}
+
+export async function getProductOptions(productId: string) {
+  return prisma.option.findMany({
+    where: { productId },
+    orderBy: { sortOrder: 'asc' },
+    include: { values: { orderBy: { sortOrder: 'asc' } } },
+  });
+}
+
+export async function setVariantOptionValues(variantId: string, optionValueIds: string[]) {
+  const variant = await prisma.variant.findUnique({ where: { id: variantId } });
+  if (!variant) throw new AppError('Variant not found', 404);
+  if (optionValueIds.length > 0) {
+    const found = await prisma.optionValue.findMany({ where: { id: { in: optionValueIds } } });
+    if (found.length !== optionValueIds.length) {
+      throw new AppError('One or more optionValueIds do not exist', 400);
+    }
+    const variantProductOptions = await prisma.option.findMany({
+      where: { productId: variant.productId },
+      include: { values: true },
+    });
+    const validIds = new Set<string>();
+    for (const o of variantProductOptions) for (const v of o.values) validIds.add(v.id);
+    for (const id of optionValueIds) {
+      if (!validIds.has(id)) {
+        throw new AppError(`Option value ${id} does not belong to product ${variant.productId}`, 400);
+      }
+    }
+  }
+  await prisma.variantOptionValue.deleteMany({ where: { variantId } });
+  for (const optionValueId of optionValueIds) {
+    await prisma.variantOptionValue.create({ data: { variantId, optionValueId } });
+  }
+  return prisma.variantOptionValue.findMany({
+    where: { variantId },
+    include: { optionValue: { include: { option: true } } },
+  });
+}
+
+export async function getVariantOptionValues(variantId: string) {
+  return prisma.variantOptionValue.findMany({
+    where: { variantId },
+    include: { optionValue: { include: { option: true } } },
   });
 }

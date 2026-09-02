@@ -1,3 +1,9 @@
+// Zod schemas + types for the product controller/service trio.
+// NOTE: product.controller.ts and product.service.ts are legacy (not
+// imported by the live product.routes.ts), so these schemas are not
+// exercised by the API - product.routes.ts defines its own inline
+// create/update/query schemas. Kept in sync with the live shapes where
+// practical, but treat product.routes.ts as the source of truth.
 import { z } from 'zod';
 
 // Product type enum
@@ -17,21 +23,21 @@ export const CreateProductSchema = z.object({
   sku: z.string().min(1).max(100),
   type: ProductType.default('physical'),
   status: ProductStatus.default('draft'),
-  price: z.number().positive(),
-  compareAtPrice: z.number().positive().optional(),
-  costPrice: z.number().positive().optional(),
+  price: z.number().finite().positive(),
+  compareAtPrice: z.number().finite().positive().optional(),
+  costPrice: z.number().finite().positive().optional(),
   trackInventory: z.boolean().default(true),
-  quantity: z.number().int().min(0).default(0),
-  lowStockThreshold: z.number().int().min(0).default(10),
+  quantity: z.number().finite().int().min(0).default(0),
+  lowStockThreshold: z.number().finite().int().min(0).default(10),
   downloadUrl: z.string().url().optional(),
-  downloadLimit: z.number().int().positive().optional(),
-  downloadExpiry: z.number().int().positive().optional(),
-  weight: z.number().positive().optional(),
+  downloadLimit: z.number().finite().int().positive().optional(),
+  downloadExpiry: z.number().finite().int().positive().optional(),
+  weight: z.number().finite().positive().optional(),
   weightUnit: z.enum(['kg', 'lb', 'oz', 'g']).default('kg'),
   dimensions: z.object({
-    length: z.number().positive(),
-    width: z.number().positive(),
-    height: z.number().positive(),
+    length: z.number().finite().positive(),
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
     unit: z.enum(['cm', 'in', 'm', 'ft']).default('cm'),
   }).optional(),
   categoryId: z.string().uuid(),
@@ -42,13 +48,13 @@ export const CreateProductSchema = z.object({
     url: z.string(),
     alt: z.string().optional(),
     isPrimary: z.boolean().default(false),
-    sortOrder: z.number().int().default(0),
+    sortOrder: z.number().finite().int().default(0),
   })).default([]),
   variants: z.array(z.object({
     name: z.string(),
     sku: z.string(),
-    price: z.number().positive(),
-    quantity: z.number().int().min(0).default(0),
+    price: z.number().finite().positive(),
+    quantity: z.number().finite().int().min(0).default(0),
     attributes: z.record(z.string()),
     isActive: z.boolean().default(true),
   })).default([]),
@@ -94,6 +100,17 @@ export interface ProductResponse {
   variants: ProductVariantResponse[];
   averageRating: number;
   reviewCount: number;
+  /** Digital-product fields. Only meaningful when `type === 'digital'`,
+   * but we always return them so the storefront doesn't have to branch
+   * on the type before deciding what to render. */
+  downloadUrl: string | null;
+  /** Derived from downloadUrl's extension; present on the public API
+   * instead of the raw URL (which stays admin-only). */
+  fileFormat: string | null;
+  downloadLimit: number | null;
+  /** Number of days from order placement until the per-order link
+   * expires. `null` means no expiry. */
+  downloadExpiry: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

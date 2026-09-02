@@ -1,3 +1,9 @@
+// /admin/inventory/reorder - the auto-reorder rules + the draft
+// pipeline. Rules say "when stock falls below X, draft a purchase
+// order for Y"; the scheduler (jobs/inventory-scheduler.ts) or the
+// manual "run now" button evaluates them and creates DRAFTS, which
+// the admin then approves/edits here - no purchase order is created
+// behind the admin's back.
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -116,7 +122,7 @@ export default function ReorderPage() {
             </div>
           )}
 
-          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr style={{ background: '#f9f9f9' }}>
                 <th style={th}>Product</th><th style={th}>Threshold</th><th style={th}>Reorder qty</th><th style={th}>Supplier</th><th style={th}>Active</th>
@@ -139,7 +145,7 @@ export default function ReorderPage() {
       )}
 
       {tab === 'drafts' && (
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
+        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr style={{ background: '#f9f9f9' }}>
               <th style={th}>Product</th><th style={th}>Quantity</th><th style={th}>Status</th><th style={th}>Created</th><th style={{ ...th, textAlign: 'right' }}>Actions</th>

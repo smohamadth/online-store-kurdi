@@ -11,6 +11,12 @@ import path from 'path';
  * Use this config when you want route-level coverage without needing
  * a real database. The "real" integration tests use the same code
  * paths; only the underlying prisma client is swapped out.
+ *
+ * Pool: one fork PER FILE (not singleFork). Every fork has its own module
+ * registry, so the mockPrisma store is fully isolated per file, and a file
+ * that writes process.env (temp THEMES_DIR/PLUGINS_DIR) can never leak into
+ * a neighbour. Single-fork also accumulates every app instance in one
+ * process, which OOMs small-memory CI runners.
  */
 export default defineConfig({
   test: {
@@ -21,7 +27,6 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 30_000,
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
   },
   resolve: {
     alias: {

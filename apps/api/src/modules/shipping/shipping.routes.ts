@@ -1,7 +1,24 @@
+// ---------------------------------------------------------------------------
+// Shipping: admin CRUD for zones + methods, and the public rate
+// calculator the checkout calls.
+//
+// Zones match an address by country (always), then optionally a state
+// list and/or a zip prefix. Methods attach to a zone and price by one of
+// four types: flat (baseRate), weight (base + weightUnitRate x weight),
+// price (base + pricePercentage% of the order), or item_count
+// (base + baseRate per item); min/max weight and min/max order amount
+// act as availability gates.
+//
+// Like tax, calculate is advisory (drives the checkout display); order
+// placement recomputes the chosen method's rate server-side via
+// shipping.service (see order.routes.ts), so the client's
+// shippingAmount is never trusted.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { calculateShippingForOrder } from './shipping.service';
 import { z } from 'zod';
 
 const router = Router();
@@ -21,15 +38,15 @@ const shippingMethodSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   type: z.enum(['flat', 'weight', 'price', 'item_count']),
-  baseRate: z.number().min(0),
-  weightUnitRate: z.number().min(0).optional(),
-  minWeight: z.number().min(0).optional(),
-  maxWeight: z.number().min(0).optional(),
+  baseRate: z.number().min(0).finite(),
+  weightUnitRate: z.number().min(0).finite().optional(),
+  minWeight: z.number().min(0).finite().optional(),
+  maxWeight: z.number().min(0).finite().optional(),
   pricePercentage: z.number().min(0).max(100).optional(),
-  minOrderAmount: z.number().min(0).optional(),
-  maxOrderAmount: z.number().min(0).optional(),
-  itemCountRate: z.number().min(0).optional(),
-  freeShippingThreshold: z.number().min(0).optional(),
+  minOrderAmount: z.number().min(0).finite().optional(),
+  maxOrderAmount: z.number().min(0).finite().optional(),
+  itemCountRate: z.number().min(0).finite().optional(),
+  freeShippingThreshold: z.number().min(0).finite().optional(),
   minDeliveryDays: z.number().int().min(1).optional(),
   maxDeliveryDays: z.number().int().min(1).optional(),
   isActive: z.boolean().optional(),
@@ -243,7 +260,9 @@ router.delete('/methods/:id', authenticate, authorize('admin'), async (req, res,
 // SHIPPING CALCULATION
 // ============================================
 
-// POST /api/shipping/calculate - Calculate shipping rates
+// POST /api/shipping/calculate - Calculate shipping rates (advisory; order
+// placement recomputes the same numbers server-side via shipping.service).
+// authz-ok: guest checkout must quote shipping before login
 router.post('/calculate', async (req, res, next) => {
   try {
     const { country, state, zipCode, subtotal, weight, itemCount } = req.body;
@@ -255,101 +274,26 @@ router.post('/calculate', async (req, res, next) => {
       });
     }
 
-    // Find matching shipping zones
-    const zones = await prisma.shippingZone.findMany({
-      where: { isActive: true },
-      include: {
-        methods: {
-          where: { isActive: true },
-        },
-      },
+    const methods = await calculateShippingForOrder({
+      country,
+      state,
+      zipCode,
+      subtotal: Number(subtotal || 0),
+      weight: Number(weight || 0),
+      itemCount: Number(itemCount || 0),
     });
-
-    const matchingMethods: any[] = [];
-
-    for (const zone of zones) {
-      const countries = JSON.parse(zone.countries as string || '[]');
-      const states = JSON.parse(zone.states as string || '[]');
-      const zipCodes = JSON.parse(zone.zipCodes as string || '[]');
-
-      // Check if address matches zone
-      const countryMatch = countries.includes(country) || countries.includes('*');
-      const stateMatch = states.length === 0 || states.includes(state) || states.includes('*');
-      const zipMatch = zipCodes.length === 0 || zipCodes.some((z: string) => zipCode?.startsWith(z));
-
-      if (countryMatch && stateMatch && zipMatch) {
-        for (const method of zone.methods) {
-          let rate = Number(method.baseRate);
-          let isFree = false;
-
-          // Calculate rate based on type
-          switch (method.type) {
-            case 'flat':
-              // Flat rate - already set
-              break;
-
-            case 'weight':
-              if (method.weightUnitRate && weight) {
-                rate = Number(method.baseRate) + (weight * Number(method.weightUnitRate));
-              }
-              break;
-
-            case 'price':
-              if (method.pricePercentage && subtotal) {
-                rate = (subtotal * Number(method.pricePercentage)) / 100;
-                if (method.minOrderAmount && subtotal < Number(method.minOrderAmount)) {
-                  continue; // Skip if below minimum
-                }
-                if (method.maxOrderAmount && subtotal > Number(method.maxOrderAmount)) {
-                  continue; // Skip if above maximum
-                }
-              }
-              break;
-
-            case 'item_count':
-              if (method.itemCountRate && itemCount) {
-                rate = Number(method.baseRate) + (itemCount * Number(method.itemCountRate));
-              }
-              break;
-          }
-
-          // Check free shipping threshold
-          if (method.freeShippingThreshold && subtotal >= Number(method.freeShippingThreshold)) {
-            rate = 0;
-            isFree = true;
-          }
-
-          matchingMethods.push({
-            id: method.id,
-            name: method.name,
-            description: method.description,
-            type: method.type,
-            rate: Math.round(rate * 100) / 100,
-            isFree,
-            minDeliveryDays: method.minDeliveryDays,
-            maxDeliveryDays: method.maxDeliveryDays,
-            zone: {
-              id: zone.id,
-              name: zone.name,
-            },
-          });
-        }
-      }
-    }
-
-    // Sort by rate
-    matchingMethods.sort((a, b) => a.rate - b.rate);
 
     res.json({
       status: 'success',
-      data: matchingMethods,
+      data: methods,
     });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/shipping/zones/lookup - Find zone for address
+// POST /api/shipping/zones/lookup - Find the zones matching an address
+// authz-ok: guest checkout zone lookup
 router.post('/zones/lookup', async (req, res, next) => {
   try {
     const { country, state, zipCode } = req.body;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
+import { parseDays } from '../../utils/pagination';
 
 const router = Router();
 
@@ -16,7 +17,7 @@ const router = Router();
  */
 router.get('/stats', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const days = parseDays(req.query.days, 30, 365);
     const since = new Date();
     since.setDate(since.getDate() - days);
 

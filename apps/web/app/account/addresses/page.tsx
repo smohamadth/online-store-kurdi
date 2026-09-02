@@ -1,3 +1,7 @@
+// /account/addresses - the saved-address book (add / edit / delete /
+// set default) behind the checkout's "ship to a saved address"
+// picker. All calls go to /api/addresses, which is scoped to the
+// logged-in user on the server.
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -369,7 +373,7 @@ export default function AddressesPage() {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>First Name *</label>
                   <input type="text" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} required style={{ width: '100%', padding: '10px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '4px', boxSizing: 'border-box' }} />

@@ -13,14 +13,19 @@
  * save succeeded, and the admin builder surfaces real errors.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { api, Product, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { useIsMobile } from '@/lib/hooks';
+import { resolveThemeConfig } from '@/lib/themeRuntime';
+import { blockToHomeSection } from '@/lib/layouts/homeMapping';
+import type { PageLayout } from '@/lib/layouts/types';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
+import StoreImage from '@/components/StoreImage';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
+import HeroSplit from '@/components/HeroSplit';
 import PromoGrid from '@/components/PromoGrid';
 import BannerStrip from '@/components/BannerStrip';
 import HomeGallery from '@/components/HomeGallery';
@@ -35,9 +40,20 @@ import {
   Newsletter,
   RichTextBlock,
   SectionHeading,
+  CustomSection,
 } from '@/components/HomeSections';
+import FaqAccordion from '@/components/rich/FaqAccordion';
+import LogoCloud from '@/components/rich/LogoCloud';
+import VideoSection from '@/components/rich/VideoSection';
+import ComparisonTable from '@/components/rich/ComparisonTable';
+import PullQuote from '@/components/rich/PullQuote';
+import LookbookSection from '@/components/rich/LookbookSection';
+import ShowcaseRow from '@/components/rich/ShowcaseRow';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
+import { heroOptionsFromConfig } from '@/lib/heroOptions';
 import { API_BASE } from '@/lib/http';
+import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
+import RecentlyViewed from '@/components/RecentlyViewed';
 
 const CONTAINER = 'var(--container, 1200px)';
 
@@ -194,12 +210,55 @@ export default function HomeView() {
 
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
 
+  /**
+   * Theme Studio override: if the ACTIVE theme ships a `layouts.home`, render
+   * that grid instead of the HomeSection rows. Bundled themes have no
+   * `layouts` field, so this is inert for them and only activates once an
+   * admin creates a theme with a saved home layout.
+   */
+  const homeLayout: PageLayout | undefined = useMemo(() => {
+    const cfg = resolveThemeConfig(theme.activeTheme);
+    return cfg?.layouts?.home as PageLayout | undefined;
+  }, [theme.activeTheme]);
+
   const renderSection = (s: HomeSection) => {
     const cfg = s.config || {};
 
     switch (s.type) {
-      case 'hero':
-        return <HeroGallery key={s.id} banners={heroBanners} loaded={bannersLoaded} />;
+      case 'hero': {
+        // Design options for this hero row (Appearance → Home → the hero
+        // block): layout / height / autoplay / arrows / dots. Themes with
+        // their own hero component receive the same `config` and decide
+        // what they honour; the platform hero honours all of them.
+        const heroOpts = heroOptionsFromConfig(cfg.hero);
+        const heroSlides =
+          heroOpts.layout === 'slideshow' ? heroBanners : heroBanners.slice(0, 1);
+        return (
+          <ThemeSectionRenderer
+            key={s.id}
+            section="hero"
+            fallback={
+              heroOpts.layout === 'split' ? (
+                <HeroSplit
+                  banner={heroBanners[0] ?? null}
+                  height={heroOpts.height}
+                />
+              ) : (
+                <HeroGallery
+                  banners={heroSlides}
+                  loaded={bannersLoaded}
+                  autoPlay={heroOpts.autoPlay}
+                  autoPlayMs={heroOpts.autoPlayMs}
+                  showArrows={heroOpts.showArrows}
+                  showDots={heroOpts.showDots}
+                  height={heroOpts.height}
+                />
+              )
+            }
+            props={{ banners: heroSlides, config: cfg }}
+          />
+        );
+      }
 
       case 'promo':
         return <PromoGrid key={s.id} banners={promoBanners} />;
@@ -215,32 +274,39 @@ export default function HomeView() {
 
       case 'categories':
         return (
-          <section key={s.id} style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
-            <SectionHeading
-              title={s.title}
-              subtitle={s.subtitle}
-              linkText={cfg.linkText || 'View All →'}
-              linkHref={cfg.linkHref || '/products'}
-            />
-            {categories.length === 0 ? (
-              <p style={{ marginTop: '24px', color: 'var(--muted,#666)' }}>
-                No categories yet. Add some in Admin → Categories.
-              </p>
-            ) : (
-              <div
-                style={{
-                  marginTop: '32px',
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${perRow}, 1fr)`,
-                  gap: '16px',
-                }}
-              >
-                {categories.slice(0, cfg.limit || 8).map((c) => (
-                  <CategoryTile key={c.slug} category={c} />
-                ))}
-              </div>
-            )}
-          </section>
+          <ThemeSectionRenderer
+            key={s.id}
+            section="categories"
+            fallback={
+              <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+                <SectionHeading
+                  title={s.title}
+                  subtitle={s.subtitle}
+                  linkText={cfg.linkText || 'View All →'}
+                  linkHref={cfg.linkHref || '/products'}
+                />
+                {categories.length === 0 ? (
+                  <p style={{ marginTop: '24px', color: 'var(--muted,#666)' }}>
+                    No categories yet. Add some in Admin → Categories.
+                  </p>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: '32px',
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : `repeat(${perRow}, 1fr)`,
+                      gap: '16px',
+                    }}
+                  >
+                    {categories.slice(0, cfg.limit || 8).map((c) => (
+                      <CategoryTile key={c.slug} category={c} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            }
+            props={{ title: s.title ?? undefined, subtitle: s.subtitle ?? undefined, categories, config: cfg }}
+          />
         );
 
       case 'featured': {
@@ -251,41 +317,48 @@ export default function HomeView() {
           Math.max(cols, Math.floor(featuredProducts.length / cols) * cols)
         );
         return (
-          <section key={s.id} style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
-            <SectionHeading
-              title={s.title}
-              subtitle={s.subtitle}
-              linkText={cfg.linkText || 'View All Products →'}
-              linkHref={cfg.linkHref || '/products'}
-            />
-            {loading && (
-              <div style={{ marginTop: '32px' }}>
-                <ProductGridSkeleton count={perRow * 2} />
-              </div>
-            )}
-            {!loading && shown.length > 0 && (
-              <div
-                style={{
-                  marginTop: '32px',
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                  gap: '24px',
-                }}
-              >
-                {shown.map((p) => (
-                  <ProductCard key={p.id} product={p} currencySymbol={settings.currencySymbol} />
-                ))}
-              </div>
-            )}
-            {!loading && featuredProducts.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted,#666)' }}>
-                <p>No featured products yet.</p>
-                <p style={{ fontSize: '14px', marginTop: '8px' }}>
-                  Mark products as “featured” in Admin → Products.
-                </p>
-              </div>
-            )}
-          </section>
+          <ThemeSectionRenderer
+            key={s.id}
+            section="featured"
+            fallback={
+              <section style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '64px 20px' }}>
+                <SectionHeading
+                  title={s.title}
+                  subtitle={s.subtitle}
+                  linkText={cfg.linkText || 'View All Products →'}
+                  linkHref={cfg.linkHref || '/products'}
+                />
+                {loading && (
+                  <div style={{ marginTop: '32px' }}>
+                    <ProductGridSkeleton count={perRow * 2} />
+                  </div>
+                )}
+                {!loading && shown.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: '32px',
+                      display: 'grid',
+                      gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                      gap: '24px',
+                    }}
+                  >
+                    {shown.map((p) => (
+                      <ProductCard key={p.id} product={p} currencySymbol={settings.currencySymbol} />
+                    ))}
+                  </div>
+                )}
+                {!loading && featuredProducts.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '48px', color: 'var(--muted,#666)' }}>
+                    <p>No featured products yet.</p>
+                    <p style={{ fontSize: '14px', marginTop: '8px' }}>
+                      Mark products as “featured” in Admin → Products.
+                    </p>
+                  </div>
+                )}
+              </section>
+            }
+            props={{ title: s.title ?? undefined, subtitle: s.subtitle ?? undefined, products: shown, config: cfg }}
+          />
         );
       }
 
@@ -347,6 +420,96 @@ export default function HomeView() {
           />
         );
 
+      case 'faq':
+        return (
+          <FaqAccordion
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            items={cfg.items}
+            columns={cfg.columns === 'one' ? 'one' : 'two'}
+            openFirst={cfg.openFirst !== false}
+          />
+        );
+
+      case 'logos':
+        return (
+          <LogoCloud
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            items={cfg.items}
+            grayscale={cfg.grayscale !== false}
+          />
+        );
+
+      case 'video':
+        return (
+          <VideoSection
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            url={cfg.url}
+            autoplay={Boolean(cfg.autoplay)}
+            muted={Boolean(cfg.muted)}
+            loop={Boolean(cfg.loop)}
+            aspect={cfg.aspect}
+            poster={cfg.poster}
+          />
+        );
+
+      case 'comparison':
+        return (
+          <ComparisonTable
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            columns={cfg.columns}
+            rows={cfg.rows}
+            highlight={typeof cfg.highlight === 'number' ? cfg.highlight : null}
+          />
+        );
+
+      case 'quote':
+        return (
+          <PullQuote
+            key={s.id}
+            quote={cfg.quote}
+            author={cfg.author}
+            role={cfg.role}
+            avatar={cfg.avatar}
+            background={cfg.background}
+          />
+        );
+
+      case 'lookbook':
+        return (
+          <LookbookSection
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            description={cfg.description}
+            image={cfg.image}
+            imagePosition={cfg.imagePosition === 'end' ? 'end' : 'start'}
+            buttonText={cfg.buttonText}
+            linkUrl={cfg.linkUrl}
+            overlayColor={cfg.overlayColor}
+          />
+        );
+
+      case 'showcaseRow':
+        return (
+          <ShowcaseRow
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            category={cfg.category}
+            limit={cfg.limit}
+            viewAllText={cfg.viewAllText}
+            currencySymbol={settings.currencySymbol}
+          />
+        );
+
       case 'richText':
         return (
           <RichTextBlock
@@ -355,6 +518,21 @@ export default function HomeView() {
             subtitle={s.subtitle}
             html={cfg.html}
             align={cfg.align === 'center' ? 'center' : 'left'}
+          />
+        );
+
+      // Admin-designed section: rich content in a chosen background /
+      // width / padding (Appearance → Home → "Custom section").
+      case 'custom':
+        return (
+          <CustomSection
+            key={s.id}
+            title={s.title}
+            html={cfg.html}
+            background={cfg.background}
+            align={cfg.align === 'center' ? 'center' : cfg.align === 'right' ? 'right' : 'left'}
+            padding={cfg.padding}
+            width={cfg.width}
           />
         );
 
@@ -391,9 +569,48 @@ export default function HomeView() {
         <div style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '40px 20px' }}>
           <ProductGridSkeleton count={perRow * 2} />
         </div>
+      ) : homeLayout && Array.isArray(homeLayout.blocks) && homeLayout.blocks.length > 0 ? (
+        /* Theme Studio home layout: render each block in its grid cell using
+            the same rich section renderers as the default layout. */
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${homeLayout.columns || 12}, 1fr)`,
+            gap: homeLayout.gap ?? 24,
+            gridAutoFlow: 'dense',
+          }}
+        >
+          {[...homeLayout.blocks]
+            .sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart)
+            .map((b) => {
+              const sec = blockToHomeSection(b);
+              // Master toggles (Appearance -> Sections) still win: a section
+              // switched off there stays hidden even in a studio layout.
+              if (legacyHidden(sec.key)) return null;
+              return (
+                <div
+                  key={b.id}
+                  data-block-type={b.type}
+                  style={{
+                    gridColumn: `${b.colStart} / span ${b.colSpan}`,
+                    gridRow: `${b.rowStart} / span ${b.rowSpan}`,
+                    minWidth: 0,
+                  }}
+                >
+                  {renderSection(sec)}
+                </div>
+              );
+            })}
+        </div>
       ) : (
         visible.map(renderSection)
       )}
+
+      {/* "Recently viewed" - client-side, per-browser. Renders nothing
+          for a fresh visitor (empty list), so it never shows as an
+          empty section. Kept below the curated sections on purpose:
+          it's a recall aid, not merchandising. */}
+      <RecentlyViewed />
     </div>
   );
 }
@@ -413,6 +630,9 @@ function CategoryTile({
       href={`/category/${category.slug}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      // Keyboard users get the same lift/zoom on focus.
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
       style={{
         display: 'block',
         position: 'relative',
@@ -438,10 +658,9 @@ function CategoryTile({
         }}
       >
         {showImage ? (
-          <img
+          <StoreImage
             src={getImageUrl(category.image!)}
             alt={category.name}
-            loading="lazy"
             onError={() => setImgFailed(true)}
             style={{
               width: '100%',

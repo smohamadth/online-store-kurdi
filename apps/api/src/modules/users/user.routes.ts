@@ -1,17 +1,30 @@
+// ---------------------------------------------------------------------------
+// Users API (mounted at /api/users).
+//
+// Two audiences with strict separation:
+//   - the admin user list (GET /, GET /:id as admin, PUT /:id as admin,
+//     plus the per-user order/wishlist views) - the admin Users page;
+//   - the customer's own profile (GET /:id and PUT /:id when id ===
+//     req.user.id) - the account page.
+//
+// Self-update is locked to a small allow-list (selfUpdateSchema):
+// role/isActive/isVerified can ONLY come through the admin schema -
+// that split is the privilege-escalation guard. See the doc comments on
+// each route for the regression history.
+// ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
+import { parsePagination } from '../../utils/pagination';
 
 const router = Router();
 
 // GET /api/users - Get all users (admin only)
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query, { limit: 20 });
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -144,7 +157,12 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     // Parse with the schema matching the caller's privileges. A non-admin
     // sending `role` gets a 400 naming the field rather than a silent drop.
-    const parsed = isAdmin ? adminUpdateSchema.parse(req.body) : selfUpdateSchema.parse(req.body);
+    // adminUpdateSchema is a strict superset of selfUpdateSchema, so a
+    // self-parse result (no role/isActive keys) is a valid narrower shape of
+    // the same type - the guard rails below treat absent keys as "not sent".
+    const parsed = (isAdmin
+      ? adminUpdateSchema.parse(req.body)
+      : selfUpdateSchema.parse(req.body)) as z.infer<typeof adminUpdateSchema>;
 
     const target = await prisma.user.findUnique({
       where: { id },
