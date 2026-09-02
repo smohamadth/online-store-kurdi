@@ -46,7 +46,23 @@ for f in files:
                 window,
             )
         )
-        checks_ok = bool(re.search(r"res\.ok|response\.ok|!res\.ok|!response\.ok", window))
+        # A guarded write is one that inspects the outcome before treating it
+        # as success. Two idioms are in use:
+        #   1. the fetch Response flag  -> `if (!res.ok)`
+        #   2. an explicit status code  -> `if (status !== 200)`, `res.status !== 201`
+        # Only the first was recognised, so every page built on a helper that
+        # returns `{ status, body }` (admin/plugins uses one) was reported as a
+        # silent write even though it checks the status and calls setError on
+        # every branch. Those five false positives made the audit exit 1 on a
+        # clean tree, which trains people to ignore it.
+        checks_ok = bool(
+            re.search(
+                r"(res|response)\.ok"
+                r"|\bstatus\s*(!==|===|!=|==|<|>=)\s*\d{3}"
+                r"|\.status\s*(!==|===|!=|==|<|>=)\s*\d{3}",
+                window,
+            )
+        )
         uses_client = 'authHttp.' in line
 
         # authHttp throws on failure, so it's safe *if* something surfaces it
