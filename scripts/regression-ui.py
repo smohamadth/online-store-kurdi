@@ -3,6 +3,7 @@ import os
 import sys
 import traceback
 from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PWTimeout
 
 
 def annotate(title, message):
@@ -32,7 +33,11 @@ ACCOUNT = ["/account", "/account/orders", "/account/wishlist",
 
 
 def login(p, email, pw):
-    p.goto(f"{BASE}/login", wait_until="networkidle", timeout=60000)
+    p.goto(f"{BASE}/login", wait_until="load", timeout=60000)
+    try:
+        p.wait_for_load_state("networkidle", timeout=15000)
+    except PWTimeout:
+        pass
     p.fill('input[type="email"]', email)
     p.fill('input[type="password"]', pw)
     p.get_by_role("button", name="Sign In", exact=True).last.click()
@@ -43,6 +48,7 @@ def login(p, email, pw):
 # section raises before they are assigned.
 bad, abad, cbad, n = [], [], [], 0
 errors = {}
+slow = {}
 crash = None
 
 with sync_playwright() as pw:
@@ -51,10 +57,33 @@ with sync_playwright() as pw:
     current = {"path": ""}
     p.on("pageerror", lambda e: errors.setdefault(current["path"], []).append(str(e)[:110]))
 
+    # Track in-flight requests so a page that never goes idle can say WHICH
+    # request is holding it open, instead of just timing out.
+    inflight = {}
+    p.on("request", lambda r: inflight.__setitem__(r.url, r.resource_type))
+    p.on("requestfinished", lambda r: inflight.pop(r.url, None))
+    p.on("requestfailed", lambda r: inflight.pop(r.url, None))
+
     try:
         def visit(path):
             current["path"] = path
-            p.goto(f"{BASE}{path}", wait_until="networkidle", timeout=60000)
+            inflight.clear()
+            # `networkidle` means "no network connections for 500ms". Any
+            # long-poll, retrying request, streamed response or hanging
+            # third-party asset keeps it from ever firing, which fails the
+            # whole sweep even though the page rendered fine. Playwright
+            # itself discourages it for exactly this reason.
+            #
+            # Wait for `load` (hard requirement), then give the page a short
+            # grace period to reach idle. If idle never arrives, carry on and
+            # report the requests still open rather than aborting the run.
+            p.goto(f"{BASE}{path}", wait_until="load", timeout=60000)
+            try:
+                p.wait_for_load_state("networkidle", timeout=15000)
+            except PWTimeout:
+                stuck = [f"{t}:{u}" for u, t in list(inflight.items())[:5]]
+                slow.setdefault(path, stuck)
+                print(f"  ⏳ {path} never reached networkidle; open: {stuck or 'none'}")
             p.wait_for_timeout(1600)
             body = p.inner_text("body")
             broken = ("Application error" in body or "Something went wrong" in body
@@ -99,14 +128,14 @@ with sync_playwright() as pw:
 
         print()
         print("=== KEY BEHAVIOUR ===")
-        p.goto(f"{BASE}/products", wait_until="networkidle", timeout=60000)
+        visit("/products")
         p.wait_for_timeout(2500)
         p.locator('a[href^="/products/"]').first.hover()
         p.wait_for_timeout(700)
         n = p.get_by_role("button", name="Add to cart").count()
         print("  add-to-cart buttons on /products:", n, "✅" if n else "❌")
 
-        p.goto(f"{BASE}/products/classic-t-shirt", wait_until="networkidle", timeout=60000)
+        visit("/products/classic-t-shirt")
         p.wait_for_timeout(2500)
         html = p.content()
         print("  product JSON-LD present:", "application/ld+json" in html)
@@ -146,6 +175,13 @@ if not n:
     failures.append("no add-to-cart buttons rendered on /products")
 if errors:
     failures.append(f"console errors on {len(errors)} page(s): {', '.join(list(errors)[:5])}")
+
+if slow:
+    print()
+    print("=== PAGES THAT NEVER REACHED networkidle ===")
+    for path, stuck in slow.items():
+        print(f"  {path}: {stuck or 'no requests still open (settled late)'}")
+        annotate(f"Slow page {path}", f"never reached networkidle; open requests: {stuck or 'none'}")
 
 print()
 if failures:
