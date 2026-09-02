@@ -30,6 +30,7 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 const hoisted = vi.hoisted(() => {
   return {
     getProductBySlug: vi.fn(),
+    getRelatedProducts: vi.fn(),
   };
 });
 
@@ -45,6 +46,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     getProductBySlug: hoisted.getProductBySlug,
+    getRelatedProducts: hoisted.getRelatedProducts,
   },
   Product: class {},
   getCategoryEmoji: () => '👕',
@@ -117,6 +119,8 @@ beforeEach(() => {
   // We need to put `.mockResolvedValue` back.
   hoisted.getProductBySlug.mockReset();
   hoisted.getProductBySlug.mockResolvedValue({ data: PRODUCT });
+  hoisted.getRelatedProducts.mockReset();
+  hoisted.getRelatedProducts.mockResolvedValue({ data: [] });
   fetchMock.mockReset();
   fetchMock.mockImplementation((url: string) => {
     if (typeof url === 'string' && url.includes('/options')) {
@@ -467,5 +471,77 @@ describe('ProductView: image gallery ordering', () => {
     const srcs = Array.from(container.querySelectorAll('img')).map(src);
     // No primary -> pure sortOrder order: y (2) then x (5).
     expect(srcs).toEqual(['/img-y.jpg', '/img-y.jpg', '/img-x.jpg']);
+  });
+});
+
+describe('ProductView: related products row', () => {
+  it('renders “You may also like” with the related feed products', async () => {
+    hoisted.getRelatedProducts.mockResolvedValue({
+      data: [
+        { ...PRODUCT, id: 'p-2', name: 'Cap', slug: 'cap', images: [{ id: 'i', url: '', alt: 'Cap' }] },
+      ],
+    });
+    render(<ProductView />);
+    expect(await screen.findByText('You may also like')).toBeTruthy();
+    expect(await screen.findByText('Cap')).toBeTruthy();
+  });
+
+  it('skips the row when the feed is empty', async () => {
+    hoisted.getRelatedProducts.mockResolvedValue({ data: [] });
+    render(<ProductView />);
+    await screen.findAllByText('T-Shirt');
+    // Give the related effect time to resolve empty.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('You may also like')).toBeNull();
+  });
+});
+
+describe('ProductView: mobile sticky quick-add bar', () => {
+  it('appears after scrolling on a small screen and offers quick add', async () => {
+    // Make the viewport “mobile” (useIsMobile reads window.innerWidth).
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 480 });
+    window.dispatchEvent(new Event('resize'));
+
+    render(<ProductView />);
+    expect((await screen.findAllByText('T-Shirt')).length).toBeGreaterThan(0);
+
+    // No bar before scrolling.
+    expect(screen.queryByRole('region', { name: 'Quick purchase' })).toBeNull();
+
+    // Scrolling past the threshold shows the bar.
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 900 });
+    window.dispatchEvent(new Event('scroll'));
+
+    const bar = await screen.findByRole('region', { name: 'Quick purchase' });
+    expect(bar).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Quick add to cart' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Quick buy now' })).toBeTruthy();
+
+    // Restore the desktop viewport for the remaining tests.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('scroll'));
+  });
+});
+
+describe('ProductView: assurance band and share row', () => {
+  it('renders the trust strip with policy links', async () => {
+    render(<ProductView />);
+    await screen.findAllByText('T-Shirt');
+    expect(await screen.findByText('30-day returns')).toBeTruthy();
+    expect(screen.getByText('Free shipping')).toBeTruthy();
+    const returns = screen.getByText('30-day returns').closest('a');
+    expect(returns?.getAttribute('href')).toBe('/returns');
+    const support = screen.getByText('24/7 support').closest('a');
+    expect(support?.getAttribute('href')).toBe('/contact');
+  });
+
+  it('renders share buttons pointing at the product URL', async () => {
+    render(<ProductView />);
+    await screen.findAllByText('T-Shirt');
+    const x = await screen.findByRole('link', { name: 'Share on X' });
+    expect(x.getAttribute('href')).toContain(encodeURIComponent('http://localhost:3000/products/t-shirt'));
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy();
   });
 });

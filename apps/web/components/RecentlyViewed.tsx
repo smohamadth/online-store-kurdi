@@ -14,8 +14,9 @@ import { useStoreSettings } from '@/lib/settings';
 import type { Product } from '@/lib/api';
 import ProductCard from '@/components/ProductCard';
 
-export default function RecentlyViewed() {
-  const items = useRecentlyViewed();
+export default function RecentlyViewed({ excludeId }: { excludeId?: string }) {
+  // The product page hides the product you are already looking at.
+  const items = useRecentlyViewed().filter((i) => i.id !== excludeId);
   const { settings } = useStoreSettings();
 
   if (items.length === 0) return null;

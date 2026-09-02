@@ -9,6 +9,9 @@ import { BlogPost, formatPostDate } from '@/lib/blog';
 import PostViewCounter from '@/components/PostViewCounter';
 import PostCard from '@/components/PostCard';
 import ReadingProgress from '@/components/ReadingProgress';
+import TableOfContents from '@/components/blog/TableOfContents';
+import BlogSubscribe from '@/components/blog/BlogSubscribe';
+import ShareButtons from '@/components/ShareButtons';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { PageBlocks } from '@/components/PageBlocks';
 import { getServerPageLayout } from '@/lib/layouts/serverLayout';
@@ -201,6 +204,18 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   const store = await getStoreInfo();
   const image = coverUrl(post.coverImage);
 
+  // Previous/next links in the blog feed. Best-effort: fetch the public
+  // feed around this post and pick its date-sorted neighbours. Missing
+  // neighbours (newest/oldest post, deep pagination) simply hide.
+  const { code } = await resolveRequestLocale();
+  const feedLang = code === 'en' ? '' : code;
+  let neighbors: { older: NavPost | null; newer: NavPost | null } = { older: null, newer: null };
+  try {
+    neighbors = await getFeedNeighbors(post.slug, feedLang);
+  } catch {
+    // No navigation is better than a page that fails on it.
+  }
+
   // Structured data: lets Google show the headline, date and image directly in
   // results. Cheap to emit and the main reason a blog earns traffic.
   // Built by the shared helper so this page and the unit test
@@ -235,7 +250,27 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   }
 
   return (
-    <article style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 20px 80px' }}>
+    <article
+      className="post-article"
+      style={{ maxWidth: 'min(1180px, 100%)', margin: '0 auto', padding: '40px 20px 80px' }}
+    >
+      <style>{`
+        /* Article + on-this-page rail: single reading column on mobile
+           (TOC box above the body), a sticky right rail on wide screens. */
+        .post-article { max-width: min(1180px, 100%); }
+        .post-article .cover-band { grid-column: 1 / -1; }
+        .post-body h2, .post-body h3 { scroll-margin-top: 96px; }
+        @media (max-width: 1023.98px) {
+          .post-article .post-rail { display: flex; flex-direction: column; }
+          .post-article .post-rail .post-body { order: 3; }
+          .post-article .post-rail .toc-aside { order: 2; width: 100%; max-width: 760px; margin: 28px auto 0; }
+        }
+        @media (min-width: 1024px) {
+          .post-article { display: grid; grid-template-columns: minmax(0, 760px) minmax(0, 260px); column-gap: 48px; justify-content: center; align-items: start; }
+          .post-article .post-rail { display: contents; }
+          .post-article .toc-aside { grid-column: 2; grid-row: 1 / span 40; position: sticky; top: 96px; max-height: calc(100vh - 128px); overflow-y: auto; }
+        }
+      `}</style>
       <script
         type="application/ld+json"
         data-testid="json-ld-post"
@@ -264,6 +299,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
       {/* Cover band - full container width, like a magazine plate. */}
       {image && (
         <div
+          className="cover-band"
           style={{
             width: '100%',
             aspectRatio: '21 / 9',
@@ -285,6 +321,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </div>
       )}
 
+      <div className="post-rail">
       <header style={{ maxWidth: '760px', margin: '0 auto' }}>
         <div
           style={{
@@ -421,6 +458,63 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         )}
       </div>
 
+      <aside className="toc-aside" aria-label="On this page">
+        <TableOfContents />
+      </aside>
+      </div>
+
+      {/* End of article: share, author, subscribe, previous/next. */}
+      <div style={{ maxWidth: '760px', margin: '52px auto 0' }}>
+        <ShareButtons
+          url={`${SITE}/blog/${post.slug}`}
+          title={post.title}
+          label="Share this post"
+          center
+        />
+      </div>
+
+      {post.author && (
+        <div
+          style={{
+            maxWidth: '760px',
+            margin: '40px auto 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+          }}
+        >
+          <AuthorAvatar name={post.author} />
+          <div>
+            <div style={{ fontSize: '12.5px', color: 'var(--muted, #666)' }}>Written by</div>
+            <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--body-text, #111)' }}>
+              {post.author}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <BlogSubscribe />
+
+      {neighbors && (neighbors.newer || neighbors.older) && (
+        <nav
+          aria-label="Previous and next posts"
+          style={{
+            maxWidth: '760px',
+            margin: '40px auto 0',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '12px',
+          }}
+        >
+          {neighbors.older ? (
+            <PostNavCard label="Older post" post={neighbors.older} kind="back" />
+          ) : null}
+          {neighbors.newer ? (
+            <PostNavCard label="Newer post" post={neighbors.newer} kind="forward" />
+          ) : null}
+        </nav>
+      )}
+
       {post.related && post.related.length > 0 && (
         <section style={{ marginTop: '64px', paddingTop: '32px', borderTop: '1px solid var(--border, #e5e5e5)' }}>
           <div
@@ -472,6 +566,104 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </section>
       )}
     </article>
+  );
+}
+
+interface NavPost {
+  title: string;
+  slug: string;
+}
+
+/**
+ * Date-sorted neighbours of `slug` in the public blog feed.
+ *
+ * The feed endpoint orders featured posts first, so row-index arithmetic
+ * around the current post is wrong for pinned posts — re-sort the fetched
+ * rows by (publishedAt ?? createdAt) and take the neighbours from there.
+ * Two pages (up to 100 posts) are fetched; posts deeper in the archive
+ * simply yield no navigation.
+ */
+async function getFeedNeighbors(
+  slug: string,
+  lang: string
+): Promise<{ older: NavPost | null; newer: NavPost | null }> {
+  const empty = { older: null, newer: null };
+  const rows: BlogPost[] = [];
+  try {
+    for (let page = 1; page <= 2; page += 1) {
+      const qs = new URLSearchParams({ page: String(page), limit: '50' });
+      if (lang) qs.set('lang', lang);
+      const res = await serverFetch(`/blog?${qs}`, { cache: 'no-store' });
+      if (!res.ok) break;
+      const body = await res.json().catch(() => null);
+      const list: BlogPost[] = body?.data || [];
+      rows.push(...list);
+      if (list.length < 50) break; // no second page
+    }
+  } catch {
+    return empty;
+  }
+  if (rows.length === 0) return empty;
+  const stamp = (post: BlogPost) => new Date(post.publishedAt || post.createdAt).getTime();
+  const sorted = [...rows].sort((a, b) => stamp(b) - stamp(a));
+  const idx = sorted.findIndex((post) => post.slug === slug);
+  if (idx < 0) return empty;
+  const pick = (post: BlogPost | undefined): NavPost | null =>
+    post ? { title: post.title, slug: post.slug } : null;
+  return { older: pick(sorted[idx + 1]), newer: pick(sorted[idx - 1]) };
+}
+
+/** One half of the previous/next navigation card row. */
+function PostNavCard({
+  label,
+  post,
+  kind,
+}: {
+  label: string;
+  post: NavPost;
+  kind: 'back' | 'forward';
+}) {
+  return (
+    <Link
+      href={`/blog/${post.slug}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        padding: '16px 18px',
+        border: '1px solid var(--border, #e5e7eb)',
+        borderRadius: 'calc(var(--radius, 10px) + 2px)',
+        backgroundColor: 'var(--card-bg, #fff)',
+        textDecoration: 'none',
+      }}
+    >
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: '11.5px',
+          fontWeight: 800,
+          letterSpacing: '0.07em',
+          textTransform: 'uppercase',
+          color: 'var(--muted, #6b7280)',
+        }}
+      >
+        {kind === 'back' ? <DirectionArrow kind="back" /> : null}
+        {label}
+        {kind === 'forward' ? <DirectionArrow kind="forward" /> : null}
+      </span>
+      <span
+        style={{
+          fontSize: '16px',
+          fontWeight: 700,
+          lineHeight: 1.45,
+          color: 'var(--body-text, #111)',
+        }}
+      >
+        {post.title}
+      </span>
+    </Link>
   );
 }
 

@@ -27,6 +27,9 @@ import { trackRecentlyViewed } from '@/lib/recentlyViewed';
 import { trackEvent } from '@/lib/tracking';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
+import ProductCarousel from '@/components/ProductCarousel';
+import RecentlyViewed from '@/components/RecentlyViewed';
+import ShareButtons from '@/components/ShareButtons';
 import StoreImage from '@/components/StoreImage';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { useIsMobile } from '@/lib/hooks';
@@ -73,6 +76,8 @@ export default function ProductView() {
   const [stockAlertSet, setStockAlertSet] = useState(false);
   const [stockAlertEmail, setStockAlertEmail] = useState('');
   const [showStockAlertForm, setShowStockAlertForm] = useState(false);
+  const [related, setRelated] = useState<Product[]>([]);
+  const [showStickyBar, setShowStickyBar] = useState(false);
 
   useEffect(() => {
     if (slug) fetchProduct();
@@ -81,6 +86,34 @@ export default function ProductView() {
   useEffect(() => {
     if (product?.id) checkWishlistStatus(product.id);
   }, [product?.id]);
+
+  // "You may also like" — same endpoint the category pages use; an empty
+  // or failed response simply skips the row.
+  useEffect(() => {
+    if (!product?.id) return;
+    let alive = true;
+    api
+      .getRelatedProducts(product.id)
+      .then((r) => {
+        if (!alive) return;
+        const list = Array.isArray(r.data) ? (r.data as Product[]) : [];
+        setRelated(list.filter((p) => p.id !== product.id).slice(0, 6));
+      })
+      .catch(() => alive && setRelated([]));
+    return () => {
+      alive = false;
+    };
+  }, [product?.id]);
+
+  // Mobile sticky quick-add bar: shows once the visitor has scrolled past
+  // the main purchase controls, so the buy buttons are always one thumb
+  // away while reading the description.
+  useEffect(() => {
+    const onScroll = () => setShowStickyBar(window.scrollY > 480);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Analytics: one view event per product page load (feeds trending,
   // conversion rates and "based on your browsing history"). No-op
@@ -197,6 +230,9 @@ export default function ProductView() {
   // flow should still work even when the legacy "in stock"
   // count is zero (digital products are always available).
   const isDigital = product.type === 'digital';
+  // Mirrors the main Add-to-cart gating: physical products that are out
+  // of stock (and not on preorder) cannot be added.
+  const soldOut = !isDigital && product.quantity <= 0 && !(product as any).allowBackorder;
   // Expiry: show "Links expire in N days" on the PDP when the
   // product has a non-null, positive downloadExpiry.
   const downloadExpiryDays =
@@ -902,7 +938,66 @@ export default function ProductView() {
           <p style={{ marginTop: '16px', fontSize: '12px', color: '#999' }}>
             SKU: {product.sku}
           </p>
+
+          {/* Share */}
+          <div style={{ marginTop: '16px' }}>
+            <ShareButtons url={`${SITE}/products/${slug}`} title={product.name} label="Share" />
+          </div>
         </div>
+      </div>
+
+      {/* Assurance band — the promises behind every order. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '14px',
+          marginBottom: '40px',
+          padding: '18px 22px',
+          border: '1px solid var(--border, #e5e5e5)',
+          borderRadius: 'calc(var(--radius, 8px) + 4px)',
+          backgroundColor: 'var(--card-bg, #fff)',
+        }}
+      >
+        {[
+          { icon: '🚚', title: 'Free shipping', text: 'On orders over 50', href: '/help' },
+          { icon: '↩️', title: '30-day returns', text: 'Hassle-free refunds', href: '/returns' },
+          { icon: '🔒', title: 'Secure checkout', text: 'Encrypted payments' },
+          { icon: '💬', title: '24/7 support', text: 'We reply within hours', href: '/contact' },
+        ].map((item) => {
+          const inner = (
+            <>
+              <span aria-hidden="true" style={{ fontSize: '22px', lineHeight: 1 }}>{item.icon}</span>
+              <span style={{ display: 'grid', gap: '2px' }}>
+                <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--body-text, #111)' }}>
+                  {item.title}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--muted, #666)' }}>{item.text}</span>
+              </span>
+            </>
+          );
+          return item.href ? (
+            <Link
+              key={item.title}
+              href={item.href}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '12px',
+                textDecoration: 'none',
+              }}
+            >
+              {inner}
+            </Link>
+          ) : (
+            <div
+              key={item.title}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}
+            >
+              {inner}
+            </div>
+          );
+        })}
       </div>
 
       {/* Product Description */}
@@ -919,7 +1014,116 @@ export default function ProductView() {
 
       {/* Reviews Section */}
       <ReviewSection productId={product.id} productName={product.name} />
+
+      {/* Related products — "You may also like" */}
+      {related.length > 0 && (
+        <ProductCarousel
+          title="You may also like"
+          subtitle="Products customers often buy together"
+          products={related}
+          viewAllHref={
+            (product.category as any)?.slug
+              ? `/category/${encodeURIComponent((product.category as any).slug)}`
+              : undefined
+          }
+          currencySymbol={settings.currencySymbol}
+        />
+      )}
+
+      {/* Recently viewed — this browser's history (current product excluded) */}
+      <RecentlyViewed excludeId={product.id} />
     </div>
+
+    {/* Sticky quick-add bar (mobile only) */}
+    {isMobile && !loading && product && showStickyBar && (
+      <div
+        role="region"
+        aria-label="Quick purchase"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          insetInline: 0,
+          zIndex: 60,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '10px 16px',
+          paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+          borderTop: '1px solid var(--border, #e5e5e5)',
+          backgroundColor: 'var(--card-bg, #fff)',
+          boxShadow: '0 -6px 20px rgba(0, 0, 0, 0.08)',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: '18px',
+              fontWeight: 800,
+              color: 'var(--body-text, #111)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {formatPrice(currentPrice, settings.currencySymbol)}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--muted, #666)' }}>
+            {soldOut
+              ? 'Out of stock'
+              : isDigital
+                ? 'Instant download'
+                : product.quantity <= 0 && (product as any).allowBackorder
+                  ? 'Preorder'
+                  : 'In stock'}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleAddToCart}
+          disabled={soldOut}
+          aria-label="Quick add to cart"
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            borderRadius: 'var(--btn-radius, 8px)',
+            backgroundColor: soldOut ? '#ccc' : addedToCart ? '#22c55e' : 'var(--brand, #111)',
+            color: '#fff',
+            fontSize: '15px',
+            fontWeight: 700,
+            cursor: soldOut ? 'not-allowed' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isDigital
+            ? addedToCart
+              ? '✓ Added'
+              : 'Add to cart'
+            : soldOut
+              ? 'Out of stock'
+              : addedToCart
+                ? '✓ Added'
+                : 'Add to cart'}
+        </button>
+        <button
+          type="button"
+          onClick={handleBuyNow}
+          disabled={soldOut}
+          aria-label="Quick buy now"
+          style={{
+            padding: '12px 18px',
+            border: `2px solid ${soldOut ? '#ccc' : 'var(--body-text, #111)'}`,
+            borderRadius: 'var(--btn-radius, 8px)',
+            backgroundColor: 'transparent',
+            color: soldOut ? '#ccc' : 'var(--body-text, #111)',
+            fontSize: '14px',
+            fontWeight: 700,
+            cursor: soldOut ? 'not-allowed' : 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isDigital ? 'Download' : 'Buy now'}
+        </button>
+      </div>
+    )}
     </>
   );
 }
