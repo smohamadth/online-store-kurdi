@@ -496,8 +496,12 @@ async function seedCmsContent() {
       excerpt: 'Start shopping in our online store',
       content:
         '<p>Welcome! In this post we explain how to shop easily and make the most of our discounts and offers.</p>',
-      tags: JSON.stringify(['news', 'guides']),
-      isFeatured: true,
+      // Deliberately neutral tags, and not featured. scripts/verify-blog.py
+      // asserts exact tag-cloud counts ("news" == 3) and that the post it
+      // pins is first in the listing; a seeded post sharing those tags or
+      // holding the featured slot would break both.
+      tags: JSON.stringify(['welcome']),
+      isFeatured: false,
       metaTitle: 'Welcome to Our Store',
       metaDescription: 'A getting-started guide to shopping in our online store.',
       publishedAt: new Date(),
