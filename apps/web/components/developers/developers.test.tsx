@@ -111,6 +111,30 @@ describe('DevelopersPage', () => {
     expect(screen.getAllByText('Try it').length).toBeGreaterThan(0);
   });
 
+  it('“Try it” fires the entry’s own method (POST sends an empty JSON body)', async () => {
+    const fetchMock = okFetch(manifest);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DevelopersPage />);
+    const row = (await screen.findByText('/api/auth/login')).closest('button');
+    expect(row).toBeTruthy();
+    fireEvent.click(row!);
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole('button').some((b) => b.textContent === 'Try it')
+      ).toBe(true);
+    });
+    const tryButton = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent === 'Try it')!;
+    fireEvent.click(tryButton);
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining('/api/auth/login'),
+        expect.objectContaining({ method: 'POST', body: '{}' })
+      );
+    });
+  });
+
   it('shows a helpful error when the manifest cannot be fetched', async () => {
     vi.stubGlobal(
       'fetch',

@@ -64,7 +64,7 @@ describe('GET /api/developers (manifest)', () => {
   it('every auth-free GET entry in the manifest is reachable', async () => {
     const entries = await getManifest();
     const gets = entries.filter(
-      (e) => e.method === 'GET' && e.auth === 'none' && !e.path.includes(':')
+      (e) => e.method === 'GET' && (e.auth === 'none' || e.auth === 'optional') && !e.path.includes(':')
     );
     expect(gets.length).toBeGreaterThanOrEqual(10);
     for (const e of gets) {
@@ -73,6 +73,27 @@ describe('GET /api/developers (manifest)', () => {
       // (e.g. missing query param) or return 500 only when the store has
       // no data — but a documented public route must never 404.
       expect(res.status, `${e.method} ${e.path}`).not.toBe(404);
+    }
+  });
+
+  it('every auth-free POST entry with a fixed path is reachable', async () => {
+    const entries = await getManifest();
+    const posts = entries.filter(
+      (e) => e.method === 'POST' && e.auth === 'none' && !e.path.includes(':')
+    );
+    expect(posts.length).toBeGreaterThanOrEqual(5);
+    // Handlers that do not schema-parse an empty body first may 500 under
+    // the mock prisma (e.g. forgot-password filters by `contains: undefined`,
+    // which the real prisma treats as "no filter" — production answers 200).
+    const may500OnEmptyBody = new Set(['POST /api/auth/forgot-password']);
+    for (const e of posts) {
+      const res = await request(app).post(e.path).send({});
+      // Validation/auth errors (400/401) prove the route exists; an empty
+      // body must never 404.
+      expect(res.status, `${e.method} ${e.path}`).not.toBe(404);
+      if (!may500OnEmptyBody.has(`${e.method} ${e.path}`)) {
+        expect(res.status, `${e.method} ${e.path}`).not.toBe(500);
+      }
     }
   });
 });

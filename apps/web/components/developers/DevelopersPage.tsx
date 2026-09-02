@@ -70,6 +70,33 @@ export default function DevelopersPage() {
             list comes from the API itself, and the design options from the actual modules the
             storefront uses.
           </p>
+          <nav aria-label="On this page" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
+            {[
+              ['#quickstart', 'Quick start'],
+              ['#http-api', 'HTTP API'],
+              ['#bootstrap', 'Bootstrap'],
+              ['#hero-config', 'Hero design'],
+              ['#section-types', 'Section types'],
+              ['#theme-contract', 'Theme contract'],
+              ['#conventions', 'Conventions'],
+            ].map(([href, label]) => (
+              <a
+                key={href}
+                href={href}
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: '#e2e8f0',
+                  textDecoration: 'none',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 999,
+                  padding: '5px 13px',
+                }}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
         </div>
       </header>
 
@@ -226,7 +253,7 @@ const banners  = await api("/banners?position=hero");
             <tr>
               <td style={{ padding: '6px 10px' }}><code style={{ fontFamily: C.mono, fontSize: 12 }}>intervalSec</code></td>
               <td style={{ padding: '6px 10px' }}><code style={{ fontFamily: C.mono, fontSize: 12 }}>number</code></td>
-              <td style={{ padding: '6px 10px' }}><code style={{ fontFamily: C.mono, fontSize: 12 }}>6</code></td>
+              <td style={{ padding: '6px 10px' }}><code style={{ fontFamily: C.mono, fontSize: 12 }}>{HERO_DEFAULTS.autoPlayMs / 1000}</code></td>
               <td style={{ padding: '6px 10px', fontSize: 12.5, color: C.muted }}>Seconds between slides, clamped to 3–10. Stored as ms internally (autoPlayMs).</td>
             </tr>
             <tr>

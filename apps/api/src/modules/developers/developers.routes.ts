@@ -13,7 +13,9 @@
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { prisma } from '../../config/database';
+import { isStripeConfigured } from '../../config/stripe';
 import { ensureSeeded, fromRow } from '../home/home.routes';
+import { getEnabledGateways } from '../payments/gatewayConfig';
 import { PUBLIC_ENDPOINTS, MANIFEST_VERSION } from './publicEndpoints';
 
 const router = Router();
@@ -58,7 +60,7 @@ async function fetchMenu(location: string) {
 //
 // Each bundle member mirrors its public endpoint so the bundle never
 // shows something the storefront itself would not render:
-//   settings    -> GET /api/settings        (plain row; no secret fields)
+//   settings    -> GET /api/settings        (incl. capability flags)
 //   sections    -> GET /api/home-sections   (rows in order, config parsed)
 //   banners     -> GET /api/banners         (active, inside schedule)
 //   categories  -> GET /api/categories      (with counts + children)
@@ -68,12 +70,18 @@ router.get('/bootstrap', async (_req, res, next) => {
     // Sections come from the same seed-and-parse helpers as the public
     // home-sections route (imported, not copied, so they cannot drift).
     // Settings mirror GET /api/settings: the default row is created on
-    // first read when missing.
+    // first read when missing, and the secret-free capability flags are
+    // appended exactly as that route appends them.
     await ensureSeeded();
     let settingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
     if (!settingsRow) {
       settingsRow = await prisma.storeSettings.create({ data: { id: 'default' } });
     }
+    const settings = {
+      ...settingsRow,
+      stripeEnabled: isStripeConfigured(),
+      paymentGateways: await getEnabledGateways(),
+    };
     const [sectionRows, bannerRows, categoryRows, headerMenu, footerMenu] =
       await Promise.all([
         prisma.homeSection.findMany({ orderBy: { sortOrder: 'asc' } }),
@@ -98,7 +106,7 @@ router.get('/bootstrap', async (_req, res, next) => {
     res.json({
       status: 'success',
       data: {
-        settings: settingsRow,
+        settings,
         sections: sectionRows.map(fromRow),
         banners: bannerRows,
         categories: categoryRows,

@@ -44,7 +44,7 @@ export interface PublicEndpoint {
   params?: EndpointParam[];
 }
 
-export const MANIFEST_VERSION = 1;
+export const MANIFEST_VERSION = 2;
 
 export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
   // ------------------------------------------------------------- storefront
@@ -85,13 +85,27 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
         optional: true,
         description: 'Only banners for this home-page placement.',
       },
-      {
-        name: 'lang',
-        type: 'string',
-        optional: true,
-        description: 'Language code (e.g. en, ku, ar) for localised fields.',
-      },
     ],
+  },
+  {
+    method: 'GET',
+    path: '/api/theme',
+    tag: 'Storefront',
+    auth: 'none',
+    summary:
+      'The active storefront theme: the ThemeSettings row (active theme ' +
+      'key, brand colours, typography, announcement bar, custom CSS) plus ' +
+      'the active theme’s full validated config — the tokens a headless ' +
+      'client needs to match the store’s brand.',
+  },
+  {
+    method: 'GET',
+    path: '/api/themes',
+    tag: 'Storefront',
+    auth: 'none',
+    summary:
+      'Every theme available on this server (bundled + installed) with its ' +
+      'full theme.json config: tokens, fonts, section overrides, layouts.',
   },
   {
     method: 'GET',
@@ -144,18 +158,25 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
       'Paginated product listing with facets, sorting and attribute ' +
       'filters. Response: `{ data, pagination, applied }`.',
     params: [
-      { name: 'page', type: 'number', optional: true, description: '1-based page.' },
-      { name: 'limit', type: 'number', optional: true, description: 'Page size (default 24).' },
-      { name: 'category', type: 'string', optional: true, description: 'Category slug.' },
-      { name: 'type', type: 'string', optional: true, description: 'Product type.' },
-      { name: 'q', type: 'string', optional: true, description: 'Full-text search term.' },
-      { name: 'sort', type: 'string', optional: true, description: 'e.g. newest, price-asc, price-desc, rating.' },
+      { name: 'page', type: 'number', optional: true, description: '1-based page (default 1).' },
+      { name: 'limit', type: 'number', optional: true, description: 'Page size (default 20, max 100).' },
+      { name: 'category', type: 'string', optional: true, description: 'Category slug(s), comma-separated.' },
+      { name: 'type', type: 'string', optional: true, description: 'Product kind: physical or digital.' },
+      { name: 'search', type: 'string', optional: true, description: 'Free-text search term.' },
+      {
+        name: 'sort',
+        type: 'enum',
+        values: ['newest', 'oldest', 'price_asc', 'price_desc', 'name_asc', 'name_desc', 'rating_desc', 'popular', 'relevance'],
+        optional: true,
+        description: 'Sort order (default newest).',
+      },
       { name: 'minPrice', type: 'number', optional: true, description: 'Lowest price.' },
       { name: 'maxPrice', type: 'number', optional: true, description: 'Highest price.' },
       { name: 'inStock', type: 'boolean', optional: true, description: 'Only in-stock items.' },
       { name: 'onSale', type: 'boolean', optional: true, description: 'Only discounted items.' },
-      { name: 'minRating', type: 'number', optional: true, description: 'Minimum average rating.' },
-      { name: 'attr.<name>', type: 'string', optional: true, description: 'Attribute filter, e.g. attr.size=M.' },
+      { name: 'minRating', type: 'number', optional: true, description: 'Minimum average rating (0–5).' },
+      { name: 'optionValueId', type: 'string', optional: true, description: 'Variant option value id(s), comma-separated.' },
+      { name: 'attr.<name>', type: 'string', optional: true, description: 'Attribute filter, e.g. attr.size=M,L.' },
       { name: 'lang', type: 'string', optional: true, description: 'Language code for localised fields.' },
     ],
   },
@@ -219,6 +240,138 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
     auth: 'none',
     summary: 'Approved reviews for a product (public).',
   },
+  {
+    method: 'GET',
+    path: '/api/products/:productId/variants',
+    tag: 'Catalog',
+    auth: 'optional',
+    summary: 'Every variant of a product (sku, price, attributes, stock).',
+  },
+  {
+    method: 'GET',
+    path: '/api/products/:productId/options',
+    tag: 'Catalog',
+    auth: 'optional',
+    summary: 'A product’s option tree (e.g. size/colour) for the PDP selector.',
+  },
+  {
+    method: 'GET',
+    path: '/api/variants/:idOrSlug',
+    tag: 'Catalog',
+    auth: 'optional',
+    summary: 'One variant by UUID or slug.',
+  },
+  {
+    method: 'GET',
+    path: '/api/variants/:id/options',
+    tag: 'Catalog',
+    auth: 'optional',
+    summary: 'The option values a variant chooses.',
+  },
+
+  // ------------------------------------------------------ recommendations
+  {
+    method: 'GET',
+    path: '/api/recommendations/trending',
+    tag: 'Recommendations',
+    auth: 'none',
+    summary: 'Trending products (storefront widgets).',
+    params: [{ name: 'limit', type: 'number', optional: true, description: 'How many (default 10).' }],
+  },
+  {
+    method: 'GET',
+    path: '/api/recommendations/new-arrivals',
+    tag: 'Recommendations',
+    auth: 'none',
+    summary: 'Newest products for “new arrivals” rows.',
+    params: [{ name: 'limit', type: 'number', optional: true, description: 'How many (default 10).' }],
+  },
+  {
+    method: 'GET',
+    path: '/api/recommendations/also-bought/:productId',
+    tag: 'Recommendations',
+    auth: 'none',
+    summary: '“Customers also bought” for a product.',
+  },
+  {
+    method: 'GET',
+    path: '/api/recommendations/bought-together/:productId',
+    tag: 'Recommendations',
+    auth: 'none',
+    summary: '“Frequently bought together” for a product.',
+  },
+  {
+    method: 'GET',
+    path: '/api/recommendations/personalized',
+    tag: 'Recommendations',
+    auth: 'optional',
+    summary: 'Personalized feed; anonymous requests get the generic fallback.',
+  },
+  {
+    method: 'GET',
+    path: '/api/recommendations/history',
+    tag: 'Recommendations',
+    auth: 'customer',
+    summary: 'Recommendations based on the customer’s browsing history.',
+  },
+  {
+    method: 'POST',
+    path: '/api/recommendations/click',
+    tag: 'Recommendations',
+    auth: 'none',
+    summary: 'Log a recommendation click (fired by storefront widgets).',
+  },
+  {
+    method: 'POST',
+    path: '/api/recommendations/purchase',
+    tag: 'Recommendations',
+    auth: 'customer',
+    summary: 'Log that a recommended product was purchased.',
+  },
+
+  // -------------------------------------------------------------- checkout
+  {
+    method: 'POST',
+    path: '/api/coupons/validate',
+    tag: 'Checkout',
+    auth: 'none',
+    summary:
+      'Advisory coupon check for the cart page — order placement recomputes ' +
+      'the same rules server-side, so the shown discount is the one applied.',
+    params: [
+      { name: 'code', type: 'string', description: 'Coupon code.' },
+      { name: 'subtotal', type: 'number', optional: true, description: 'Cart subtotal the rules evaluate against.' },
+    ],
+  },
+  {
+    method: 'POST',
+    path: '/api/shipping/calculate',
+    tag: 'Checkout',
+    auth: 'none',
+    summary:
+      'Estimate shipping methods for an address (advisory — the order ' +
+      'recomputes the same numbers server-side).',
+    params: [
+      { name: 'country', type: 'string', description: 'Country code (required).' },
+      { name: 'state', type: 'string', optional: true, description: 'State/province code.' },
+      { name: 'zipCode', type: 'string', optional: true, description: 'Postal code.' },
+      { name: 'subtotal', type: 'number', optional: true, description: 'Cart subtotal.' },
+      { name: 'weight', type: 'number', optional: true, description: 'Total weight.' },
+      { name: 'itemCount', type: 'number', optional: true, description: 'Number of items.' },
+    ],
+  },
+  {
+    method: 'POST',
+    path: '/api/shipping/zones/lookup',
+    tag: 'Checkout',
+    auth: 'none',
+    summary: 'Find the active shipping zones matching an address.',
+    params: [
+      { name: 'country', type: 'string', description: 'Country code (required).' },
+      { name: 'state', type: 'string', optional: true, description: 'State/province code.' },
+      { name: 'zipCode', type: 'string', optional: true, description: 'Postal code.' },
+    ],
+  },
 
   // --------------------------------------------------------------- content
   {
@@ -226,7 +379,12 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
     path: '/api/pages',
     tag: 'Content',
     auth: 'none',
-    summary: 'Published pages (info/legal/help), newest first.',
+    summary:
+      'Published pages in admin order (id, slug, title, excerpt, pageType, ' +
+      'footer visibility).',
+    params: [
+      { name: 'lang', type: 'string', optional: true, description: 'Language code for localised fields.' },
+    ],
   },
   {
     method: 'GET',
@@ -284,7 +442,9 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
     path: '/api/currencies',
     tag: 'Content',
     auth: 'none',
-    summary: 'Enabled currencies with symbols and rates.',
+    summary:
+      'Enabled currencies with symbols and rates to the store base — the ' +
+      'base currency is always included, even without a Currency row.',
   },
 
   // --------------------------------------------------------------- accounts
@@ -446,6 +606,28 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
     summary: 'Request a cancellation (subject to order state).',
   },
   {
+    method: 'GET',
+    path: '/api/account/downloads',
+    tag: 'Customer',
+    auth: 'customer',
+    summary: 'The digital downloads the signed-in customer purchased.',
+  },
+  {
+    method: 'GET',
+    path: '/api/account/downloads/:id',
+    tag: 'Customer',
+    auth: 'customer',
+    summary: 'One of the customer’s downloads.',
+  },
+  {
+    method: 'GET',
+    path: '/api/downloads/:token',
+    tag: 'Customer',
+    auth: 'optional',
+    summary:
+      'Resolve a one-time download token (from the order email) to its file.',
+  },
+  {
     method: 'POST',
     path: '/api/products/:productId/reviews',
     tag: 'Customer',
@@ -481,6 +663,19 @@ export const PUBLIC_ENDPOINTS: PublicEndpoint[] = [
     tag: 'Engagement',
     auth: 'none',
     summary: 'Whether a stock alert already exists for a product.',
+  },
+  {
+    method: 'DELETE',
+    path: '/api/stock-alerts/:productId',
+    tag: 'Engagement',
+    auth: 'none',
+    summary:
+      'Cancel a stock alert. Signed-in customers are matched by account; ' +
+      'guests pass their email (unsubscribe links in the alert emails).',
+    params: [
+      { name: 'email', type: 'string', optional: true, description: 'Guest email that subscribed.' },
+      { name: 'variantId', type: 'string', optional: true, description: 'Alert for a specific variant.' },
+    ],
   },
 
   // ------------------------------------------------------------- developer

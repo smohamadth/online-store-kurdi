@@ -55,8 +55,17 @@ function TryIt({ entry }: { entry: ManifestEntry }) {
     setResult(null);
     try {
       const path = entry.path.replace(/:([a-zA-Z]+)/g, 'demo');
+      const isPost = entry.method === 'POST';
       const res = await fetch(`${API_BASE}${path}`, {
-        headers: { accept: 'application/json' },
+        method: entry.method,
+        headers: {
+          accept: 'application/json',
+          ...(isPost ? { 'content-type': 'application/json' } : {}),
+        },
+        // POST entries take an empty JSON body, which surfaces the
+        // endpoint's validation response (e.g. "code is required") —
+        // proof the route is alive without creating anything.
+        ...(isPost ? { body: '{}' } : {}),
       });
       const text = await res.text();
       let body = text;
@@ -328,9 +337,32 @@ export default function EndpointCatalog() {
         never go stale. Paths with <code style={{ fontFamily: C.mono }}>:params</code> are patterns;
         replace the segment with a real value.
       </p>
-      {filtered.map((e) => (
-        <EndpointRow key={`${e.method} ${e.path}`} entry={e} />
-      ))}
+      {(() => {
+        let lastTag = '';
+        return filtered.map((e) => {
+          const head = e.tag !== lastTag ? e.tag : null;
+          lastTag = e.tag;
+          return (
+            <div key={`${e.method} ${e.path}`}>
+              {head && (
+                <h3
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: C.muted,
+                    margin: '18px 0 8px',
+                  }}
+                >
+                  {head}
+                </h3>
+              )}
+              <EndpointRow entry={e} />
+            </div>
+          );
+        });
+      })()}
       {filtered.length === 0 && (
         <p style={{ color: C.faint, fontSize: 13 }}>No endpoints match “{filter}”.</p>
       )}

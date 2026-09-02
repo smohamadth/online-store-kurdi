@@ -144,6 +144,7 @@ export function H2({ id, children }: { id?: string; children: React.ReactNode })
         color: C.ink,
         margin: '44px 0 6px',
         letterSpacing: '-0.01em',
+        scrollMarginTop: 90,
       }}
     >
       {children}
