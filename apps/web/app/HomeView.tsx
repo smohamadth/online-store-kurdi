@@ -42,6 +42,13 @@ import {
   SectionHeading,
   CustomSection,
 } from '@/components/HomeSections';
+import FaqAccordion from '@/components/rich/FaqAccordion';
+import LogoCloud from '@/components/rich/LogoCloud';
+import VideoSection from '@/components/rich/VideoSection';
+import ComparisonTable from '@/components/rich/ComparisonTable';
+import PullQuote from '@/components/rich/PullQuote';
+import LookbookSection from '@/components/rich/LookbookSection';
+import ShowcaseRow from '@/components/rich/ShowcaseRow';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { heroOptionsFromConfig } from '@/lib/heroOptions';
 import { API_BASE } from '@/lib/http';
@@ -410,6 +417,96 @@ export default function HomeView() {
             items={cfg.items}
             layout={cfg.layout === 'grid' ? 'grid' : 'masonry'}
             columns={cfg.columns}
+          />
+        );
+
+      case 'faq':
+        return (
+          <FaqAccordion
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            items={cfg.items}
+            columns={cfg.columns === 'one' ? 'one' : 'two'}
+            openFirst={cfg.openFirst !== false}
+          />
+        );
+
+      case 'logos':
+        return (
+          <LogoCloud
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            items={cfg.items}
+            grayscale={cfg.grayscale !== false}
+          />
+        );
+
+      case 'video':
+        return (
+          <VideoSection
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            url={cfg.url}
+            autoplay={Boolean(cfg.autoplay)}
+            muted={Boolean(cfg.muted)}
+            loop={Boolean(cfg.loop)}
+            aspect={cfg.aspect}
+            poster={cfg.poster}
+          />
+        );
+
+      case 'comparison':
+        return (
+          <ComparisonTable
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            columns={cfg.columns}
+            rows={cfg.rows}
+            highlight={typeof cfg.highlight === 'number' ? cfg.highlight : null}
+          />
+        );
+
+      case 'quote':
+        return (
+          <PullQuote
+            key={s.id}
+            quote={cfg.quote}
+            author={cfg.author}
+            role={cfg.role}
+            avatar={cfg.avatar}
+            background={cfg.background}
+          />
+        );
+
+      case 'lookbook':
+        return (
+          <LookbookSection
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            description={cfg.description}
+            image={cfg.image}
+            imagePosition={cfg.imagePosition === 'end' ? 'end' : 'start'}
+            buttonText={cfg.buttonText}
+            linkUrl={cfg.linkUrl}
+            overlayColor={cfg.overlayColor}
+          />
+        );
+
+      case 'showcaseRow':
+        return (
+          <ShowcaseRow
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            category={cfg.category}
+            limit={cfg.limit}
+            viewAllText={cfg.viewAllText}
+            currencySymbol={settings.currencySymbol}
           />
         );
 

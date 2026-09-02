@@ -34,6 +34,22 @@ export interface StatItem {
   suffix: string;
   label: string;
 }
+export interface FaqItem {
+  q: string;
+  a: string;
+}
+export interface LogoItem {
+  name: string;
+  image: string;
+}
+export interface ComparisonColumn {
+  name: string;
+  sub?: string;
+}
+export interface ComparisonRow {
+  label: string;
+  values: string[];
+}
 
 /** Human labels for the admin builder. */
 export const TYPE_LABELS: Record<string, string> = {
@@ -53,6 +69,13 @@ export const TYPE_LABELS: Record<string, string> = {
   newsletter: 'Newsletter signup',
   richText: 'Rich text block',
   custom: 'Custom section (design it)',
+  faq: 'FAQ accordion',
+  logos: 'Brand logos',
+  video: 'Video embed',
+  comparison: 'Comparison table',
+  quote: 'Pull quote',
+  lookbook: 'Lookbook (image + copy)',
+  showcaseRow: 'Category showcase',
 };
 
 export const TYPE_ICONS: Record<string, string> = {
@@ -72,10 +95,32 @@ export const TYPE_ICONS: Record<string, string> = {
   newsletter: '✉️',
   richText: '📝',
   custom: '🎨',
+  faq: '❔',
+  logos: '🤝',
+  video: '🎬',
+  comparison: '⚖️',
+  quote: '💭',
+  lookbook: '📖',
+  showcaseRow: '🛍️',
 };
 
 /** Types an admin can add from scratch (the rest are singletons already seeded). */
-export const CREATABLE_TYPES = ['richText', 'custom', 'gallery', 'features', 'trustBar', 'testimonials', 'stats'];
+export const CREATABLE_TYPES = [
+  'richText',
+  'custom',
+  'gallery',
+  'features',
+  'trustBar',
+  'testimonials',
+  'stats',
+  'faq',
+  'logos',
+  'video',
+  'comparison',
+  'quote',
+  'lookbook',
+  'showcaseRow',
+];
 
 /**
  * Pure drag-and-drop reorder: given the list, the index of the dragged

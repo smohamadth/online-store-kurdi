@@ -28,6 +28,23 @@ describe('homeSections constants', () => {
     expect(TYPE_LABELS['custom']).toBeTruthy();
     expect(TYPE_ICONS['custom']).toBeTruthy();
   });
+
+  it('exposes the rich prebuilt blocks with labels and icons', () => {
+    const RICH = ['faq', 'logos', 'video', 'comparison', 'quote', 'lookbook', 'showcaseRow'];
+    for (const t of RICH) {
+      expect(CREATABLE_TYPES, t).toContain(t);
+      expect(TYPE_LABELS[t], t).toBeTruthy();
+      expect(TYPE_ICONS[t], t).toBeTruthy();
+    }
+  });
+
+  it('keeps every creatable type labelled (the builder’s Add menu) and vice versa', () => {
+    const labelled = new Set(Object.keys(TYPE_LABELS));
+    for (const t of CREATABLE_TYPES) {
+      expect(labelled.has(t), `${t} is creatable but has no label`).toBe(true);
+      expect(TYPE_ICONS[t], `${t} is creatable but has no icon`).toBeTruthy();
+    }
+  });
 });
 
 describe('reorderSectionsByDrop - drag-and-drop position math', () => {

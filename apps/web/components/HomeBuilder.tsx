@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import ImageUpload from '@/components/ImageUpload';
 import { useIsMobile } from '@/lib/hooks';
 import { ButtonSpinner, LoadingState } from '@/components/Spinner';
-import { errorMessage } from '@/lib/http';
+import { errorMessage, http } from '@/lib/http';
 import {
   HomeSection,
   TYPE_LABELS,
@@ -1156,6 +1156,27 @@ function TypeEditor({
       );
     }
 
+    case 'faq':
+      return <FaqEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} isMobile={isMobile} />;
+
+    case 'logos':
+      return <LogosEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} />;
+
+    case 'video':
+      return <VideoEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} />;
+
+    case 'comparison':
+      return <ComparisonEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} isMobile={isMobile} />;
+
+    case 'quote':
+      return <QuoteEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} isMobile={isMobile} />;
+
+    case 'lookbook':
+      return <LookbookEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} />;
+
+    case 'showcaseRow':
+      return <ShowcaseEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} />;
+
     case 'promo':
       return (
         <p style={{ fontSize: '13px', color: '#666' }}>
@@ -1175,6 +1196,737 @@ function TypeEditor({
     default:
       return null;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Editors for the rich prebuilt blocks (faq, logos, video,           */
+/* comparison, quote, lookbook, showcaseRow).                          */
+/* ------------------------------------------------------------------ */
+
+function ItemListCard({
+  idx,
+  children,
+  onUp,
+  onDown,
+  onRemove,
+  upDisabled,
+  downDisabled,
+}: {
+  idx: number;
+  children: React.ReactNode;
+  onUp: () => void;
+  onDown: () => void;
+  onRemove: () => void;
+  upDisabled: boolean;
+  downDisabled: boolean;
+}) {
+  return (
+    <div
+      style={{
+        border: '1px solid #eee',
+        borderRadius: '8px',
+        padding: '12px',
+        display: 'grid',
+        gridTemplateColumns: '1fr auto',
+        gap: '12px',
+        alignItems: 'start',
+      }}
+    >
+      <div style={{ display: 'grid', gap: '8px' }}>{children}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <button aria-label="Move item up" disabled={upDisabled} onClick={onUp} style={arrowBtn(upDisabled)}>
+          ▲
+        </button>
+        <button aria-label="Move item down" disabled={downDisabled} onClick={onDown} style={arrowBtn(downDisabled)}>
+          ▼
+        </button>
+        <button
+          aria-label="Remove item"
+          onClick={onRemove}
+          style={{
+            padding: '6px 10px',
+            border: '1px solid #fca5a5',
+            color: '#b91c1c',
+            background: '#fff',
+            borderRadius: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddItemButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        marginTop: '8px',
+        padding: '8px 14px',
+        border: '1px dashed #bbb',
+        borderRadius: '6px',
+        background: '#fff',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: 600,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Faq — question/answer accordion items + layout toggles. */
+function FaqEditor({
+  cfg,
+  patch,
+  isMobile,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+  isMobile: boolean;
+}) {
+  const items: any[] = Array.isArray(cfg.items) ? cfg.items : [];
+  const setItems = (next: any[]) => patch({ items: next });
+  const row = (i: number) => (
+    <div style={{ display: 'grid', gap: '8px' }}>
+      <input
+        style={inputStyle}
+        placeholder="Question"
+        aria-label={`Question ${i + 1}`}
+        value={items[i]?.q ?? ''}
+        onChange={(e) => {
+          const next = [...items];
+          next[i] = { ...next[i], q: e.target.value };
+          setItems(next);
+        }}
+      />
+      <textarea
+        style={{ ...inputStyle, minHeight: '64px', resize: 'vertical' }}
+        placeholder="Answer"
+        aria-label={`Answer ${i + 1}`}
+        value={items[i]?.a ?? ''}
+        onChange={(e) => {
+          const next = [...items];
+          next[i] = { ...next[i], a: e.target.value };
+          setItems(next);
+        }}
+      />
+    </div>
+  );
+  return (
+    <div style={{ display: 'grid', gap: '14px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gap: '14px',
+          alignItems: 'end',
+        }}
+      >
+        <div>
+          <label style={labelStyle}>Columns</label>
+          <select
+            style={inputStyle}
+            value={cfg.columns === 'one' ? 'one' : 'two'}
+            onChange={(e) => patch({ columns: e.target.value })}
+          >
+            <option value="two">Two columns (desktop)</option>
+            <option value="one">One column</option>
+          </select>
+        </div>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            paddingBottom: '9px',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={cfg.openFirst !== false}
+            onChange={(e) => patch({ openFirst: e.target.checked })}
+          />
+          Open the first question on load
+        </label>
+      </div>
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {items.map((_, idx) => (
+          <ItemListCard
+            key={idx}
+            idx={idx}
+            upDisabled={idx === 0}
+            downDisabled={idx === items.length - 1}
+            onUp={() => {
+              const next = [...items];
+              [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+              setItems(next);
+            }}
+            onDown={() => {
+              const next = [...items];
+              [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+              setItems(next);
+            }}
+            onRemove={() => setItems(items.filter((_, i) => i !== idx))}
+          >
+            {row(idx)}
+          </ItemListCard>
+        ))}
+      </div>
+      <AddItemButton label="+ Add question" onClick={() => setItems([...items, { q: '', a: '' }])} />
+    </div>
+  );
+}
+
+/** Logos — brand marks (image or wordmark) + grayscale toggle. */
+function LogosEditor({
+  cfg,
+  patch,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+}) {
+  const items: any[] = Array.isArray(cfg.items) ? cfg.items : [];
+  const setItems = (next: any[]) => patch({ items: next });
+  return (
+    <div style={{ display: 'grid', gap: '14px' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+        <input
+          type="checkbox"
+          checked={cfg.grayscale !== false}
+          onChange={(e) => patch({ grayscale: e.target.checked })}
+        />
+        Desaturate logos (even “trusted by” strip)
+      </label>
+      <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+        Upload a logo image, or leave the image empty and the brand name renders as a wordmark.
+      </p>
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {items.map((_, idx) => (
+          <ItemListCard
+            key={idx}
+            idx={idx}
+            upDisabled={idx === 0}
+            downDisabled={idx === items.length - 1}
+            onUp={() => {
+              const next = [...items];
+              [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+              setItems(next);
+            }}
+            onDown={() => {
+              const next = [...items];
+              [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+              setItems(next);
+            }}
+            onRemove={() => setItems(items.filter((_, i) => i !== idx))}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px', alignItems: 'start' }}>
+              <ImageUpload
+                label=""
+                folder="categories"
+                currentImage={items[idx]?.image || undefined}
+                onUpload={(url) => {
+                  const next = [...items];
+                  next[idx] = { ...next[idx], image: url };
+                  setItems(next);
+                }}
+              />
+              <input
+                style={inputStyle}
+                placeholder="Brand name (also the image alt text)"
+                aria-label={`Brand name ${idx + 1}`}
+                value={items[idx]?.name ?? ''}
+                onChange={(e) => {
+                  const next = [...items];
+                  next[idx] = { ...next[idx], name: e.target.value };
+                  setItems(next);
+                }}
+              />
+            </div>
+          </ItemListCard>
+        ))}
+      </div>
+      <AddItemButton label="+ Add logo" onClick={() => setItems([...items, { name: '', image: '' }])} />
+    </div>
+  );
+}
+
+/** Video — provider URL + playback options. */
+function VideoEditor({
+  cfg,
+  patch,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+}) {
+  return (
+    <div style={{ display: 'grid', gap: '14px' }}>
+      <div>
+        <label style={labelStyle}>Video URL</label>
+        <input
+          style={inputStyle}
+          value={cfg.url ?? ''}
+          placeholder="https://www.youtube.com/watch?v=… · https://vimeo.com/… · https://….mp4"
+          onChange={(e) => patch({ url: e.target.value })}
+        />
+        <p style={{ fontSize: '12px', color: '#888', marginTop: '6px' }}>
+          YouTube, Vimeo or a direct .mp4/.webm file. The block hides itself until a URL is set.
+        </p>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '14px',
+          alignItems: 'end',
+        }}
+      >
+        <div>
+          <label style={labelStyle}>Aspect ratio</label>
+          <select
+            style={inputStyle}
+            value={cfg.aspect || '16:9'}
+            onChange={(e) => patch({ aspect: e.target.value })}
+          >
+            <option value="16:9">Widescreen 16:9</option>
+            <option value="4:3">Classic 4:3</option>
+            <option value="21:9">Cinema 21:9</option>
+            <option value="1:1">Square 1:1</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Poster image URL (video file only)</label>
+          <input
+            style={inputStyle}
+            value={cfg.poster ?? ''}
+            placeholder="optional"
+            onChange={(e) => patch({ poster: e.target.value })}
+          />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(cfg.autoplay)}
+            onChange={(e) => patch({ autoplay: e.target.checked })}
+          />
+          Autoplay
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(cfg.muted)}
+            onChange={(e) => patch({ muted: e.target.checked })}
+          />
+          Muted
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+          <input
+            type="checkbox"
+            checked={Boolean(cfg.loop)}
+            onChange={(e) => patch({ loop: e.target.checked })}
+          />
+          Loop
+        </label>
+      </div>
+      <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+        Autoplay forces the player muted — browsers block unmuted autoplay.
+      </p>
+    </div>
+  );
+}
+
+/** Comparison — columns, feature rows with one value per column, highlight. */
+function ComparisonEditor({
+  cfg,
+  patch,
+  isMobile,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+  isMobile: boolean;
+}) {
+  const cols: any[] = Array.isArray(cfg.columns) ? cfg.columns : [];
+  const rows: any[] = Array.isArray(cfg.rows) ? cfg.rows : [];
+  const setCols = (next: any[]) => patch({ columns: next });
+  const setRows = (next: any[]) => patch({ rows: next });
+  const colCount = Math.max(1, cols.length);
+
+  return (
+    <div style={{ display: 'grid', gap: '16px' }}>
+      <div>
+        <label style={labelStyle}>Compared items (columns)</label>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          {cols.map((_, idx) => (
+            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <input
+                  style={inputStyle}
+                  placeholder={`Column name ${idx + 1} (e.g. Basic)`}
+                  aria-label={`Column name ${idx + 1}`}
+                  value={cols[idx]?.name ?? ''}
+                  onChange={(e) => {
+                    const next = [...cols];
+                    next[idx] = { ...next[idx], name: e.target.value };
+                    setCols(next);
+                  }}
+                />
+                <input
+                  style={inputStyle}
+                  placeholder="Sub-line (e.g. price)"
+                  aria-label={`Column sub-line ${idx + 1}`}
+                  value={cols[idx]?.sub ?? ''}
+                  onChange={(e) => {
+                    const next = [...cols];
+                    next[idx] = { ...next[idx], sub: e.target.value };
+                    setCols(next);
+                  }}
+                />
+              </div>
+              <button
+                aria-label={`Remove column ${idx + 1}`}
+                onClick={() => setCols(cols.filter((_, i) => i !== idx))}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #fca5a5',
+                  color: '#b91c1c',
+                  background: '#fff',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setCols([...cols, { name: '', sub: '' }])}
+          style={{
+            marginTop: '8px',
+            padding: '7px 14px',
+            border: '1px dashed #bbb',
+            borderRadius: '6px',
+            background: '#fff',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+          }}
+        >
+          + Add item
+        </button>
+      </div>
+
+      <div>
+        <label style={labelStyle}>Feature rows</label>
+        <p style={{ fontSize: '12px', color: '#888', margin: '0 0 10px' }}>
+          Type <code>true</code> for a ✓ or <code>false</code> for a ✕; anything else shows as
+          text. Leave a cell empty for a dash.
+        </p>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          {rows.map((_, ri) => (
+            <ItemListCard
+              key={ri}
+              idx={ri}
+              upDisabled={ri === 0}
+              downDisabled={ri === rows.length - 1}
+              onUp={() => {
+                const next = [...rows];
+                [next[ri - 1], next[ri]] = [next[ri], next[ri - 1]];
+                setRows(next);
+              }}
+              onDown={() => {
+                const next = [...rows];
+                [next[ri + 1], next[ri]] = [next[ri], next[ri + 1]];
+                setRows(next);
+              }}
+              onRemove={() => setRows(rows.filter((_, i) => i !== ri))}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : `minmax(120px, 1.2fr) repeat(${colCount}, minmax(70px, 1fr))`,
+                  gap: '8px',
+                  alignItems: 'center',
+                }}
+              >
+                <input
+                  style={inputStyle}
+                  placeholder="Feature label (e.g. Free shipping)"
+                  aria-label={`Feature label ${ri + 1}`}
+                  value={rows[ri]?.label ?? ''}
+                  onChange={(e) => {
+                    const next = [...rows];
+                    next[ri] = { ...next[ri], label: e.target.value };
+                    setRows(next);
+                  }}
+                />
+                {Array.from({ length: colCount }).map((_, ci) => (
+                  <input
+                    key={ci}
+                    style={inputStyle}
+                    placeholder={ci === 0 ? 'value' : ''}
+                    aria-label={`Row ${ri + 1} column ${ci + 1}`}
+                    value={rows[ri]?.values?.[ci] ?? ''}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      const values = Array.isArray(next[ri]?.values) ? [...next[ri].values] : [];
+                      values[ci] = e.target.value;
+                      next[ri] = { ...next[ri], values };
+                      setRows(next);
+                    }}
+                  />
+                ))}
+              </div>
+            </ItemListCard>
+          ))}
+        </div>
+        <AddItemButton
+          label="+ Add feature row"
+          onClick={() =>
+            setRows([...rows, { label: '', values: Array.from({ length: colCount }, () => '') }])
+          }
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>Highlighted column</label>
+        <select
+          style={inputStyle}
+          value={cfg.highlight ?? 0}
+          onChange={(e) => patch({ highlight: Number(e.target.value) })}
+        >
+          <option value={0}>None</option>
+          {cols.map((_, i) => (
+            <option key={i} value={i + 1}>
+              Column {i + 1}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/** Quote — statement + attribution + band background. */
+function QuoteEditor({
+  cfg,
+  patch,
+  isMobile,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+  isMobile: boolean;
+}) {
+  return (
+    <div style={{ display: 'grid', gap: '14px' }}>
+      <div>
+        <label style={labelStyle}>Quote</label>
+        <textarea
+          style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
+          value={cfg.quote ?? ''}
+          onChange={(e) => patch({ quote: e.target.value })}
+          placeholder="One powerful sentence about your store or your promise…"
+        />
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gap: '14px',
+        }}
+      >
+        <div>
+          <label style={labelStyle}>Author</label>
+          <input
+            style={inputStyle}
+            value={cfg.author ?? ''}
+            onChange={(e) => patch({ author: e.target.value })}
+            placeholder="e.g. The founder"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Role</label>
+          <input
+            style={inputStyle}
+            value={cfg.role ?? ''}
+            onChange={(e) => patch({ role: e.target.value })}
+            placeholder="e.g. Founder, Your Store"
+          />
+        </div>
+      </div>
+      <div>
+        <label style={labelStyle}>Background</label>
+        <select
+          style={inputStyle}
+          value={cfg.background || 'soft'}
+          onChange={(e) => patch({ background: e.target.value })}
+        >
+          <option value="soft">Soft grey band</option>
+          <option value="none">None (page background)</option>
+          <option value="brand">Brand colour</option>
+          <option value="dark">Dark band</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/** Lookbook — editorial photo + copy + CTA. */
+function LookbookEditor({
+  cfg,
+  patch,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+}) {
+  return (
+    <div style={{ display: 'grid', gap: '14px' }}>
+      <div>
+        <label style={labelStyle}>Photo</label>
+        <ImageUpload
+          label=""
+          folder="categories"
+          currentImage={cfg.image || undefined}
+          onUpload={(url) => patch({ image: url })}
+        />
+        <p style={{ fontSize: '12px', color: '#888', marginTop: '6px' }}>
+          The heading and sub-heading above appear on the copy side. No photo? The band shows the
+          copy alone, full width.
+        </p>
+      </div>
+      <div>
+        <label style={labelStyle}>Description (copy side)</label>
+        <textarea
+          style={{ ...inputStyle, minHeight: '70px', resize: 'vertical' }}
+          value={cfg.description ?? ''}
+          onChange={(e) => patch({ description: e.target.value })}
+          placeholder="A sentence or two telling the story of this look / range…"
+        />
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '14px',
+        }}
+      >
+        <div>
+          <label style={labelStyle}>Photo side</label>
+          <select
+            style={inputStyle}
+            value={cfg.imagePosition === 'end' ? 'end' : 'start'}
+            onChange={(e) => patch({ imagePosition: e.target.value })}
+          >
+            <option value="start">Start (first in reading order)</option>
+            <option value="end">End (after the copy)</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Button text</label>
+          <input
+            style={inputStyle}
+            value={cfg.buttonText ?? ''}
+            onChange={(e) => patch({ buttonText: e.target.value })}
+            placeholder="Shop the look"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Button URL</label>
+          <input
+            style={inputStyle}
+            value={cfg.linkUrl ?? ''}
+            onChange={(e) => patch({ linkUrl: e.target.value })}
+            placeholder="/products"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Showcase — pick a category; the row renders that range's products. */
+function ShowcaseEditor({
+  cfg,
+  patch,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+}) {
+  const [options, setOptions] = useState<{ name: string; slug: string }[]>([]);
+  const [listId] = useState(() => `showcase-cats-${Math.random().toString(36).slice(2, 8)}`);
+  useEffect(() => {
+    let alive = true;
+    http
+      .get<any[]>('/categories')
+      .then((r) => alive && setOptions((r.data || []).map((c: any) => ({ name: c.name, slug: c.slug }))))
+      .catch(() => alive && setOptions([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <div style={{ display: 'grid', gap: '14px' }}>
+      <div>
+        <label style={labelStyle}>Category</label>
+        <input
+          style={inputStyle}
+          list={listId}
+          value={cfg.category ?? ''}
+          onChange={(e) => patch({ category: e.target.value })}
+          placeholder={options.length ? 'Pick a category…' : 'Category slug, e.g. clothing'}
+        />
+        <datalist id={listId}>
+          {options.map((o) => (
+            <option key={o.slug} value={o.slug}>
+              {o.name}
+            </option>
+          ))}
+        </datalist>
+        <p style={{ fontSize: '12px', color: '#888', marginTop: '6px' }}>
+          The block hides itself until a category is chosen. The row uses the theme’s product
+          grid and links “View all” to /category/&lt;slug&gt;.
+        </p>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '14px',
+          alignItems: 'end',
+        }}
+      >
+        <div>
+          <label style={labelStyle}>Products — {cfg.limit || 8}</label>
+          <input
+            type="range"
+            min={4}
+            max={12}
+            step={2}
+            value={cfg.limit || 8}
+            onChange={(e) => patch({ limit: parseInt(e.target.value) })}
+            style={{ width: '100%' }}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>View-all link text</label>
+          <input
+            style={inputStyle}
+            value={cfg.viewAllText ?? ''}
+            onChange={(e) => patch({ viewAllText: e.target.value })}
+            placeholder="View all →"
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function defaultConfigFor(type: string): Record<string, any> {
@@ -1214,6 +1966,65 @@ function defaultConfigFor(type: string): Record<string, any> {
           { image: '', caption: 'Shop all', linkUrl: '/products', tone: '#16a34a' },
         ],
       };
+    case 'faq':
+      return {
+        columns: 'two',
+        openFirst: true,
+        items: [
+          { q: 'How long does delivery take?', a: 'Orders usually arrive within 3–5 working days.' },
+          { q: 'What is your return policy?', a: 'Unwanted items can be returned within 30 days of delivery.' },
+        ],
+      };
+    case 'logos':
+      return {
+        grayscale: true,
+        items: [
+          { name: 'Your brand', image: '' },
+          { name: 'Partner one', image: '' },
+          { name: 'Partner two', image: '' },
+        ],
+      };
+    case 'video':
+      return {
+        url: '',
+        aspect: '16:9',
+        autoplay: false,
+        muted: false,
+        loop: false,
+        poster: '',
+      };
+    case 'comparison':
+      return {
+        highlight: 2,
+        columns: [
+          { name: 'Basic', sub: '' },
+          { name: 'Pro', sub: 'Most popular' },
+          { name: 'Plus', sub: '' },
+        ],
+        rows: [
+          { label: 'Free shipping', values: ['false', 'true', 'true'] },
+          { label: 'Priority support', values: ['false', 'false', 'true'] },
+          { label: '30-day returns', values: ['true', 'true', 'true'] },
+        ],
+      };
+    case 'quote':
+      return {
+        quote:
+          'We believe great products start with great people — and end with happy customers.',
+        author: 'The team',
+        role: 'Your store',
+        background: 'soft',
+      };
+    case 'lookbook':
+      return {
+        image: '',
+        imagePosition: 'start',
+        description: '',
+        buttonText: 'Shop the look',
+        linkUrl: '/products',
+      };
+    case 'showcaseRow':
+      return { category: '', limit: 8, viewAllText: 'View all →' };
     default:
       return {};
   }
