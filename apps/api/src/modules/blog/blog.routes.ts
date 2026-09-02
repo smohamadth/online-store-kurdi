@@ -269,6 +269,7 @@ router.get('/slug/:slug', async (req, res, next) => {
 
 // Fire-and-forget view counter. Never fails the caller: an analytics blip must
 // not stop a reader seeing the article.
+// authz-ok: anonymous view counter; abuse-limited by viewThrottle
 router.post('/slug/:slug/view', async (req, res) => {
   try {
     // Public + unauthenticated: without a throttle, flooding this

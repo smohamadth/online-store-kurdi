@@ -77,6 +77,7 @@ const loginSchema = z.object({
 });
 
 // POST /api/auth/register
+// authz-ok: public sign-up; abuse-limited by authThrottle
 router.post('/register', async (req, res, next) => {
   try {
     // Validate request body
@@ -170,6 +171,7 @@ router.post('/register', async (req, res, next) => {
 });
 
 // POST /api/auth/login
+// authz-ok: public sign-in; abuse-limited by authThrottle
 router.post('/login', async (req, res, next) => {
   try {
     // Brute-force throttle BEFORE any bcrypt work: bcrypt.compare is
@@ -273,6 +275,7 @@ router.post('/login', async (req, res, next) => {
 // replaced by a new one in the same Session row. A replayed (already
 // rotated) token finds no Session and gets 401, which is how the client
 // knows it must log in again.
+// authz-ok: the refresh token itself is the credential
 router.post('/refresh', async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
@@ -415,6 +418,7 @@ router.get('/me', authenticate, async (req, res, next) => {
 });
 
 // POST /api/auth/forgot-password
+// authz-ok: public; password reset must work without a session
 router.post('/forgot-password', async (req, res, next) => {
   // Per-email + per-IP cap: the endpoint mints a reset token and emails
   // it, so an unthrottled flood both spams a mailbox and writes a
@@ -485,6 +489,7 @@ router.post('/forgot-password', async (req, res, next) => {
 });
 
 // POST /api/auth/reset-password
+// authz-ok: the emailed reset token is the credential
 router.post('/reset-password', async (req, res, next) => {
   // The reset endpoint runs a bcrypt hash on a guessable token, so it
   // is a guessing target too; cap attempts per IP. (No per-email key:

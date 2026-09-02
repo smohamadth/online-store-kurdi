@@ -79,6 +79,7 @@ const settingsSchema = z.object({
 });
 
 // GET /api/settings - Get store settings
+// authz-ok: public store settings; payment credentials are scrubbed before send
 router.get('/', async (req, res, next) => {
   try {
     let settings = await prisma.storeSettings.findUnique({

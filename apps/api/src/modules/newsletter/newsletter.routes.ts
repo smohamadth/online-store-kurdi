@@ -22,6 +22,7 @@ const subscribeSchema = z.object({
 // POST /api/newsletter/subscribe - Public footer/checkout subscribe box.
 // Re-subscribing is a no-op that still returns success, so the UI can
 // treat "already subscribed" and "subscribed" identically.
+// authz-ok: public newsletter opt-in
 router.post('/subscribe', async (req, res, next) => {
   try {
     const { email } = subscribeSchema.parse(req.body);

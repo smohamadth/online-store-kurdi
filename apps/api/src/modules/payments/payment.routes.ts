@@ -162,6 +162,7 @@ async function notifyRefundIssued(
 // before any order state changes. We use req.rawBody: the app-level
 // express.json verify hook stashes the exact request bytes before
 // parsing, which is what constructEvent needs.
+// authz-ok: Stripe callback; authenticated by webhook signature, not a session
 router.post('/webhooks/stripe', async (req, res, next) => {
   try {
     const stripe = getStripe();

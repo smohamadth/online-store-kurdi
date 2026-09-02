@@ -110,6 +110,78 @@ if (!envParse.success) {
 
 export const env = envParse.data;
 
+// ---------------------------------------------------------------------------
+// Refuse to boot a PRODUCTION server on placeholder credentials.
+//
+// `.env.example` ships working-looking values so a developer can copy it and
+// have the stack run immediately. Two of them are dangerous if they survive
+// to production:
+//
+//   JWT_SECRET=your-super-secret-jwt-key-change-in-production
+//   MINIO_SECRET_KEY=minioadmin
+//
+// The JWT placeholder is 46 characters, so `z.string().min(32)` above accepts
+// it happily. Anyone who copies .env.example, deploys, and forgets to rotate
+// is signing tokens with a value published in this repository - an attacker
+// can mint a token with `role: "admin"` and the API will honour it. Length
+// validation cannot catch this; only a value check can.
+//
+// Enforced only when NODE_ENV=production so local dev and CI are unaffected.
+// ---------------------------------------------------------------------------
+
+/** Credentials that must never reach production, lowercased for comparison. */
+const PLACEHOLDER_VALUES = new Set([
+  'your-super-secret-jwt-key-change-in-production',
+  'change-in-production',
+  'changeme',
+  'minioadmin',
+  'secret',
+  'password',
+  'sk_test_your_stripe_secret_key',
+  'whsec_your_webhook_secret',
+]);
+
+/** Substrings that mark a value as an unedited template. */
+const PLACEHOLDER_MARKERS = [
+  'your-',
+  'your_',
+  'change-in-production',
+  'changeme',
+  'replace-me',
+  'xxxxx',
+];
+
+export function isPlaceholderSecret(value: string | undefined): boolean {
+  if (!value) return false;
+  const v = value.trim().toLowerCase();
+  if (PLACEHOLDER_VALUES.has(v)) return true;
+  return PLACEHOLDER_MARKERS.some((m) => v.includes(m));
+}
+
+if (env.NODE_ENV === 'production') {
+  const offenders: string[] = [];
+  const guarded: Array<[string, string | undefined]> = [
+    ['JWT_SECRET', env.JWT_SECRET],
+    ['MINIO_SECRET_KEY', env.MINIO_SECRET_KEY],
+    ['MINIO_ACCESS_KEY', env.MINIO_ACCESS_KEY],
+    ['STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY],
+    ['STRIPE_WEBHOOK_SECRET', process.env.STRIPE_WEBHOOK_SECRET],
+    ['SMTP_PASS', env.SMTP_PASS],
+  ];
+  for (const [name, value] of guarded) {
+    if (isPlaceholderSecret(value)) offenders.push(name);
+  }
+
+  if (offenders.length > 0) {
+    console.error(
+      '❌ Refusing to start in production with placeholder credentials:\n' +
+        offenders.map((o) => `   - ${o} is still the .env.example value`).join('\n') +
+        '\n   Generate a real secret, e.g.  openssl rand -hex 32',
+    );
+    process.exit(1);
+  }
+}
+
 // Environment helpers
 export const isDevelopment = env.NODE_ENV === 'development';
 export const isProduction = env.NODE_ENV === 'production';

@@ -42,6 +42,7 @@ const trackSchema = z.object({
 // the 30-day `aff_ref` attribution cookie. Anything else answers
 // { valid: false } WITHOUT a cookie — a stale or fake ref must never break
 // a page load, so this endpoint never errors on the ref itself.
+// authz-ok: public storefront tracking pixel; records a click by ref code and returns no PII
 router.post('/track', async (req, res, next) => {
   try {
     const { code } = trackSchema.parse(req.body ?? {});

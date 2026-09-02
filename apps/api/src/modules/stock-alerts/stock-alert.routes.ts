@@ -47,6 +47,7 @@ const keyWhere = (productId: string, variantId?: string) => ({
 // Authenticated users subscribe by user id; guests by email. A duplicate
 // (same user OR same email on the same key) is a no-op that returns
 // success, so the UI can safely re-send.
+// authz-ok: guests subscribe by email; identity is scoped per-email in the handler
 router.post('/', async (req, res, next) => {
   try {
     const data = alertSchema.parse(req.body);
@@ -128,6 +129,7 @@ router.get('/check/:productId', async (req, res, next) => {
 // key, so re-subscribing after an unsubscribe starts fresh. Guests pass
 // their email as a query param because they have no user id. Always returns
 // success - unsubscribing something you were never subscribed to is fine.
+// authz-ok: guests unsubscribe by email; identity is scoped per-email in the handler
 router.delete('/:productId', async (req, res, next) => {
   try {
     const { productId } = req.params;

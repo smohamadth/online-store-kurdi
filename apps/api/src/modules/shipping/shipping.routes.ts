@@ -262,6 +262,7 @@ router.delete('/methods/:id', authenticate, authorize('admin'), async (req, res,
 
 // POST /api/shipping/calculate - Calculate shipping rates (advisory; order
 // placement recomputes the same numbers server-side via shipping.service).
+// authz-ok: guest checkout must quote shipping before login
 router.post('/calculate', async (req, res, next) => {
   try {
     const { country, state, zipCode, subtotal, weight, itemCount } = req.body;
@@ -292,6 +293,7 @@ router.post('/calculate', async (req, res, next) => {
 });
 
 // POST /api/shipping/zones/lookup - Find the zones matching an address
+// authz-ok: guest checkout zone lookup
 router.post('/zones/lookup', async (req, res, next) => {
   try {
     const { country, state, zipCode } = req.body;

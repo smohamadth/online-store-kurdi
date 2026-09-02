@@ -252,6 +252,7 @@ router.delete('/classes/:id', authenticate, authorize('admin'), async (req, res,
 
 // POST /api/tax/calculate - Calculate tax for order (advisory; order
 // placement recomputes the same numbers server-side via tax.service).
+// authz-ok: guest checkout must quote tax before login
 router.post('/calculate', async (req, res, next) => {
   try {
     const { country, state, city, zipCode, subtotal, items } = req.body;

@@ -16,6 +16,9 @@ import { uploadFile, getPresignedUrl, deleteFile, getPublicUrl } from '../../con
 import { AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+// Object-key extension derived from the validated mime type, never from the
+// client-supplied filename (which could steer the key out of its prefix).
+import { safeExtension } from '../../utils/objectKey';
 
 const router = Router();
 
@@ -77,8 +80,9 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res, nex
     const folder = validateStorageFolder(req.body.folder || 'uploads');
     const userId = req.user?.id;
 
-    // Generate unique filename
-    const fileExtension = file.originalname.split('.').pop();
+    // Generate unique filename. The extension comes from the validated mime
+    // type, never from the client-supplied name (see safeExtension).
+    const fileExtension = safeExtension(file.mimetype, file.originalname);
     const fileName = `${folder}/${userId}/${uuidv4()}.${fileExtension}`;
 
     // Process image if it's an image file
@@ -138,8 +142,9 @@ router.post('/upload/multiple', authenticate, upload.array('files', 10), async (
     const uploadedFiles = [];
 
     for (const file of files) {
-      // Generate unique filename
-      const fileExtension = file.originalname.split('.').pop();
+      // Generate unique filename (see safeExtension - never trust the
+      // client-supplied name for the object key).
+      const fileExtension = safeExtension(file.mimetype, file.originalname);
       const fileName = `${folder}/${userId}/${uuidv4()}.${fileExtension}`;
 
       // Process image if it's an image file

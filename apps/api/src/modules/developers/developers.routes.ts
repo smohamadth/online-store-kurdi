@@ -65,6 +65,7 @@ async function fetchMenu(location: string) {
 //   banners     -> GET /api/banners         (active, inside schedule)
 //   categories  -> GET /api/categories      (with counts + children)
 //   menus       -> GET /api/menus/location/{header,footer}
+// authz-ok: public storefront bundle; mirrors the public endpoints and scrubs gateway secrets
 router.get('/bootstrap', async (_req, res, next) => {
   try {
     // Sections come from the same seed-and-parse helpers as the public

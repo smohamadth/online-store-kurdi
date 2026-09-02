@@ -26,6 +26,7 @@ const contactSchema = z.object({
 });
 
 // POST /api/contact - Submit contact form (public)
+// authz-ok: public contact form
 router.post('/', async (req, res, next) => {
   try {
     // Zod throws a ZodError on bad input; the global error handler turns

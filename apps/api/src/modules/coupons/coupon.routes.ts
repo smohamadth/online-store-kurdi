@@ -104,6 +104,7 @@ router.get('/coupons/:id', authenticate, authorize('admin', 'manager'), async (r
 // The business rules live in coupon.service, which order placement ALSO
 // calls at order time - so the discount the customer saw is the discount
 // the order gets, and a code that stops being valid cannot be replayed.
+// authz-ok: checkout validates a code before the customer logs in
 router.post('/coupons/validate', async (req, res, next) => {
   try {
     const { code, subtotal } = req.body;

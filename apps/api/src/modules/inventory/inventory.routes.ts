@@ -1045,6 +1045,7 @@ router.post('/restock', authenticate, authorize('admin', 'manager'), async (req,
 
 // Public (no auth) but signature-verified. The secret is looked up by
 // `provider`; a missing or rotated secret rejects with 401.
+// authz-ok: external 3PL callback; authenticated by shared-secret signature, not a session
 router.post('/webhooks/3pl', async (req, res, next) => {
   try {
     const provider = String(req.header('X-Provider') || '');
