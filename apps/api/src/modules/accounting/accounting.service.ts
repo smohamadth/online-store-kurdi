@@ -325,19 +325,151 @@ export async function reversePostedEntry(id: string): Promise<JournalEntry> {
 }
 
 // ---------------------------------------------------------------------------
+// Deposit issuance / reduction auto-posting
+//
+// The customer-deposits liability (2200) is consumed automatically at
+// checkout (the sale entry debits it for the wallet-applied portion), but its
+// ISSUANCE was never posted: an admin granting store credit or issuing a gift
+// card increased the liability with no journal entry, so the deposits account
+// drifted negative over time. These two best-effort hooks close that:
+//
+//   - issuance (store credit goodwill/adjust, gift card issue/top-up) posts
+//       Debit  [contra by type]      Credit 2200 customer deposits
+//   - a negative store-credit adjust (liability reduction) posts the mirror:
+//       Debit  2200                  Credit [contra]
+//
+// The contra side is a business judgment: 'refund' types book against
+// refunds & returns (4200 — consistent with creditToStoreCredit refunds),
+// everything else defaults to marketing & advertising (5300 — value given
+// away), and an explicit `accountCode` supplied by the admin wins. Both are
+// gated on ACCOUNTING_AUTO_POST and NEVER throw (a ledger hiccup must not
+// fail the balance update).
+// ---------------------------------------------------------------------------
+
+function resolveDepositContraAccount(
+  accounts: Account[],
+  opts: { type?: string; accountCode?: string },
+): Account | null {
+  // Explicit admin override wins.
+  if (opts.accountCode) {
+    const explicit = accounts.find((x) => x.code === opts.accountCode && x.active);
+    if (explicit) return explicit;
+  }
+  // Type default: refunds against refunds & returns, everything else
+  // against marketing & advertising.
+  const code = opts.type === 'refund' ? '4200' : '5300';
+  const byDefault = accounts.find((x) => x.code === code && x.active);
+  if (byDefault) return byDefault;
+  // Last resort: any open expense account, so a custom chart without the
+  // defaults still gets a truthful posting.
+  return accounts.find((x) => x.type === 'expense' && x.active) ?? null;
+}
+
+/** Best-effort posting for store-credit / gift-card issuance (liability up). */
+export async function autoPostDepositIssuance(args: {
+  amount: number;
+  currency?: string;
+  type: string;
+  orderId?: string;
+  memo?: string;
+  accountCode?: string;
+}): Promise<JournalEntry | null> {
+  if (process.env.ACCOUNTING_AUTO_POST !== 'true') return null;
+  try {
+    return await withStoreLock(async () => {
+      const accounts = await readAccounts();
+      const deposits = accounts.find((x) => x.code === '2200' && x.active);
+      if (!deposits) return null; // no deposit liability account: skip
+      const contra = resolveDepositContraAccount(accounts, {
+        type: args.type,
+        accountCode: args.accountCode,
+      });
+      if (!contra) return null;
+      const amount = Math.round(args.amount * 100) / 100;
+      const built = validateJournalEntry(accounts, {
+        date: new Date().toISOString().slice(0, 10),
+        memo: (args.memo || `Deposit ${args.type}`).slice(0, 240),
+        ...(args.orderId ? { reference: args.orderId } : {}),
+        currency: (args.currency || DEFAULT_CURRENCY).toUpperCase(),
+        lines: [
+          { accountId: contra.id, debit: amount, credit: 0 },
+          { accountId: deposits.id, debit: 0, credit: amount },
+        ],
+      });
+      const entry: JournalEntry = {
+        ...built,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        voided: false,
+        kind: 'normal',
+      };
+      const all = await loadJournal();
+      await saveJsonAtomic(journalPath(), [...all, entry]);
+      return entry;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort posting for a store-credit reduction (liability down, mirror of issuance). */
+export async function autoPostDepositReduction(args: {
+  amount: number; // positive — the balance is REDUCED by this
+  currency?: string;
+  memo?: string;
+  accountCode?: string;
+}): Promise<JournalEntry | null> {
+  if (process.env.ACCOUNTING_AUTO_POST !== 'true') return null;
+  try {
+    return await withStoreLock(async () => {
+      const accounts = await readAccounts();
+      const deposits = accounts.find((x) => x.code === '2200' && x.active);
+      if (!deposits) return null;
+      const contra = resolveDepositContraAccount(accounts, { accountCode: args.accountCode });
+      if (!contra) return null;
+      const amount = Math.round(args.amount * 100) / 100;
+      const built = validateJournalEntry(accounts, {
+        date: new Date().toISOString().slice(0, 10),
+        memo: (args.memo || 'Store credit reduced').slice(0, 240),
+        currency: (args.currency || DEFAULT_CURRENCY).toUpperCase(),
+        lines: [
+          { accountId: deposits.id, debit: amount, credit: 0 },
+          { accountId: contra.id, debit: 0, credit: amount },
+        ],
+      });
+      const entry: JournalEntry = {
+        ...built,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        voided: false,
+        kind: 'normal',
+      };
+      const all = await loadJournal();
+      await saveJsonAtomic(journalPath(), [...all, entry]);
+      return entry;
+    });
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Order → journal (closes the "manual posting only" gap)
 //
 // A sale is posted with a single click from the order. The engine builds a
 // balanced entry from the order's own totals:
 //
-//   Debit  payment gateway / accounts receivable   totalAmount
-//   Credit product sales                           subtotal - discount
-//   Credit shipping revenue                        shippingAmount
-//   Credit sales tax payable                       taxAmount
+//   Debit  customer deposits (wallet-applied portion)   storeCredit + giftCard
+//   Debit  method asset / accounts receivable           the remainder
+//   Credit product sales                                subtotal - discount
+//   Credit shipping revenue                             shippingAmount
+//   Credit sales tax payable                            taxAmount
 //
-// The debit account is chosen by payment status (paid ⇒ the payment-gateway
-// asset; otherwise accounts receivable). Accounts are looked up by their chart
-// code, so an admin who renames an account still matches it.
+// Accounts are looked up by their chart code, so an admin who renames an
+// account still matches it. When the sale is already posted but was booked
+// to accounts receivable (the order was unpaid at post time) and the order
+// is NOW paid, the same action posts the cash-in transfer that clears the
+// AR (see postArSettlementOrRefuse).
 // ---------------------------------------------------------------------------
 
 interface OrderLike {
@@ -468,7 +600,7 @@ export async function suggestOrderEntry(orderId: string): Promise<{ order: Order
 
 /**
  * Post the sale entry for an order. Guards against double-posting: an order
- * whose reference is already in the journal is refused, so re-running the
+ * whose sale entry is already in the journal is refused, so re-running the
  * action cannot create a duplicate entry.
  *
  * The guard ignores entries that no longer represent the sale: VOIDED
@@ -477,6 +609,13 @@ export async function suggestOrderEntry(orderId: string): Promise<{ order: Order
  * reversal entries themselves (`reversalOf` — they are offsets, not
  * postings). Without this, post → reverse (or post → void) permanently
  * orphaned the order from the ledger: every later attempt was refused.
+ *
+ * Special case — AR settlement: when the live sale WAS booked to accounts
+ * receivable (the order was unpaid at post time) and the order is now paid,
+ * the same action posts the cash-in transfer (debit the method asset, credit
+ * AR) instead of refusing. This is what clears the receivable when a COD /
+ * bank-transfer order that was posted early is later settled — both through
+ * auto-posting at settlement and through the manual Post-from-Order action.
  */
 export async function postOrderEntry(orderId: string): Promise<JournalEntry> {
   return withStoreLock(async () => {
@@ -484,15 +623,15 @@ export async function postOrderEntry(orderId: string): Promise<JournalEntry> {
     if (!order) throw new Error('Order not found');
 
     const existing = await loadJournal();
-    const alreadyPosted = existing.some(
+    const liveSale = existing.find(
       (e) =>
         e.reference === order.orderNumber &&
         !e.voided &&
         !e.reversedById &&
         !e.reversalOf,
     );
-    if (alreadyPosted) {
-      throw new Error(`Order ${order.orderNumber} is already posted to the ledger`);
+    if (liveSale) {
+      return postArSettlementOrRefuse(order, liveSale, existing);
     }
 
     const built = await buildOrderEntry(order);
@@ -514,6 +653,68 @@ export async function postOrderEntry(orderId: string): Promise<JournalEntry> {
     await saveJsonAtomic(journalPath(), [...existing, entry]);
     return entry;
   });
+}
+
+/**
+ * The sale for an order is already live in the journal. Two cases:
+ *
+ *   1. The sale was booked to accounts receivable (the order was unpaid at
+ *      post time) and the order is now paid → post the cash-in transfer
+ *      (debit the method asset, credit AR) that clears the receivable.
+ *   2. Anything else (no AR to clear, order still unpaid) → refuse the
+ *      double-post.
+ *
+ * The transfer is linked by `reference: order.id` and a "Payment received"
+ * memo (NOT the order number — the number identifies the sale entry), and a
+ * second transfer for the same order is refused, so re-running the action
+ * can never double-clear the AR.
+ */
+async function postArSettlementOrRefuse(
+  order: OrderLike,
+  liveSale: JournalEntry,
+  existing: JournalEntry[],
+): Promise<JournalEntry> {
+  const paid = ['completed', 'paid'].includes(order.paymentStatus.toLowerCase());
+  const accounts = await readAccounts();
+  const ar = accounts.find((x) => x.code === '1300' && x.active);
+  const arLine = ar ? liveSale.lines.find((l) => l.accountId === ar.id && l.debit > 0) : undefined;
+  if (!paid || !arLine || !ar) {
+    throw new Error(`Order ${order.orderNumber} is already posted to the ledger`);
+  }
+  const transferExists = existing.some(
+    (e) =>
+      !e.voided &&
+      !e.reversedById &&
+      !e.reversalOf &&
+      e.reference === order.id &&
+      typeof e.memo === 'string' &&
+      e.memo.includes('Payment received'),
+  );
+  if (transferExists) {
+    throw new Error(`Order ${order.orderNumber} is already posted to the ledger`);
+  }
+
+  const asset = assetAccountForPaymentMethod(accounts, order.paymentMethod);
+  const amount = round2(arLine.debit);
+  const validated = validateJournalEntry(accounts, {
+    date: new Date().toISOString().slice(0, 10),
+    memo: `Payment received — order ${order.orderNumber}`,
+    reference: order.id,
+    currency: DEFAULT_CURRENCY,
+    lines: [
+      { accountId: asset.id, debit: amount, credit: 0 },
+      { accountId: ar.id, debit: 0, credit: amount },
+    ],
+  });
+  const entry: JournalEntry = {
+    ...validated,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    voided: false,
+    kind: 'normal',
+  };
+  await saveJsonAtomic(journalPath(), [...existing, entry]);
+  return entry;
 }
 
 // ---------------------------------------------------------------------------

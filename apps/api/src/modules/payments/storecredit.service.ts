@@ -12,6 +12,7 @@
  */
 import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/errorHandler';
+import { autoPostDepositIssuance } from '../accounting/accounting.service';
 
 // ---------------------------------------------------------------------
 // Balance arithmetic
@@ -53,10 +54,13 @@ export async function creditStoreCredit(args: {
   orderId?: string;
   notes?: string;
   createdById?: string;
+  /** Optional chart-account code for the contra side of the auto-posted journal entry. */
+  accountCode?: string;
 }) {
   if (args.amount <= 0) throw new AppError('Credit amount must be positive', 400);
   const currency = args.currency ?? 'USD';
-  return prisma.$transaction(async (tx: any) => {
+  const type = args.type ?? 'adjust';
+  const result = await prisma.$transaction(async (tx: any) => {
     // Upsert keeps the get-or-create race-free: two concurrent first-time
     // credits can never create two balance rows (the old read-then-create
     // could), and the increment is a single atomic UPDATE, so concurrent
@@ -71,7 +75,7 @@ export async function creditStoreCredit(args: {
       data: {
         storeCreditId: updated.id,
         amount: args.amount,
-        type: args.type ?? 'adjust',
+        type,
         orderId: args.orderId ?? null,
         notes: args.notes ?? null,
         createdById: args.createdById ?? null,
@@ -79,6 +83,22 @@ export async function creditStoreCredit(args: {
     });
     return updated;
   });
+
+  // Best-effort journal posting (ACCOUNTING_AUTO_POST gate; never throws):
+  // the deposits liability grew, so the ledger must reflect it.
+  // 'refund' is skipped — the refund flow already posts it via
+  // autoPostRefund(toStoreCredit) and posting again would double-count.
+  if (type !== 'refund') {
+    await autoPostDepositIssuance({
+      amount: args.amount,
+      currency,
+      type,
+      orderId: args.orderId,
+      memo: `Store credit ${type}${args.notes ? ` — ${args.notes}` : ''}`,
+      accountCode: args.accountCode,
+    });
+  }
+  return result;
 }
 
 /**

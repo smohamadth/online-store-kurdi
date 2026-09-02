@@ -767,6 +767,267 @@ describe('refund auto-posting credits the method asset', () => {
   });
 });
 
+describe('deposit issuance auto-posting', () => {
+  async function withAutoPost<T>(fn: () => Promise<T>): Promise<T> {
+    process.env.ACCOUNTING_AUTO_POST = 'true';
+    try {
+      return await fn();
+    } finally {
+      delete process.env.ACCOUNTING_AUTO_POST;
+    }
+  }
+  async function journalEntries(token: string) {
+    return (
+      await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`)
+    ).body.data;
+  }
+  async function chart() {
+    return (await adminGet('/api/accounting/accounts')).body.data;
+  }
+
+  it('posts a goodwill store-credit grant against marketing (5300) and deposits (2200)', async () => {
+    await withAutoPost(async () => {
+      const { token } = await authHeader({ role: 'admin' });
+      const user = (await authHeader({ role: 'customer' })).user;
+      const grant = await request(app)
+        .post('/api/store-credit')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ userId: user.id, amount: 50, type: 'goodwill', notes: 'apology credit' });
+      expect(grant.status).toBe(201);
+
+      const accs = await chart();
+      const marketing = accs.find((a: any) => a.code === '5300');
+      const deposits = accs.find((a: any) => a.code === '2200');
+      const entries = await journalEntries(token);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].memo).toContain('goodwill');
+      expect(entries[0].lines.some((l: any) => l.accountId === marketing.id && l.debit === 50)).toBe(true);
+      expect(entries[0].lines.some((l: any) => l.accountId === deposits.id && l.credit === 50)).toBe(true);
+    });
+  });
+
+  it('posts a gift-card issuance and a top-up as deposit liability increases', async () => {
+    await withAutoPost(async () => {
+      const { token } = await authHeader({ role: 'admin' });
+      const issue = await request(app)
+        .post('/api/gift-cards')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ amount: 25, notes: 'birthday promo' });
+      expect(issue.status).toBe(201);
+      const topup = await request(app)
+        .post(`/api/gift-cards/${issue.body.data.id}/credit`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ amount: 10, type: 'adjust', notes: 'extra value' });
+      expect(topup.status).toBe(200);
+
+      const accs = await chart();
+      const marketing = accs.find((a: any) => a.code === '5300');
+      const deposits = accs.find((a: any) => a.code === '2200');
+      const entries = await journalEntries(token);
+      expect(entries).toHaveLength(2);
+      for (const e of entries) {
+        expect(e.lines.some((l: any) => l.accountId === marketing.id && l.debit > 0)).toBe(true);
+        expect(e.lines.some((l: any) => l.accountId === deposits.id && l.credit > 0)).toBe(true);
+      }
+      const totalDebit = entries.reduce(
+        (s: number, e: any) => s + e.lines.reduce((x: number, l: any) => x + l.debit, 0),
+        0,
+      );
+      expect(totalDebit).toBe(35);
+    });
+  });
+
+  it('posts a negative store-credit adjust as the mirror (debit deposits, credit marketing)', async () => {
+    await withAutoPost(async () => {
+      const { token } = await authHeader({ role: 'admin' });
+      const user = (await authHeader({ role: 'customer' })).user;
+      await request(app)
+        .post('/api/store-credit')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ userId: user.id, amount: 100, type: 'goodwill' });
+      const adj = await request(app)
+        .post('/api/store-credit/adjust')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ userId: user.id, amount: -30, reason: 'over-grant corrected' });
+      expect(adj.status).toBe(200);
+
+      const accs = await chart();
+      const marketing = accs.find((a: any) => a.code === '5300');
+      const deposits = accs.find((a: any) => a.code === '2200');
+      const entries = await journalEntries(token);
+      expect(entries).toHaveLength(2);
+      // The reduction is the entry that DEBITS deposits (the grant credits
+      // it); its memo carries the admin's reason.
+      const reduction = entries.find((e: any) =>
+        e.lines.some((l: any) => l.accountId === deposits.id && l.debit > 0),
+      );
+      expect(reduction).toBeTruthy();
+      expect(reduction.memo).toContain('over-grant corrected');
+      expect(reduction.lines.some((l: any) => l.accountId === deposits.id && l.debit === 30)).toBe(true);
+      expect(reduction.lines.some((l: any) => l.accountId === marketing.id && l.credit === 30)).toBe(true);
+    });
+  });
+
+  it('honours an explicit accountCode override on the contra side', async () => {
+    await withAutoPost(async () => {
+      const { token } = await authHeader({ role: 'admin' });
+      const user = (await authHeader({ role: 'customer' })).user;
+      await request(app)
+        .post('/api/store-credit')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ userId: user.id, amount: 40, type: 'goodwill', accountCode: '5100', notes: 'shipping comp' });
+      const accs = await chart();
+      const shipping = accs.find((a: any) => a.code === '5100');
+      const entries = await journalEntries(token);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].lines.some((l: any) => l.accountId === shipping.id && l.debit === 40)).toBe(true);
+    });
+  });
+
+  it('a creditToStoreCredit refund posts exactly ONE entry (issuance hook skips refunds)', async () => {
+    await withAutoPost(async () => {
+      const { token } = await authHeader({ role: 'admin' });
+      const user = (await authHeader({ role: 'customer' })).user;
+      const order = await createOrder(user.id, {
+        paymentStatus: 'completed',
+        subtotal: 90,
+        taxAmount: 10,
+        totalAmount: 100,
+      });
+      const refund = await request(app)
+        .post('/api/payments/refund')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, reason: 'return', creditToStoreCredit: true });
+      expect(refund.status).toBe(200);
+
+      // Regression: the refund flow calls creditStoreCredit(type 'refund')
+      // AND autoPostRefund(toStoreCredit) — if both posted, the refund
+      // would be double-counted in the ledger.
+      const entries = await journalEntries(token);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].memo).toContain('Refund');
+    });
+  });
+
+  it('posts nothing when auto-posting is off', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const user = (await authHeader({ role: 'customer' })).user;
+    await request(app)
+      .post('/api/store-credit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: user.id, amount: 50, type: 'goodwill' });
+    const entries = await journalEntries(token);
+    expect(entries).toHaveLength(0);
+  });
+});
+
+describe('payments received on an AR-posted order', () => {
+  it('auto-posts the cash-in transfer when a posted unpaid order is settled', async () => {
+    process.env.ACCOUNTING_AUTO_POST = 'true';
+    try {
+      const { token } = await authHeader({ role: 'admin' });
+      const user = (await authHeader({ role: 'customer' })).user;
+      const order = await createOrder(user.id, {
+        paymentStatus: 'pending',
+        paymentMethod: 'bank_transfer',
+        subtotal: 90,
+        taxAmount: 10,
+        totalAmount: 100,
+      });
+
+      // 1. Post the sale while unpaid -> accounts receivable.
+      const post = await request(app)
+        .post(`/api/accounting/orders/${order.id}/post`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(post.status).toBe(200);
+
+      // 2. The order is settled (bank transfer received).
+      const settle = await request(app)
+        .post('/api/payments/process')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, paymentMethod: 'bank_transfer' });
+      expect(settle.status).toBe(200);
+
+      // 3. A payment-received transfer entry cleared the AR.
+      const accs = (await adminGet('/api/accounting/accounts')).body.data;
+      const ar = accs.find((a: any) => a.code === '1300');
+      const bank = accs.find((a: any) => a.code === '1100');
+      const entries = (await request(app).get('/api/accounting/entries').set('Authorization', `Bearer ${token}`)).body.data;
+      const transfer = entries.find((e: any) => e.memo.includes('Payment received'));
+      expect(transfer).toBeTruthy();
+      expect(transfer.reference).toBe(order.id);
+      expect(transfer.lines.some((l: any) => l.accountId === ar.id && l.credit === 100)).toBe(true);
+      expect(transfer.lines.some((l: any) => l.accountId === bank.id && l.debit === 100)).toBe(true);
+
+      // AR nets to zero; the sale + transfer balance.
+      const balances = (await request(app).get('/api/accounting/reports/balances').set('Authorization', `Bearer ${token}`)).body.data;
+      expect(balances.find((b: any) => b.account.id === ar.id).balance).toBe(0);
+    } finally {
+      delete process.env.ACCOUNTING_AUTO_POST;
+    }
+  });
+
+  it('the manual post action posts the transfer instead of refusing (and only once)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const user = (await authHeader({ role: 'customer' })).user;
+    const order = await createOrder(user.id, {
+      paymentStatus: 'pending',
+      paymentMethod: 'bank_transfer',
+      subtotal: 90,
+      taxAmount: 10,
+      totalAmount: 100,
+    });
+
+    // Post while unpaid -> AR.
+    const post = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(post.status).toBe(200);
+
+    // Settle WITHOUT auto-posting (flag off)…
+    const settle = await request(app)
+      .post('/api/payments/process')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ orderId: order.id, paymentMethod: 'bank_transfer' });
+    expect(settle.status).toBe(200);
+
+    // …then Post from Order again: the AR gets cleared, not a 400.
+    const transfer = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(transfer.status).toBe(200);
+    expect(transfer.body.data.memo).toContain('Payment received');
+
+    // A third post is refused (sale + transfer both live).
+    const again = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(again.status).toBe(400);
+    expect(again.body.code).toBe('POST_ORDER_FAILED');
+  });
+
+  it('still refuses a double-post while the order stays unpaid (no transfer)', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const user = (await authHeader({ role: 'customer' })).user;
+    const order = await createOrder(user.id, {
+      paymentStatus: 'pending',
+      paymentMethod: 'cash_on_delivery',
+      subtotal: 90,
+      taxAmount: 10,
+      totalAmount: 100,
+    });
+    const first = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(first.status).toBe(200);
+    const second = await request(app)
+      .post(`/api/accounting/orders/${order.id}/post`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(second.status).toBe(400);
+    expect(second.body.code).toBe('POST_ORDER_FAILED');
+  });
+});
+
 describe('CSV export', () => {
   it('exports the trial balance as CSV', async () => {
     await postSale(50);

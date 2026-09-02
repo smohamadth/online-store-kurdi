@@ -260,7 +260,24 @@ cannot overwrite each other's updates. This works on any shared filesystem
 entry automatically when a payment is settled (Stripe webhook or staff-recorded
 bank transfer/COD) and a refund entry on refund. It is idempotent (the
 double-post guard swallows repeats) and best-effort — a posting hiccup never
-fails the payment settlement.
+fails the payment settlement. Two more hooks close the loop on the
+customer-deposits liability (2200):
+
+- **Deposit issuance.** Granting store credit (goodwill/adjust) or issuing /
+  topping up a gift card now posts `Debit [contra] / Credit 2200` — the
+  liability increase is reflected instead of drifting negative over time.
+  The contra side is a business judgment: `refund`-type credits book against
+  refunds & returns (4200, consistent with `creditToStoreCredit` refunds,
+  which post exactly one entry — no double-count), everything else defaults
+  to marketing & advertising (5300), and any `accountCode` you pass to
+  `POST /api/store-credit`, `/api/store-credit/adjust`,
+  `/api/gift-cards` or `/api/gift-cards/:id/credit` wins. A negative
+  store-credit adjust posts the mirror (`Debit 2200 / Credit [contra]`).
+- **AR settlement.** When an order that was posted while unpaid (booked to
+  accounts receivable 1300) is later paid, the sale action — automatic at
+  settlement AND the manual **Post from Order** — posts the cash-in transfer
+  (`Debit method asset / Credit AR`) that clears the receivable instead of
+  refusing. It runs once: a second transfer for the same order is refused.
 
 ---
 
@@ -295,15 +312,13 @@ fails the payment settlement.
 - **Shared-filesystem requirement.** The cross-process lock needs all API
   instances to share the same data directory (NFS / mounted volume); it does not
   span separate databases.
-- **The customer-deposits liability only shows its consumption side
-  automatically.** Sale entries debit 2200 for the wallet-applied portion and
-  `creditToStoreCredit` refunds credit it — but the *issuance* of store credit /
-  gift cards by admin goodwill credits or card issuance is not auto-posted (the
-  account to debit is a business judgment, e.g. a marketing expense). Post those
-  manually with the entry composer (debit the expense/AR account, credit 2200)
-  or the deposits account drifts negative. Orders paid later from wallet credit
-  are always booked correctly against 2200.
-- **Payments received on an AR-posted order are not re-posted.** An order
-  posted while unpaid sits in accounts receivable; when it is later paid, no
-  "cash in, AR out" transfer entry is generated automatically — post it manually
-  (debit the method asset, credit 1300).
+- **The contra side of issuance postings is a default, not a science.**
+  Store-credit goodwill/adjust and gift-card issuance/top-up book against
+  marketing & advertising (5300) by default — the value was given away. If your
+  store's economics differ (e.g. you sell gift cards for cash), pass an
+  `accountCode` on the wallet API calls (or post a correcting entry) so the
+  other side lands where it belongs.
+- **AR settlement is one-shot per order.** Posting an order that is unpaid
+  (receivable), then paid, then settled posts exactly one cash-in transfer;
+  further settlement events are refused — post any additional movement (e.g. a
+  partial second collection) manually.

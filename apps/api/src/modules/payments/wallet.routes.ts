@@ -34,6 +34,7 @@ import {
   creditStoreCredit,
   listStoreCreditTransactions,
 } from './storecredit.service';
+import { autoPostDepositReduction } from '../accounting/accounting.service';
 
 const router = Router();
 
@@ -46,6 +47,9 @@ const issueSchema = z.object({
   currency: z.string().length(3).optional(),
   expiresAt: z.string().datetime().optional().nullable(),
   notes: z.string().max(500).optional(),
+  // Chart-account code for the contra side of the auto-posted journal entry
+  // (defaults per type; see autoPostDepositIssuance).
+  accountCode: z.string().max(16).optional(),
 });
 
 // POST /api/gift-cards - admin: issue
@@ -58,6 +62,7 @@ router.post('/gift-cards', authenticate, authorize('admin'), async (req, res, ne
       expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       notes: body.notes,
       createdById: req.user!.id,
+      accountCode: body.accountCode,
     });
     res.status(201).json({ status: 'success', data: card });
   } catch (err) { next(err); }
@@ -155,6 +160,7 @@ router.post('/gift-cards/:id/credit', authenticate, authorize('admin'), async (r
       type: z.enum(['refund', 'adjust', 'issue']).optional(),
       orderId: z.string().uuid().optional(),
       notes: z.string().max(500).optional(),
+      accountCode: z.string().max(16).optional(),
     }).parse(req.body);
     const card = await creditGiftCard({
       cardId: req.params.id,
@@ -162,6 +168,7 @@ router.post('/gift-cards/:id/credit', authenticate, authorize('admin'), async (r
       type: body.type,
       orderId: body.orderId,
       notes: body.notes,
+      accountCode: body.accountCode,
     });
     res.json({ status: 'success', data: card });
   } catch (err) { next(err); }
@@ -215,6 +222,7 @@ const creditSchema = z.object({
   type: z.enum(['refund', 'goodwill', 'adjust']).optional(),
   orderId: z.string().uuid().optional(),
   notes: z.string().max(500).optional(),
+  accountCode: z.string().max(16).optional(),
 });
 router.post('/store-credit', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
@@ -237,6 +245,7 @@ router.post('/store-credit', authenticate, authorize('admin', 'manager'), async 
       orderId: body.orderId,
       notes: body.notes,
       createdById: req.user!.id,
+      accountCode: body.accountCode,
     });
     res.status(201).json({ status: 'success', data: updated });
   } catch (err) { next(err); }
@@ -248,6 +257,9 @@ const adjustSchema = z.object({
   amount: z.number().finite(), // .finite(): can be negative, but never Infinity/NaN
   currency: z.string().length(3).optional(),
   reason: z.string().min(1).max(500),
+  // Chart-account code for the contra side of the auto-posted journal entry
+  // (defaults per type; see autoPostDepositIssuance / autoPostDepositReduction).
+  accountCode: z.string().max(16).optional(),
 });
 router.post('/store-credit/adjust', authenticate, authorize('admin'), async (req, res, next) => {
   try {
@@ -267,6 +279,7 @@ router.post('/store-credit/adjust', authenticate, authorize('admin'), async (req
         type: 'adjust',
         notes: body.reason,
         createdById: req.user!.id,
+        accountCode: body.accountCode,
       });
       return res.json({ status: 'success', data: updated });
     } else {
@@ -301,6 +314,14 @@ router.post('/store-credit/adjust', authenticate, authorize('admin'), async (req
           },
         });
         return tx.storeCredit.findUnique({ where: { id: credit.id } });
+      });
+      // Best-effort journal posting (ACCOUNTING_AUTO_POST gate; never
+      // throws): the deposits liability shrank, so the ledger mirrors it.
+      await autoPostDepositReduction({
+        amount: -body.amount, // body.amount is negative; post the positive size
+        currency,
+        memo: body.reason,
+        accountCode: body.accountCode,
       });
       return res.json({ status: 'success', data: updated });
     }

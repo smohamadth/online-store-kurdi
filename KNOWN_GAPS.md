@@ -569,14 +569,24 @@ A lightweight, file-based double-entry bookkeeping module (see
    as the earlier reverse-of-voided bug), voiding a reversal un-reverses the
    original, reversing a reversal is refused, and reversing a max-length memo
    no longer fails the 240-char cap.
+5. **Deposit issuance and AR settlement are auto-posted (the last two manual
+   gaps).** Granting store credit (goodwill/adjust) or issuing/topping up a
+   gift card now posts `Debit [contra] / Credit 2200` (contra default: 4200
+   for refund-type credits — which post exactly once, no double-count with the
+   creditToStoreCredit refund entry — else 5300, overridable per call with
+   `accountCode`), and a negative store-credit adjust posts the mirror.
+   An order posted while unpaid (booked to AR 1300) and later paid gets a
+   one-shot cash-in transfer (`Debit method asset / Credit AR`) — automatically
+   at settlement and via the manual Post-from-Order action — instead of being
+   stuck in receivables or refused.
 
 Remaining honest limits: multi-currency is per-ledger (no FX conversion), closing
 a year is permanent (adjust via normal entries in that year), auto-posting is
 opt-in via the env flag, the cross-process lock needs the instances to share
-the same data directory, the customer-deposits liability is only auto-posted on
-its consumption side (admin goodwill credits / gift-card issuance must be posted
-manually — see docs/ACCOUNTING.md), and a payment received on an AR-posted
-order is not re-posted as a cash-in transfer (manual entry).
+the same data directory, the contra side of issuance postings is a sensible
+default (5300) that the wallet API can override with `accountCode` when the
+store's economics differ, and AR settlement is one-shot per order (additional
+partial collections are manual).
 
 The pure engine lives in `apps/api/src/modules/accounting/accountingEngine.ts`
 and is unit-tested (`tests/unit/accounting/accountingEngine.test.ts`); the file
