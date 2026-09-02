@@ -111,6 +111,27 @@ describe('DevelopersPage', () => {
     expect(screen.getAllByText('Try it').length).toBeGreaterThan(0);
   });
 
+  it('generates copy-paste examples from the endpoint docs (cURL/JS/Python tabs)', async () => {
+    render(<DevelopersPage />);
+    const row = (await screen.findByText('/api/banners')).closest('button');
+    fireEvent.click(row!);
+    // cURL tab is the default: query param comes from the documented enum.
+    expect(screen.getByText('cURL')).toBeTruthy();
+    expect(
+      (await screen.findAllByText((t) => typeof t === 'string' && t.includes('position=hero'))).length
+    ).toBeGreaterThan(0);
+    // Python tab renders a requests snippet with params=...
+    fireEvent.click(screen.getByText('Python'));
+    expect(
+      (await screen.findAllByText((t) => typeof t === 'string' && t.includes('requests.get'))).length
+    ).toBeGreaterThan(0);
+    // JS tab renders fetch
+    fireEvent.click(screen.getByText('JavaScript'));
+    expect(
+      (await screen.findAllByText((t) => typeof t === 'string' && t.includes('await fetch('))).length
+    ).toBeGreaterThan(0);
+  });
+
   it('“Try it” fires the entry’s own method (POST sends an empty JSON body)', async () => {
     const fetchMock = okFetch(manifest);
     vi.stubGlobal('fetch', fetchMock);

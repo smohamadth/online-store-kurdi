@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { API_BASE } from '@/lib/http';
+import { buildExamples } from './examples';
 import { C, CodeBlock, methodColors, Pill } from './ui';
 
 export interface EndpointParam {
@@ -117,6 +118,8 @@ function TryIt({ entry }: { entry: ManifestEntry }) {
 
 function EndpointRow({ entry }: { entry: ManifestEntry }) {
   const [open, setOpen] = useState(false);
+  const [exampleTab, setExampleTab] = useState('curl');
+  const examples = useMemo(() => buildExamples(entry), [entry]);
   const mc = methodColors[entry.method] ?? { fg: C.ink, bg: '#eef1f6' };
   return (
     <div
@@ -215,6 +218,36 @@ function EndpointRow({ entry }: { entry: ManifestEntry }) {
               </tbody>
             </table>
           )}
+          <div style={{ marginTop: 10 }}>
+            <p style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.faint, margin: '0 0 6px' }}>
+              Example — copy, paste, replace the demo values
+            </p>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              {examples.map((ex) => (
+                <button
+                  key={ex.key}
+                  type="button"
+                  onClick={() => setExampleTab(ex.key)}
+                  aria-pressed={exampleTab === ex.key}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '4px 12px',
+                    borderRadius: 999,
+                    border: `1px solid ${exampleTab === ex.key ? C.accent : C.border}`,
+                    backgroundColor: exampleTab === ex.key ? C.accentSoft : C.cardBg,
+                    color: exampleTab === ex.key ? C.accent : C.muted,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+            {examples.map(
+              (ex) => exampleTab === ex.key && <CodeBlock key={ex.key} code={ex.code} label={`${entry.method} ${entry.path} — ${ex.label}`} />
+            )}
+          </div>
           <TryIt entry={entry} />
         </div>
       )}

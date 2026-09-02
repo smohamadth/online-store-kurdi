@@ -74,6 +74,7 @@ export default function DevelopersPage() {
             {[
               ['#quickstart', 'Quick start'],
               ['#http-api', 'HTTP API'],
+              ['#flows', 'Examples'],
               ['#bootstrap', 'Bootstrap'],
               ['#hero-config', 'Hero design'],
               ['#section-types', 'Section types'],
@@ -167,6 +168,87 @@ const banners  = await api("/banners?position=hero");
           browser.
         </P>
         <EndpointCatalog />
+
+        {/* ------------------------------------------------ flows */}
+        <H2 id="flows">End-to-end examples</H2>
+        <P>
+          Copy-paste flows that put the pieces together. Every endpoint row above also ships its
+          own generated <strong>cURL / JavaScript / Python</strong> example — expand any row to
+          copy it. Replace <code style={{ fontFamily: C.mono }}>your-store.example</code> with
+          your store domain.
+        </P>
+
+        <CodeBlock
+          label="Headless homepage — bootstrap + catalog rows (JavaScript)"
+          code={`// 1. One call for the shell: settings, home layout (with each
+//    block's design config), banners, categories, menus
+const shell = await fetch("https://your-store.example/api/developers/bootstrap")
+  .then((r) => r.json())
+  .then((b) => b.data);
+
+// 2. The catalog rows your layout asks for
+const featured = await fetch("https://your-store.example/api/products/featured?limit=8")
+  .then((r) => r.json())
+  .then((b) => b.data);
+
+// 3. Render the sections in order. The hero row tells you which
+//    design the merchant picked:
+const heroRow = shell.sections.find((s) => s.type === "hero");
+// heroRow.config.hero -> { layout: "split", height: "tall", ... }
+console.log(shell.settings.storeName, heroRow.config.hero, featured.length);
+`}
+        />
+
+        <CodeBlock
+          label="Sign in and add to cart (JavaScript)"
+          code={`// 1. Sign in -> data.accessToken (keep it; refresh with /api/auth/refresh)
+const login = await fetch("https://your-store.example/api/auth/login", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: "customer@example.com", password: "your-password" }),
+}).then((r) => r.json());
+const token = login.data.accessToken;
+
+// 2. Add to the customer's cart with the bearer token
+const add = await fetch("https://your-store.example/api/cart", {
+  method: "POST",
+  headers: { "content-type": "application/json", authorization: "Bearer " + token },
+  body: JSON.stringify({ productId: "<product-id>", quantity: 1 }),
+}).then((r) => r.json());
+console.log(add.data.items);
+`}
+        />
+
+        <CodeBlock
+          label="Checkout estimates — coupon + shipping before the order (Python)"
+          code={`import requests
+
+base = "https://your-store.example/api"
+
+# Advisory coupon check (order placement re-validates server-side)
+coupon = requests.post(
+    base + "/api/coupons/validate",
+    json={"code": "SAVE10", "subtotal": 120},
+).json()
+print("coupon valid:", coupon["data"]["valid"])
+
+# Shipping method estimate for the destination
+shipping = requests.post(
+    base + "/api/shipping/calculate",
+    json={"country": "US", "state": "CA", "zipCode": "90001", "subtotal": 120},
+).json()
+for method in shipping["data"]:
+    print(method["name"], method.get("rate"))
+
+# Place the order with the customer token (POST /api/orders)
+`}
+        />
+        <P>
+          Want more? The account-area flows work the same way: browse
+          <code style={{ fontFamily: C.mono }}> Customer</code> and{' '}
+          <code style={{ fontFamily: C.mono }}>Recommendations</code> entries in the catalog above
+          and copy their generated examples.
+        </P>
 
         {/* ------------------------------------------------ bootstrap */}
         <H2 id="bootstrap">One-call storefront bootstrap</H2>
@@ -322,6 +404,57 @@ const banners  = await api("/banners?position=hero");
           <code style={{ fontFamily: C.mono }}>sections</code> map wins; otherwise the platform
           renderer is used. Full authoring guide: <code style={{ fontFamily: C.mono }}>docs/THEME_DEVELOPMENT.md</code>.
         </P>
+        <CodeBlock
+          label="A custom section — themes/acme/sections/Hero.tsx"
+          code={`'use client';
+import Link from 'next/link';
+import type { SectionProps } from '@/lib/themeSections';
+
+// A section override receives one props bag (see the table below).
+// Data comes from the home page; design tokens come from CSS variables
+// set by the theme (--brand, --body-bg, --body-text, --muted, ...).
+export default function AcmeHero({ banners }: SectionProps) {
+  const banner = banners?.[0];
+  if (!banner) return null;
+  return (
+    <section data-section="hero" style={{ padding: '48px 20px' }}>
+      <h1 style={{ color: 'var(--body-text, #111)', fontSize: 40 }}>{banner.title}</h1>
+      {banner.description && (
+        <p style={{ color: 'var(--muted, #666)' }}>{banner.description}</p>
+      )}
+      <Link
+        href={banner.linkUrl || '/products'}
+        style={{
+          background: 'var(--brand, #111)',
+          color: 'var(--brand-text, #fff)',
+          padding: '12px 22px',
+          borderRadius: 'var(--btn-radius, 8px)',
+        }}
+      >
+        {banner.buttonText || 'Shop now'}
+      </Link>
+    </section>
+  );
+}
+`}
+        />
+        <CodeBlock
+          label="and register it in the theme's theme.json"
+          code={`{
+  "key": "acme",
+  "name": "Acme",
+  "description": "My first theme.",
+  "sections": { "hero": "@/themes/acme/sections/Hero" }
+}
+`}
+        />
+        <P>
+          Add the override to the static import map in{' '}
+          <code style={{ fontFamily: C.mono }}>apps/web/lib/themeSections.tsx</code> and the theme
+          registry (<code style={{ fontFamily: C.mono }}>apps/web/lib/themeRegistry.ts</code>) for
+          bundled themes — details in <code style={{ fontFamily: C.mono }}>docs/THEME_DEVELOPMENT.md</code>.
+        </P>
+
         <table style={{ borderCollapse: 'collapse', width: '100%', margin: '8px 0 4px' }}>
           <thead>
             <tr>
