@@ -255,20 +255,41 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
       style={{ maxWidth: 'min(1180px, 100%)', margin: '0 auto', padding: '40px 20px 80px' }}
     >
       <style>{`
-        /* Article + on-this-page rail: single reading column on mobile
-           (TOC box above the body), a sticky right rail on wide screens. */
-        .post-article { max-width: min(1180px, 100%); }
-        .post-article .cover-band { grid-column: 1 / -1; }
+        /* Article + on-this-page rail.
+           The layout stays a single centered reading column until the
+           client-side TOC has found headings and adds .has-toc — so short
+           posts and the first paint never show a hollow right rail, and
+           every section keeps its own centered column. */
         .post-body h2, .post-body h3 { scroll-margin-top: 96px; }
+        .toc-aside { display: none; }
+        .post-article.has-toc .toc-aside { display: block; }
         @media (max-width: 1023.98px) {
-          .post-article .post-rail { display: flex; flex-direction: column; }
-          .post-article .post-rail .post-body { order: 3; }
-          .post-article .post-rail .toc-aside { order: 2; width: 100%; max-width: 760px; margin: 28px auto 0; }
+          .post-article.has-toc .post-rail { display: flex; flex-direction: column; }
+          .post-article.has-toc .post-body { order: 3; }
+          .post-article.has-toc .toc-aside { order: 2; width: 100%; max-width: 760px; margin: 28px auto 0; }
         }
         @media (min-width: 1024px) {
-          .post-article { display: grid; grid-template-columns: minmax(0, 760px) minmax(0, 260px); column-gap: 48px; justify-content: center; align-items: start; }
-          .post-article .post-rail { display: contents; }
-          .post-article .toc-aside { grid-column: 2; grid-row: 1 / span 40; position: sticky; top: 96px; max-height: calc(100vh - 128px); overflow-y: auto; }
+          .post-article.has-toc {
+            display: grid;
+            grid-template-columns: minmax(0, 760px) minmax(0, 300px);
+            column-gap: 48px;
+            justify-content: center;
+            align-items: start;
+          }
+          .post-article.has-toc .cover-band { grid-column: 1 / -1; }
+          .post-article.has-toc .post-rail { display: contents; }
+          /* The aside is explicitly pinned to the second column across the
+             whole article, so every auto-placed sibling (header, body,
+             share, subscribe, ...) fills the reading column in order. */
+          .post-article.has-toc .toc-aside {
+            grid-column: 2;
+            grid-row: 1 / span 40;
+            position: sticky;
+            top: 96px;
+            max-height: calc(100vh - 128px);
+            overflow-y: auto;
+            min-width: 0;
+          }
         }
       `}</style>
       <script
@@ -458,7 +479,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         )}
       </div>
 
-      <aside className="toc-aside" aria-label="On this page">
+      <aside className="toc-aside">
         <TableOfContents />
       </aside>
       </div>
@@ -473,7 +494,11 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         />
       </div>
 
-      {post.author && (
+      {/* End-of-article author card. Skipped when the author IS the store
+          (the header byline already says it) so it never reads as a
+          self-referential filler; when shown it adds the publication
+          context the compact byline cannot carry. */}
+      {post.author && post.author !== store.storeName && (
         <div
           style={{
             maxWidth: '760px',
@@ -481,13 +506,28 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
             display: 'flex',
             alignItems: 'center',
             gap: '14px',
+            padding: '16px 18px',
+            border: '1px solid var(--border, #e5e7eb)',
+            borderRadius: 'calc(var(--radius, 10px) + 2px)',
+            backgroundColor: 'var(--card-bg, #fff)',
           }}
         >
           <AuthorAvatar name={post.author} />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '12.5px', color: 'var(--muted, #666)' }}>Written by</div>
             <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--body-text, #111)' }}>
               {post.author}
+            </div>
+            <div
+              style={{
+                fontSize: '12.5px',
+                color: 'var(--muted, #666)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              A story from the {store.storeName} blog
             </div>
           </div>
         </div>

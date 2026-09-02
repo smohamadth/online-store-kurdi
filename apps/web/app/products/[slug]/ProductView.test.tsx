@@ -523,6 +523,38 @@ describe('ProductView: mobile sticky quick-add bar', () => {
     window.dispatchEvent(new Event('resize'));
     window.dispatchEvent(new Event('scroll'));
   });
+
+  it('hides again near the page bottom so it never covers the footer', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 480 });
+    // A tall enough page for the "near bottom" math to engage.
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      value: 5000,
+    });
+    window.dispatchEvent(new Event('resize'));
+
+    render(<ProductView />);
+    expect((await screen.findAllByText('T-Shirt')).length).toBeGreaterThan(0);
+
+    // Mid-page: bar visible.
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 1000 });
+    window.dispatchEvent(new Event('scroll'));
+    expect(await screen.findByRole('region', { name: 'Quick purchase' })).toBeTruthy();
+
+    // Scrolled to the very bottom: bar must disappear.
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 4900 });
+    window.dispatchEvent(new Event('scroll'));
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Quick purchase' })).toBeNull()
+    );
+
+    // Clean up so later tests start from a normal page height.
+    delete (document.documentElement as any).scrollHeight;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('scroll'));
+  });
 });
 
 describe('ProductView: assurance band and share row', () => {

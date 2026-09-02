@@ -8,23 +8,32 @@
  * short posts, and expose the copy-link affordance on ShareButtons.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { ReactNode } from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import TableOfContents from './TableOfContents';
 import ShareButtons from '@/components/ShareButtons';
 import BlogSubscribe from './BlogSubscribe';
 
 describe('TableOfContents', () => {
-  it('builds links from the article headings and assigns ids', () => {
+  // The real page is an <article class="post-article">; the TOC toggles
+  // .has-toc on it to switch between single-column and two-column layouts.
+  const inArticle = (children: ReactNode) => (
+    <article className="post-article">{children}</article>
+  );
+
+  it('builds links from the article headings and assigns ids', async () => {
     const { container } = render(
-      <div>
-        <div className="post-body">
-          <h2>First section</h2>
-          <p>text</p>
-          <h2>Second section</h2>
-          <h3>A sub point</h3>
+      inArticle(
+        <div>
+          <div className="post-body">
+            <h2>First section</h2>
+            <p>text</p>
+            <h2>Second section</h2>
+            <h3>A sub point</h3>
+          </div>
+          <TableOfContents />
         </div>
-        <TableOfContents />
-      </div>
+      )
     );
     const links = screen.getAllByRole('link');
     // h2 + h2 + h3 = 3 links (h3 indented but still linked).
@@ -33,17 +42,23 @@ describe('TableOfContents', () => {
     expect(heading.id).toBe('first-section');
     expect(links[0].getAttribute('href')).toBe('#first-section');
     expect(screen.getAllByText('A sub point').length).toBeGreaterThan(0);
+    // A real TOC switches the article into the two-column rail layout.
+    await waitFor(() =>
+      expect(container.querySelector('.post-article')?.classList.contains('has-toc')).toBe(true)
+    );
   });
 
   it('keeps duplicate headings unique', () => {
     render(
-      <div>
-        <div className="post-body">
-          <h2>Repeat</h2>
-          <h2>Repeat</h2>
+      inArticle(
+        <div>
+          <div className="post-body">
+            <h2>Repeat</h2>
+            <h2>Repeat</h2>
+          </div>
+          <TableOfContents />
         </div>
-        <TableOfContents />
-      </div>
+      )
     );
     const links = screen.getAllByRole('link');
     expect(links.length).toBe(2);
@@ -51,16 +66,19 @@ describe('TableOfContents', () => {
     expect(new Set(ids).size).toBe(2);
   });
 
-  it('renders nothing for short articles (fewer than two headings)', () => {
+  it('renders nothing for short articles (fewer than two headings) and keeps the single-column layout', () => {
     const { container } = render(
-      <div>
-        <div className="post-body">
-          <h2>Only one</h2>
+      inArticle(
+        <div>
+          <div className="post-body">
+            <h2>Only one</h2>
+          </div>
+          <TableOfContents />
         </div>
-        <TableOfContents />
-      </div>
+      )
     );
     expect(container.querySelector('nav')).toBeNull();
+    expect(container.querySelector('.post-article')?.classList.contains('has-toc')).toBe(false);
   });
 
   it('scrolling to a heading is smooth and updates the URL hash', async () => {
@@ -68,13 +86,15 @@ describe('TableOfContents', () => {
     Element.prototype.scrollIntoView = scrollIntoView;
     vi.stubGlobal('history', { ...history, replaceState: vi.fn() });
     render(
-      <div>
-        <div className="post-body">
-          <h2>Alpha</h2>
-          <h2>Beta</h2>
+      inArticle(
+        <div>
+          <div className="post-body">
+            <h2>Alpha</h2>
+            <h2>Beta</h2>
+          </div>
+          <TableOfContents />
         </div>
-        <TableOfContents />
-      </div>
+      )
     );
     const toc = screen.getByRole('navigation', { name: 'On this page' });
     const beta = within(toc).getByText('Beta');

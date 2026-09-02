@@ -36,11 +36,23 @@ export default function TableOfContents() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
+    // The blog page toggles between a single centered column and a
+    // two-column rail purely from this class, so it must be removed when
+    // there is nothing to list (short posts, still-loading content).
+    const article = document.querySelector<HTMLElement>('.post-article');
+    const syncClass = (on: boolean) => article?.classList.toggle('has-toc', on);
+
     const root = document.querySelector('.post-body');
-    if (!root) return;
+    if (!root) {
+      syncClass(false);
+      return;
+    }
 
     const headings = Array.from(root.querySelectorAll<HTMLHeadingElement>('h2, h3'));
-    if (headings.length < 2) return;
+    if (headings.length < 2) {
+      syncClass(false);
+      return;
+    }
 
     // Assign stable ids to headings that don't have one yet.
     const seen = new Set<string>();
@@ -54,6 +66,22 @@ export default function TableOfContents() {
     });
     setItems(list);
     setActiveId(list[0].id);
+    syncClass(true);
+
+    // Deep links: a shared #section URL only becomes meaningful once the
+    // ids above exist, so honour it right after assigning them. Deferred
+    // a tick so images/layout above the fold have settled.
+    const hashTimer = window.setTimeout(() => {
+      if (!window.location.hash) return;
+      try {
+        const target = document.getElementById(
+          decodeURIComponent(window.location.hash.slice(1))
+        );
+        target?.scrollIntoView({ block: 'start' });
+      } catch {
+        // Malformed hash — never crash the article.
+      }
+    }, 50);
 
     const els = headings.map((h) => h.id);
     let cleanup: () => void = () => {};
@@ -88,7 +116,11 @@ export default function TableOfContents() {
       cleanup = () => window.removeEventListener('scroll', onScroll);
     }
 
-    return cleanup;
+    return () => {
+      window.clearTimeout(hashTimer);
+      cleanup();
+      syncClass(false);
+    };
   }, []);
 
   if (items.length < 2) return null;

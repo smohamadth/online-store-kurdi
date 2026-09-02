@@ -107,13 +107,30 @@ export default function ProductView() {
 
   // Mobile sticky quick-add bar: shows once the visitor has scrolled past
   // the main purchase controls, so the buy buttons are always one thumb
-  // away while reading the description.
+  // away while reading the description. It hides again near the very
+  // bottom of the page so it never floats over the footer's links.
+  // Re-runs when the product changes (SPA navigation keeps the scroll
+  // position, so the bar must re-evaluate for the new page height).
   useEffect(() => {
-    const onScroll = () => setShowStickyBar(window.scrollY > 480);
+    const pageHeight = () =>
+      Math.max(
+        document.body?.scrollHeight || 0,
+        document.documentElement?.scrollHeight || 0
+      );
+    const onScroll = () => {
+      const y = window.scrollY;
+      const limit = pageHeight();
+      const nearBottom = limit > 0 && window.innerHeight + y >= limit - 140;
+      setShowStickyBar(y > 480 && !nearBottom);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [product?.id]);
 
   // Analytics: one view event per product page load (feeds trending,
   // conversion rates and "based on your browsing history"). No-op
@@ -232,7 +249,12 @@ export default function ProductView() {
   const isDigital = product.type === 'digital';
   // Mirrors the main Add-to-cart gating: physical products that are out
   // of stock (and not on preorder) cannot be added.
-  const soldOut = !isDigital && product.quantity <= 0 && !(product as any).allowBackorder;
+  const outOfStock = !isDigital && product.quantity <= 0;
+  const preorder = outOfStock && Boolean((product as any).allowBackorder);
+  const soldOut = outOfStock && !preorder;
+  // Mirrors the main Buy-now gating exactly (a preorder cannot be bought
+  // immediately — the main button is disabled for it too).
+  const buyNowDisabled = outOfStock;
   // Expiry: show "Links expire in N days" on the PDP when the
   // product has a non-null, positive downloadExpiry.
   const downloadExpiryDays =
@@ -855,24 +877,24 @@ export default function ProductView() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 onClick={handleAddToCart}
-                disabled={!isDigital && product.quantity <= 0 && !(product as any).allowBackorder}
+                disabled={soldOut}
                 style={{
                   flex: 1,
                   padding: '14px 24px',
-                  backgroundColor: (!isDigital && product.quantity <= 0 && !(product as any).allowBackorder) ? '#ccc' : (addedToCart ? '#22c55e' : '#000'),
+                  backgroundColor: soldOut ? '#ccc' : (addedToCart ? '#22c55e' : '#000'),
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '16px',
                   fontWeight: 600,
-                  cursor: (!isDigital && product.quantity <= 0 && !(product as any).allowBackorder) ? 'not-allowed' : 'pointer',
+                  cursor: soldOut ? 'not-allowed' : 'pointer',
                 }}
               >
                 {isDigital
                   ? (addedToCart ? '✓ Added!' : 'Add to Cart')
-                  : (product.quantity <= 0
-                    ? ((product as any).allowBackorder ? '⏳ Preorder' : 'Out of Stock')
-                    : (addedToCart ? '✓ Added!' : 'Add to Cart'))}
+                  : (soldOut
+                    ? 'Out of Stock'
+                    : (addedToCart ? '✓ Added!' : (preorder ? '⏳ Preorder' : 'Add to Cart')))}
               </button>
               <button
                 onClick={handleWishlist}
@@ -891,18 +913,18 @@ export default function ProductView() {
             </div>
             <button
               onClick={handleBuyNow}
-              disabled={!isDigital && product.quantity <= 0}
+              disabled={buyNowDisabled}
               data-testid="buy-now-button"
               style={{
                 width: '100%',
                 padding: '14px 24px',
                 backgroundColor: 'var(--card-bg, white)',
-                color: (!isDigital && product.quantity <= 0) ? '#ccc' : '#000',
-                border: `2px solid ${(!isDigital && product.quantity <= 0) ? '#ccc' : '#000'}`,
+                color: buyNowDisabled ? '#ccc' : '#000',
+                border: `2px solid ${buyNowDisabled ? '#ccc' : '#000'}`,
                 borderRadius: '6px',
                 fontSize: '16px',
                 fontWeight: 600,
-                cursor: (!isDigital && product.quantity <= 0) ? 'not-allowed' : 'pointer',
+                cursor: buyNowDisabled ? 'not-allowed' : 'pointer',
               }}
             >
               {isDigital ? '⬇ Download now' : 'Buy Now'}
@@ -1022,8 +1044,8 @@ export default function ProductView() {
           subtitle="Products customers often buy together"
           products={related}
           viewAllHref={
-            (product.category as any)?.slug
-              ? `/category/${encodeURIComponent((product.category as any).slug)}`
+            product.category?.slug
+              ? `/category/${encodeURIComponent(product.category.slug)}`
               : undefined
           }
           currencySymbol={settings.currencySymbol}
@@ -1033,6 +1055,11 @@ export default function ProductView() {
       {/* Recently viewed — this browser's history (current product excluded) */}
       <RecentlyViewed excludeId={product.id} />
     </div>
+
+    {/* Reserve space so the fixed bar never covers the final row */}
+    {isMobile && !loading && product && showStickyBar && (
+      <div aria-hidden="true" style={{ height: 76 }} />
+    )}
 
     {/* Sticky quick-add bar (mobile only) */}
     {isMobile && !loading && product && showStickyBar && (
@@ -1066,13 +1093,7 @@ export default function ProductView() {
             {formatPrice(currentPrice, settings.currencySymbol)}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted, #666)' }}>
-            {soldOut
-              ? 'Out of stock'
-              : isDigital
-                ? 'Instant download'
-                : product.quantity <= 0 && (product as any).allowBackorder
-                  ? 'Preorder'
-                  : 'In stock'}
+            {soldOut ? 'Out of stock' : isDigital ? 'Instant download' : preorder ? 'Preorder' : 'In stock'}
           </div>
         </div>
         <button
@@ -1101,22 +1122,24 @@ export default function ProductView() {
               ? 'Out of stock'
               : addedToCart
                 ? '✓ Added'
-                : 'Add to cart'}
+                : preorder
+                  ? '⏳ Preorder'
+                  : 'Add to cart'}
         </button>
         <button
           type="button"
           onClick={handleBuyNow}
-          disabled={soldOut}
+          disabled={buyNowDisabled}
           aria-label="Quick buy now"
           style={{
             padding: '12px 18px',
-            border: `2px solid ${soldOut ? '#ccc' : 'var(--body-text, #111)'}`,
+            border: `2px solid ${buyNowDisabled ? '#ccc' : 'var(--body-text, #111)'}`,
             borderRadius: 'var(--btn-radius, 8px)',
             backgroundColor: 'transparent',
-            color: soldOut ? '#ccc' : 'var(--body-text, #111)',
+            color: buyNowDisabled ? '#ccc' : 'var(--body-text, #111)',
             fontSize: '14px',
             fontWeight: 700,
-            cursor: soldOut ? 'not-allowed' : 'pointer',
+            cursor: buyNowDisabled ? 'not-allowed' : 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
