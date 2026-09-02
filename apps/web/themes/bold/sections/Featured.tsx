@@ -130,14 +130,12 @@ export default function BoldFeatured({ title, subtitle, products, config }: Sect
             >
               <div
                 style={{
-                  // Square image, full bleed. The image is
-                  // the product. Padding-bottom trick to keep
-                  // 1:1 aspect ratio without the new
-                  // `aspectRatio` CSS (which the rest of the
-                  // codebase uses, but for the Bold card the
-                  // padding trick matches the default
-                  // ProductCard's pattern).
-                  aspectRatio: '1',
+                  // Tall 4:5 editorial crop. Bold is the
+                  // "image-first / oversized photography" theme, and a
+                  // portrait frame is what fashion lookbooks use - it
+                  // also sets Bold apart from the square-cropped themes
+                  // at a glance, which a shared 1:1 did not.
+                  aspectRatio: '4 / 5',
                   backgroundColor: 'var(--card-bg, #171717)',
                   overflow: 'hidden',
                   marginBottom: '24px',
@@ -195,11 +193,33 @@ export default function BoldFeatured({ title, subtitle, products, config }: Sect
                     margin: '0 0 6px',
                   }}
                 >
-                  <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
-                  <span aria-hidden="true" style={{ opacity: 0.3 }}>
-                    {'★'.repeat(5 - Math.round(rating))}
-                  </span>{' '}
-                  <span>{rating.toFixed(1)}</span>
+                  {/* A solid fill meter rather than a star row: Bold is
+                      the loud, read-it-from-across-the-room theme, and
+                      blocks carry further than glyphs. aria-label above
+                      still announces the real score. */}
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: 'inline-block',
+                      verticalAlign: 'middle',
+                      width: '56px',
+                      height: '6px',
+                      backgroundColor: 'var(--border, #262626)',
+                      marginInlineEnd: '8px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'block',
+                        width: `${(rating / 5) * 100}%`,
+                        height: '100%',
+                        backgroundColor: 'var(--accent, #facc15)',
+                      }}
+                    />
+                  </span>
+                  <span style={{ fontWeight: 800, letterSpacing: '0.04em' }}>
+                    {rating.toFixed(1)}
+                  </span>
                   {product.reviewCount ? ` (${product.reviewCount})` : ''}
                 </p>
               )}

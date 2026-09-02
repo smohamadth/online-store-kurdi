@@ -95,9 +95,15 @@ function buildSvg(theme, W) {
   // Product grid geometry.
   const gap = 20;
   const cardW = (inner - gap * (perRow - 1)) / perRow;
-  // Cap the image box: at 2-per-row (Bold) a 0.78 aspect would make each card
-  // ~700px tall and swamp the mock. Real grids letterbox wide cards instead.
-  const imgH = Math.round(Math.min(cardW * 0.78, 300));
+  // Each theme crops its product images differently (see the Featured
+  // sections): Bold is a 4:5 editorial portrait, Minimal a 4:3 landscape,
+  // Dawnlight and Pulse stay square. Mirror that here or the previews would
+  // misrepresent the single most obvious difference between the themes.
+  const IMAGE_RATIO = { bold: 5 / 4, minimal: 3 / 4, dawnlight: 1, pulse: 1, default: 1 };
+  const ratio = IMAGE_RATIO[theme.key] ?? 1;
+  // Cap the box: at 2-per-row (Bold) an uncapped portrait crop would make
+  // each card ~800px tall and swamp the mock.
+  const imgH = Math.round(Math.min(cardW * ratio, 340));
   const cardH = imgH + 78;
 
   const gridTop = announceH + headerH + heroH + 62;

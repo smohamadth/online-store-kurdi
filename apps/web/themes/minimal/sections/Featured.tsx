@@ -116,11 +116,14 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
             >
               <div
                 style={{
-                  // Square aspect ratio, subtle border, no shadow.
-                  // The minimal theme deliberately doesn't use
-                  // shadow - "elevation" is a marketing pattern,
+                  // Wide 4:3 crop, subtle border, no shadow. Minimal is
+                  // text-first: a shorter frame keeps the image
+                  // supporting rather than dominant, and leaves the
+                  // serif name and price as the loudest thing on the
+                  // card. Also distinguishes it from the square themes.
+                  // "Elevation" stays off - it is a marketing pattern,
                   // not a minimal one.
-                  aspectRatio: '1',
+                  aspectRatio: '4 / 3',
                   backgroundColor: 'var(--surface-2, #f0eee8)',
                   border: '1px solid var(--border, #e8e6e0)',
                   marginBottom: '20px',
@@ -176,11 +179,13 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
                     margin: '0 0 6px',
                   }}
                 >
-                  <span aria-hidden="true">{'★'.repeat(Math.round(rating))}</span>
-                  <span aria-hidden="true" style={{ opacity: 0.35 }}>
-                    {'★'.repeat(5 - Math.round(rating))}
-                  </span>{' '}
+                  {/* Typographic rating, no star row. Minimal ships
+                      "no marketing chrome", and a five-star glyph strip
+                      is precisely that; the score reads as editorial
+                      credit instead. Screen readers still get the full
+                      "Rated x out of 5" from aria-label above. */}
                   <span>{rating.toFixed(1)}</span>
+                  <span aria-hidden="true" style={{ opacity: 0.5 }}> / 5</span>
                   {product.reviewCount ? ` (${product.reviewCount})` : ''}
                 </p>
               )}
