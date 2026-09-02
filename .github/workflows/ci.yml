@@ -1,17 +1,26 @@
 name: CI
 
-# Runs the test suites on every push and pull request to main.
+# Runs the test suites on every push and pull request.
 #
-# Two jobs:
-#   api-checks  - fast (~2 min). API regression sweep + static audit. No browser.
-#   ui-checks   - slower (~6 min). Builds the frontend and drives a real browser.
+# Four jobs:
+#   static-checks - fastest (~3 min). Lint + typecheck + the whole vitest
+#                   suite (API unit/integration, web lib/components). No
+#                   server, no browser. This is the job that catches most
+#                   regressions, so it runs first and cheapest.
+#   api-checks    - fast (~4 min). Live API regression sweep + static audits.
+#   es-search     - Elasticsearch live search against a real cluster.
+#   ui-checks     - slower (~15 min). Builds the frontend and drives a real
+#                   browser through the page suites.
 #
-# They run in parallel. If either goes red the commit is marked failed on
+# They run in parallel. If any goes red the commit is marked failed on
 # GitHub, so a regression is caught before it is pulled onto a dev machine.
 
 on:
   push:
-    branches: [main]
+    # `main` plus the agent/working branches, so a plain push to a feature
+    # branch gets the same signal a PR would. Without the second pattern a
+    # push to arena/** ran nothing at all.
+    branches: [main, 'arena/**']
   pull_request:
     branches: [main]
   # Lets you re-run the suites by hand from the Actions tab.
@@ -29,10 +38,13 @@ env:
   PRISMA_VERSION: 5.22.0
 
 jobs:
-  api-checks:
-    name: API regression + static audit
+  # ===================================================================
+  # 1. Lint, typecheck and the full vitest suite.
+  # ===================================================================
+  static-checks:
+    name: Lint, typecheck + vitest
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +58,54 @@ jobs:
         # postinstall runs `prisma generate`, so the generated client is always
         # in step with the schema. A stale client is the bug that made every
         # admin page 500 with "Cannot read properties of undefined".
+        run: npm ci
+
+      - name: Configure environment
+        run: cp apps/api/.env.ci apps/api/.env
+
+      - name: Lint (API)
+        run: npm run lint:api
+
+      - name: Lint (web)
+        run: npm run lint:web
+
+      - name: Typecheck (web)
+        # `next build` fails on type errors, but that takes minutes in
+        # ui-checks. Failing here surfaces the same error in seconds.
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: API unit tests
+        run: npm run test:api:unit
+
+      - name: API integration tests
+        # In-memory mock Prisma: no database or network needed.
+        run: npm run test:api:integration
+
+      - name: Web tests (lib + components)
+        run: npm run test:web
+
+  # ===================================================================
+  # 2. Live API regression sweep + static audits.
+  # ===================================================================
+  api-checks:
+    name: API regression + static audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
         run: npm ci
 
       - name: Configure environment
@@ -84,6 +144,12 @@ jobs:
       - name: Audit for silent admin write failures
         run: python3 scripts/audit-silent-writes.py
 
+      # Static: every mutating/sensitive route must carry an auth guard or an
+      # explicit `// authz-ok: <reason>`. Catches an endpoint shipped with no
+      # authorization at all, which no functional test would notice.
+      - name: Audit route authorization
+        run: python3 scripts/audit-route-authz.py
+
       - name: Commerce rules (coupons, orders, stock)
         run: python3 scripts/verify-commerce.py
 
@@ -92,6 +158,9 @@ jobs:
         if: always()
         run: tail -100 /tmp/api.log || true
 
+  # ===================================================================
+  # 3. Elasticsearch live search.
+  # ===================================================================
   es-search:
     name: Elasticsearch live search
     runs-on: ubuntu-latest
@@ -140,10 +209,13 @@ jobs:
         # and skips on machines without a cluster.
         run: npx vitest run --config vitest.integration.config.ts tests/integration/elasticsearch.live.test.ts
 
+  # ===================================================================
+  # 4. Browser regression.
+  # ===================================================================
   ui-checks:
     name: Browser regression
     runs-on: ubuntu-latest
-    # Six browser suites plus a Next.js production build. 25 was too tight once
+    # Browser suites plus a Next.js production build. 25 was too tight once
     # a slow step ate into it.
     timeout-minutes: 35
 
