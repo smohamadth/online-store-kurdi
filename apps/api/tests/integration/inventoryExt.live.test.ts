@@ -16,6 +16,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
+import { signWebhookBody } from '../helpers/signWebhook';
 import {
   createProduct,
   createCategory,
@@ -136,10 +137,11 @@ describe('Live: inventory subsystem contract', () => {
     });
     expect(secret.provider).toBe('shipbob');
 
+    const webhookBody = { events: [{ sku: 'MUG-1', quantity: -2, type: 'order' }] };
     const webhookRes = await request(app).post('/api/inventory/webhooks/3pl')
       .set('X-Provider', 'shipbob')
-      .set('X-Signature', 'some-valid-hmac')
-      .send({ events: [{ sku: 'MUG-1', quantity: -2, type: 'order' }] });
+      .set('X-Signature', signWebhookBody('shared-secret-123', webhookBody))
+      .send(webhookBody);
     expect(webhookRes.status).toBe(200);
     if (webhookRes.body.data[0]?.ok !== true) {
       throw new Error(`webhook failed: ${JSON.stringify(webhookRes.body)}`);

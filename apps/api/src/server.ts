@@ -200,6 +200,7 @@ async function startServer() {
       logger.info(`🔗 API URL: http://localhost:${port}/api`);
       logger.info(`💚 Health check: http://localhost:${port}/health`);
       
+      // env-default-ok: prints local tool URLs to the log; grants nothing.
       if (env.NODE_ENV === 'development') {
         logger.info(`📊 Prisma Studio: npx prisma studio`);
         logger.info(`📧 MailHog: http://localhost:8025`);

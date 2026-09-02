@@ -27,6 +27,7 @@ import {
 } from '../../utils/authThrottle';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../../services/email.service';
 import { emit } from '../plugins/pluginHooks';
+import { exposeResetToken } from '../../config/environment';
 import { z } from 'zod';
 
 const router = Router();
@@ -478,10 +479,18 @@ router.post('/forgot-password', async (req, res, next) => {
     res.json({
       status: 'success',
       message: successMessage,
-      // Include token in development for testing (the email may go to
-      // MailHog, which is slower to check than the response body).
-      // Never present in production.
-      ...(process.env.NODE_ENV === 'development' && { resetToken }),
+      // Echo the reset token back only when a developer has EXPLICITLY opted
+      // in with EXPOSE_RESET_TOKEN=true (handy when the mail goes to MailHog).
+      //
+      // This used to key off `NODE_ENV === 'development'`. NODE_ENV defaults
+      // to 'development' (config/environment.ts), so any deployment that did
+      // not explicitly set NODE_ENV=production handed a valid password-reset
+      // token for ANY email address to an unauthenticated caller - account
+      // takeover for every user, on an endpoint that otherwise takes care not
+      // even to reveal whether an account exists. An opt-in flag cannot be
+      // switched on by an ambient default, and it is refused in production
+      // regardless (see config/environment.ts).
+      ...(exposeResetToken() && { resetToken }),
     });
   } catch (error) {
     next(error);

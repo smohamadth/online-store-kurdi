@@ -182,7 +182,26 @@ if (env.NODE_ENV === 'production') {
   }
 }
 
+/**
+ * Should POST /api/auth/forgot-password echo the reset token in its response?
+ *
+ * Debug aid for local work when mail goes to MailHog. Requires an EXPLICIT
+ * EXPOSE_RESET_TOKEN=true and is hard-refused in production, because the
+ * token grants account takeover for the named address. Deliberately not keyed
+ * off NODE_ENV: that variable defaults to 'development', so an operator who
+ * simply forgets to set it would otherwise be publishing reset tokens.
+ */
+export function exposeResetToken(): boolean {
+  // Read process.env live rather than the parsed `env` snapshot: the snapshot
+  // is frozen at import time, which would make the production refusal below
+  // impossible to exercise in a test (and therefore unverifiable).
+  if (process.env.NODE_ENV === 'production') return false;
+  return process.env.EXPOSE_RESET_TOKEN === 'true';
+}
+
 // Environment helpers
+// env-default-ok: a plain label, not a gate. Security decisions must test
+// for production explicitly rather than trusting this to be false.
 export const isDevelopment = env.NODE_ENV === 'development';
 export const isProduction = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';

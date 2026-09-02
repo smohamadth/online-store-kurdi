@@ -1055,7 +1055,15 @@ router.post('/webhooks/3pl', async (req, res, next) => {
     const secretRow = await prisma.webhookSecret.findFirst({ where: { provider, isActive: true } });
     if (!secretRow) throw new AppError('Unknown or rotated provider', 401);
     const body = (req as any).rawBody || JSON.stringify(req.body);
-    if (!verifyWebhookSignature(secretRow.secret, body, signature, { mockAccept: process.env.NODE_ENV !== 'production' })) {
+    // Always perform the real HMAC check. This used to pass
+    // `mockAccept: process.env.NODE_ENV !== 'production'`, which accepts ANY
+    // non-empty X-Signature. NODE_ENV defaults to 'development' (see
+    // config/environment.ts), so any deployment that did not explicitly set
+    // NODE_ENV=production had 3PL webhook authentication switched off
+    // entirely - an unauthenticated caller could post `X-Signature: x` and
+    // move stock levels for any SKU. The bypass must never be reachable from
+    // an ambient env default; unit tests exercise the flag directly instead.
+    if (!verifyWebhookSignature(secretRow.secret, body, signature)) {
       throw new AppError('Invalid signature', 401);
     }
     // Body schema: { events: [{ type, sku, quantity, variantSku, externalRef, reason }] }
