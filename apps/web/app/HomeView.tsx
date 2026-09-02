@@ -42,6 +42,7 @@ import {
   CustomSection,
 } from '@/components/HomeSections';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
+import { heroOptionsFromConfig } from '@/lib/heroOptions';
 import { API_BASE } from '@/lib/http';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import RecentlyViewed from '@/components/RecentlyViewed';
@@ -216,15 +217,33 @@ export default function HomeView() {
     const cfg = s.config || {};
 
     switch (s.type) {
-      case 'hero':
+      case 'hero': {
+        // Design options for this hero row (Appearance → Home → the hero
+        // block): layout / height / autoplay / arrows / dots. Themes with
+        // their own hero component receive the same `config` and decide
+        // what they honour; the platform hero honours all of them.
+        const heroOpts = heroOptionsFromConfig(cfg.hero);
+        const heroSlides =
+          heroOpts.layout === 'single' ? heroBanners.slice(0, 1) : heroBanners;
         return (
           <ThemeSectionRenderer
             key={s.id}
             section="hero"
-            fallback={<HeroGallery banners={heroBanners} loaded={bannersLoaded} />}
-            props={{ banners: heroBanners }}
+            fallback={
+              <HeroGallery
+                banners={heroSlides}
+                loaded={bannersLoaded}
+                autoPlay={heroOpts.autoPlay}
+                autoPlayMs={heroOpts.autoPlayMs}
+                showArrows={heroOpts.showArrows}
+                showDots={heroOpts.showDots}
+                height={heroOpts.height}
+              />
+            }
+            props={{ banners: heroSlides, config: cfg }}
           />
         );
+      }
 
       case 'promo':
         return <PromoGrid key={s.id} banners={promoBanners} />;
@@ -506,6 +525,9 @@ function CategoryTile({
       href={`/category/${category.slug}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      // Keyboard users get the same lift/zoom on focus.
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
       style={{
         display: 'block',
         position: 'relative',

@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
+import { HERO_HEIGHT_PX, type HeroHeight } from '@/lib/heroOptions';
 
 export interface Banner {
   id: string;
@@ -27,6 +28,35 @@ export interface Banner {
   overlayColor?: string;
   align?: string;
   position?: string;
+}
+
+/**
+ * Decide what sits behind a banner slide that has NO image.
+ *
+ * `overlayColor` doubles as the background: gradients are always used as
+ * the backdrop, and so are solid colours (hex / rgb / fully-opaque rgba) -
+ * an admin who types `#f59e0b` as the colour gets an amber band, not a
+ * surprise navy one. The one thing that is NOT treated as a background is
+ * the form's default `rgba(0,0,0,0.35)`: that is a *scrim* meant to sit on
+ * top of a photo, and using it on an empty background would put white text
+ * on near-transparent black. Those slides keep the classic dark gradient.
+ */
+export function looksLikeScrim(overlayColor?: string | null): boolean {
+  if (!overlayColor) return true; // nothing supplied - use the default band
+  if (overlayColor.includes('gradient')) return false;
+  const m = overlayColor.match(/rgba?\(([^)]*)\)/i);
+  if (m) {
+    const parts = m[1].split(',').map((p) => parseFloat(p.trim()));
+    // rgba with an explicit alpha below ~0.85 reads as a scrim.
+    if (parts.length >= 4 && Number.isFinite(parts[3])) return parts[3] < 0.85;
+    return false; // rgb(...) without alpha = solid
+  }
+  return false; // hex / named colour = solid
+}
+
+export function resolveSlideBackground(overlayColor?: string | null): string {
+  if (overlayColor && !looksLikeScrim(overlayColor)) return overlayColor;
+  return 'linear-gradient(120deg, #1a1a2e, #16213e)';
 }
 
 const DEFAULT_SLIDES: Banner[] = [
@@ -80,10 +110,27 @@ interface Props {
    * than guessing.
    */
   loaded?: boolean;
+  /** Autoplay delay in ms. Ignored when `autoPlay` is false. */
   autoPlayMs?: number;
+  /** Rotate automatically. Default true. */
+  autoPlay?: boolean;
+  /** Show the prev/next arrow buttons (desktop). Default true. */
+  showArrows?: boolean;
+  /** Show the slide dots. Default true. */
+  showDots?: boolean;
+  /** Band height preset. Default "standard" (520/420px). */
+  height?: HeroHeight;
 }
 
-export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000 }: Props) {
+export default function HeroGallery({
+  banners,
+  loaded = false,
+  autoPlayMs = 6000,
+  autoPlay = true,
+  showArrows = true,
+  showDots = true,
+  height = 'standard',
+}: Props) {
   const isMobile = useIsMobile();
 
   // The DATABASE is the source of truth.
@@ -116,10 +163,10 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
   }, []);
 
   useEffect(() => {
-    if (paused || reducedMotion || count <= 1) return;
+    if (paused || reducedMotion || count <= 1 || !autoPlay) return;
     const t = setTimeout(next, autoPlayMs);
     return () => clearTimeout(t);
-  }, [index, paused, reducedMotion, count, next, autoPlayMs]);
+  }, [index, paused, reducedMotion, count, next, autoPlayMs, autoPlay]);
 
   useEffect(() => {
     if (index > count - 1) setIndex(0);
@@ -135,7 +182,10 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
     return () => el?.removeEventListener('keydown', onKey as any);
   }, [next, prev]);
 
-  const height = isMobile ? '420px' : '520px';
+  const bandHeightPx = isMobile
+    ? HERO_HEIGHT_PX[height]?.mobile ?? HERO_HEIGHT_PX.standard.mobile
+    : HERO_HEIGHT_PX[height]?.desktop ?? HERO_HEIGHT_PX.standard.desktop;
+  const bandHeight = `${bandHeightPx}px`;
 
   // Admin has no active hero slides: render nothing rather than inventing
   // content the store owner never configured.
@@ -165,7 +215,7 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
       style={{
         position: 'relative',
         width: '100%',
-        height,
+        height: bandHeight,
         overflow: 'hidden',
         backgroundColor: '#0f0f17',
         outline: 'none',
@@ -201,9 +251,7 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
                 inset: 0,
                 background: img
                   ? `url(${getImageUrl(img)}) center/cover no-repeat`
-                  : overlay.includes('gradient')
-                  ? overlay
-                  : 'linear-gradient(120deg, #1a1a2e, #16213e)',
+                  : resolveSlideBackground(overlay),
               }}
             />
             {/* Overlay for readability when there is a photo */}
@@ -358,7 +406,7 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
       })}
 
       {/* Arrows */}
-      {count > 1 && !isMobile && (
+      {count > 1 && !isMobile && showArrows && (
         <>
           <button
             aria-label="Previous slide"
@@ -374,7 +422,7 @@ export default function HeroGallery({ banners, loaded = false, autoPlayMs = 6000
       )}
 
       {/* Dots / progress */}
-      {count > 1 && (
+      {count > 1 && showDots && (
         <div
           style={{
             position: 'absolute',

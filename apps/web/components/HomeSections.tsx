@@ -48,7 +48,9 @@ export function SectionHeading({
         alignItems: center ? 'center' : 'flex-end',
         justifyContent: center ? 'center' : 'space-between',
         flexDirection: center ? 'column' : 'row',
-        textAlign: center ? 'center' : 'left',
+        // Logical alignment: in an RTL document the heading block sits at
+        // the inline start (right) and its lines align to the right edge.
+        textAlign: center ? 'center' : 'start',
         gap: '16px',
       }}
     >
@@ -585,7 +587,9 @@ export function RichTextBlock({
             color: 'var(--body-text, #333)',
             lineHeight: 1.75,
             fontSize: '15px',
-            textAlign: align,
+            // The stored "left" is a logical intent: mirror to the reading
+            // start in RTL documents.
+            textAlign: align === 'center' ? 'center' : 'start',
           }}
           // Sanitised server-side before it is stored; see home.routes.ts and
           // the shared sanitiser used by the rich text editor.

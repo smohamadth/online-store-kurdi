@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
-import type { Banner } from './HeroGallery';
+import { looksLikeScrim, type Banner } from './HeroGallery';
 
 export default function PromoGrid({ banners }: { banners: Banner[] }) {
   const isMobile = useIsMobile();
@@ -34,9 +34,12 @@ export default function PromoGrid({ banners }: { banners: Banner[] }) {
                 height: isMobile ? '160px' : '200px',
                 borderRadius: '12px',
                 overflow: 'hidden',
+                // No image: gradient or solid overlay colours become the
+                // backdrop; a scrim-like rgba (the form default) keeps the
+                // classic dark band underneath the tile's own scrim.
                 background: b.image
                   ? `url(${getImageUrl(b.image)}) center/cover no-repeat`
-                  : b.overlayColor && b.overlayColor.includes('gradient')
+                  : b.overlayColor && !looksLikeScrim(b.overlayColor)
                   ? b.overlayColor
                   : 'linear-gradient(120deg,#111827,#374151)',
                 border: '1px solid var(--border, #e5e5e5)',

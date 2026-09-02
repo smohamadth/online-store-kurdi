@@ -1047,12 +1047,112 @@ function TypeEditor({
       );
     }
 
-    case 'hero':
-      return (
-        <p style={{ fontSize: '13px', color: '#666' }}>
-          Slides for this block are managed in <strong>Admin → Banners</strong> (position “hero”).
-        </p>
+    case 'hero': {
+      // Design options for the hero band. Nested under `cfg.hero` so the
+      // block reads as one unit (lib/heroOptions.ts normalises it on the
+      // storefront; anything invalid falls back per key).
+      const hero = (cfg.hero || {}) as Record<string, any>;
+      const patchHero = (patch: Record<string, any>) =>
+        patchConfig(row.id, { hero: { ...hero, ...patch } });
+      const heroSelect = (
+        key: string,
+        label: string,
+        options: { value: string; text: string }[],
+        fallback: string
+      ) => (
+        <div>
+          <label style={labelStyle}>{label}</label>
+          <select
+            style={inputStyle}
+            value={hero[key] || fallback}
+            onChange={(e) => patchHero({ [key]: e.target.value })}
+          >
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.text}
+              </option>
+            ))}
+          </select>
+        </div>
       );
+      return (
+        <div style={{ display: 'grid', gap: '14px' }}>
+          <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
+            The slides themselves (image, copy, buttons, colours, order) are
+            managed in <strong>Admin → Banners</strong> (position “hero”). The
+            options below shape how the hero band looks.
+          </p>
+          {twoCol(
+            <>
+              {heroSelect('layout', 'Layout', [
+                { value: 'slideshow', text: 'Slideshow (rotate through the slides)' },
+                { value: 'single', text: 'Single (first slide only, no motion)' },
+              ], 'slideshow')}
+              {heroSelect('height', 'Height', [
+                { value: 'compact', text: 'Compact' },
+                { value: 'standard', text: 'Standard' },
+                { value: 'tall', text: 'Tall' },
+              ], 'standard')}
+            </>
+          )}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+            }}
+          >
+            <input
+              type="checkbox"
+              id="hero-autoplay"
+              checked={hero.autoPlay !== false}
+              onChange={(e) => patchHero({ autoPlay: e.target.checked })}
+            />
+            <label htmlFor="hero-autoplay" style={{ fontWeight: 600 }}>
+              Autoplay
+            </label>
+            <input
+              type="range"
+              min={3}
+              max={10}
+              value={hero.intervalSec || 6}
+              aria-label="Autoplay interval (seconds)"
+              disabled={hero.autoPlay === false}
+              onChange={(e) => patchHero({ intervalSec: parseInt(e.target.value) })}
+              style={{ flex: 1, marginInlineStart: '6px' }}
+            />
+            <span style={{ fontSize: '13px', color: '#888', whiteSpace: 'nowrap' }}>
+              {hero.intervalSec || 6}s
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+              <input
+                type="checkbox"
+                checked={hero.arrows !== false}
+                onChange={(e) => patchHero({ arrows: e.target.checked })}
+              />
+              Prev/next arrows
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+              <input
+                type="checkbox"
+                checked={hero.dots !== false}
+                onChange={(e) => patchHero({ dots: e.target.checked })}
+              />
+              Slide dots
+            </label>
+          </div>
+          <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+            These options apply to the platform hero (the Default theme and
+            themes without their own hero). A theme that ships its own hero
+            design — Bold, Dawnlight, Minimal, Pulse — keeps its look and
+            only honours the “Single” layout choice.
+          </p>
+        </div>
+      );
+    }
 
     case 'promo':
       return (
