@@ -55,7 +55,7 @@ describe('Variant-level stock decrement (#2)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: shirt.id, variantId: m.id, quantity: 1 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect([200, 201]).toContain(res.status);
     const mAfter = await mockPrisma.productVariant.findUnique({ where: { id: m.id } });
@@ -77,7 +77,7 @@ describe('Variant-level stock decrement (#2)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: shirt.id, variantId: m.id, quantity: 1 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     const logs = await mockPrisma.inventoryLog.findMany({ where: { productId: shirt.id, variantId: m.id } });
     expect(logs).toHaveLength(1);
@@ -96,7 +96,7 @@ describe('Variant-level stock decrement (#2)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: shirt.id, variantId: m.id, quantity: 5 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
@@ -113,7 +113,7 @@ describe('Backorders (#3)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: p.id, quantity: 1 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect([200, 201]).toContain(res.status);
     const pAfter = await mockPrisma.product.findUnique({ where: { id: p.id } });
@@ -130,7 +130,7 @@ describe('Backorders (#3)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: p.id, quantity: 1 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
@@ -145,7 +145,7 @@ describe('Backorders (#3)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: p.id, quantity: 1 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect([200, 201]).toContain(res.status);
     const orderId = res.body.data?.id;
@@ -699,7 +699,7 @@ describe('Restock / return flow (#9)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .send({
         items: [{ productId: p.id, quantity: 3 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect([200, 201]).toContain(order.status);
     expect((await mockPrisma.product.findUnique({ where: { id: p.id } }))!.quantity).toBe(7);

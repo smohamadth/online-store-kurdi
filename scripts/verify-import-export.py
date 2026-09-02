@@ -149,8 +149,17 @@ try:
           and len(cat_lines) > 1,
           f"{len(cat_lines)} lines")
 
-    status, _, _ = call("GET", "/import-export/export/orders", admin_token)
+    # `orders` used to be rejected, so this probe used it as the "unknown
+    # entity" case. It is a supported entity now (products | categories |
+    # customers | orders) and returns a 200 CSV, which the JSON-decoding
+    # branch of call() then choked on. Probe a genuinely unknown name, and
+    # read it raw so a non-JSON error body cannot crash the check itself.
+    status, _, _ = call("GET", "/import-export/export/not-an-entity", admin_token, raw=True)
     check("unknown export entity is 400", status == 400, f"got {status}")
+
+    # And assert the entity that caused the confusion actually works.
+    status, orders_text, _ = export_csv(admin_token, "orders")
+    check("order CSV export is 200", status == 200, f"got {status}")
 
     # -- 3. preview ----------------------------------------------------------
     before = product_count(admin_token)

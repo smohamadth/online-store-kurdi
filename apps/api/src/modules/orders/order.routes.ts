@@ -49,14 +49,22 @@ const createOrderSchema = z.object({
     )
     .min(1),
   shippingAddressId: z.string().optional(),
+  // The inline address is optional (you may pass shippingAddressId instead),
+  // but if it IS supplied it has to be complete: firstName, lastName,
+  // address1, city, state, postalCode and country are all NOT NULL on the
+  // Address model. These were previously every-field-.optional(), so a
+  // partial address passed validation and then threw inside
+  // prisma.address.create - the customer got a 500 with a Prisma error
+  // instead of a 400 naming the field they left blank. `country` keeps its
+  // 'US' default in the handler, so it stays optional here.
   shippingAddress: z
     .object({
-      firstName: z.string().max(100).optional(),
-      lastName: z.string().max(100).optional(),
-      address: z.string().max(500).optional(),
-      city: z.string().max(100).optional(),
-      state: z.string().max(100).optional(),
-      zipCode: z.string().max(20).optional(),
+      firstName: z.string().min(1).max(100),
+      lastName: z.string().min(1).max(100),
+      address: z.string().min(1).max(500),
+      city: z.string().min(1).max(100),
+      state: z.string().min(1).max(100),
+      zipCode: z.string().min(1).max(20),
       country: z.string().max(2).optional(),
       phone: z.string().max(40).optional(),
     })

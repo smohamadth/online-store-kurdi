@@ -393,7 +393,7 @@ describe('Stripe: order placement with card', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         items: [{ productId: product.id, quantity: 1 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
         paymentMethod,
         ...body,
       });

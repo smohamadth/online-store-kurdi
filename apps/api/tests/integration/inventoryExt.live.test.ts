@@ -110,7 +110,7 @@ describe('Live: inventory subsystem contract', () => {
       .set('Authorization', `Bearer ${custAuth}`)
       .send({
         items: [{ productId: p1.id, quantity: 7 }],
-        shippingAddress: { firstName: 'A', lastName: 'B', address1: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1', city: 'C', state: 'S', zipCode: '00000', country: 'US' },
       });
     expect([200, 201]).toContain(orderRes.status);
     const order = orderRes.body.data;

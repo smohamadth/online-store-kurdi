@@ -186,6 +186,46 @@ describe('POST /api/orders', () => {
     expect(res.status).toBe(201);
   });
 
+  it('rejects a partial inline shipping address instead of failing at the DB', async () => {
+    // The zod schema marked every shippingAddress field .optional(), but
+    // Address.firstName/lastName/address1/city/state/postalCode are NOT NULL
+    // in the schema. A checkout that omitted any of them passed validation and
+    // then blew up inside prisma.address.create - a 500 with a Prisma error
+    // instead of a 400 telling the customer which field is missing.
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 5 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 1 }],
+        // city / state / zipCode deliberately absent
+        shippingAddress: { firstName: 'A', lastName: 'B', address: '1 St', country: 'US' },
+      });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toMatch(/city|state|zipCode|required/i);
+  });
+
+  it('still accepts an order that reuses a saved address id', async () => {
+    // The required-field rule must apply only to the inline object; passing
+    // shippingAddressId alone stays valid.
+    const { token, user } = await authHeader();
+    const p = await createProduct({ quantity: 5 });
+    const addr = await mockPrisma.address.create({
+      data: {
+        userId: user.id, type: 'shipping', firstName: 'A', lastName: 'B',
+        address1: '1 St', city: 'NYC', state: 'NY', postalCode: '10001', country: 'US',
+      },
+    });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: p.id, quantity: 1 }], shippingAddressId: addr.id });
+
+    expect(res.status).toBe(201);
+  });
+
   it('ignores client-sent amounts and stores server-computed totals', async () => {
     // Regression: order placement used to trust the client's
     // subtotal/tax/shipping/discount/total verbatim, so a request
