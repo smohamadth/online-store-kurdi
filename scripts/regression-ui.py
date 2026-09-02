@@ -123,5 +123,15 @@ if failures:
     print("===== FAILED =====")
     for f in failures:
         print("  -", f)
+    # Also emit GitHub Actions error annotations. Without these the reason a
+    # run went red lives only inside the step log, which is awkward to reach
+    # (and unreachable entirely from restricted networks) - the job summary
+    # just says "Process completed with exit code 1". Annotations surface the
+    # actual failing pages directly on the run and the PR.
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for f in failures:
+            print(f"::error title=UI regression::{f}")
+        for path, errs in list(errors.items())[:10]:
+            print(f"::error title=Console error on {path}::{errs[0]}")
     sys.exit(1)
 print("===== all UI checks passed =====")
