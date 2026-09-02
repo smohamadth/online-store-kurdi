@@ -11,6 +11,7 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useTheme } from '@/lib/theme';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { getImageUrl } from '@/lib/api';
@@ -25,12 +26,20 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
   // default when the admin has not set it), while letting auto-fit reflow to
   // fewer columns on small screens.
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 3));
+  // The admin's link text arrives with a trailing arrow glyph; we
+  // strip it and render a direction-aware arrow so RTL mirrors.
+  const viewAllLabel = String(config?.linkText ?? 'View all').replace(
+    /\s*[→←]\s*$/,
+    ''
+  );
+  const viewAllHref = (config?.linkHref as string) || '/products';
 
   if (list.length === 0) return null;
 
   return (
     <section
       data-section="featured"
+      data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #f8fafc)',
         padding: 'clamp(48px, 7vw, 88px) 24px',
@@ -38,25 +47,52 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
     >
       <div style={{ maxWidth: 'var(--container, 1280px)', margin: '0 auto' }}>
         {(title || subtitle) && (
-          <div style={{ marginBottom: '40px', maxWidth: '560px' }}>
-            {title && (
-              <h2
-                style={{
-                  fontSize: 'clamp(24px, 3.5vw, 34px)',
-                  letterSpacing: '-0.01em',
-                  fontWeight: 'var(--heading-weight, 700)',
-                  color: 'var(--body-text, #0f172a)',
-                  margin: 0,
-                }}
-              >
-                {title}
-              </h2>
-            )}
-            {subtitle && (
-              <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'var(--muted, #64748b)', margin: '12px 0 0' }}>
-                {subtitle}
-              </p>
-            )}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              gap: '16px',
+              marginBottom: '40px',
+            }}
+          >
+            <div style={{ maxWidth: '560px' }}>
+              {title && (
+                <h2
+                  style={{
+                    fontSize: 'clamp(24px, 3.5vw, 34px)',
+                    letterSpacing: '-0.01em',
+                    fontWeight: 'var(--heading-weight, 700)',
+                    color: 'var(--body-text, #0f172a)',
+                    margin: 0,
+                  }}
+                >
+                  {title}
+                </h2>
+              )}
+              {subtitle && (
+                <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'var(--muted, #64748b)', margin: '12px 0 0' }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
+            <Link
+              href={viewAllHref}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                flexShrink: 0,
+                fontSize: '14px',
+                fontWeight: 600,
+                color: 'var(--accent, #4f46e5)',
+                textDecoration: 'none',
+                paddingBottom: '4px',
+              }}
+            >
+              {viewAllLabel}
+              <DirectionArrow kind="forward" />
+            </Link>
           </div>
         )}
 
@@ -152,13 +188,16 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
                     )}
                     <span
                       style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
                         fontSize: '13px',
                         fontWeight: 600,
                         color: 'var(--accent, #4f46e5)',
                         marginInlineStart: 'auto',
                       }}
                     >
-                      View →
+                      View <DirectionArrow kind="forward" />
                     </span>
                   </div>
                 </div>

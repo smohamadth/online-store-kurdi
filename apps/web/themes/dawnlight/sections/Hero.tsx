@@ -33,8 +33,15 @@ export default function DawnlightHero({ banners }: SectionProps) {
           minHeight: first ? '420px' : '320px',
           display: 'flex',
           alignItems: 'center',
-          backgroundColor: 'var(--body-bg, #ffffff)',
-          backgroundImage: first ? `url(${getImageUrl(first.image)})` : undefined,
+          // A banner whose image is missing (or no banner at all)
+          // gets a quiet tinted band so the paper panel still reads
+          // as a deliberate composition instead of white-on-white.
+          backgroundColor: first?.image
+            ? undefined
+            : 'var(--surface-2, #f2f2f0)',
+          backgroundImage: first?.image
+            ? `url(${getImageUrl(first.image)})`
+            : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -95,14 +102,14 @@ export default function DawnlightHero({ banners }: SectionProps) {
                 display: 'inline-block',
                 marginTop: '28px',
                 padding: '14px 32px',
-                backgroundColor: 'var(--primary, #121212)',
-                color: 'var(--primary-text, #ffffff)',
+                backgroundColor: 'var(--brand, #121212)',
+                color: 'var(--brand-text, #ffffff)',
                 fontSize: '14px',
                 fontWeight: 600,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',
                 textDecoration: 'none',
-                border: '1px solid var(--primary, #121212)',
+                border: '1px solid var(--brand, #121212)',
               }}
             >
               {first?.buttonText || 'Shop now'}
@@ -127,7 +134,10 @@ export default function DawnlightHero({ banners }: SectionProps) {
           <div
             style={{
               aspectRatio: '4 / 3',
-              backgroundImage: `url(${getImageUrl(second.image)})`,
+              backgroundColor: second.image ? undefined : '#f7f7f7',
+              backgroundImage: second.image
+                ? `url(${getImageUrl(second.image)})`
+                : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               border: '1px solid var(--border, #e6e6e6)',
@@ -156,7 +166,7 @@ export default function DawnlightHero({ banners }: SectionProps) {
                   display: 'inline-block',
                   marginTop: '24px',
                   padding: '12px 28px',
-                  border: '1px solid var(--primary, #121212)',
+                  border: '1px solid var(--brand, #121212)',
                   color: 'var(--body-text, #121212)',
                   fontSize: '14px',
                   fontWeight: 600,

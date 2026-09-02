@@ -14,7 +14,7 @@ import { useTheme } from '@/lib/theme';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function DawnlightCategories({ title, categories }: SectionProps) {
+export default function DawnlightCategories({ title, subtitle, categories }: SectionProps) {
   const theme = useTheme();
   const list = categories ?? [];
 
@@ -23,6 +23,7 @@ export default function DawnlightCategories({ title, categories }: SectionProps)
   return (
     <section
       data-section="categories"
+      data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #ffffff)',
         borderTop: '1px solid var(--border, #e6e6e6)',
@@ -30,20 +31,28 @@ export default function DawnlightCategories({ title, categories }: SectionProps)
       }}
     >
       <div style={{ maxWidth: 'var(--container, 1200px)', margin: '0 auto', padding: '72px 24px' }}>
-        {title && (
-          <h2
-            style={{
-              fontSize: '15px',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              color: 'var(--body-text, #121212)',
-              margin: '0 0 40px',
-              textAlign: 'center',
-            }}
-          >
-            {title}
-          </h2>
+        {(title || subtitle) && (
+          <div style={{ margin: '0 0 40px', textAlign: 'center' }}>
+            {title && (
+              <h2
+                style={{
+                  fontSize: '15px',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  color: 'var(--body-text, #121212)',
+                  margin: 0,
+                }}
+              >
+                {title}
+              </h2>
+            )}
+            {subtitle && (
+              <p style={{ fontSize: '14px', color: 'var(--muted, #5c5c5c)', margin: '8px 0 0' }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
         )}
         <div
           style={{

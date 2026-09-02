@@ -11,30 +11,39 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useTheme } from '@/lib/theme';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function DawnlightFeatured({ title, products, config }: SectionProps) {
+export default function DawnlightFeatured({ title, subtitle, products, config }: SectionProps) {
   const { theme } = useTheme();
   const { settings } = useStoreSettings();
   const limit = (config?.limit as number) ?? 4;
   const list = (products ?? []).slice(0, limit);
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
+  // The admin's link text arrives with a trailing arrow glyph; we
+  // strip it and render a direction-aware arrow so RTL mirrors.
+  const viewAllLabel = String(config?.linkText ?? 'View all').replace(
+    /\s*[→←]\s*$/,
+    ''
+  );
+  const viewAllHref = (config?.linkHref as string) || '/products';
 
   if (list.length === 0) return null;
 
   return (
     <section
       data-section="featured"
+      data-theme={theme.activeTheme}
       style={{
         maxWidth: 'var(--container, 1200px)',
         margin: '0 auto',
         padding: '72px 24px',
       }}
     >
-      {title && (
+      {(title || subtitle) && (
         <div
           style={{
             display: 'flex',
@@ -45,19 +54,34 @@ export default function DawnlightFeatured({ title, products, config }: SectionPr
             marginBottom: '40px',
           }}
         >
-          <h2
-            style={{
-              fontSize: '15px',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              color: 'var(--body-text, #121212)',
-              margin: 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {title}
-          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {title && (
+              <h2
+                style={{
+                  fontSize: '15px',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  color: 'var(--body-text, #121212)',
+                  margin: 0,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {title}
+              </h2>
+            )}
+            {subtitle && (
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: 'var(--muted, #5c5c5c)',
+                  margin: 0,
+                }}
+              >
+                {subtitle}
+              </p>
+            )}
+          </div>
           <span
             aria-hidden="true"
             style={{
@@ -67,8 +91,11 @@ export default function DawnlightFeatured({ title, products, config }: SectionPr
             }}
           />
           <Link
-            href="/products"
+            href={viewAllHref}
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
               fontSize: '14px',
               fontWeight: 600,
               color: 'var(--body-text, #121212)',
@@ -76,7 +103,8 @@ export default function DawnlightFeatured({ title, products, config }: SectionPr
               whiteSpace: 'nowrap',
             }}
           >
-            View all →
+            {viewAllLabel}
+            <DirectionArrow kind="forward" />
           </Link>
         </div>
       )}

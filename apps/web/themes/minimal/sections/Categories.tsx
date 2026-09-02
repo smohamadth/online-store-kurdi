@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useTheme } from '@/lib/theme';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function MinimalCategories({ title, categories, config }: SectionProps) {
+export default function MinimalCategories({ title, subtitle, categories, config }: SectionProps) {
   const theme = useTheme();
   const limit = (config?.limit as number) ?? 6;
   const list = (categories ?? []).slice(0, limit);
@@ -37,20 +37,34 @@ export default function MinimalCategories({ title, categories, config }: Section
         borderTop: '1px solid var(--border, #e8e6e0)',
       }}
     >
-      {title && (
-        <h2
-          style={{
-            fontSize: '13px',
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-            color: 'var(--muted, #6b6b65)',
-            fontWeight: 500,
-            margin: 0,
-            marginBottom: '32px',
-          }}
-        >
-          {title}
-        </h2>
+      {(title || subtitle) && (
+        <div style={{ marginBottom: '32px' }}>
+          {title && (
+            <h2
+              style={{
+                fontSize: '13px',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'var(--muted, #6b6b65)',
+                fontWeight: 500,
+                margin: 0,
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {subtitle && (
+            <p
+              style={{
+                fontSize: '14px',
+                color: 'var(--muted, #6b6b65)',
+                margin: '8px 0 0',
+              }}
+            >
+              {subtitle}
+            </p>
+          )}
+        </div>
       )}
       <ul
         style={{

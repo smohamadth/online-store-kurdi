@@ -10,19 +10,29 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useTheme } from '@/lib/theme';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function PulseCategories({ title, subtitle, categories }: SectionProps) {
+export default function PulseCategories({ title, subtitle, categories, config }: SectionProps) {
   const theme = useTheme();
   const list = categories ?? [];
+  // The home page's category row ships a "View all" config; surface
+  // it here so the category band keeps the same navigation affordance
+  // as the platform default section.
+  const viewAllLabel = String(config?.linkText ?? 'View all').replace(
+    /\s*[→←]\s*$/,
+    ''
+  );
+  const viewAllHref = (config?.linkHref as string) || '/products';
 
   if (list.length === 0) return null;
 
   return (
     <section
       data-section="categories"
+      data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #f8fafc)',
         padding: '0 24px clamp(48px, 7vw, 88px)',
@@ -30,25 +40,52 @@ export default function PulseCategories({ title, subtitle, categories }: Section
     >
       <div style={{ maxWidth: 'var(--container, 1280px)', margin: '0 auto' }}>
         {(title || subtitle) && (
-          <div style={{ marginBottom: '40px', maxWidth: '560px' }}>
-            {title && (
-              <h2
-                style={{
-                  fontSize: 'clamp(24px, 3.5vw, 34px)',
-                  letterSpacing: '-0.01em',
-                  fontWeight: 'var(--heading-weight, 700)',
-                  color: 'var(--body-text, #0f172a)',
-                  margin: 0,
-                }}
-              >
-                {title}
-              </h2>
-            )}
-            {subtitle && (
-              <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'var(--muted, #64748b)', margin: '12px 0 0' }}>
-                {subtitle}
-              </p>
-            )}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              gap: '16px',
+              marginBottom: '40px',
+            }}
+          >
+            <div style={{ maxWidth: '560px' }}>
+              {title && (
+                <h2
+                  style={{
+                    fontSize: 'clamp(24px, 3.5vw, 34px)',
+                    letterSpacing: '-0.01em',
+                    fontWeight: 'var(--heading-weight, 700)',
+                    color: 'var(--body-text, #0f172a)',
+                    margin: 0,
+                  }}
+                >
+                  {title}
+                </h2>
+              )}
+              {subtitle && (
+                <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'var(--muted, #64748b)', margin: '12px 0 0' }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
+            <Link
+              href={viewAllHref}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                flexShrink: 0,
+                fontSize: '14px',
+                fontWeight: 600,
+                color: 'var(--accent, #4f46e5)',
+                textDecoration: 'none',
+                paddingBottom: '4px',
+              }}
+            >
+              {viewAllLabel}
+              <DirectionArrow kind="forward" />
+            </Link>
           </div>
         )}
 

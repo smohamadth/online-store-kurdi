@@ -271,7 +271,7 @@ export default function HomeView() {
                 )}
               </section>
             }
-            props={{ title: s.title ?? undefined, categories, config: cfg }}
+            props={{ title: s.title ?? undefined, subtitle: s.subtitle ?? undefined, categories, config: cfg }}
           />
         );
 
@@ -323,7 +323,7 @@ export default function HomeView() {
                 )}
               </section>
             }
-            props={{ title: s.title ?? undefined, products: shown, config: cfg }}
+            props={{ title: s.title ?? undefined, subtitle: s.subtitle ?? undefined, products: shown, config: cfg }}
           />
         );
       }

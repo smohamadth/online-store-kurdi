@@ -16,13 +16,32 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
+import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function BoldHero({ banners: _banners }: SectionProps) {
+export default function BoldHero({ banners }: SectionProps) {
   const { settings } = useStoreSettings();
   const theme = useTheme();
+  // The first admin banner drives the poster. When the merchant has
+  // set one up, its title, copy, CTA and image replace the
+  // store-settings text so the hero is actually controllable from
+  // the admin (previously the banner data was destructured away and
+  // the right half always showed the placeholder).
+  const first = banners?.[0];
+  const image = first?.image || null;
+  const headline =
+    first?.title ||
+    (settings.storeDescription || 'Look at this.').split('.')[0];
+  const subcopy =
+    first?.subtitle ||
+    first?.description ||
+    settings.storeDescription?.split('.').slice(1).join('.').trim() ||
+    'A new collection. Limited run. No restocks.';
+  const ctaHref = first?.linkUrl || '/products';
+  const ctaLabel = first?.buttonText || 'Shop the drop';
   // The Bold hero is loud on purpose. The single product
   // image on the right takes a fixed aspect ratio so the
   // hero has a consistent visual weight regardless of the
@@ -77,7 +96,7 @@ export default function BoldHero({ banners: _banners }: SectionProps) {
             fontWeight: 700,
           }}
         >
-          {settings.storeName} presents
+          {first?.badge || `${settings.storeName} presents`}
         </p>
         <h1
           style={{
@@ -99,7 +118,7 @@ export default function BoldHero({ banners: _banners }: SectionProps) {
             textTransform: 'uppercase',
           }}
         >
-          {(settings.storeDescription || 'Look at this.').split('.')[0]}
+          {headline}
         </h1>
         <p
           style={{
@@ -114,11 +133,10 @@ export default function BoldHero({ banners: _banners }: SectionProps) {
           {/* Secondary line below the headline. Kept short
               - the Bold theme's hero is the headline, not
               the body copy. */}
-          {settings.storeDescription?.split('.').slice(1).join('.').trim() ||
-            'A new collection. Limited run. No restocks.'}
+          {subcopy}
         </p>
         <Link
-          href="/products"
+          href={ctaHref}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -142,12 +160,12 @@ export default function BoldHero({ banners: _banners }: SectionProps) {
             minHeight: '56px',
           }}
         >
-          Shop the drop
-          <span aria-hidden="true" style={{ fontSize: '18px' }}>→</span>
+          {ctaLabel}
+          <DirectionArrow kind="forward" />
         </Link>
       </div>
 
-      {/* Right half: image (or gradient placeholder) */}
+      {/* Right half: the banner image (or gradient placeholder) */}
       <div
         style={{
           // Aspect ratio 1:1 on the right half so the hero
@@ -155,35 +173,50 @@ export default function BoldHero({ banners: _banners }: SectionProps) {
           // banner image's natural aspect. The merchant can
           // change this in the admin later if they want a
           // wider hero.
+          position: 'relative',
           aspectRatio: '1',
-          background: fallbackGradient,
+          background: image ? '#171717' : fallbackGradient,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           // The "LOOK AT ME" badge in the corner. A
           // decorative element that reinforces the theme's
           // tone.
-          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <span
-          aria-hidden="true"
-          style={{
-            // The "no image uploaded" placeholder. Real
-            // banners will go in front of this once the
-            // admin attaches a hero image; for now the
-            // gradient is what the merchant sees.
-            fontSize: '24px',
-            fontWeight: 900,
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.4)',
-            padding: '16px 24px',
-            border: '2px dashed rgba(255,255,255,0.4)',
-          }}
-        >
-          Hero image
-        </span>
+        {image ? (
+          <img
+            src={getImageUrl(image)}
+            alt={first?.title || settings.storeName}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            style={{
+              // The "no image uploaded" placeholder. Real
+              // banner images render in front of this once
+              // the admin attaches one; for now the
+              // gradient is what the merchant sees.
+              fontSize: '24px',
+              fontWeight: 900,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.4)',
+              padding: '16px 24px',
+              border: '2px dashed rgba(255,255,255,0.4)',
+            }}
+          >
+            Hero image
+          </span>
+        )}
       </div>
     </section>
   );

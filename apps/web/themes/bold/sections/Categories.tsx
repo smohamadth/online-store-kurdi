@@ -14,20 +14,28 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useTheme } from '@/lib/theme';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function BoldCategories({ title, categories, config }: SectionProps) {
+export default function BoldCategories({ title, subtitle, categories, config }: SectionProps) {
   const theme = useTheme();
   const limit = (config?.limit as number) ?? 4;
   const list = (categories ?? []).slice(0, limit);
+  // Keyboard users get the same image zoom as hover users: the card
+  // link drives the scale so focus (not just the mouse) triggers it.
+  const zoomImage = (scale: string) => (e: React.SyntheticEvent<HTMLElement>) => {
+    const img = e.currentTarget.querySelector('img');
+    if (img) img.style.transform = `scale(${scale})`;
+  };
 
   if (list.length === 0) return null;
 
   return (
     <section
       data-section="categories"
+      data-theme={theme.activeTheme}
       style={{
         // A dark band that breaks up the page visually.
         // Different from the body's #0a0a0a so the section
@@ -38,23 +46,43 @@ export default function BoldCategories({ title, categories, config }: SectionPro
         borderBottom: '1px solid var(--border, #262626)',
       }}
     >
-      {title && (
-        <h2
+      {(title || subtitle) && (
+        <div
           style={{
-            fontSize: 'clamp(32px, 5vw, 56px)',
-            fontWeight: 900,
-            letterSpacing: '-0.02em',
-            textTransform: 'uppercase',
-            color: 'var(--body-text, #fafafa)',
-            margin: 0,
-            marginBottom: '64px',
-            textAlign: 'center',
             maxWidth: 'var(--container, 1400px)',
-            marginInline: 'auto',
+            margin: '0 auto 64px',
+            textAlign: 'center',
           }}
         >
-          {title}
-        </h2>
+          {title && (
+            <h2
+              style={{
+                fontSize: 'clamp(32px, 5vw, 56px)',
+                fontWeight: 900,
+                letterSpacing: '-0.02em',
+                textTransform: 'uppercase',
+                color: 'var(--body-text, #fafafa)',
+                margin: 0,
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {subtitle && (
+            <p
+              style={{
+                fontSize: '15px',
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: 'var(--muted, #a1a1aa)',
+                margin: '16px 0 0',
+              }}
+            >
+              {subtitle}
+            </p>
+          )}
+        </div>
       )}
       <div
         style={{
@@ -89,6 +117,10 @@ export default function BoldCategories({ title, categories, config }: SectionPro
                 textDecoration: 'none',
                 color: 'var(--body-text, #fafafa)',
               }}
+              onMouseEnter={zoomImage('1.05')}
+              onMouseLeave={zoomImage('1')}
+              onFocus={zoomImage('1.05')}
+              onBlur={zoomImage('1')}
             >
               {hasImage && (
                 <img
@@ -102,12 +134,6 @@ export default function BoldCategories({ title, categories, config }: SectionPro
                     height: '100%',
                     objectFit: 'cover',
                     transition: 'transform 0.5s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
                   }}
                 />
               )}
@@ -139,6 +165,18 @@ export default function BoldCategories({ title, categories, config }: SectionPro
                 >
                   {cat.name}
                 </h3>
+                {typeof cat.count === 'number' && (
+                  <p
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      margin: '0 0 10px',
+                      color: 'rgba(255,255,255,0.85)',
+                    }}
+                  >
+                    {cat.count} {cat.count === 1 ? 'product' : 'products'}
+                  </p>
+                )}
                 <p
                   style={{
                     fontSize: '14px',
@@ -147,9 +185,12 @@ export default function BoldCategories({ title, categories, config }: SectionPro
                     color: 'rgba(255,255,255,0.7)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.1em',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
                   }}
                 >
-                  Shop <span aria-hidden="true">→</span>
+                  Shop <DirectionArrow kind="forward" />
                 </p>
               </div>
             </Link>

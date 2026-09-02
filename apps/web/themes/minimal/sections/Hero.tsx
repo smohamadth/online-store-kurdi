@@ -5,6 +5,10 @@
  * buttons. The store name as a typographic statement, a single
  * line of marketing copy, a small link to the products.
  *
+ * When the merchant has configured a hero banner, its copy and
+ * CTA replace the store-settings text (still no imagery - the
+ * banner is treated as text, which keeps the quiet intent).
+ *
  * This is the kind of hero a writer or maker uses. The product
  * is the brand; the storefront gets out of the way.
  */
@@ -12,17 +16,26 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function MinimalHero(_props: SectionProps) {
+export default function MinimalHero({ banners }: SectionProps) {
   const { settings } = useStoreSettings();
   // The active theme is always available inside a section override
   // (the section is only rendered when the theme picker resolved to
   // it). Reading it here is the only way for a section to know which
   // theme is active, since CSS variables are scoped to the root.
   const theme = useTheme();
+  // Minimal stays text-first, but when the merchant has configured a
+  // hero banner the banner's copy and CTA take over (the banner is
+  // the storefront's source of truth). With no banner the hero falls
+  // back to the store settings, exactly as before.
+  const first = banners?.[0];
+  const heroBody = first
+    ? first.subtitle || first.description || null
+    : settings.storeDescription || null;
 
   return (
     <section
@@ -58,7 +71,7 @@ export default function MinimalHero(_props: SectionProps) {
             fontWeight: 500,
           }}
         >
-          {settings.storeName}
+          {first?.badge || settings.storeName}
         </p>
         <h1
           style={{
@@ -73,9 +86,11 @@ export default function MinimalHero(_props: SectionProps) {
             letterSpacing: '-0.01em',
           }}
         >
-          {settings.storeDescription || 'A small collection of things, made carefully.'}
+          {first?.title ||
+            settings.storeDescription ||
+            'A small collection of things, made carefully.'}
         </h1>
-        {settings.storeDescription && (
+        {heroBody && (
           <p
             style={{
               fontSize: '17px',
@@ -90,13 +105,11 @@ export default function MinimalHero(_props: SectionProps) {
                 description and as the hero's tagline. Truncate
                 for the hero so the page never has a wall of
                 text above the fold. */}
-            {settings.storeDescription.length > 180
-              ? settings.storeDescription.slice(0, 177) + '…'
-              : settings.storeDescription}
+            {heroBody.length > 180 ? heroBody.slice(0, 177) + '…' : heroBody}
           </p>
         )}
         <Link
-          href="/products"
+          href={first?.linkUrl || '/products'}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -113,8 +126,8 @@ export default function MinimalHero(_props: SectionProps) {
             transition: 'transform 0.18s ease',
           }}
         >
-          See what's in stock
-          <span aria-hidden="true">→</span>
+          {first?.buttonText || "See what's in stock"}
+          <DirectionArrow kind="forward" />
         </Link>
       </div>
     </section>

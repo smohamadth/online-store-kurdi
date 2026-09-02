@@ -34,6 +34,7 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
   return (
     <section
       data-section="featured"
+      data-theme={theme.activeTheme}
       style={{
         // Generous padding - the minimal theme's signature is
         // "more whitespace than you think is reasonable."
@@ -42,21 +43,35 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
         margin: '0 auto',
       }}
     >
-      {title && (
-        <h2
-          style={{
-            fontSize: '13px',
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-            color: 'var(--muted, #6b6b65)',
-            fontWeight: 500,
-            margin: 0,
-            marginBottom: '48px',
-            textAlign: 'center',
-          }}
-        >
-          {title}
-        </h2>
+      {(title || subtitle) && (
+        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+          {title && (
+            <h2
+              style={{
+                fontSize: '13px',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'var(--muted, #6b6b65)',
+                fontWeight: 500,
+                margin: 0,
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {subtitle && (
+            <p
+              style={{
+                fontSize: '14px',
+                color: 'var(--muted, #6b6b65)',
+                fontWeight: 500,
+                margin: '10px 0 0',
+              }}
+            >
+              {subtitle}
+            </p>
+          )}
+        </div>
       )}
       <div
         style={{
@@ -79,6 +94,24 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
                 display: 'block',
                 textDecoration: 'none',
                 color: 'var(--body-text, #1a1a1a)',
+              }}
+              // Keyboard focus scales the image just like hover,
+              // so the zoom is not mouse-only.
+              onMouseEnter={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) img.style.transform = 'scale(1.03)';
+              }}
+              onMouseLeave={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) img.style.transform = 'scale(1)';
+              }}
+              onFocus={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) img.style.transform = 'scale(1.03)';
+              }}
+              onBlur={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) img.style.transform = 'scale(1)';
               }}
             >
               <div
@@ -107,16 +140,6 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
                       height: '100%',
                       objectFit: 'cover',
                       transition: 'transform 0.4s ease',
-                    }}
-                    // Subtle hover scale. CSS :hover would be
-                    // better but the rest of the app uses
-                    // onMouseEnter/onMouseLeave, so we match
-                    // that pattern for consistency.
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.03)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
                     }}
                   />
                 ) : (

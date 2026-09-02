@@ -22,23 +22,39 @@
 'use client';
 
 import Link from 'next/link';
+import { DirectionArrow } from '@/components/DirectionArrow';
 import { useTheme } from '@/lib/theme';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
-export default function BoldFeatured({ title, products, config }: SectionProps) {
+export default function BoldFeatured({ title, subtitle, products, config }: SectionProps) {
   const { theme } = useTheme();
   const { settings } = useStoreSettings();
   const limit = (config?.limit as number) ?? 4;
   const list = (products ?? []).slice(0, limit);
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 2));
+  // The section row's config can point the "View all" link anywhere
+  // (the admin's link text arrives with a trailing arrow glyph; we
+  // strip it and render a direction-aware arrow ourselves).
+  const viewAllLabel = String(config?.linkText ?? 'View all products').replace(
+    /\s*[→←]\s*$/,
+    ''
+  );
+  const viewAllHref = (config?.linkHref as string) || '/products';
+  // Scale the card image on hover AND on keyboard focus, so the
+  // poster treatment is not mouse-only.
+  const zoomImage = (scale: string) => (e: React.SyntheticEvent<HTMLElement>) => {
+    const img = e.currentTarget.querySelector('img');
+    if (img) img.style.transform = `scale(${scale})`;
+  };
 
   if (list.length === 0) return null;
 
   return (
     <section
       data-section="featured"
+      data-theme={theme.activeTheme}
       style={{
         // Bold's section spacing is bigger than Minimal's.
         // A 96px top padding and 128px bottom give each
@@ -48,24 +64,40 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
         margin: '0 auto',
       }}
     >
-      {title && (
-        <h2
-          style={{
-            // The section title is large and uppercase.
-            // Different from Minimal's 13px tag, Bold's title
-            // IS the section.
-            fontSize: 'clamp(32px, 5vw, 56px)',
-            fontWeight: 900,
-            letterSpacing: '-0.02em',
-            textTransform: 'uppercase',
-            color: 'var(--body-text, #fafafa)',
-            margin: 0,
-            marginBottom: '64px',
-            textAlign: 'center',
-          }}
-        >
-          {title}
-        </h2>
+      {(title || subtitle) && (
+        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          {title && (
+            <h2
+              style={{
+                // The section title is large and uppercase.
+                // Different from Minimal's 13px tag, Bold's title
+                // IS the section.
+                fontSize: 'clamp(32px, 5vw, 56px)',
+                fontWeight: 900,
+                letterSpacing: '-0.02em',
+                textTransform: 'uppercase',
+                color: 'var(--body-text, #fafafa)',
+                margin: 0,
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {subtitle && (
+            <p
+              style={{
+                fontSize: '15px',
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: 'var(--muted, #a1a1aa)',
+                margin: '16px 0 0',
+              }}
+            >
+              {subtitle}
+            </p>
+          )}
+        </div>
       )}
       <div
         style={{
@@ -91,6 +123,10 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
                 textDecoration: 'none',
                 color: 'var(--body-text, #fafafa)',
               }}
+              onMouseEnter={zoomImage('1.05')}
+              onMouseLeave={zoomImage('1')}
+              onFocus={zoomImage('1.05')}
+              onBlur={zoomImage('1')}
             >
               <div
                 style={{
@@ -121,12 +157,6 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
                       height: '100%',
                       objectFit: 'cover',
                       transition: 'transform 0.5s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
                     }}
                   />
                 ) : (
@@ -195,6 +225,26 @@ export default function BoldFeatured({ title, products, config }: SectionProps) 
             </Link>
           );
         })}
+      </div>
+      <div style={{ marginTop: '48px', textAlign: 'center' }}>
+        <Link
+          href={viewAllHref}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: 'var(--accent, #facc15)',
+            fontSize: '14px',
+            fontWeight: 900,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            textDecoration: 'none',
+            padding: '8px 12px',
+          }}
+        >
+          {viewAllLabel}
+          <DirectionArrow kind="forward" />
+        </Link>
       </div>
     </section>
   );
