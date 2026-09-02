@@ -6,7 +6,7 @@
  *
  * ```json
  * "hero": {
- *   "layout": "slideshow" | "single",
+ *   "layout": "slideshow" | "single" | "split",
  *   "height": "compact" | "standard" | "tall",
  *   "autoPlay": true | false,
  *   "intervalSec": 3-10,
@@ -22,15 +22,19 @@
  * ignored; wrong-typed values fall back per key.
  */
 
-export type HeroLayout = 'slideshow' | 'single';
+export type HeroLayout = 'slideshow' | 'single' | 'split';
 export type HeroHeight = 'compact' | 'standard' | 'tall';
 
 export interface HeroOptions {
-  /** slideshow = rotate through the active banners; single = first banner only. */
+  /**
+   * slideshow = rotate through the active banners;
+   * single = first banner only, no motion;
+   * split = first banner as a copy+media split band (platform hero only).
+   */
   layout: HeroLayout;
   /** Desktop hero band height. Mobile scales down automatically. */
   height: HeroHeight;
-  /** Autoplay the slideshow. Ignored when layout is "single". */
+  /** Autoplay the slideshow. Only meaningful for the slideshow layout. */
   autoPlay: boolean;
   /** Autoplay delay in milliseconds. */
   autoPlayMs: number;
@@ -54,7 +58,7 @@ export const HERO_HEIGHT_PX: Record<HeroHeight, { desktop: number; mobile: numbe
   tall: { desktop: 640, mobile: 520 },
 };
 
-const LAYOUTS: HeroLayout[] = ['slideshow', 'single'];
+const LAYOUTS: HeroLayout[] = ['slideshow', 'single', 'split'];
 const HEIGHTS: HeroHeight[] = ['compact', 'standard', 'tall'];
 
 /** Options a store owner can set; keys match the HomeBuilder form. */
@@ -93,14 +97,16 @@ export function heroOptionsFromConfig(
     ? (raw.height as HeroHeight)
     : HERO_DEFAULTS.height;
   const autoPlay =
-    layout === 'single' ? false : boolOf(raw.autoPlay, HERO_DEFAULTS.autoPlay);
+    layout === 'slideshow' ? boolOf(raw.autoPlay, HERO_DEFAULTS.autoPlay) : false;
   const intervalSec = clampInt(raw.intervalSec, 3, 10, 6);
   return {
     layout,
     height,
     autoPlay,
     autoPlayMs: intervalSec * 1000,
-    showArrows: layout === 'single' ? false : boolOf(raw.arrows, HERO_DEFAULTS.showArrows),
-    showDots: layout === 'single' ? false : boolOf(raw.dots, HERO_DEFAULTS.showDots),
+    showArrows:
+      layout === 'slideshow' ? boolOf(raw.arrows, HERO_DEFAULTS.showArrows) : false,
+    showDots:
+      layout === 'slideshow' ? boolOf(raw.dots, HERO_DEFAULTS.showDots) : false,
   };
 }

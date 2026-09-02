@@ -25,6 +25,7 @@ import type { PageLayout } from '@/lib/layouts/types';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import StoreImage from '@/components/StoreImage';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
+import HeroSplit from '@/components/HeroSplit';
 import PromoGrid from '@/components/PromoGrid';
 import BannerStrip from '@/components/BannerStrip';
 import HomeGallery from '@/components/HomeGallery';
@@ -224,21 +225,28 @@ export default function HomeView() {
         // what they honour; the platform hero honours all of them.
         const heroOpts = heroOptionsFromConfig(cfg.hero);
         const heroSlides =
-          heroOpts.layout === 'single' ? heroBanners.slice(0, 1) : heroBanners;
+          heroOpts.layout === 'slideshow' ? heroBanners : heroBanners.slice(0, 1);
         return (
           <ThemeSectionRenderer
             key={s.id}
             section="hero"
             fallback={
-              <HeroGallery
-                banners={heroSlides}
-                loaded={bannersLoaded}
-                autoPlay={heroOpts.autoPlay}
-                autoPlayMs={heroOpts.autoPlayMs}
-                showArrows={heroOpts.showArrows}
-                showDots={heroOpts.showDots}
-                height={heroOpts.height}
-              />
+              heroOpts.layout === 'split' ? (
+                <HeroSplit
+                  banner={heroBanners[0] ?? null}
+                  height={heroOpts.height}
+                />
+              ) : (
+                <HeroGallery
+                  banners={heroSlides}
+                  loaded={bannersLoaded}
+                  autoPlay={heroOpts.autoPlay}
+                  autoPlayMs={heroOpts.autoPlayMs}
+                  showArrows={heroOpts.showArrows}
+                  showDots={heroOpts.showDots}
+                  height={heroOpts.height}
+                />
+              )
             }
             props={{ banners: heroSlides, config: cfg }}
           />

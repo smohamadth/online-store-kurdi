@@ -1086,7 +1086,8 @@ function TypeEditor({
             <>
               {heroSelect('layout', 'Layout', [
                 { value: 'slideshow', text: 'Slideshow (rotate through the slides)' },
-                { value: 'single', text: 'Single (first slide only, no motion)' },
+                { value: 'single', text: 'Single slide, full width (no motion)' },
+                { value: 'split', text: 'Split — copy beside the image (no motion)' },
               ], 'slideshow')}
               {heroSelect('height', 'Height', [
                 { value: 'compact', text: 'Compact' },
@@ -1148,7 +1149,8 @@ function TypeEditor({
             These options apply to the platform hero (the Default theme and
             themes without their own hero). A theme that ships its own hero
             design — Bold, Dawnlight, Minimal, Pulse — keeps its look and
-            only honours the “Single” layout choice.
+            only honours the “Single” and “Split” layout choices (both show
+            the first slide only).
           </p>
         </div>
       );

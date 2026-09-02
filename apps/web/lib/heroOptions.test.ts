@@ -56,4 +56,21 @@ describe('heroOptionsFromConfig', () => {
     expect(o).toMatchObject({ layout: 'single', autoPlay: false, showArrows: false, showDots: false });
     expect(o.autoPlayMs).toBe(6000);
   });
+
+  it('treats the split layout like a single static band', () => {
+    const o = heroOptionsFromConfig({
+      layout: 'split',
+      height: 'tall',
+      autoPlay: true,
+      intervalSec: 9,
+    });
+    expect(o).toMatchObject({
+      layout: 'split',
+      height: 'tall',
+      autoPlay: false,
+      showArrows: false,
+      showDots: false,
+    });
+    expect(o.autoPlayMs).toBe(9000);
+  });
 });

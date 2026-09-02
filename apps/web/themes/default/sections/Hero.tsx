@@ -19,6 +19,7 @@
 'use client';
 
 import HeroGallery from '@/components/HeroGallery';
+import HeroSplit from '@/components/HeroSplit';
 import { heroOptionsFromConfig } from '@/lib/heroOptions';
 import type { SectionProps } from '@/lib/themeSections';
 
@@ -27,6 +28,12 @@ export default function DefaultHero(props: SectionProps) {
     props.config?.hero as Record<string, unknown> | undefined
   );
   const banners = props.banners ?? [];
+  // "single" and "split" both show the first banner statically; split
+  // renders it in the copy+media band (HeroSplit), single uses the
+  // full-bleed band without carousel chrome.
+  if (opts.layout === 'split') {
+    return <HeroSplit banner={banners[0] ?? null} height={opts.height} />;
+  }
   const slides = opts.layout === 'single' ? banners.slice(0, 1) : banners;
   return (
     <HeroGallery
