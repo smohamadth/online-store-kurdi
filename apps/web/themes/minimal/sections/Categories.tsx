@@ -101,6 +101,13 @@ export default function MinimalCategories({ title, subtitle, categories, config 
               onMouseLeave={(e) => {
                 e.currentTarget.style.color = 'var(--body-text, #1a1a1a)';
               }}
+              // Keyboard users get the same hover colour on focus.
+              onFocus={(e) => {
+                e.currentTarget.style.color = 'var(--accent, #8b6f47)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.color = 'var(--body-text, #1a1a1a)';
+              }}
             >
               <span
                 style={{

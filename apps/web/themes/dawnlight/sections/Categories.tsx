@@ -66,12 +66,31 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
               key={category.slug}
               href={`/category/${category.slug}`}
               style={{ display: 'block', textDecoration: 'none', color: 'var(--body-text, #121212)' }}
+              // "On hover the border darkens" - delivered on focus
+              // too so keyboard users see the same state.
+              onMouseEnter={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+              }}
+              onMouseLeave={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'var(--border, #e6e6e6)';
+              }}
+              onFocus={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+              }}
+              onBlur={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'var(--border, #e6e6e6)';
+              }}
             >
               <div
                 style={{
                   aspectRatio: '4 / 3',
                   backgroundColor: '#f7f7f7',
                   border: '1px solid var(--border, #e6e6e6)',
+                  transition: 'border-color 0.18s ease',
                   backgroundImage: category.image ? `url(${getImageUrl(category.image)})` : undefined,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',

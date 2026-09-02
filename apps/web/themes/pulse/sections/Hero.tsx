@@ -17,14 +17,32 @@
 'use client';
 
 import Link from 'next/link';
+import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
 export default function PulseHero({ banners }: SectionProps) {
   const theme = useTheme();
+  const { settings } = useStoreSettings();
   const first = banners?.[0];
   const hasImage = Boolean(first?.image);
+  // With no banner configured, the hero speaks with the store's own
+  // description (first sentence as the headline, the rest as subtext)
+  // instead of a hard-coded demo slogan.
+  const description = settings.storeDescription || '';
+  const headline =
+    first?.title || description.split('.')[0] || 'Built for how you shop now';
+  const body =
+    first?.subtitle ||
+    first?.description ||
+    (!first && description
+      ? description.split('.').slice(1).join('.').trim() || null
+      : null);
+  // A gentle lift on hover AND keyboard focus for both pills.
+  const ctaZoom = (active: boolean) => (e: React.SyntheticEvent<HTMLElement>) => {
+    e.currentTarget.style.transform = active ? 'scale(1.03)' : 'scale(1)';
+  };
 
   return (
     <section
@@ -57,7 +75,11 @@ export default function PulseHero({ banners }: SectionProps) {
                 display: 'inline-block',
                 padding: '6px 14px',
                 borderRadius: 999,
-                backgroundColor: '#eef2ff',
+                // Tinted from the accent token (not a hard-coded
+                // indigo-50) so a store that overrides the accent
+                // colour gets a matching badge.
+                backgroundColor:
+                  'color-mix(in srgb, var(--accent, #4f46e5) 12%, #ffffff)',
                 color: 'var(--accent, #4f46e5)',
                 fontSize: '13px',
                 fontWeight: 600,
@@ -77,9 +99,9 @@ export default function PulseHero({ banners }: SectionProps) {
               margin: 0,
             }}
           >
-            {first?.title || 'Built for how you shop now'}
+            {headline}
           </h1>
-          {(first?.subtitle || first?.description) && (
+          {body && (
             <p
               style={{
                 fontSize: '17px',
@@ -89,7 +111,7 @@ export default function PulseHero({ banners }: SectionProps) {
                 maxWidth: '440px',
               }}
             >
-              {first.subtitle || first.description}
+              {body}
             </p>
           )}
           <div style={{ marginTop: '32px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
@@ -99,12 +121,17 @@ export default function PulseHero({ banners }: SectionProps) {
                 display: 'inline-block',
                 padding: '14px 30px',
                 borderRadius: 999,
-                backgroundColor: 'var(--primary, #0f172a)',
-                color: 'var(--primary-text, #ffffff)',
+                backgroundColor: 'var(--brand, #0f172a)',
+                color: 'var(--brand-text, #ffffff)',
                 fontSize: '15px',
                 fontWeight: 600,
                 textDecoration: 'none',
+                transition: 'transform 0.18s ease',
               }}
+              onMouseEnter={() => ctaZoom(true)}
+              onMouseLeave={() => ctaZoom(false)}
+              onFocus={() => ctaZoom(true)}
+              onBlur={() => ctaZoom(false)}
             >
               {first?.buttonText || 'Shop the collection'}
             </Link>
@@ -121,7 +148,12 @@ export default function PulseHero({ banners }: SectionProps) {
                   fontWeight: 600,
                   textDecoration: 'none',
                   backgroundColor: 'var(--card-bg, #ffffff)',
+                  transition: 'transform 0.18s ease',
                 }}
+                onMouseEnter={() => ctaZoom(true)}
+                onMouseLeave={() => ctaZoom(false)}
+                onFocus={() => ctaZoom(true)}
+                onBlur={() => ctaZoom(false)}
               >
                 {first?.secondaryText || 'Learn more'}
               </Link>
@@ -137,7 +169,6 @@ export default function PulseHero({ banners }: SectionProps) {
               backgroundImage: `url(${getImageUrl(first.image)})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              borderTop: '1px solid var(--border, #e2e8f0)',
             }}
           />
         )}

@@ -125,6 +125,18 @@ export default function MinimalHero({ banners }: SectionProps) {
             borderRadius: 0,
             transition: 'transform 0.18s ease',
           }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.03)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.transform = 'scale(1.03)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
         >
           {first?.buttonText || "See what's in stock"}
           <DirectionArrow kind="forward" />

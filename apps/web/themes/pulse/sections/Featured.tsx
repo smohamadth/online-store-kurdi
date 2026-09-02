@@ -106,55 +106,82 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
             gap: '24px',
           }}
         >
-          {list.map((product) => {
-            const image = product.images?.[0];
-            const rating = Number(product.averageRating) || 0;
-            const hasSale =
-              typeof product.compareAtPrice === 'number' &&
-              product.compareAtPrice > product.price;
-            return (
-              <Link
-                key={product.id}
-                href={`/products/${product.slug}`}
+        {list.map((product) => {
+          const image = product.images?.[0];
+          const rating = Number(product.averageRating) || 0;
+          const hasSale =
+            typeof product.compareAtPrice === 'number' &&
+            product.compareAtPrice > product.price;
+          // Only badge a real saving - a 1-cent gap would otherwise
+          // round to a "-0%" sticker.
+          const discount = hasSale
+            ? Math.round(
+                ((product.compareAtPrice! - product.price) /
+                  product.compareAtPrice!) *
+                  100
+              )
+            : 0;
+          return (
+            <Link
+              key={product.id}
+              href={`/products/${product.slug}`}
+              style={{
+                display: 'block',
+                textDecoration: 'none',
+                backgroundColor: 'var(--card-bg, #ffffff)',
+                border: '1px solid var(--border, #e2e8f0)',
+                borderRadius: 'var(--radius, 16px)',
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+                color: 'var(--body-text, #0f172a)',
+                overflow: 'hidden',
+                transition: 'box-shadow 0.2s ease',
+              }}
+              // The card's promised behaviour: the soft shadow
+              // deepens on hover - and on keyboard focus, so the
+              // affordance is not mouse-only.
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow =
+                  '0 1px 3px rgba(15, 23, 42, 0.06), 0 16px 32px rgba(15, 23, 42, 0.14)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.boxShadow =
+                  '0 1px 3px rgba(15, 23, 42, 0.06), 0 16px 32px rgba(15, 23, 42, 0.14)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
+              }}
+            >
+              <div
                 style={{
-                  display: 'block',
-                  textDecoration: 'none',
-                  backgroundColor: 'var(--card-bg, #ffffff)',
-                  border: '1px solid var(--border, #e2e8f0)',
-                  borderRadius: 'var(--radius, 16px)',
-                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
-                  color: 'var(--body-text, #0f172a)',
-                  overflow: 'hidden',
+                  position: 'relative',
+                  aspectRatio: '1 / 1',
+                  backgroundColor: '#f1f5f9',
+                  backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
                 }}
               >
-                <div
-                  style={{
-                    position: 'relative',
-                    aspectRatio: '1 / 1',
-                    backgroundColor: '#f1f5f9',
-                    backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }}
-                >
-                  {hasSale && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        insetInlineStart: '12px',
-                        insetBlockStart: '12px',
-                        backgroundColor: 'var(--sale, #dc2626)',
-                        color: '#fff',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                      }}
-                    >
-                      -{Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100)}%
-                    </span>
-                  )}
-                </div>
+                {hasSale && discount >= 1 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      insetInlineStart: '12px',
+                      insetBlockStart: '12px',
+                      backgroundColor: 'var(--sale, #dc2626)',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: 999,
+                    }}
+                  >
+                    -{discount}%
+                  </span>
+                )}
+              </div>
                 <div style={{ padding: '18px 20px 20px' }}>
                   <p style={{ fontSize: '16px', fontWeight: 600, margin: 0, letterSpacing: '-0.01em' }}>
                     {product.name}

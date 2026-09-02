@@ -122,11 +122,38 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
           const hasSale =
             typeof product.compareAtPrice === 'number' &&
             product.compareAtPrice > product.price;
+          // Only badge a real saving - a 1-cent gap would otherwise
+          // round to a "-0%" sticker.
+          const discount = hasSale
+            ? Math.round(
+                ((product.compareAtPrice! - product.price) /
+                  product.compareAtPrice!) *
+                  100
+              )
+            : 0;
           return (
             <Link
               key={product.id}
               href={`/products/${product.slug}`}
               style={{ display: 'block', textDecoration: 'none', color: 'var(--body-text, #121212)' }}
+              // The promised hover state (and its keyboard twin):
+              // the hairline border darkens, nothing lifts.
+              onMouseEnter={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+              }}
+              onMouseLeave={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'var(--border, #e6e6e6)';
+              }}
+              onFocus={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+              }}
+              onBlur={(e) => {
+                const frame = e.currentTarget.querySelector('div');
+                if (frame) frame.style.borderColor = 'var(--border, #e6e6e6)';
+              }}
             >
               <div
                 style={{
@@ -134,12 +161,13 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
                   aspectRatio: '1 / 1',
                   backgroundColor: '#f7f7f7',
                   border: '1px solid var(--border, #e6e6e6)',
+                  transition: 'border-color 0.18s ease',
                   backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 }}
               >
-                {hasSale && (
+                {hasSale && discount >= 1 && (
                   <span
                     style={{
                       position: 'absolute',
@@ -154,7 +182,7 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
                       padding: '4px 10px',
                     }}
                   >
-                    -{Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100)}%
+                    -{discount}%
                   </span>
                 )}
               </div>
@@ -173,7 +201,10 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
                     {product.reviewCount ? ` (${product.reviewCount})` : ''}
                   </p>
                 )}
-                <p style={{ fontSize: '14px', color: 'var(--muted, #5c5c5c)', margin: '6px 0 0' }}>
+                {/* Price in the theme's price colour - the same
+                    near-black as the name unless the merchant
+                    overrides the token. */}
+                <p style={{ fontSize: '14px', color: 'var(--price, #121212)', margin: '6px 0 0' }}>
                   {hasSale && (
                     <>
                       <span style={{ textDecoration: 'line-through', marginInlineEnd: '8px', opacity: 0.65 }}>

@@ -109,6 +109,23 @@ export default function PulseCategories({ title, subtitle, categories, config }:
                 boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
                 overflow: 'hidden',
                 color: 'var(--body-text, #0f172a)',
+                transition: 'box-shadow 0.2s ease',
+              }}
+              // Same card language as the featured grid: the shadow
+              // deepens on hover AND keyboard focus.
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow =
+                  '0 1px 3px rgba(15, 23, 42, 0.06), 0 16px 32px rgba(15, 23, 42, 0.14)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.boxShadow =
+                  '0 1px 3px rgba(15, 23, 42, 0.06), 0 16px 32px rgba(15, 23, 42, 0.14)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
               }}
             >
               {category.image ? (
@@ -127,7 +144,10 @@ export default function PulseCategories({ title, subtitle, categories, config }:
                       width: '64px',
                       height: '64px',
                       borderRadius: 999,
-                      backgroundColor: '#eef2ff',
+                      // Tinted from the accent token (not hard-coded
+                      // indigo-50) so accent overrides recolor it.
+                      backgroundColor:
+                        'color-mix(in srgb, var(--accent, #4f46e5) 12%, #ffffff)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

@@ -15,14 +15,32 @@
 'use client';
 
 import Link from 'next/link';
+import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { getImageUrl } from '@/lib/api';
 import type { SectionProps } from '@/lib/themeSections';
 
 export default function DawnlightHero({ banners }: SectionProps) {
   const theme = useTheme();
+  const { settings } = useStoreSettings();
   const first = banners?.[0];
   const second = banners?.[1];
+  // A store that hasn't set up banners yet still gets a hero that
+  // speaks about itself: first sentence of the store description as
+  // the headline, the rest as the supporting line.
+  const description = settings.storeDescription || '';
+  const primaryTitle =
+    first?.title || description.split('.')[0] || 'Shop the collection';
+  const primaryBody =
+    first?.subtitle ||
+    first?.description ||
+    (!first && description
+      ? description.split('.').slice(1).join('.').trim() || null
+      : null);
+  // Flat Dawn buttons get a quiet hover/focus lift.
+  const ctaZoom = (active: boolean) => (e: React.SyntheticEvent<HTMLElement>) => {
+    e.currentTarget.style.transform = active ? 'scale(1.03)' : 'scale(1)';
+  };
 
   return (
     <section data-section="hero" data-theme={theme.activeTheme}>
@@ -82,9 +100,9 @@ export default function DawnlightHero({ banners }: SectionProps) {
                 color: 'var(--body-text, #121212)',
               }}
             >
-              {first?.title || 'Shop the collection'}
+              {primaryTitle}
             </h1>
-            {(first?.subtitle || first?.description) && (
+            {primaryBody && (
               <p
                 style={{
                   fontSize: '16px',
@@ -93,7 +111,7 @@ export default function DawnlightHero({ banners }: SectionProps) {
                   margin: '16px 0 0',
                 }}
               >
-                {first.subtitle || first.description}
+                {primaryBody}
               </p>
             )}
             <Link
@@ -110,7 +128,12 @@ export default function DawnlightHero({ banners }: SectionProps) {
                 textTransform: 'uppercase',
                 textDecoration: 'none',
                 border: '1px solid var(--brand, #121212)',
+                transition: 'transform 0.18s ease',
               }}
+              onMouseEnter={() => ctaZoom(true)}
+              onMouseLeave={() => ctaZoom(false)}
+              onFocus={() => ctaZoom(true)}
+              onBlur={() => ctaZoom(false)}
             >
               {first?.buttonText || 'Shop now'}
             </Link>
@@ -118,7 +141,9 @@ export default function DawnlightHero({ banners }: SectionProps) {
         </div>
       </div>
 
-      {/* Dawn's "image with text" row, when a second banner exists. */}
+      {/* Dawn's "image with text" row, when a second banner exists.
+          Without an image the row becomes text-only rather than
+          showing an empty grey frame. */}
       {second && (
         <div
           style={{
@@ -126,24 +151,31 @@ export default function DawnlightHero({ banners }: SectionProps) {
             margin: '0 auto',
             padding: '64px 24px',
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gridTemplateColumns: second.image
+              ? 'repeat(auto-fit, minmax(300px, 1fr))'
+              : '1fr',
             gap: '48px',
             alignItems: 'center',
           }}
         >
+          {second.image && (
+            <div
+              style={{
+                aspectRatio: '4 / 3',
+                backgroundImage: `url(${getImageUrl(second.image)})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                border: '1px solid var(--border, #e6e6e6)',
+              }}
+            />
+          )}
           <div
-            style={{
-              aspectRatio: '4 / 3',
-              backgroundColor: second.image ? undefined : '#f7f7f7',
-              backgroundImage: second.image
-                ? `url(${getImageUrl(second.image)})`
-                : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              border: '1px solid var(--border, #e6e6e6)',
-            }}
-          />
-          <div>
+            style={
+              second.image
+                ? undefined
+                : { maxWidth: '680px', justifySelf: 'center', textAlign: 'center' }
+            }
+          >
             <h2
               style={{
                 fontSize: 'clamp(22px, 3vw, 30px)',
@@ -173,7 +205,12 @@ export default function DawnlightHero({ banners }: SectionProps) {
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                   textDecoration: 'none',
+                  transition: 'transform 0.18s ease',
                 }}
+                onMouseEnter={() => ctaZoom(true)}
+                onMouseLeave={() => ctaZoom(false)}
+                onFocus={() => ctaZoom(true)}
+                onBlur={() => ctaZoom(false)}
               >
                 {second.buttonText || 'Learn more'}
               </Link>
