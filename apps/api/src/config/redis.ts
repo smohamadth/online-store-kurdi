@@ -135,6 +135,85 @@ export const cache = {
     }
   },
 
+  /**
+   * Atomically increment a counter and return the new value.
+   *
+   * Use this instead of `set(key, (await get(key)) + 1)`. That read-modify-write
+   * pattern loses updates whenever two requests interleave between the GET and
+   * the SET, which for a web-facing counter is the normal case rather than a
+   * rare race: under 100 concurrent events it recorded 1.
+   *
+   * INCR is executed server-side by Redis, so concurrent callers serialise.
+   * Returns null when Redis is unavailable, matching the fail-soft contract of
+   * the other methods (callers must not treat null as zero traffic).
+   *
+   * The TTL is applied only when the key is first created (INCR returns 1),
+   * so a rolling window is not extended by every subsequent hit.
+   */
+  async incr(key: string, ttl?: number): Promise<number | null> {
+    try {
+      const next = await redis.incr(key);
+      if (ttl && next === 1) {
+        await redis.expire(key, ttl);
+      }
+      return next;
+    } catch (error) {
+      logger.error('Cache incr error:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Read a counter written by incr().
+   *
+   * INCR stores a bare integer, not JSON, so this parses with Number rather
+   * than JSON.parse (they agree for integers, but this states the intent).
+   * A missing key reads as 0: for a counter, "never incremented" and "zero"
+   * are the same thing. Redis being down also yields 0 - the caller is a
+   * dashboard, and a blank panel is worse than a zero.
+   */
+  async getCounter(key: string): Promise<number> {
+    try {
+      const value = await redis.get(key);
+      if (value === null || value === undefined || value === '') return 0;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    } catch (error) {
+      logger.error('Cache getCounter error:', error);
+      return 0;
+    }
+  },
+
+  /**
+   * Append to a capped list, atomically.
+   *
+   * Replaces the get-array / push / set-array pattern, which drops events the
+   * same way the counter did. RPUSH+LTRIM run server-side; LTRIM keeps the
+   * newest `max` entries.
+   */
+  async pushCapped(key: string, value: any, max: number, ttl?: number): Promise<void> {
+    try {
+      const len = await redis.rPush(key, JSON.stringify(value));
+      await redis.lTrim(key, -max, -1);
+      if (ttl && len === 1) {
+        await redis.expire(key, ttl);
+      }
+    } catch (error) {
+      logger.error('Cache pushCapped error:', error);
+    }
+  },
+
+  /** Read a capped list written by pushCapped. */
+  async listRange<T>(key: string, start = 0, stop = -1): Promise<T[]> {
+    try {
+      const items: string[] = await redis.lRange(key, start, stop);
+      return items.map((item: string) => JSON.parse(item) as T);
+    } catch (error) {
+      logger.error('Cache listRange error:', error);
+      return [];
+    }
+  },
+
   // Delete value from cache
   async del(key: string): Promise<void> {
     try {

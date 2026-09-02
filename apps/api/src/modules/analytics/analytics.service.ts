@@ -60,17 +60,13 @@ export class AnalyticsService {
         },
       });
 
-      // Also store in Redis for real-time analytics
+      // Also store in Redis for real-time analytics, capped at the last 100
+      // events per session. This is an atomic RPUSH+LTRIM: the previous
+      // read-array / push / write-array sequence discarded concurrent events
+      // from the same session (two tabs, or a burst of page views) because
+      // each writer overwrote the whole array it had read moments earlier.
       const cacheKey = `${this.cachePrefix}events:${event.sessionId}`;
-      const existingEvents = await cache.get<UserEvent[]>(cacheKey) || [];
-      existingEvents.push(event);
-      
-      // Keep only last 100 events per session
-      if (existingEvents.length > 100) {
-        existingEvents.splice(0, existingEvents.length - 100);
-      }
-      
-      await cache.set(cacheKey, existingEvents, 86400); // 24 hours
+      await cache.pushCapped(cacheKey, event, 100, 86400); // 24 hours
 
       // Update real-time counters
       await this.updateRealTimeCounters(event);
@@ -365,20 +361,24 @@ export class AnalyticsService {
     try {
       const today = new Date().toISOString().split('T')[0];
       
+      // These use atomic INCR rather than get-then-set. The previous
+      // `cache.set(key, (await cache.get(key) || 0) + 1)` read-modify-write
+      // dropped every increment that landed between another request's GET and
+      // its SET - measured at 1 surviving out of 100 concurrent events, so
+      // analytics under real traffic were not merely approximate but ~empty.
+
       // Daily event counter
       const dailyKey = `${this.cachePrefix}daily:${today}:${event.eventType}`;
-      await cache.set(dailyKey, ((await cache.get<number>(dailyKey)) || 0) + 1, 86400);
+      await cache.incr(dailyKey, 86400);
 
       // Product view counter
       if (event.productId && event.eventType === 'view') {
-        const productKey = `${this.cachePrefix}product:${event.productId}:views`;
-        await cache.set(productKey, ((await cache.get<number>(productKey)) || 0) + 1, 86400);
+        await cache.incr(`${this.cachePrefix}product:${event.productId}:views`, 86400);
       }
 
       // Search query counter
       if (event.searchQuery && event.eventType === 'search') {
-        const searchKey = `${this.cachePrefix}search:${event.searchQuery}`;
-        await cache.set(searchKey, ((await cache.get<number>(searchKey)) || 0) + 1, 86400);
+        await cache.incr(`${this.cachePrefix}search:${event.searchQuery}`, 86400);
       }
     } catch (error) {
       logger.error('Error updating real-time counters:', error);
@@ -390,11 +390,16 @@ export class AnalyticsService {
     try {
       const today = new Date().toISOString().split('T')[0];
       
+      // NB: the `|| 0` used to sit INSIDE the Promise.all array, i.e.
+      // `cache.get(...) || 0`. A pending Promise is always truthy, so the
+      // fallback was unreachable and a cache miss surfaced as `null` rather
+      // than 0 - the dashboard rendered blank metrics instead of zeroes. The
+      // coalescing has to happen after the await.
       const [views, searches, addToCarts, purchases] = await Promise.all([
-        cache.get<number>(`${this.cachePrefix}daily:${today}:view`) || 0,
-        cache.get<number>(`${this.cachePrefix}daily:${today}:search`) || 0,
-        cache.get<number>(`${this.cachePrefix}daily:${today}:add_to_cart`) || 0,
-        cache.get<number>(`${this.cachePrefix}daily:${today}:purchase`) || 0,
+        cache.getCounter(`${this.cachePrefix}daily:${today}:view`),
+        cache.getCounter(`${this.cachePrefix}daily:${today}:search`),
+        cache.getCounter(`${this.cachePrefix}daily:${today}:add_to_cart`),
+        cache.getCounter(`${this.cachePrefix}daily:${today}:purchase`),
       ]);
 
       return {

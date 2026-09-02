@@ -46,6 +46,75 @@ process.env.CORS_ORIGIN = 'http://127.0.0.1:3000';
 process.env.REVIEWS_AUTO_APPROVE = 'false';
 process.env.PAYMENTS_ALLOW_MOCK = 'false';
 
+/**
+ * In-memory stand-in for the `cache` export of src/config/redis.ts.
+ *
+ * Kept behaviourally faithful (TTLs are ignored - tests do not wait them out):
+ * strings and lists are stored separately, incr is atomic, and pushCapped
+ * keeps the newest N entries, so code paths that read back what they wrote
+ * behave as they would against a real Redis.
+ */
+// vi.mock factories are hoisted above module-level consts, so the mock and
+// its backing stores must be created inside vi.hoisted().
+const { cacheMock, resetCacheMock } = vi.hoisted(() => {
+const cacheStrings = new Map<string, string>();
+const cacheLists = new Map<string, string[]>();
+
+function resetCacheMock() {
+  cacheStrings.clear();
+  cacheLists.clear();
+}
+
+const cacheMock = {
+  get: vi.fn(async (key: string) => {
+    const v = cacheStrings.get(key);
+    return v === undefined ? null : JSON.parse(v);
+  }),
+  set: vi.fn(async (key: string, value: unknown) => {
+    cacheStrings.set(key, JSON.stringify(value));
+  }),
+  del: vi.fn(async (key: string) => {
+    cacheStrings.delete(key);
+    cacheLists.delete(key);
+  }),
+  clear: vi.fn(async () => {
+    resetCacheMock();
+  }),
+  keys: vi.fn(async (pattern: string) => {
+    const re = new RegExp(
+      '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$',
+    );
+    return [...cacheStrings.keys(), ...cacheLists.keys()].filter((k) => re.test(k));
+  }),
+  incr: vi.fn(async (key: string) => {
+    const next = (parseInt(cacheStrings.get(key) ?? '0', 10) || 0) + 1;
+    cacheStrings.set(key, String(next));
+    return next;
+  }),
+  getCounter: vi.fn(async (key: string) => {
+    const v = cacheStrings.get(key);
+    if (v === undefined || v === '') return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }),
+  pushCapped: vi.fn(async (key: string, value: unknown, max: number) => {
+    const arr = cacheLists.get(key) ?? [];
+    arr.push(JSON.stringify(value));
+    cacheLists.set(key, arr.slice(Math.max(0, arr.length - max)));
+  }),
+  listRange: vi.fn(async (key: string, start = 0, stop = -1) => {
+    const arr = cacheLists.get(key) ?? [];
+    const s = start < 0 ? Math.max(0, arr.length + start) : start;
+    const e = stop < 0 ? arr.length + stop : stop;
+    return arr.slice(s, e + 1).map((i) => JSON.parse(i));
+  }),
+};
+
+return { cacheMock, resetCacheMock };
+});
+
+export { resetCacheMock };
+
 vi.mock('../src/config/database', () => mockDatabaseModule);
 vi.mock('../../src/config/database', () => mockDatabaseModule); // for tests/helpers/
 vi.mock('../src/config/redis', () => ({
@@ -53,7 +122,13 @@ vi.mock('../src/config/redis', () => ({
   connectRedis: vi.fn(async () => {}),
   disconnectRedis: vi.fn(async () => {}),
   checkRedisHealth: vi.fn(async () => false),
-  cache: { get: vi.fn(async () => null), set: vi.fn(async () => {}), del: vi.fn(async () => {}), clear: vi.fn(async () => {}), keys: vi.fn(async () => []) },
+  // A small in-memory cache rather than a set of always-miss stubs. The old
+  // stub returned null from get() and swallowed set(), so any caching bug -
+  // including a stale entry never being invalidated - was invisible to the
+  // integration suite. It also had to be extended by hand whenever a method
+  // was added, and a missing one surfaced as "cache.X is not a function" at
+  // runtime rather than as a clear failure.
+  cache: cacheMock,
   sessionStore: { get: vi.fn(async () => null), set: vi.fn(async () => {}), destroy: vi.fn(async () => {}) },
 }));
 vi.mock('../src/config/minio', () => ({
@@ -68,8 +143,13 @@ vi.mock('../src/config/minio', () => ({
   listFiles: vi.fn(async () => []),
 }));
 
+// NOTE: `mochaHooks` is a Mocha convention and is NOT honoured by vitest -
+// this never ran. Suites reset state explicitly via cleanDatabase() in
+// tests/helpers/db.ts, which now clears the cache mock too. Left in place
+// (inert) only to avoid touching unrelated exports.
 export const mochaHooks = {
   beforeEach: async () => {
     resetMockPrisma();
+    resetCacheMock();
   },
 };

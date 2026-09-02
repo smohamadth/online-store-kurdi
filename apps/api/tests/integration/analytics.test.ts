@@ -152,6 +152,55 @@ describe('Admin analytics', () => {
     expect(res.status).toBe(403);
   });
 
+  it('GET /realtime reports 0 (not null) for a day with no events', async () => {
+    // Regression: getRealTimeStats wrote `cache.get(key) || 0` INSIDE a
+    // Promise.all array. A pending Promise is always truthy, so the `|| 0`
+    // was unreachable and a cache miss surfaced as null - the dashboard
+    // rendered blanks where it should have shown zeroes.
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .get('/api/analytics/realtime')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const m = res.body.data.metrics;
+    expect(m).toEqual({ views: 0, searches: 0, addToCarts: 0, purchases: 0 });
+    for (const [k, v] of Object.entries(m)) {
+      expect(v, `${k} must be a number, not null`).toBeTypeOf('number');
+    }
+  });
+
+  it('GET /realtime totals a burst of tracked events end-to-end', async () => {
+    // End-to-end wiring check: track -> cache.incr -> getCounter -> response.
+    // NOTE: this does NOT prove atomicity. The integration cache mock is
+    // synchronous, so requests cannot interleave between a GET and a SET and
+    // the old read-modify-write counter passes this test too. The lost-update
+    // race is covered in tests/unit/config/cacheAtomicity.test.ts, which
+    // drives a client that yields between operations the way a socket does.
+    process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    const product = await createProduct({
+      name: 'P', slug: 'p', sku: 'SKU-RT', price: 10, quantity: 5,
+      categoryId: (await mockPrisma.category.create({ data: { name: 'C', slug: 'c' } })).id,
+    });
+
+    const BURST = 25;
+    await Promise.all(
+      Array.from({ length: BURST }, (_, i) =>
+        request(app).post('/api/analytics/track').send({
+          eventType: 'view',
+          sessionId: `sess-${i}`,
+          productId: product.id,
+        }),
+      ),
+    );
+
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .get('/api/analytics/realtime')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.metrics.views).toBe(BURST);
+  });
+
   it('GET /realtime requires admin', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const res = await request(app)
