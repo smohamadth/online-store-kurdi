@@ -26,7 +26,7 @@ async function seedEntities() {
     data: { slug: 'electronics', name: 'Electronics', description: 'Devices' },
   });
   await mockPrisma.page.create({
-    data: { slug: 'about-us', title: 'About Us', content: '<p>English body</p>' },
+    data: { slug: 'our-story', title: 'Our Story', content: '<p>English body</p>' },
   });
   await mockPrisma.blogPost.create({
     data: { slug: 'welcome-to-our-store', title: 'Welcome', content: '<p>Hello</p>' },
@@ -133,7 +133,7 @@ describe('seeded translations change what the storefront renders', () => {
     const catAr = await translationFor('category', category.id, 'ar');
     expect(localizeRow({ ...category }, catAr, 'ar', 'en', 'category').name).toBe('إلكترونيات');
 
-    const page = await mockPrisma.page.findFirst({ where: { slug: 'about-us' } });
+    const page = await mockPrisma.page.findFirst({ where: { slug: 'our-story' } });
     const pageFa = await translationFor('page', page.id, 'fa');
     expect(localizeRow({ ...page }, pageFa, 'fa', 'en', 'page').title).toBe('درباره ما');
 
@@ -147,7 +147,7 @@ describe('seeded translations change what the storefront renders', () => {
   it('keeps translated HTML intact through the sanitizing read path', async () => {
     // page.content is in HTML_RENDERED_FIELDS, so localizeRow sanitizes it.
     // The fixtures use a plain <h2>/<p>/<ul> subset, which must survive.
-    const page = await mockPrisma.page.findFirst({ where: { slug: 'about-us' } });
+    const page = await mockPrisma.page.findFirst({ where: { slug: 'our-story' } });
     const fa = await translationFor('page', page.id, 'fa');
     const localized = localizeRow({ ...page }, fa, 'fa', 'en', 'page');
 

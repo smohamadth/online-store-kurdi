@@ -452,7 +452,7 @@ async function main() {
 async function seedCmsContent() {
   const pages = [
     {
-      slug: 'about-us',
+      slug: 'our-story',
       title: 'About Us',
       pageType: 'info',
       status: 'published',
@@ -465,7 +465,7 @@ async function seedCmsContent() {
       sortOrder: 0,
     },
     {
-      slug: 'shipping-policy',
+      slug: 'delivery-information',
       title: 'Shipping Policy',
       pageType: 'help',
       status: 'published',

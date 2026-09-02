@@ -14,6 +14,8 @@
  *     was pasted as transliteration or accidentally copied from the Turkish)
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   PRODUCT_TRANSLATIONS,
   CATEGORY_TRANSLATIONS,
@@ -180,7 +182,7 @@ describe('translation fixtures: entity tables', () => {
       expect.arrayContaining(['general', 'electronics', 'clothing', 'books', 'digital-products']),
     );
     expect(Object.keys(PAGE_TRANSLATIONS)).toEqual(
-      expect.arrayContaining(['about-us', 'shipping-policy']),
+      expect.arrayContaining(['our-story', 'delivery-information']),
     );
     expect(Object.keys(BLOG_TRANSLATIONS)).toEqual(
       expect.arrayContaining(['welcome-to-our-store']),
@@ -189,5 +191,34 @@ describe('translation fixtures: entity tables', () => {
 
   it('matches the storefront locale list exactly', () => {
     expect([...SUPPORTED_CONTENT_LOCALES].sort()).toEqual(['ar', 'en', 'fa', 'ku', 'tr']);
+  });
+});
+
+/**
+ * The admin "new page from template" flow creates the draft using the
+ * template's own slug and only renames it afterwards. If the seed already
+ * occupies that slug the create returns 409 and the flow breaks on a fresh
+ * install. Seeded page slugs must therefore avoid every template slug.
+ */
+describe('seeded page slugs do not collide with admin page templates', () => {
+  // Parsed from the real template file rather than hardcoded, so adding a
+  // template that clashes with a seeded page fails here instead of in CI.
+  const templatesPath = resolve(
+    __dirname,
+    '../../../../web/app/admin/pages/_templates.ts',
+  );
+  const TEMPLATE_SLUGS = Array.from(
+    readFileSync(templatesPath, 'utf8').matchAll(/slug:\s*'([a-z0-9-]+)'/g),
+  ).map((m) => m[1]);
+
+  it('found the template slugs (guards against a vacuous pass)', () => {
+    expect(TEMPLATE_SLUGS.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('avoids every admin template slug', () => {
+    const collisions = Object.keys(PAGE_TRANSLATIONS).filter((s) =>
+      TEMPLATE_SLUGS.includes(s),
+    );
+    expect(collisions).toEqual([]);
   });
 });

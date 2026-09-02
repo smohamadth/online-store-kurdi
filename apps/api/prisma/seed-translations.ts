@@ -268,7 +268,7 @@ export const CATEGORY_TRANSLATIONS: Record<string, LocaleMap> = {
 // ---------------------------------------------------------------------------
 
 export const PAGE_TRANSLATIONS: Record<string, LocaleMap> = {
-  'about-us': {
+  'our-story': {
     ku: {
       title: 'دەربارەی ئێمە',
       excerpt: 'ئێمە کێین و چی دەکەین',
@@ -302,7 +302,7 @@ export const PAGE_TRANSLATIONS: Record<string, LocaleMap> = {
       metaDescription: 'Mağazamız ve sunduğumuz hizmetler hakkında bilgi.',
     },
   },
-  'shipping-policy': {
+  'delivery-information': {
     ku: {
       title: 'سیاسەتی گەیاندن',
       excerpt: 'زانیاری دەربارەی گەیاندن',
