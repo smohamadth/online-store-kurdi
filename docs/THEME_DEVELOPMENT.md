@@ -226,10 +226,16 @@ component. `theme.json` maps a section name to a component path:
 "sections": { "hero": "@/themes/solar/sections/Hero" }
 ```
 
+> **Live reference:** the storefront serves an in-app developer
+> reference at **`/developers`** — the public HTTP API catalog (rendered
+> from `GET /api/developers`), the one-call storefront bootstrap, and the
+> home/hero design contract (rendered from the same modules the storefront
+> uses). Keep it open while authoring a theme.
+
 The component lives in `apps/web/lib/themeSections.tsx` as a **static
 import** — the map `THEME_SECTION_COMPONENTS` turns `"<key>/<section>"`
 into the bundled component, so a typo fails the build, not the storefront.
-Each section receives `SectionProps` (title, products, categories,
+Each section receives `SectionProps` (title, subtitle, products, categories,
 banners, config — see the interface in `themeSections.tsx`). Sections with
 no override fall back to the platform's built-in rendering
 (`ThemeSectionRenderer`). Installed themes have no entry in the static

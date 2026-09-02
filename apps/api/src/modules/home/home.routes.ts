@@ -24,7 +24,7 @@ const router = Router();
  */
 
 /** Insert any shipped block whose key is missing. Never overwrites edits. */
-async function ensureSeeded() {
+export async function ensureSeeded() {
   const existing = await prisma.homeSection.findMany({ select: { key: true } });
   const have = new Set(existing.map((s) => s.key));
   const missing = HOME_SECTION_SEED.filter((s) => !have.has(s.key));
@@ -53,7 +53,7 @@ async function ensureSeeded() {
 }
 
 /** Parse the stored JSON string; a corrupt value must not break the page. */
-function fromRow(row: any) {
+export function fromRow(row: any) {
   let config: unknown = {};
   if (row.config) {
     try {

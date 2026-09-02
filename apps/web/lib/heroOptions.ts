@@ -58,8 +58,8 @@ export const HERO_HEIGHT_PX: Record<HeroHeight, { desktop: number; mobile: numbe
   tall: { desktop: 640, mobile: 520 },
 };
 
-const LAYOUTS: HeroLayout[] = ['slideshow', 'single', 'split'];
-const HEIGHTS: HeroHeight[] = ['compact', 'standard', 'tall'];
+export const HERO_LAYOUTS: readonly HeroLayout[] = ['slideshow', 'single', 'split'];
+export const HERO_HEIGHTS: readonly HeroHeight[] = ['compact', 'standard', 'tall'];
 
 /** Options a store owner can set; keys match the HomeBuilder form. */
 export interface HeroConfigInput {
@@ -90,10 +90,10 @@ export function heroOptionsFromConfig(
   input?: HeroConfigInput | Record<string, unknown> | null
 ): HeroOptions {
   const raw = (input ?? {}) as Record<string, unknown>;
-  const layout = LAYOUTS.includes(raw.layout as HeroLayout)
+  const layout = HERO_LAYOUTS.includes(raw.layout as HeroLayout)
     ? (raw.layout as HeroLayout)
     : HERO_DEFAULTS.layout;
-  const height = HEIGHTS.includes(raw.height as HeroHeight)
+  const height = HERO_HEIGHTS.includes(raw.height as HeroHeight)
     ? (raw.height as HeroHeight)
     : HERO_DEFAULTS.height;
   const autoPlay =

@@ -453,9 +453,17 @@ REST, JSON, JWT-protected where needed. Base: `/api`.
   `recommendations` (trending, new-arrivals, also-bought, bought-together,
   history, personalized), `downloads`, `currency`, `storage` (uploads)
 - **Health**: `GET /health`
+- **Developer API**: `GET /developers` serves the machine-readable manifest of
+  every documented public endpoint; `GET /developers/bootstrap` returns
+  settings + home sections (with their design config, incl. the hero options)
+  + banners + categories + header/footer menus in one call. The live,
+  browser-based reference — endpoint catalog with “try it”, the hero design
+  contract, and the theme section contract — is served by the storefront at
+  **`/developers`** (point your browser at your store's `/developers` page).
 
 Authoritative source: `apps/api/src/modules/*/…routes.ts` (every route is
-unit/integration-tested or covered by a live `verify-*.py` script).
+unit/integration-tested or covered by a live `verify-*.py` script). The public
+endpoint list is generated from `apps/api/src/modules/developers/publicEndpoints.ts`.
 
 ## 13. Database
 
