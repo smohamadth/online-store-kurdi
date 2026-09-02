@@ -160,6 +160,8 @@ export default function BoldCategories({ title, subtitle, categories, config }: 
                     textTransform: 'uppercase',
                     margin: 0,
                     marginBottom: '4px',
+                    // token-ratchet-ok: sits on the dark image scrim below,
+                    // not on the theme background.
                     color: '#fff',
                   }}
                 >
@@ -171,6 +173,7 @@ export default function BoldCategories({ title, subtitle, categories, config }: 
                       fontSize: '14px',
                       fontWeight: 600,
                       margin: '0 0 10px',
+                      // token-ratchet-ok: on the image scrim.
                       color: 'rgba(255,255,255,0.85)',
                     }}
                   >
@@ -182,6 +185,7 @@ export default function BoldCategories({ title, subtitle, categories, config }: 
                     fontSize: '14px',
                     fontWeight: 600,
                     margin: 0,
+                    // token-ratchet-ok: on the image scrim.
                     color: 'rgba(255,255,255,0.7)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.1em',

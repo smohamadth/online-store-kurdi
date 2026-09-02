@@ -140,7 +140,7 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
               // the hairline border darkens, nothing lifts.
               onMouseEnter={(e) => {
                 const frame = e.currentTarget.querySelector('div');
-                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+                if (frame) frame.style.borderColor = 'color-mix(in srgb, var(--body-text, #121212) 55%, transparent)';
               }}
               onMouseLeave={(e) => {
                 const frame = e.currentTarget.querySelector('div');
@@ -148,7 +148,7 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
               }}
               onFocus={(e) => {
                 const frame = e.currentTarget.querySelector('div');
-                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+                if (frame) frame.style.borderColor = 'color-mix(in srgb, var(--body-text, #121212) 55%, transparent)';
               }}
               onBlur={(e) => {
                 const frame = e.currentTarget.querySelector('div');
@@ -159,7 +159,7 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
                 style={{
                   position: 'relative',
                   aspectRatio: '1 / 1',
-                  backgroundColor: '#f7f7f7',
+                  backgroundColor: 'var(--surface-2, #f7f7f7)',
                   border: '1px solid var(--border, #e6e6e6)',
                   transition: 'border-color 0.18s ease',
                   backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
@@ -174,6 +174,7 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
                       insetInlineStart: '12px',
                       insetBlockStart: '12px',
                       backgroundColor: 'var(--sale, #b42318)',
+                      // token-ratchet-ok: on the --sale badge fill.
                       color: '#fff',
                       fontSize: '11px',
                       fontWeight: 600,

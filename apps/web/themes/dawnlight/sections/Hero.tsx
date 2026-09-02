@@ -70,7 +70,11 @@ export default function DawnlightHero({ banners }: SectionProps) {
               // A solid paper panel so the copy reads on any image.
               // Dawn itself uses plain text over a scrim; the panel is
               // this theme's answer without darkening the photo.
-              backgroundColor: 'rgba(255, 255, 255, 0.94)',
+              // Derived from the theme's own card colour rather than a
+              // literal white, so the panel stays readable (and the text
+              // inside it stays legible) when the store runs a dark
+              // palette such as the shipped "Midnight".
+              backgroundColor: 'color-mix(in srgb, var(--card-bg, #ffffff) 94%, transparent)',
               border: '1px solid var(--border, #e6e6e6)',
               padding: '40px 44px',
               maxWidth: '520px',

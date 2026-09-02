@@ -131,7 +131,7 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
                 backgroundColor: 'var(--card-bg, #ffffff)',
                 border: '1px solid var(--border, #e2e8f0)',
                 borderRadius: 'var(--radius, 16px)',
-                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+                boxShadow: 'var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06))',
                 color: 'var(--body-text, #0f172a)',
                 overflow: 'hidden',
                 transition: 'box-shadow 0.2s ease',
@@ -141,24 +141,24 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
               // affordance is not mouse-only.
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow =
-                  '0 1px 3px rgba(15, 23, 42, 0.06), 0 16px 32px rgba(15, 23, 42, 0.14)';
+                  'var(--shadow-hover, 0 16px 32px rgba(15, 23, 42, 0.14))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
+                e.currentTarget.style.boxShadow = 'var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06))';
               }}
               onFocus={(e) => {
                 e.currentTarget.style.boxShadow =
-                  '0 1px 3px rgba(15, 23, 42, 0.06), 0 16px 32px rgba(15, 23, 42, 0.14)';
+                  'var(--shadow-hover, 0 16px 32px rgba(15, 23, 42, 0.14))';
               }}
               onBlur={(e) => {
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
+                e.currentTarget.style.boxShadow = 'var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06))';
               }}
             >
               <div
                 style={{
                   position: 'relative',
                   aspectRatio: '1 / 1',
-                  backgroundColor: '#f1f5f9',
+                  backgroundColor: 'var(--surface-2, #f1f5f9)',
                   backgroundImage: image ? `url(${getImageUrl(image.url)})` : undefined,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
@@ -171,6 +171,7 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
                       insetInlineStart: '12px',
                       insetBlockStart: '12px',
                       backgroundColor: 'var(--sale, #dc2626)',
+                      // token-ratchet-ok: on the --sale badge fill.
                       color: '#fff',
                       fontSize: '12px',
                       fontWeight: 700,

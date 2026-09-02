@@ -250,9 +250,14 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Only run when invoked directly. Guarding this means `require()`ing the
+// module for its buildSvg() export (tests, other tooling) does not silently
+// rewrite every theme's preview.png as an import side effect.
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
 
 module.exports = { buildSvg, FONT_STACKS, SHADOWS };

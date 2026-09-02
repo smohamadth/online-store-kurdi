@@ -60,7 +60,7 @@ export default function PulseHero({ banners }: SectionProps) {
           backgroundColor: 'var(--card-bg, #ffffff)',
           border: '1px solid var(--border, #e2e8f0)',
           borderRadius: 'calc(var(--radius, 16px) + 8px)',
-          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.05)',
+          boxShadow: 'var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06))',
           overflow: 'hidden',
           display: 'grid',
           gridTemplateColumns: hasImage ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr',

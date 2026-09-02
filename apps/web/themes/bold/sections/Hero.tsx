@@ -221,6 +221,8 @@ export default function BoldHero({ banners }: SectionProps) {
               fontWeight: 900,
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
+              // token-ratchet-ok: placeholder text on the theme's own dark
+              // brand gradient, which is fixed art rather than a token.
               color: 'rgba(255,255,255,0.4)',
               padding: '16px 24px',
               border: '2px dashed rgba(255,255,255,0.4)',

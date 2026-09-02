@@ -70,7 +70,7 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
               // too so keyboard users see the same state.
               onMouseEnter={(e) => {
                 const frame = e.currentTarget.querySelector('div');
-                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+                if (frame) frame.style.borderColor = 'color-mix(in srgb, var(--body-text, #121212) 55%, transparent)';
               }}
               onMouseLeave={(e) => {
                 const frame = e.currentTarget.querySelector('div');
@@ -78,7 +78,7 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
               }}
               onFocus={(e) => {
                 const frame = e.currentTarget.querySelector('div');
-                if (frame) frame.style.borderColor = 'rgba(18, 18, 18, 0.55)';
+                if (frame) frame.style.borderColor = 'color-mix(in srgb, var(--body-text, #121212) 55%, transparent)';
               }}
               onBlur={(e) => {
                 const frame = e.currentTarget.querySelector('div');
@@ -88,7 +88,7 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
               <div
                 style={{
                   aspectRatio: '4 / 3',
-                  backgroundColor: '#f7f7f7',
+                  backgroundColor: 'var(--surface-2, #f7f7f7)',
                   border: '1px solid var(--border, #e6e6e6)',
                   transition: 'border-color 0.18s ease',
                   backgroundImage: category.image ? `url(${getImageUrl(category.image)})` : undefined,
