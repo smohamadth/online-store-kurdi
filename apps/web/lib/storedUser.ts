@@ -14,6 +14,14 @@ export interface StoredUser {
   email?: string;
   firstName?: string;
   lastName?: string;
+  /**
+   * `phone` and `avatar` are returned by the API's user projection (see
+   * auth.routes.ts) and read by /admin/profile. They must be declared: with
+   * only the `unknown` index signature to fall back on, `userData.phone`
+   * types as `{}` and fails to assign to a `string` form field.
+   */
+  phone?: string;
+  avatar?: string;
   role?: string;
   [key: string]: unknown;
 }

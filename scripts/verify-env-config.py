@@ -98,8 +98,17 @@ check(f"{len(CASES)} URL/provider combinations classified correctly",
 print()
 print("=== 3. API refuses to start on a mismatch and prints the fix ===")
 env_path = os.path.join(API, ".env")
+# The generated Prisma client is required to even import src/server.ts. When
+# `prisma generate` has not run (no network for binaries.prisma.sh, e.g. an
+# offline dev box), the server dies with MODULE_NOT_FOUND long before it can
+# reach the DATABASE_URL check -- which used to be reported as three bogus
+# "the error message is missing X" failures. Skip instead of lying; CI runs
+# `npm ci` (postinstall -> prisma generate) so the section still executes there.
+_PRISMA_CLIENT = os.path.join(ROOT, "node_modules", ".prisma", "client")
 if not os.path.exists(os.path.join(ROOT, "node_modules")):
     print("  SKIP - node_modules not installed")
+elif not os.path.exists(_PRISMA_CLIENT):
+    print("  SKIP - generated Prisma client missing (run `npx prisma generate`)")
 else:
     backup = None
     if os.path.exists(env_path):

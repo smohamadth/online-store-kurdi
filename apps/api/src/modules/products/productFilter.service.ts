@@ -114,11 +114,15 @@ export async function listProducts(
         select: { variantId: true },
       });
       const ids = new Set<string>(rows.map((r: any) => r.variantId));
-      matchingVariantIds =
+      // Assign through a non-nullable local so the `.length` check below
+      // narrows cleanly (TS cannot track the null-ness of the outer `let`
+      // across the conditional assignment).
+      const next: string[] =
         matchingVariantIds === null
-          ? rows.map((r: any) => r.variantId)
+          ? rows.map((r: any) => r.variantId as string)
           : matchingVariantIds.filter((id) => ids.has(id));
-      if (matchingVariantIds.length === 0) break;
+      matchingVariantIds = next;
+      if (next.length === 0) break;
     }
     if (!matchingVariantIds || matchingVariantIds.length === 0) {
       // No active variant satisfies the requested attribute combination.

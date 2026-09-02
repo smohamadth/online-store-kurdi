@@ -302,7 +302,9 @@ router.put('/reviews/:reviewId', authenticate, async (req, res, next) => {
           : typeof rating === 'string' && /^-?\d+$/.test(rating.trim())
             ? parseInt(rating, 10)
             : NaN;
-    if (rating !== undefined && (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5)) {
+    // Narrow on `numericRating` itself rather than on `rating`: the two are
+    // only linked by the ternary above, which the compiler cannot follow.
+    if (numericRating !== undefined && (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5)) {
       return res.status(400).json({
         status: 'error',
         message: 'Rating must be between 1 and 5',

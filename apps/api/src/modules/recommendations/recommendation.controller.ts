@@ -11,7 +11,13 @@ import { parsePagination, parseDays } from '../../utils/pagination';
 // strings are a free DB-bloat attack (a megabyte-long recommendationType
 // per click). Cap all of them.
 const CLICK_LOG_SCHEMA = z.object({
-  recommendationType: z.string().min(1).max(50).optional(),
+  // `recommendationType` is a REQUIRED, non-null column on RecommendationLog.
+  // It used to be `.optional()`, so a payload that omitted it passed
+  // validation and then handed `undefined` to Prisma — the insert threw, the
+  // service swallowed the error in its catch, and the click was lost with a
+  // 200 returned to the caller. Defaulting keeps the endpoint lenient while
+  // guaranteeing the row is writable.
+  recommendationType: z.string().min(1).max(50).default('unknown'),
   productId: z.string().min(1).max(100),
   algorithmVersion: z.string().min(1).max(50).default('v1'),
 });

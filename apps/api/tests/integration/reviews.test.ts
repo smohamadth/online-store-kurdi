@@ -130,6 +130,47 @@ describe('PUT /api/reviews/:reviewId', () => {
     expect(after?.rating).toBe(3);
   });
 
+  it('rejects out-of-range and non-numeric ratings on update', async () => {
+    // Boundary sweep around the 1..5 gate. `'4'` (a numeric string) is the
+    // one value in this list that must be ACCEPTED — form posts send strings.
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({ data: { userId: user.id, productId: p.id, rating: 3 } });
+
+    for (const bad of [-1, 6, 100, '', ' ', '5.5', 'NaN', null]) {
+      const res = await request(app)
+        .put(`/api/reviews/${r.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: bad });
+      expect(res.status, `rating=${JSON.stringify(bad)} should be rejected`).toBe(400);
+    }
+    expect((await mockPrisma.review.findUnique({ where: { id: r.id } }))?.rating).toBe(3);
+
+    const ok = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ rating: '4' });
+    expect(ok.status).toBe(200);
+    expect((await mockPrisma.review.findUnique({ where: { id: r.id } }))?.rating).toBe(4);
+  });
+
+  it('leaves the rating untouched when the field is omitted', async () => {
+    // `rating: undefined` must mean "do not change", not "validate 0".
+    const { token, user } = await authHeader();
+    const p = await createProduct();
+    const r = await mockPrisma.review.create({
+      data: { userId: user.id, productId: p.id, rating: 2, comment: 'before' },
+    });
+    const res = await request(app)
+      .put(`/api/reviews/${r.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ comment: 'after' });
+    expect(res.status).toBe(200);
+    const after = await mockPrisma.review.findUnique({ where: { id: r.id } });
+    expect(after?.rating).toBe(2);
+    expect(after?.comment).toBe('after');
+  });
+
   it('lets an admin toggle isApproved', async () => {
     const { user } = await authHeader();
     const { token: adminToken } = await authHeader({ role: 'admin' });

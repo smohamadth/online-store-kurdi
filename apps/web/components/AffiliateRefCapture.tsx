@@ -25,13 +25,19 @@ export default function AffiliateRefCapture() {
       const marker = `aff_tracked_${ref}`;
       if (localStorage.getItem(marker)) return;
       // Fire-and-forget; never breaks the page load.
-      trackAffiliateClick(ref).then((res) => {
-        if (res.valid) {
-          try {
-            localStorage.setItem(marker, '1');
-          } catch {}
-        }
-      });
+      // `.catch` is required, not decorative: the surrounding try/catch only
+      // guards the synchronous body, so a rejected promise here would escape
+      // as an unhandled rejection (which crashes some test runners and trips
+      // window.onunhandledrejection error reporters in production).
+      trackAffiliateClick(ref)
+        .then((res) => {
+          if (res?.valid) {
+            try {
+              localStorage.setItem(marker, '1');
+            } catch {}
+          }
+        })
+        .catch(() => {});
     } catch {}
   }, []);
 

@@ -21,6 +21,31 @@ function setLocation(url: string) {
   window.history.replaceState({}, '', url);
 }
 
+/**
+ * Collect unhandled promise rejections for the duration of a test.
+ *
+ * happy-dom does not dispatch a `window.unhandledrejection` event, so the
+ * only reliable observation point is the Node process hook that Vitest also
+ * listens on. We temporarily remove Vitest's own listeners so the rejection
+ * is recorded here instead of failing the whole file, then restore them.
+ */
+function captureUnhandled() {
+  const unhandled: unknown[] = [];
+  const previous = process.listeners('unhandledRejection');
+  previous.forEach((l) => process.off('unhandledRejection', l as never));
+
+  const handler = (reason: unknown) => unhandled.push(reason);
+  process.on('unhandledRejection', handler);
+
+  return {
+    unhandled,
+    restore() {
+      process.off('unhandledRejection', handler);
+      previous.forEach((l) => process.on('unhandledRejection', l as never));
+    },
+  };
+}
+
 describe('AffiliateRefCapture', () => {
   beforeEach(() => {
     mockTrack.mockReset();
@@ -76,5 +101,65 @@ describe('AffiliateRefCapture', () => {
 
     render(<AffiliateRefCapture />);
     await waitFor(() => expect(mockTrack).toHaveBeenCalled());
+  });
+
+  /**
+   * Regression: the component used to chain `.then()` with no `.catch()`.
+   * The surrounding try/catch only guards the SYNCHRONOUS body, so a rejected
+   * trackAffiliateClick escaped as an unhandled rejection. The assertion above
+   * ("never throws") passed anyway, because an unhandled rejection is not a
+   * thrown error in the test's call stack — it surfaced only as a runner-level
+   * "Errors 1" line. This test listens for the rejection directly so the bug
+   * cannot come back silently.
+   */
+  it('produces no unhandled promise rejection when tracking fails', async () => {
+    const { unhandled, restore } = captureUnhandled();
+
+    try {
+      setLocation('/?ref=KURD-REJECT');
+      mockTrack.mockRejectedValue(new Error('network down'));
+
+      render(<AffiliateRefCapture />);
+      await waitFor(() => expect(mockTrack).toHaveBeenCalled());
+
+      // Let the microtask queue drain so a missing .catch would have fired.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+      // A failed track must not mark the code as done: the visitor should get
+      // another chance to be attributed on their next landing.
+      expect(localStorage.getItem('aff_tracked_KURD-REJECT')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  /**
+   * Regression: a quota-exceeded / private-mode localStorage.setItem throw
+   * happens INSIDE the .then callback, where the outer try/catch cannot reach
+   * it. Without the inner try/catch it would become an unhandled rejection.
+   */
+  it('survives localStorage.setItem throwing inside the success path', async () => {
+    const { unhandled, restore } = captureUnhandled();
+
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+
+    try {
+      setLocation('/?ref=QUOTA-1');
+      mockTrack.mockResolvedValue({ valid: true, code: 'QUOTA-1' });
+
+      render(<AffiliateRefCapture />);
+      await waitFor(() => expect(mockTrack).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      Storage.prototype.setItem = setItem;
+      restore();
+    }
   });
 });

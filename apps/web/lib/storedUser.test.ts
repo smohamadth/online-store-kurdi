@@ -33,4 +33,36 @@ describe('readStoredUser', () => {
     localStorage.setItem('user', '');
     expect(readStoredUser()).toBeNull();
   });
+
+  /**
+   * Regression: `phone` and `avatar` are part of the API's user projection and
+   * are read by /admin/profile, but they were missing from the StoredUser
+   * interface. They then resolved through the `[key: string]: unknown` index
+   * signature and typed as `{}`, which does not assign to a `string` form
+   * field — a compile error in `next build`. This asserts the fields survive a
+   * round-trip and stay usable as strings.
+   */
+  it('preserves phone and avatar as typed string fields', () => {
+    const stored = {
+      id: 'u1',
+      email: 'a@b.c',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      phone: '+964 750 000 0000',
+      avatar: 'https://cdn.example/a.png',
+      role: 'admin',
+    };
+    localStorage.setItem('user', JSON.stringify(stored));
+
+    const user = readStoredUser();
+    expect(user).not.toBeNull();
+
+    // Assigning to `string` is the actual regression check: this line does not
+    // compile if the fields fall back to the `unknown` index signature.
+    const phone: string = user?.phone ?? '';
+    const avatar: string = user?.avatar ?? '';
+    expect(phone).toBe('+964 750 000 0000');
+    expect(avatar).toBe('https://cdn.example/a.png');
+    expect(user?.role).toBe('admin');
+  });
 });

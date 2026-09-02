@@ -292,6 +292,12 @@ function nowId(_model: string): string {
 function applyUpdateData(row: Row, data: any): Row {
   const merged: any = { ...row };
   for (const [k, v] of Object.entries(data || {})) {
+    // Prisma semantics: `undefined` in an update payload means "leave this
+    // column alone" (only an explicit `null` clears it). The mock used to
+    // assign it, so `data: { rating: undefined }` WIPED the stored value.
+    // That made the mock diverge from production and hid real "field is
+    // silently cleared on partial update" regressions.
+    if (v === undefined) continue;
     if (v && typeof v === 'object' && !Array.isArray(v)) {
       if ('decrement' in v) merged[k] = (merged[k] ?? 0) - Number(v.decrement);
       else if ('increment' in v) merged[k] = (merged[k] ?? 0) + Number(v.increment);
