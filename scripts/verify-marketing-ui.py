@@ -174,6 +174,12 @@ try:
             console = []
             page.on("console",
                     lambda m: console.append(m.text) if m.type == "error" else None)
+            # "Failed to load resource: 404" does not say WHICH resource, so
+            # record the failing URLs separately or the check is undebuggable.
+            failed_requests = []
+            page.on("response",
+                    lambda r: failed_requests.append(f"{r.status} {r.url}")
+                    if r.status >= 400 else None)
 
             goto(page, f"{WEB}/products/{anchor['slug']}", 2000)
 
@@ -221,8 +227,17 @@ try:
                     check("first component is in the cart", anchor["name"] in cart_text)
                     check("second component is in the cart", second["name"] in cart_text)
 
-            check("no console errors on the product page", len(console) == 0,
-                  "; ".join(console[:2]))
+            # A missing favicon or a 404 on an optional asset is not a defect
+            # in these components; a JS exception is. Report the failing URLs
+            # either way so the distinction is visible rather than assumed.
+            real_errors = [
+                c for c in console
+                if "favicon" not in c.lower() and "Failed to load resource" not in c
+            ]
+            check("no JS errors on the product page", not real_errors,
+                  "; ".join(real_errors[:2]))
+            check("no failed requests on the product page", not failed_requests,
+                  "; ".join(failed_requests[:4]))
             ctx.close()
 
         # -------------------------------------------------------------------
