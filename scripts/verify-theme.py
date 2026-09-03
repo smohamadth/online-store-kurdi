@@ -275,21 +275,19 @@ def main():
             if hamburger:
                 hamburger.click()
                 mpage.wait_for_timeout(400)
+                # Identify the drawer by a stable test hook rather than by
+                # matching its transform: getComputedStyle normalises
+                # transform to a matrix, so the old filter on 'translateX(0'
+                # could never match and the check silently compared ''.
                 drawer_bg = css(mpage, """
                     (() => {
-                        // NB: the predicate must stay INSIDE filter()'s
-                        // callback. Closing the call after .includes(...)
-                        // and continuing with && is a syntax error, which is
-                        // what this script did before it was ever run.
-                        const drawers = [...document.querySelectorAll('div')].filter(
-                            (d) => getComputedStyle(d).transform.includes('translateX(0') &&
-                                   getComputedStyle(d).position === 'absolute'
-                        );
-                        return drawers.length ? getComputedStyle(drawers[0]).backgroundColor : '';
+                        const d = document.querySelector('[data-testid="mobile-drawer"]');
+                        return d ? getComputedStyle(d).backgroundColor : 'NO-DRAWER';
                     })()
                 """)
                 check("mobile drawer background follows --card-bg (dark)",
-                      norm(drawer_bg) == norm(PRESETS["Midnight"]["cardBg"]), drawer_bg)
+                      norm(drawer_bg) == norm(PRESETS["Midnight"]["cardBg"]),
+                      f'{drawer_bg} (expected {PRESETS["Midnight"]["cardBg"]})')
             else:
                 check("mobile drawer background follows --card-bg (dark)", False, "no hamburger found")
             mob.close()
@@ -324,14 +322,21 @@ def main():
             # the storefront is dark.
             goto(page, f"{WEB}/admin")
             page.wait_for_timeout(800)
+            # The admin shell pins its palette with a direct backgroundColor,
+            # NOT by redefining --body-bg (ThemeProvider sets that on :root and
+            # the admin deliberately ignores it). Asserting on the variable
+            # read an empty string and would have "passed" the moment the
+            # expectation was loosened - so assert the RENDERED colour, which
+            # is what "admin resists a dark storefront theme" actually means.
             admin_bg = css(page, """
                 (() => {
                     const shell = document.querySelector('[data-admin-shell]');
-                    return shell ? getComputedStyle(shell).getPropertyValue('--body-bg').trim() : '';
+                    return shell ? getComputedStyle(shell).backgroundColor : 'NO-SHELL';
                 })()
             """)
             check("admin shell keeps its fixed palette under a dark storefront theme",
-                  admin_bg == "#f5f5f7", admin_bg)
+                  norm(admin_bg) == norm("#f5f5f7"),
+                  f"{admin_bg} (expected #f5f5f7)")
 
             # Reduced motion collapses transitions.
             rm = browser.new_context(reduced_motion="reduce")

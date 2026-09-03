@@ -188,7 +188,11 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
       pointerEvents: isOpen ? 'auto' : 'none',
       transition: 'opacity 0.3s ease',
     }} onClick={onClose}>
-      <div 
+      <div
+        // Stable hook for the theme regression suite. It previously found the
+        // drawer by matching transform against 'translateX(0)', which can
+        // never match: getComputedStyle normalises transform to a matrix.
+        data-testid="mobile-drawer"
         style={{
           position: 'absolute',
           top: 0,
