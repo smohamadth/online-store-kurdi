@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { AnalyticsService } from './analytics.service';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../config/database';
+import { purgeOldEvents } from './retention';
 import { parsePagination, parseDays } from '../../utils/pagination';
 
 /**
@@ -235,6 +236,27 @@ export class AnalyticsController {
           biggestDropOff: biggestDropOff(stages),
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /api/analytics/retention/purge
+   *
+   * Destructive, so `dryRun: true` reports the count without deleting - the
+   * only sane way to check a retention window against real data the first
+   * time.
+   */
+  purgeRetention = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const dryRun = req.body?.dryRun === true;
+      const rawDays = Number(req.body?.days);
+      const result = await purgeOldEvents({
+        dryRun,
+        days: Number.isFinite(rawDays) ? rawDays : undefined,
+      });
+      res.json({ status: 'success', data: result });
     } catch (error) {
       next(error);
     }

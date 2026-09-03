@@ -40,6 +40,11 @@ import {
   startScheduler as startMarketingScheduler,
   stopScheduler as stopMarketingScheduler,
 } from './jobs/marketing-scheduler';
+// Same name-collision caveat: alias the retention scheduler too.
+import {
+  startScheduler as startRetentionScheduler,
+  stopScheduler as stopRetentionScheduler,
+} from './jobs/retention-scheduler';
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
@@ -51,6 +56,7 @@ async function gracefulShutdown(signal: string) {
     stopScheduler();
     stopCurrencyScheduler();
     stopMarketingScheduler();
+    stopRetentionScheduler();
 
     // Close HTTP server
     httpServer.close(() => {
@@ -188,6 +194,9 @@ async function startServer() {
       // Abandoned-cart recovery. No-ops unless ABANDONED_CART_SCHEDULER=on:
       // a store must opt in before it starts emailing customers.
       startMarketingScheduler();
+      // Analytics retention. ON by default: keeping personal data forever is
+      // the unsafe state, so a store must opt OUT, not in.
+      startRetentionScheduler();
       if (alsoBindIpv6Loopback) {
         // net.Server can only listen once, so open a twin server that feeds
         // the same Express app.

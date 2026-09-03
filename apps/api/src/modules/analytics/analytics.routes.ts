@@ -72,6 +72,15 @@ router.get(
   analyticsController.getRealTimeStats
 );
 
+// POST /api/analytics/retention/purge - delete events past the retention
+// window. Admin-only and destructive, so it supports dryRun for a look first.
+router.post(
+  '/retention/purge',
+  authenticate,
+  authorize('admin'),
+  analyticsController.purgeRetention
+);
+
 // GET /api/analytics/funnel - conversion funnel (view -> cart -> checkout -> purchase)
 router.get(
   '/funnel',
