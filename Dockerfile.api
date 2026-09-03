@@ -25,6 +25,12 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 # Root postinstall already ran prisma generate; run it explicitly so a
 # changed schema can never slip into the image ungenerated.
+#
+# The generated client is provider-specific, so the image cannot contain one
+# client for both databases. The default (SQLite) client is generated at build
+# time; the entrypoint regenerates against schema.postgres.prisma when
+# DATABASE_URL is a postgres:// URL, which is why the full node_modules
+# (including the prisma CLI) is carried into the runtime stage.
 RUN cd apps/api && npx prisma generate && npm run build
 
 FROM node:20-alpine AS runtime

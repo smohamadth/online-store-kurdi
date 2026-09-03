@@ -13,16 +13,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL is OPT-IN (README section 5). The store runs on SQLite by
-  # default, so this service does not start unless the profile is requested:
-  #
-  #     docker compose --profile postgres up
-  #
-  # Behind a profile rather than deleted: it stays available for anyone who
-  # switches, and - importantly - it no longer forces every SQLite deployment
-  # to invent a POSTGRES_PASSWORD for a database nothing connects to.
   postgres:
-    profiles: ["postgres"]
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -90,6 +81,8 @@ services:
       dockerfile: Dockerfile.api
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -98,17 +91,15 @@ services:
       NODE_ENV: production
       PORT: "3001"
       API_VERSION: v1
-      # SQLite on a named volume. This MUST match `provider` in
-      # apps/api/prisma/schema.prisma - a mismatch is Prisma P1012 and the
-      # API refuses to boot (see src/config/verifyDatabaseUrl.ts). The
-      # committed migration history is also locked to sqlite
-      # (prisma/migrations/migration_lock.toml), so a postgresql:// URL here
-      # could not be migrated even if the provider were changed.
+      # PostgreSQL. scripts/entrypoint-api.sh reads this URL and selects the
+      # matching schema + migration set (prisma/schema.postgres.prisma and
+      # prisma/migrations-postgres), so the provider is a RUNTIME choice - the
+      # same image still runs on SQLite if handed a file: URL.
       #
-      # To run PostgreSQL instead, follow README section 5: change the
-      # provider, regenerate the migration history against Postgres, then
-      # swap this line and re-enable the postgres service below.
-      DATABASE_URL: file:/app/apps/api/data/store.db
+      # The SQLite history cannot be replayed on Postgres (PRAGMA table
+      # rebuilds, a randomblob() backfill), which is why Postgres gets a
+      # generated baseline instead. See scripts/generate-postgres-baseline.py.
+      DATABASE_URL: postgresql://store_user:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the environment}@postgres:5432/store_db
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ chars) in the environment}
       JWT_EXPIRES_IN: 7d
@@ -136,9 +127,8 @@ services:
       # creates it on boot.
       PLUGINS_DIR: /app/apps/api/plugins
     volumes:
-      # The SQLite file lives here. Without a volume the entire store is lost
-      # the moment the container is replaced - which `restart: unless-stopped`
-      # and any image update both do routinely.
+      # Retained: harmless on Postgres, and it keeps a prior SQLite
+      # deployment's file reachable if someone switches back.
       - db_data:/app/apps/api/data
       - themes_data:/app/apps/web/themes
       - plugins_data:/app/apps/api/plugins
@@ -164,11 +154,10 @@ services:
       - store-network
 
 volumes:
-  # SQLite database file (see the api service's DATABASE_URL).
-  db_data:
-  # Retained so an existing deployment's Postgres data is not orphaned by
-  # this change. Unused while the store runs on SQLite.
+  # PostgreSQL data directory - the live store database.
   postgres_data:
+  # SQLite file, for a deployment that runs the same image on a file: URL.
+  db_data:
   redis_data:
   minio_data:
   # Shared with the web container's themes dir so themes the admin installs

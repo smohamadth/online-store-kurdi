@@ -28,13 +28,38 @@ PRISMA=node_modules/.bin/prisma
 [ -x "$PRISMA" ] || PRISMA=../../node_modules/.bin/prisma
 [ -x "$PRISMA" ] || PRISMA="npx prisma"
 
-echo "==> store-api: applying committed migrations (prisma migrate deploy)"
-"$PRISMA" migrate deploy
+# Pick the schema + migration set that matches DATABASE_URL.
+#
+# The project develops and tests on SQLite; PostgreSQL deployments use a
+# generated baseline (prisma/migrations-postgres) and a generated schema
+# variant, because the SQLite history cannot be replayed on Postgres - it uses
+# PRAGMA table rebuilds and a randomblob() backfill. Selecting here means one
+# image serves both without the provider being a build-time decision.
+case "${DATABASE_URL:-}" in
+  postgres://*|postgresql://*)
+    SCHEMA=./prisma/schema.postgres.prisma
+    MIGRATIONS=./prisma/migrations-postgres
+    echo "==> store-api: PostgreSQL detected; using $SCHEMA"
+    # The Prisma client is provider-specific and the image was built with the
+    # SQLite one. Without this the API starts and then fails every query with
+    # "the URL must start with the protocol file:".
+    echo "==> store-api: regenerating the Prisma client for PostgreSQL"
+    "$PRISMA" generate --schema "$SCHEMA"
+    ;;
+  *)
+    SCHEMA=./prisma/schema.prisma
+    MIGRATIONS=./prisma/migrations
+    echo "==> store-api: SQLite; using $SCHEMA"
+    ;;
+esac
 
-echo "==> store-api: verifying schema.prisma matches the deployed migrations"
+echo "==> store-api: applying committed migrations (prisma migrate deploy)"
+"$PRISMA" migrate deploy --schema "$SCHEMA"
+
+echo "==> store-api: verifying the schema matches the deployed migrations"
 if "$PRISMA" migrate diff \
-    --from-migrations ./prisma/migrations \
-    --to-schema-datamodel ./prisma/schema.prisma \
+    --from-migrations "$MIGRATIONS" \
+    --to-schema-datamodel "$SCHEMA" \
     --exit-code >/dev/null 2>&1; then
   echo "    in sync"
 else

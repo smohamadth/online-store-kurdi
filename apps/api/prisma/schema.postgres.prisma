@@ -1,0 +1,2156 @@
+// PostgreSQL variant of schema.prisma.
+//
+// GENERATED - do not edit. Produced from schema.prisma by
+// scripts/generate-postgres-baseline.py --write, and checked against it by
+// tests/unit/config/postgresBaseline.test.ts.
+//
+// Why a second file rather than flipping `provider` in the original: the
+// dev workflow, CI and all ~1,200 integration tests run on SQLite. Changing
+// the provider globally to serve Docker would break every one of them, and a
+// deployment concern should not dictate how the project is developed.
+// Prisma selects between them with --schema.
+
+// Prisma Schema for E-commerce Store (SQLite version for development)
+// Use this schema when PostgreSQL is not available
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Read from the environment so the database can be pointed elsewhere
+  // without editing this file. It was hardcoded to "file:./dev.db", which
+  // silently ignored DATABASE_URL - .env.example advertises a PostgreSQL URL
+  // that would never have been used.
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  avatar        String?
+  role          String    @default("customer") // customer, admin, manager
+  isActive      Boolean   @default(true)
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  addresses     Address[]
+  orders        Order[]
+  reviews       Review[]
+  wishlist      WishlistItem[]
+  cart          CartItem[]
+  events        UserEvent[]
+  preferences   UserPreference?
+  sessions      Session[]
+  passwordResets PasswordReset[]
+  inventoryLogs InventoryLog[]
+  storeCredits    StoreCredit[]
+  giftCardsIssued  GiftCard[]   @relation("GiftCardCreatedBy")
+  affiliate       Affiliate?
+  abandonedCartEmails AbandonedCartEmail[]
+  couponRedemptions   CouponRedemption[]
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+}
+
+// User session model
+model Session {
+  id            String    @id @default(uuid())
+  userId        String
+  refreshToken  String    @unique
+  userAgent     String?
+  ipAddress     String?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+// Password reset tokens
+model PasswordReset {
+  id            String    @id @default(uuid())
+  userId        String
+  token         String    @unique
+  expiresAt     DateTime
+  used          Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// User address model
+model Address {
+  id            String    @id @default(uuid())
+  userId        String
+  type          String    @default("shipping") // shipping, billing
+  firstName     String
+  lastName      String
+  company       String?
+  address1      String
+  address2      String?
+  city          String
+  state         String
+  postalCode    String
+  country       String
+  phone         String?
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]
+  
+  @@index([userId])
+}
+
+// Product category model
+model Category {
+  id            String    @id @default(uuid())
+  name          String
+  slug          String    @unique
+  description   String?
+  image         String?
+  parentId      String?
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Self-relation for nested categories
+  parent        Category? @relation("CategoryTree", fields: [parentId], references: [id])
+  children      Category[] @relation("CategoryTree")
+  
+  // Relations
+  products      Product[]
+  
+  @@index([slug])
+  @@index([parentId])
+  @@index([isActive])
+}
+
+// Product model
+model Product {
+  id            String    @id @default(uuid())
+  name          String
+  slug          String    @unique
+  description   String
+  shortDescription String?
+  sku           String    @unique
+  type          String    @default("physical") // physical, digital
+  status        String    @default("draft") // draft, active, inactive, archived
+  
+  // Pricing
+  price         Float
+  compareAtPrice Float?
+  costPrice     Float?
+  
+  // Inventory (for physical products)
+  trackInventory Boolean   @default(true)
+  quantity       Int       @default(0)
+  lowStockThreshold Int    @default(10)
+  // When true, the storefront lets a customer add to cart and check out
+  // an out-of-stock product; the order ships when stock returns. The
+  // checkout can still cap backorderable quantity if `backorderLimit` is set.
+  allowBackorder Boolean   @default(false)
+  backorderLimit Int?      // null = unlimited backorders when allowBackorder is true
+  // "stock at zero" still allows search and PDP render, but hides
+  // the "Add to cart" button unless allowBackorder is true.
+  // Estimated restock date is shown on the PDP when set.
+  expectedRestockAt DateTime?
+  
+  // Digital product fields
+  downloadUrl   String?
+  downloadLimit Int?
+  downloadExpiry Int?     // days
+  
+  // Product details
+  weight        Float?
+  weightUnit    String?   @default("kg")
+  dimensions    String?   // JSON string
+  
+  // SEO fields
+  metaTitle     String?
+  metaDescription String?
+  metaKeywords  String    @default("[]") // JSON array
+  
+  // Relations
+  categoryId    String
+  category      Category  @relation(fields: [categoryId], references: [id])
+  taxClassId    String?
+  taxClass      TaxClass? @relation(fields: [taxClassId], references: [id])
+  images        ProductImage[]
+  variants      Variant[]
+  // Typed options for this product (e.g. "Color", "Size").
+  options       Option[]
+  reviews       Review[]
+  wishlist      WishlistItem[]
+  cart          CartItem[]
+  orderItems    OrderItem[]
+  inventoryLogs InventoryLog[]
+  stockAlerts   StockAlert[]
+  stockAlertSubscriptions StockAlertSubscription[]
+  warehouseStocks WarehouseStock[]
+  channelStocks ChannelStock[]
+  reorderRules   ReorderRule[]
+  reorderDrafts   ReorderDraft[]
+  stockTakeItems  StockTakeItem[]
+  warehouseTransfers WarehouseTransfer[]
+  stockReservations  StockReservation[]
+  
+  // ML/Analytics relations
+  events        UserEvent[]
+  embeddings    ProductEmbedding[]
+  similarities1 ProductSimilarity[] @relation("ProductSimilarity1")
+  similarities2 ProductSimilarity[] @relation("ProductSimilarity2")
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  publishedAt   DateTime?
+  
+  bundleItems   BundleItem[]
+
+  @@index([slug])
+  @@index([sku])
+  @@index([categoryId])
+  @@index([status])
+  @@index([type])
+  @@index([price])
+}
+
+// Product image model
+model ProductImage {
+  id            String    @id @default(uuid())
+  productId     String
+  url           String
+  alt           String?
+  thumbnail     String?
+  medium        String?
+  large         String?
+  zoom          String?
+  sortOrder     Int       @default(0)
+  isPrimary     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@index([productId])
+}
+
+// =====================================================================
+// Variant (first-class) - a sellable SKU.
+//
+// Variants have their own slug, gallery, URL, pricing, and typed
+// option linkage. The product is a "container" that groups
+// related variants; the customer usually decides on a specific
+// variant (size, color, etc.) not on the product as a whole.
+//
+// URL: /products/<product-slug>?variant=<variant-slug>
+//
+// The `attributes` JSON column is kept as a denormalised
+// snapshot for search and for legacy callers. New code should
+// prefer the typed `optionValues` join table.
+// =====================================================================
+model Variant {
+  id            String    @id @default(uuid())
+  productId     String
+  name          String
+  sku           String    @unique
+  // URL-addressable slug. Unique across the catalogue so the
+  // storefront can deep-link to a variant by slug. Null until
+  // the admin sets one; the route layer falls back to /:id.
+  slug          String?   @unique
+  // Variant-level list price. Falls back to product.price when
+  // null - the service layer applies that fallback on read.
+  price         Float
+  // Variant-level "was" price for sale badges. Null = no sale.
+  compareAtPrice Float?
+  quantity      Int       @default(0)
+  // Free-form attributes JSON. Use `optionValues` (typed) when
+  // you can; this column is for the legacy "color: red" string.
+  attributes    String    @default("{}")
+  isActive      Boolean   @default(true)
+  // Display ordering within a product. Lower = shown first.
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Denormalised attribute index rows (see VariantAttribute) - maintained
+  // by syncVariantAttributes() so the product filter can filter on
+  // (key, value) pairs in SQL instead of scanning + JSON-parsing every
+  // variant in the candidate set.
+  attributesIdx VariantAttribute[]
+  images        VariantImage[]
+  optionValues  VariantOptionValue[]
+  orderItems    OrderItem[]
+  cartItems     CartItem[]
+  inventoryLogs InventoryLog[]
+  warehouseStocks WarehouseStock[]
+  stockReservations StockReservation[]
+  warehouseTransfers WarehouseTransfer[]
+  stockTakeItems StockTakeItem[]
+  reorderRules ReorderRule[]
+  reorderDrafts ReorderDraft[]
+  channelStocks ChannelStock[]
+
+  @@index([productId])
+  @@index([sku])
+  @@index([slug])
+  @@index([isActive])
+  @@index([productId, isActive])
+}
+
+// One row per (variant, attribute key, attribute value) pair.
+//
+// The Variant.attributes JSON string is the source of truth for display
+// (PDP, admin); this table is a query index maintained in sync by
+// syncVariantAttributes() (products/variant.helpers.ts) at every write
+// site. It lets the /products filter and the facet sidebar find variants
+// by (key, value) in SQL (indexed) instead of fetching + JSON-parsing
+// every variant of the candidate set - the O(catalog) post-filter in
+// listProducts/getFacets.
+//
+// Cascade delete: dropping a variant drops its index rows.
+model VariantAttribute {
+  id        String  @id @default(uuid())
+  variantId String
+  key       String
+  value     String
+
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, key, value])
+  @@index([key, value])
+  @@index([variantId])
+}
+
+
+// A typed "option" - "Color", "Size", "Material", etc. Options
+// are per-product.
+model Option {
+  id            String    @id @default(uuid())
+  productId     String
+  name          String
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  values        OptionValue[]
+
+  @@unique([productId, name])
+  @@index([productId])
+}
+
+// A typed value for an option - "Red", "Large", "Cotton".
+model OptionValue {
+  id            String    @id @default(uuid())
+  optionId      String
+  value         String
+  // Optional swatch colour for visual pickers (#rrggbb).
+  swatch        String?
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  option        Option    @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  variantValues VariantOptionValue[]
+
+  @@unique([optionId, value])
+  @@index([optionId])
+}
+
+// The join: which OptionValues a Variant picks. A red, large
+// t-shirt has VariantOptionValue rows pointing at the "Red"
+// and "Large" OptionValues.
+model VariantOptionValue {
+  id            String    @id @default(uuid())
+  variantId     String
+  optionValueId String
+  createdAt     DateTime  @default(now())
+
+  variant       Variant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  optionValue   OptionValue  @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, optionValueId])
+  @@index([variantId])
+  @@index([optionValueId])
+}
+
+// Variant-level image gallery.
+model VariantImage {
+  id            String    @id @default(uuid())
+  variantId     String
+  url           String
+  alt           String?
+  thumbnail     String?
+  medium        String?
+  large         String?
+  zoom          String?
+  sortOrder     Int       @default(0)
+  isPrimary     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  variant       Variant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+}
+
+// Review model
+model Review {
+  id            String    @id @default(uuid())
+  userId        String
+  productId     String
+  rating        Int       // 1-5
+  title         String?
+  comment       String?
+  // "Verified purchaser" badge. Set at create/update time by the
+  // review route, which checks the user has at least one
+  // non-cancelled / non-refunded Order containing this product.
+  // Storing the flag on the row keeps the storefront query simple
+  // and lets the admin queue filter on it.
+  isVerified    Boolean   @default(false)
+  isApproved    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  photos        ReviewPhoto[]
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([rating])
+  @@index([isVerified])
+}
+
+// Photos attached to a review. Each row is a single image with
+// optional thumbnail + sortOrder so the storefront can render a
+// tidy grid. Photos are stored on the same storage backend as
+// product images (S3 / MinIO), referenced by URL.
+model ReviewPhoto {
+  id            String    @id @default(uuid())
+  reviewId      String
+  // Canonical image URL (or relative path on the storage backend).
+  url           String
+  // Optional thumbnail URL. Frontend falls back to `url` when
+  // the thumbnail is missing.
+  thumbnail     String?
+  // 0-indexed display order. Photos are sorted ascending by this
+  // column on every read.
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  review        Review    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+}
+
+// Wishlist model
+model WishlistItem {
+  id            String    @id @default(uuid())
+  userId        String
+  productId     String
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// Cart model
+model CartItem {
+  id            String    @id @default(uuid())
+  userId        String
+  productId     String
+  variantId     String?
+  quantity      Int       @default(1)
+  // When set, the stock for this line is *reserved* (not yet decremented)
+  // until `reservedUntil`. A cron-style endpoint releases expired
+  // reservations back to available stock. NULL means the cart row is
+  // not actively holding stock.
+  reservedUntil DateTime?
+  // Snapshot of the variant's attributes at add-to-cart time.
+  variantSnapshot String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  reservation   StockReservation?
+
+  @@unique([userId, productId, variantId])
+  @@index([userId])
+  @@index([reservedUntil])
+}
+
+// Order model
+model Order {
+  id            String    @id @default(uuid())
+  orderNumber   String    @unique
+  userId        String
+  status        String    @default("pending") // pending, processing, shipped, delivered, cancelled, refunded
+  
+  // Pricing
+  subtotal      Float
+  taxAmount     Float     @default(0)
+  shippingAmount Float    @default(0)
+  discountAmount Float    @default(0)
+  totalAmount   Float
+  
+  // Shipping
+  shippingAddressId String?
+  shippingMethodId  String?
+  shippingZoneId    String?
+  trackingNumber    String?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+  
+  // Payment
+  paymentMethod     String?
+  paymentStatus     String    @default("pending") // pending, completed, failed, refunded
+  paymentIntentId   String?   // Stripe payment intent ID
+
+  // Wallet credit applied at checkout (store credit + gift card). The
+  // order's totalAmount stays the FULL order value; these two columns
+  // record how much the customer covered with wallet credit, and the
+  // amount still due is totalAmount - storeCreditApplied - giftCardApplied.
+  storeCreditApplied Float     @default(0)
+  giftCardApplied    Float     @default(0)
+  giftCardCode       String?   // the card code debited, for the ledger trail
+
+  // Affiliate attribution: captured from the aff_ref cookie at placement
+  // when the affiliate program is enabled and the code belongs to an
+  // active affiliate. A commission is created when the order is paid
+  // (idempotent on orderId). Null for orders placed without a valid
+  // referral, or while the program is off.
+  affiliateId        String?
+  affiliateCode      String?   // the code as seen in ?ref=CODE, for humans
+  affiliateCommission AffiliateCommission?
+  
+  // Notes
+  notes             String?
+  adminNotes        String?
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  cancelledAt       DateTime?
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id])
+  shippingAddress   Address?  @relation(fields: [shippingAddressId], references: [id])
+  shippingMethod    ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
+  affiliate         Affiliate? @relation(fields: [affiliateId], references: [id])
+  items             OrderItem[]
+  payments          Payment[]
+  inventoryLogs     InventoryLog[]
+  
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([affiliateId])
+}
+
+// Order item model
+model OrderItem {
+  id            String    @id @default(uuid())
+  orderId       String
+  productId     String
+  variantId     String?
+  quantity      Int
+  unitPrice     Float
+  totalPrice    Float
+  
+  // Digital product fields
+  downloadUrl   String?
+  downloadCount Int       @default(0)
+  downloadLimit Int?
+  downloadExpiry DateTime?
+
+  // Flag set at order-placement when the order line was created
+  // against zero stock and the product allows backorders. Used by
+  // warehouse reports to split backorders from normal sales.
+  isBackorder   Boolean   @default(false)
+  
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  downloads     ProductDownload[]
+  
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// Per-purchase download token.
+//
+// Created at order placement when the line is digital. The `token`
+// is a 32-byte URL-safe random string; the customer hits
+// /api/downloads/:token to fetch the file. We keep both `token`
+// (high-entropy, unguessable) and `id` (sequential, useful in admin
+// views) so an attacker would have to guess a 32-byte random value,
+// not enumerate.
+//
+// `downloadCount` is per-token (this is what the customer has used).
+// `Product.downloadCount` on OrderItem is the per-product / per-line
+// counter for the legacy product-level URL. We keep both so the
+// legacy flow (a single static URL) still increments the right
+// counter, while the new flow (per-order token) has its own count.
+model ProductDownload {
+  id            String    @id @default(uuid())
+  orderItemId   String
+  // URL-safe token, 32 bytes of randomness. Indexed unique.
+  token         String    @unique
+  // Effective URL is /api/downloads/<token>. We don't store the
+  // full URL to keep the row small.
+  expiresAt     DateTime?
+  // Per-token usage counter. The global product-level counter on
+  // OrderItem tracks the legacy single-URL flow.
+  downloadCount Int       @default(0)
+  // Max redemptions for THIS token. Snapshot of the product's
+  // downloadLimit at order-placement time (same pattern as
+  // sourceUrl) so changing the product later doesn't alter what
+  // the customer already bought. Null = unlimited.
+  downloadLimit Int?
+  // The product's per-purchase URL template. We snapshot it at
+  // order-placement time so changing the product later doesn't
+  // invalidate the customer's existing downloads.
+  sourceUrl     String
+  // Audit: when was this token first created / last used.
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime?
+  
+  orderItem     OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  
+  @@index([orderItemId])
+  @@index([expiresAt])
+}
+
+// Append-only log of every successful download. The product
+// counter on `ProductDownload` is the authoritative "how many
+// times" but this row gives us who / when / from-where for the
+// audit trail (the equivalent of InventoryLog for digital goods).
+model DownloadLog {
+  id            String    @id @default(uuid())
+  downloadId    String
+  userId        String?   // null if the link was used pre-login (legacy)
+  orderItemId   String?
+  ipAddress     String?
+  userAgent     String?
+  status        String    // 'success' | 'expired' | 'limit_exceeded' | 'not_found'
+  createdAt     DateTime  @default(now())
+  
+  @@index([downloadId])
+  @@index([userId])
+  @@index([orderItemId])
+  @@index([createdAt])
+}
+
+// Payment model
+model Payment {
+  id            String    @id @default(uuid())
+  orderId       String
+  amount        Float
+  currency      String    @default("USD")
+  method        String    // stripe, paypal, etc.
+  status        String    @default("pending") // pending, completed, failed, refunded
+  transactionId String?
+  gatewayResponse String? // JSON string
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  order         Order     @relation(fields: [orderId], references: [id])
+  
+  @@index([orderId])
+  @@index([transactionId])
+}
+
+// Coupon model
+model Coupon {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  type          String    // percentage, fixed, free_shipping
+  value         Float
+  minOrderAmount Float?
+  maxDiscountAmount Float?
+  usageLimit    Int?
+  usedCount     Int       @default(0)
+  // Per-customer cap. NULL = unlimited, which is what every coupon predating
+  // this feature has, so their behaviour is unchanged. usedCount above is a
+  // GLOBAL counter and cannot express "one per customer".
+  perCustomerLimit Int?
+  // Restrict to customers with no prior completed order.
+  newCustomersOnly Boolean @default(false)
+  isActive      Boolean   @default(true)
+  startsAt      DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  redemptions   CouponRedemption[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// Gift card model.
+//
+// Codes are customer-facing; we generate them server-side as
+// upper-cased 16-character strings (XXXX-XXXX-XXXX-XXXX) so
+// they're easy to read and copy-paste. The `balance` field is
+// the remaining value - it starts equal to `initialAmount` and
+// is debited on each use. Allowing the balance to go negative is
+// blocked at the service layer; the constraint here is just
+// `>= 0` so a bad code that somehow ends up with a negative
+// balance is visible in the data.
+//
+// status values:
+//   'active'    - issued, can be redeemed
+//   'depleted'  - balance === 0, can't be used further
+//   'expired'   - expiresAt passed, can't be used
+//   'cancelled' - admin voided the card
+//
+// Note: the service layer also rejects redemption on expired
+// cards even when status='active', to handle clock drift between
+// the time of issue and the next recheck.
+model GiftCard {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  initialAmount Float
+  balance       Float     @default(0)
+  currency      String    @default("USD")
+  status        String    @default("active")
+  issuedAt      DateTime  @default(now())
+  expiresAt     DateTime?
+  redeemedByUserId String?
+  redeemedAt    DateTime?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transactions  GiftCardTransaction[]
+  createdBy     User?     @relation("GiftCardCreatedBy", fields: [createdById], references: [id])
+
+  @@index([code])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// Append-only ledger for gift-card activity. Every balance
+// change is a row here; the live `balance` on the card is the
+// running total. This mirrors the inventory-log pattern and
+// makes audits easy.
+model GiftCardTransaction {
+  id            String    @id @default(uuid())
+  giftCardId    String
+  amount        Float     // positive = credit (issue/refund), negative = debit (use)
+  type          String    // 'issue', 'use', 'expire', 'cancel', 'adjust'
+  orderId       String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  giftCard      GiftCard  @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
+  @@index([orderId])
+}
+
+// Store credit - a per-user balance issued at refund time or as
+// a goodwill gesture. Simpler than gift cards: no codes, no
+// expiration, just a running balance per user. The same
+// append-only ledger pattern is used for the audit trail.
+model StoreCredit {
+  id            String    @id @default(uuid())
+  userId        String
+  balance       Float     @default(0)
+  currency      String    @default("USD")
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  StoreCreditTransaction[]
+
+  @@unique([userId, currency])
+  @@index([userId])
+}
+
+// One row per store-credit movement (the append-only ledger behind the
+// Wallet page): positive = credit, negative = debit, per type.
+model StoreCreditTransaction {
+  id            String    @id @default(uuid())
+  storeCreditId String
+  amount        Float     // positive = credit, negative = debit
+  type          String    // 'refund', 'goodwill', 'order_use', 'adjust'
+  orderId       String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  storeCredit   StoreCredit @relation(fields: [storeCreditId], references: [id], onDelete: Cascade)
+
+  @@index([storeCreditId])
+  @@index([orderId])
+}
+
+// ============================================
+// AFFILIATE MARKETING
+// ============================================
+//
+// The program is opt-in per store (StoreSettings.affiliateEnabled, default
+// off). A user applies, an admin approves them, and they promote their
+// unique `code` via a link like https://store/?ref=CODE. Visitors who land
+// on that link get an `aff_ref` cookie; an order placed with the cookie is
+// attributed to the affiliate, and when the order is PAID a commission row
+// is created at `order.totalAmount * rate / 100` (rate = affiliate's
+// override, else the store default). See docs/AFFILIATES_PLAN.md.
+
+model Affiliate {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  code          String   @unique // URL-safe referral code shown in ?ref=CODE
+  status        String   @default("pending") // pending, active, suspended
+  rateOverride  Float?   // % override; null = store default (affiliateRate)
+  totalEarned   Float    @default(0) // lifetime approved commissions
+  totalPaid     Float    @default(0) // lifetime paid-out amount
+  clicks        Int      @default(0) // denormalized click counter
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]
+  clicksLog     AffiliateClick[]
+  commissions   AffiliateCommission[]
+  payouts       AffiliatePayout[]
+
+  @@index([status])
+}
+
+// One tracked visit through an affiliate link. `ipHash` is a sha256 of the
+// visitor IP so the store can see rough unique-visitor counts without
+// storing IPs (PII). Clicks are display metrics — best-effort.
+model AffiliateClick {
+  id            String   @id @default(uuid())
+  affiliateId   String
+  ipHash        String?  // sha256(ip), so no raw IP is stored
+  createdAt     DateTime @default(now())
+
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId, createdAt])
+}
+
+// Commission earned on a PAID order attributed to an affiliate. One row per
+// order, ever (`orderId` unique) so webhook replays can never double-pay.
+// status: pending (awaiting admin approval) -> approved | rejected.
+model AffiliateCommission {
+  id            String   @id @default(uuid())
+  affiliateId   String
+  orderId       String   @unique
+  orderNumber   String
+  orderAmount   Float    // full order value the % was computed on
+  rate          Float    // the rate actually applied (override or store default)
+  amount        Float    // orderAmount * rate / 100, rounded to 2dp
+  status        String   @default("pending") // pending, approved, rejected
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  approvedAt    DateTime?
+
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  order         Order     @relation(fields: [orderId], references: [id])
+
+  @@index([affiliateId, status])
+  @@index([status])
+}
+
+// Withdrawal request from an affiliate, resolved by an admin. status:
+// pending -> paid | rejected. When a payout is paid the affiliate's
+// totalPaid is incremented atomically; available balance is always
+// (approved commissions) - totalPaid.
+model AffiliatePayout {
+  id            String   @id @default(uuid())
+  affiliateId   String
+  amount        Float
+  status        String   @default("pending") // pending, paid, rejected
+  currency      String   @default("USD")
+  notes         String?
+  adminNotes    String?
+  requestedAt   DateTime @default(now())
+  resolvedAt    DateTime?
+
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([status])
+}
+
+// Analytics and ML Data Collection Models
+
+// User behavior events for ML
+model UserEvent {
+  id            String    @id @default(uuid())
+  userId        String?
+  sessionId     String
+  eventType     String    // view, click, add_to_cart, purchase, search, wishlist
+  productId     String?
+  categoryId    String?
+  searchQuery   String?
+  metadata      String    @default("{}") // JSON string
+  timestamp     DateTime  @default(now())
+  userAgent     String?
+  ipAddress     String?
+
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product       Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([productId])
+  @@index([sessionId])
+}
+
+// Product embeddings for content-based filtering
+model ProductEmbedding {
+  id            String    @id @default(uuid())
+  productId     String    @unique
+  embedding     String    // JSON array of floats
+  modelVersion  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// User preferences learned from behavior
+model UserPreference {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  categoryScores    String    @default("{}") // JSON object
+  brandScores       String    @default("{}") // JSON object
+  priceRange        String    @default("{}") // JSON object
+  stylePreferences  String    @default("{}") // JSON object
+  lastUpdated       DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Product similarity scores
+model ProductSimilarity {
+  id              String    @id @default(uuid())
+  product1Id      String
+  product2Id      String
+  similarityScore Float     // 0-1 similarity score
+  similarityType  String    // content, collaborative, hybrid
+  lastCalculated  DateTime  @default(now())
+
+  product1        Product   @relation("ProductSimilarity1", fields: [product1Id], references: [id], onDelete: Cascade)
+  product2        Product   @relation("ProductSimilarity2", fields: [product2Id], references: [id], onDelete: Cascade)
+
+  @@unique([product1Id, product2Id, similarityType])
+  @@index([product1Id])
+  @@index([product2Id])
+}
+
+// Recommendation logs for A/B testing
+model RecommendationLog {
+  id                  String    @id @default(uuid())
+  userId              String?
+  sessionId           String
+  recommendationType  String    // collaborative, content-based, hybrid
+  algorithmVersion    String
+  products            String    // JSON array of product IDs
+  context             String    @default("{}") // JSON object
+  clicked             Boolean   @default(false)
+  purchased           Boolean   @default(false)
+  timestamp           DateTime  @default(now())
+
+  @@index([userId])
+  @@index([recommendationType])
+  @@index([timestamp])
+  @@index([sessionId])
+}
+
+// Search analytics
+model SearchQuery {
+  id            String    @id @default(uuid())
+  userId        String?
+  sessionId     String
+  query         String
+  resultsCount  Int
+  clickedProductId String?
+  timestamp     DateTime  @default(now())
+
+  @@index([query])
+  @@index([timestamp])
+  @@index([userId])
+}
+
+// ============================================
+// SETTINGS & CONFIGURATION
+// ============================================
+
+// Store settings (single row)
+model StoreSettings {
+  id                    String    @id @default("default")
+  
+  // Store Info
+  storeName             String    @default("My Store")
+  storeDescription      String?   
+  storeEmail            String    @default("info@store.com")
+  storePhone            String?   
+  storeAddress          String?   
+  storeCity             String?   
+  storeState            String?   
+  storeZipCode          String?   
+  storeCountry          String    @default("US")
+  
+  // Currency. The base currency is what every product's
+  // `price` is denominated in. Visitors can pick a different
+  // display currency from the storefront header; the visitor's
+  // pick is converted at render time using the most recent
+  // exchange rate from the `ExchangeRate` table.
+  currency              String    @default("USD")
+  currencySymbol        String    @default("$")
+  // before|after drives where the symbol goes when the
+  // format is not locale-derived. With Intl.NumberFormat
+  // enabled, the locale wins and this is a fallback only.
+  currencyPosition      String    @default("before")
+  // Comma-separated ISO 4217 codes the storefront lets the
+  // visitor pick from. Empty = only the base currency.
+  enabledCurrencies     String    @default("")
+  // Visitor's last-picked currency (cookie-backed). Not
+  // authoritative - a fresh visitor gets the locale default.
+  // Persisted in localStorage on the client.
+  
+  // Units
+  weightUnit            String    @default("kg")
+  dimensionUnit         String    @default("cm")
+  
+  // Date/Time
+  timezone              String    @default("UTC")
+  dateFormat            String    @default("MM/DD/YYYY")
+  
+  // Social Media
+  facebookUrl           String?   
+  instagramUrl          String?   
+  twitterUrl            String?   
+  youtubeUrl            String?   
+  
+  // SEO
+  metaTitle             String?   
+  metaDescription       String?   
+  googleAnalyticsId     String?   
+  googleTagManagerId    String?   
+  
+  // Maintenance
+  maintenanceMode       Boolean   @default(false)
+  maintenanceMessage    String?   
+  
+  // Legal
+  privacyPolicyUrl      String?   
+  termsOfServiceUrl     String?   
+  returnPolicyUrl       String?   
+  
+  // Payment gateways. A JSON string map of gatewayId -> config, e.g.
+  //   { "zarinpal": { "enabled": true, "merchantId": "...", "sandbox": false }, ... }
+  // Each gateway's secret keys live ONLY here (never in the public
+  // settings endpoint). The public endpoint returns a scrubbed
+  // metadata list so the checkout can list enabled gateways without
+  // ever seeing a credential. See modules/payments/gatewayConfig.ts.
+  paymentGateways       String    @default("{}")
+
+  // Affiliate marketing program. Default OFF — the feature is opt-in per
+  // store; affiliateRate is the default commission % applied to paid
+  // orders attributed via an affiliate link (per-affiliate overrides are
+  // set on the Affiliate row).
+  affiliateEnabled      Boolean   @default(false)
+  affiliateRate         Float     @default(10)
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ============================================
+// MULTI-CURRENCY
+// ============================================
+//
+// A "Currency" is a per-store configuration row: an ISO 4217
+// code the merchant wants the storefront to offer. The base
+// currency lives on StoreSettings.currency and is implicitly
+// always available. A row here adds a non-base currency.
+//
+// `rateToBase` is the conversion factor FROM this currency TO
+// the base. e.g. if the base is USD and the row is EUR with
+// rateToBase=1.085, then EUR 100 ≈ USD 108.50. The admin can
+// override the auto-refreshed value with a manual one
+// (`manuallySet = true`) so a refresh never clobbers what the
+// merchant deliberately chose.
+//
+// `decimalPlaces` overrides Intl.NumberFormat's locale default
+// when a currency needs a non-standard precision (JOD has 3,
+// BHD has 3, most are 2).
+model Currency {
+  id            String    @id @default(uuid())
+  code          String    @unique   // e.g. "EUR", "GBP", "JPY"
+  // Free-text label for the admin form. The storefront's
+  // Intl.NumberFormat uses the ISO code as the locale, so
+  // this is admin-only.
+  name          String
+  // The symbol is what shows up when Intl.NumberFormat can't
+  // decide (e.g. in non-locale contexts). With a locale it's
+  // overridden by the runtime formatter.
+  symbol        String
+  // Override for currencies whose Intl default isn't what the
+  // merchant wants. Null = use the runtime default.
+  decimalPlaces Int?
+  // The current rate. Stored as "rateFromBase": the number
+  // of this currency's units one base unit buys. So
+  // `rateToBase: 0.919` for EUR with base=USD means
+  // "1 USD = 0.919 EUR" (equivalently, "1 EUR = 1.088 USD").
+  //
+  // The column is named `rateToBase` in the database but the
+  // value is `rateFromBase` semantically. The name stuck
+  // from an earlier draft; the function in
+  // `currency.helpers.ts` (`convert`) uses the `rateFromBase`
+  // reading. The admin form labels the field "Rate" with
+  // help text so the merchant sees the right number.
+  rateToBase        Float
+  manuallySet       Boolean   @default(false)
+  lastFetchedAt     DateTime?
+  // Whether this currency is offered to storefront visitors.
+  // The base currency is always available; this flag is for
+  // the "enabled but not promoted" case.
+  isEnabled         Boolean   @default(true)
+  sortOrder         Int       @default(0)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([code])
+  @@index([isEnabled])
+}
+
+// Free-standing cache of historical rates. The Currency row
+// holds the *current* rate; this table lets the refresh job
+// audit a refresh or back-fill a missing one without another
+// network call. Most reads go through Currency.rateToBase.
+model ExchangeRateSnapshot {
+  id          String    @id @default(uuid())
+  code        String    // ISO 4217
+  rateToBase  Float
+  // When the job fetched this rate. Indexed for the
+  // "what was the rate on date X" query (none today, but
+  // future analytics will want it).
+  fetchedAt   DateTime  @default(now())
+
+  @@index([code, fetchedAt])
+}
+
+// Admin-editable transactional email templates (settings admin); the
+// senders in services/email.service.ts look the template up by `name`
+// and fall back to built-in defaults when none is active.
+model EmailTemplate {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  subject       String    
+  htmlContent   String    
+  textContent   String?   
+  variables     String    @default("[]")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// INVENTORY MANAGEMENT
+// ============================================
+
+model InventoryLog {
+  id                String    @id @default(uuid())
+  productId         String
+  variantId         String?   
+  quantityChange    Int       
+  previousQuantity  Int       
+  newQuantity       Int       
+  reason            String    
+  notes             String?   
+  orderId           String?   
+  createdBy         String?   
+  createdAt         DateTime  @default(now())
+
+  product           Product   @relation(fields: [productId], references: [id])
+  variant           Variant? @relation(fields: [variantId], references: [id])
+  order             Order?    @relation(fields: [orderId], references: [id])
+  creator           User?     @relation(fields: [createdBy], references: [id])
+  
+  @@index([productId])
+  @@index([createdAt])
+  @@index([reason])
+  @@index([variantId])
+  @@index([orderId])
+}
+
+// Per-product low-stock notification config (the admin's Stock alerts
+// screen; one row per product, threshold + who gets the email).
+model StockAlert {
+  id                    String    @id @default(uuid())
+  productId             String    @unique
+  lowStockThreshold     Int       @default(10)
+  outOfStockThreshold   Int       @default(0)
+  notifyEmail           String?   
+  isActive              Boolean   @default(true)
+  lastAlertSent         DateTime? 
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  product               Product   @relation(fields: [productId], references: [id])
+}
+
+// "Notify me when back in stock" subscriptions.
+//
+// Was an in-memory Map in modules/stock-alerts (lost on restart,
+// per-process - a second API instance or a deploy silently wiped every
+// subscription and the "N people want this" counters). Now a real table
+// so the data survives and the endpoint scales out with the API.
+// userId is 'anonymous' for guests; email carries the guest address.
+// The (product, variant) key mirrors the old in-memory key.
+model StockAlertSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  email     String
+  productId String
+  variantId String?
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([variantId])
+}
+
+// ============================================
+// INVENTORY EXTENSIONS
+// ============================================
+//
+// Everything below extends the original InventoryLog / StockAlert pair
+// to cover: per-warehouse stock, stock reservations (cart-time holds),
+// cycle counts, auto-reorder rules, multi-channel stock, and the 3PL
+// sync log. Each model is small and focused; the orchestrating logic
+// lives in apps/api/src/modules/inventory/inventory.service.ts.
+
+// A physical location where stock is held. A brand with one warehouse
+// just has one row; multi-location retailers have many. Stock moves
+// between warehouses via the `WarehouseTransfer` model.
+model Warehouse {
+  id            String    @id @default(uuid())
+  name          String
+  code          String    @unique     // e.g. "DAL-01", "BER-EU"
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  region        String?   // state / province
+  country       String?   // ISO-2 ("US", "DE")
+  postalCode    String?
+  isActive      Boolean   @default(true)
+  isDefault     Boolean   @default(false)  // exactly one should be true; helper enforces
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stocks        WarehouseStock[]
+  transfersFrom WarehouseTransfer[] @relation("TransferFrom")
+  transfersTo   WarehouseTransfer[] @relation("TransferTo")
+  takeItems     StockTakeItem[]
+  stockTakes    StockTake[]
+  reorderRules  ReorderRule[]
+  reorderDrafts ReorderDraft[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// Per-warehouse stock for a product or variant. The parent product's
+// `quantity` is denormalised: a writer to WarehouseStock is responsible
+// for updating the parent too (the inventory service does this in
+// `applyDelta`).
+model WarehouseStock {
+  id            String    @id @default(uuid())
+  warehouseId   String
+  productId     String
+  variantId     String?
+  quantity      Int       @default(0)
+  // Soft-reserved count (held by active carts or backorders) inside
+  // this warehouse. Available = quantity - reserved.
+  reserved      Int       @default(0)
+  // Reorder point: when `quantity - reserved <= reorderPoint`, the
+  // auto-reorder job (if configured) creates a draft PO.
+  reorderPoint  Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       Variant? @relation(fields: [variantId], references: [id])
+
+  @@unique([warehouseId, productId, variantId])
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// Movement of stock between warehouses. status="in_transit" is a
+// soft hold on the source; "completed" credits the destination and
+// debits the source; "cancelled" releases the hold.
+model WarehouseTransfer {
+  id            String    @id @default(uuid())
+  fromWarehouseId String
+  toWarehouseId   String
+  productId     String
+  variantId     String?
+  quantity      Int
+  status        String    @default("in_transit")  // in_transit | completed | cancelled
+  notes         String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+
+  fromWarehouse Warehouse @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       Variant? @relation(fields: [variantId], references: [id])
+
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
+}
+
+// A reservation tied to a CartItem (or an Order, in the case of a
+// backorder). `releasedAt` is set when the reservation expires or the
+// cart is abandoned. The inventory service reads `reservedUntil` to
+// decide if a hold is still active.
+model StockReservation {
+  id            String    @id @default(uuid())
+  cartItemId    String?   @unique
+  productId     String
+  variantId     String?
+  warehouseId   String?   // null = any warehouse (default pool)
+  quantity      Int
+  // When the reservation lapses if not consumed.
+  reservedUntil DateTime
+  releasedAt    DateTime?
+  // Why the reservation exists.
+  reason        String    @default("cart_hold")  // cart_hold | backorder | manual
+  // Origin id, polymorphic. For cart_hold: cartItemId. For backorder: orderId.
+  originType    String?   // cart | order | manual
+  originId      String?
+  createdAt     DateTime  @default(now())
+
+  cartItem      CartItem? @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       Variant? @relation(fields: [variantId], references: [id])
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([reservedUntil])
+  @@index([releasedAt])
+}
+
+// A cycle count (a.k.a. stock-take) session. Many StockTakeItems
+// are counted under one session, then applied atomically.
+model StockTake {
+  id            String    @id @default(uuid())
+  warehouseId   String
+  name          String
+  status        String    @default("in_progress")  // in_progress | applied | cancelled
+  notes         String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  appliedAt     DateTime?
+  cancelledAt   DateTime?
+
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  items         StockTakeItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+}
+
+// One row per product (optionally per variant) counted in a StockTake;
+// applying the take adjusts system stock to `counted` and logs the
+// variance.
+model StockTakeItem {
+  id            String    @id @default(uuid())
+  stockTakeId   String
+  productId     String
+  variantId     String?
+  warehouseId   String
+  expected      Int       // book quantity when the take started
+  counted       Int       // what the staffer counted
+  variance      Int       // counted - expected
+  notes         String?
+
+  stockTake     StockTake @relation(fields: [stockTakeId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([stockTakeId])
+  @@index([productId])
+}
+
+// Auto-reorder rules. When a product's effective stock drops below
+// `threshold`, the auto-reorder job (cron) creates a ReorderDraft
+// (a stub PO). The draft must be approved by a manager before any
+// real action is taken.
+model ReorderRule {
+  id            String    @id @default(uuid())
+  productId     String
+  variantId     String?
+  warehouseId   String?
+  threshold     Int       @default(10)
+  reorderQty    Int       @default(50)
+  supplierName  String?   // free-text for now; would be a Supplier model in v2
+  supplierEmail String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  warehouse     Warehouse? @relation(fields: [warehouseId], references: [id])
+  drafts        ReorderDraft[]
+
+  @@index([productId])
+  @@index([isActive])
+}
+
+// A purchase-order draft created by an auto-reorder rule (or the
+// manual run). DRAFTS ONLY until the admin approves/sends it - the
+// scheduler never creates a real PO behind the admin's back.
+model ReorderDraft {
+  id            String    @id @default(uuid())
+  ruleId        String?
+  productId     String
+  variantId     String?
+  warehouseId   String?
+  quantity      Int
+  status        String    @default("draft")  // draft | sent | cancelled | received
+  supplierName  String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  sentAt        DateTime?
+  cancelledAt   DateTime?
+  receivedAt    DateTime?
+
+  rule          ReorderRule? @relation(fields: [ruleId], references: [id])
+  product       Product   @relation(fields: [productId], references: [id])
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  warehouse     Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([status])
+  @@index([productId])
+}
+
+// Sales channel (e.g. own-store, Amazon, eBay). Each product can have
+// per-channel stock: the same SKU can be "5 on website, 0 on Amazon".
+model Channel {
+  id            String    @id @default(uuid())
+  name          String    @unique       // "own_store", "amazon_us", ...
+  displayName   String
+  type          String    @default("online")  // online | marketplace | retail
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stocks        ChannelStock[]
+  syncEvents    ThreePLSyncEvent[]
+
+  @@index([isActive])
+}
+
+// Per-channel stock quantity (3PL / marketplace channel view of a
+// product/variant; unique per channel+product+variant).
+model ChannelStock {
+  id            String    @id @default(uuid())
+  channelId     String
+  productId     String
+  variantId     String?
+  quantity      Int       @default(0)
+  updatedAt     DateTime  @updatedAt
+
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       Variant? @relation(fields: [variantId], references: [id])
+
+  @@unique([channelId, productId, variantId])
+  @@index([channelId])
+  @@index([productId])
+}
+
+// Audit log of every stock-changing event from a 3PL or marketplace
+// sync. Useful for reconciling external orders against the local
+// order list.
+model ThreePLSyncEvent {
+  id            String    @id @default(uuid())
+  channelId     String
+  provider      String    // "amazon", "ebay", "shipbob", ...
+  externalSku   String
+  internalProductId String?
+  internalVariantId String?
+  delta         Int       // signed
+  reason        String?   // "order", "return", "manual_adjust", ...
+  externalRef   String?   // e.g. the channel-side order id
+  raw           String?   // JSON string of the incoming webhook
+  receivedAt    DateTime  @default(now())
+
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([provider])
+  @@index([receivedAt])
+}
+
+// Webhook signature secret for a provider. Stored as a free-text
+// value; rotated by writing a new row and marking the old inactive.
+model WebhookSecret {
+  id            String    @id @default(uuid())
+  provider      String    @unique
+  secret        String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  rotatedAt     DateTime?
+
+  @@index([provider])
+}
+
+// ============================================
+// SHIPPING MANAGEMENT
+// ============================================
+
+model ShippingZone {
+  id            String    @id @default(uuid())
+  name          String    
+  countries     String    @default("[]")
+  states        String    @default("[]")
+  zipCodes      String    @default("[]")
+  isActive      Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  methods       ShippingMethod[]
+  @@index([isActive])
+}
+
+// A priced shipping option belonging to a zone. `type` selects the
+// pricing formula: flat / weight / price (percentage of order) /
+// item_count; the min/max + freeShippingThreshold fields gate when the
+// method is offered (see the API's /api/shipping/calculate).
+model ShippingMethod {
+  id                    String    @id @default(uuid())
+  zoneId                String    
+  name                  String    
+  description           String?   
+  type                  String    
+  baseRate              Float     @default(0)
+  
+  weightUnitRate        Float?    
+  minWeight             Float?    
+  maxWeight             Float?    
+  
+  pricePercentage       Float?    
+  minOrderAmount        Float?    
+  maxOrderAmount        Float?    
+  
+  itemCountRate         Float?    
+  
+  freeShippingThreshold Float?    
+  
+  minDeliveryDays       Int       @default(1)
+  maxDeliveryDays       Int       @default(7)
+  
+  isActive              Boolean   @default(true)
+  sortOrder             Int       @default(0)
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  zone                  ShippingZone @relation(fields: [zoneId], references: [id])
+  orders                Order[]
+  
+  @@index([zoneId])
+}
+
+// ============================================
+// TAX CONFIGURATION
+// ============================================
+
+model TaxRate {
+  id            String    @id @default(uuid())
+  name          String    
+  rate          Float     
+  country       String    
+  state         String?   
+  city          String?   
+  zipCode       String?   
+  taxClass      String    @default("standard")
+  priority      Int       @default(0)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([country])
+  @@index([state])
+  @@index([taxClass])
+}
+
+// Product tax class (e.g. 'zero' / 'digital' -> 0%). A class can
+// override the location-based rate for its products at calculate time;
+// isDefault marks the class used when a product has none set.
+model TaxClass {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  description   String?   
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  products      Product[]
+}
+
+// ============================================
+// MENU MANAGEMENT
+// ============================================
+
+model Menu {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  location      String    @default("header")  // header, footer, sidebar
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items         MenuItem[]
+  
+  @@index([location])
+  @@index([isActive])
+}
+
+// One nav item; parentId gives the two-level tree (dropdowns), ordered
+// by sortOrder within its level. The storefront reads active items
+// only, per menu location.
+model MenuItem {
+  id            String    @id @default(uuid())
+  menuId        String
+  parentId      String?
+  label         String
+  url           String
+  icon          String?
+  target        String    @default("_self")  // _self, _blank
+  sortOrder     Int       @default(0)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  menu          Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  parent        MenuItem? @relation("MenuTree", fields: [parentId], references: [id])
+  children      MenuItem[] @relation("MenuTree")
+  
+  @@index([menuId])
+  @@index([parentId])
+  @@index([sortOrder])
+}
+// A storefront banner (hero / promo / strip) with an optional
+// schedule; the public API only returns active banners inside their
+// [startsAt, endsAt] window.
+model Banner {
+  id            String    @id @default(uuid())
+  title         String
+  subtitle      String?
+  description   String?
+  image         String
+  mobileImage   String?
+  linkUrl       String?
+  buttonText    String?
+  secondaryText String?
+  secondaryUrl  String?
+  badge         String?
+  textColor     String    @default("#ffffff")
+  overlayColor  String    @default("rgba(0,0,0,0.35)")
+  align         String    @default("left")   // left, center, right
+  position      String    @default("hero")   // hero, promo, strip
+  sortOrder     Int       @default(0)
+  isActive      Boolean   @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([position])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+/// Visual theme controlled from Admin → Appearance.
+/// A single row (id = "default"), mirroring StoreSettings.
+model ThemeSettings {
+  id                String   @id @default("default")
+
+  // Brand colours
+  primaryColor      String   @default("#111111")
+  primaryTextColor  String   @default("#ffffff")
+  accentColor       String   @default("#2563eb")
+  bodyBg            String   @default("#ffffff")
+  cardBg            String   @default("#ffffff")
+  bodyText          String   @default("#111111")
+  mutedText         String   @default("#666666")
+  borderColor       String   @default("#e5e5e5")
+  headerBg          String   @default("#ffffff")
+  headerText        String   @default("#111111")
+  footerBg          String   @default("#fafafa")
+  footerText        String   @default("#111111")
+  priceColor        String   @default("#111111")
+  saleColor         String   @default("#dc2626")
+
+  // Typography
+  fontFamily        String   @default("system")
+  baseFontSize      Int      @default(16)
+  headingWeight     Int      @default(800)
+
+  // Shape & spacing
+  radius            Int      @default(8)
+  buttonRadius      Int      @default(8)
+  containerWidth    Int      @default(1200)
+  cardShadow        String   @default("soft")   // none | soft | strong
+
+  // Layout toggles
+  productsPerRow    Int      @default(4)
+  showTrustBar      Boolean  @default(true)
+  showTestimonials  Boolean  @default(true)
+  showStats         Boolean  @default(true)
+  showNewsletter    Boolean  @default(true)
+  showDealCountdown Boolean  @default(true)
+  showCategories    Boolean  @default(true)
+  showFeatured      Boolean  @default(true)
+  showNewArrivals   Boolean  @default(true)
+
+  // Announcement bar
+  announcementText  String?
+  announcementLink  String?
+  announcementBg    String   @default("#111111")
+  announcementText2 String   @default("#ffffff")
+  showAnnouncement  Boolean  @default(false)
+
+  // Escape hatch
+  customCss         String?
+
+  // Active theme. Foreign key to the platform's theme registry
+  // (apps/web/lib/themeRegistry.ts). Default 'default' for new
+  // installs. The web app reads this and applies the theme's
+  // tokens; per-store overrides still work for individual
+  // variable tweaks. A change here is what makes the storefront
+  // look like a different theme.
+  activeTheme       String   @default("default")
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Home page builder
+//
+// Each row is one block on the storefront home page. Order, visibility and the
+// copy inside the block are all admin-editable and stored here, so the home
+// page is data-driven instead of hardcoded in HomeView.tsx.
+//
+// `config` is a JSON string (SQLite has no JSON column) holding the block's
+// type-specific payload - e.g. the four trust-bar items, or the testimonial
+// list. Unknown/invalid JSON falls back to the shipped defaults rather than
+// breaking the page.
+// ---------------------------------------------------------------------------
+model HomeSection {
+  id        String   @id @default(uuid())
+  key       String   @unique          // stable identifier: trustBar, categories, ...
+  type      String                     // which renderer draws it
+  title     String?
+  subtitle  String?
+  isVisible Boolean  @default(true)
+  sortOrder Int      @default(0)
+  config    String?                    // JSON string, block-specific
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Custom storefront pages (CMS)
+//
+// Pages like /privacy, /terms and /faq shipped as hardcoded .tsx files, so a
+// shop owner could not change a word without editing source and redeploying.
+// This model backs admin-authored pages served at /p/<slug>.
+//
+// `content` is sanitised HTML - see utils/sanitizeRichText.ts. It is rendered
+// with dangerouslySetInnerHTML, so it MUST be cleaned on write, never on read.
+// ---------------------------------------------------------------------------
+model Page {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  title           String
+  content         String   @default("")
+  excerpt         String?
+
+  // What kind of page this is. The pageType picks the URL prefix
+  // (info / legal / help) and the footer column. We default to
+  // "info" because that's the bucket most CMS pages fall into
+  // ("About us", "Sustainability", "Press"), and because the
+  // existing rows (created before this column existed) belong
+  // there too. Pages without a recognised type 404 in the
+  // type-aware renderer so an un-migrated row can never
+  // accidentally appear at a wrong URL.
+  pageType        String   @default("info")   // info | legal | help
+
+  // draft pages are reachable only by an admin preview; published pages are
+  // public and appear in the sitemap.
+  status          String   @default("draft")   // draft | published
+
+  // SEO. Empty values fall back to title/excerpt at render time.
+  metaTitle       String?
+  metaDescription String?
+
+  // Show this page in the footer "Legal"/"Support" style lists.
+  showInFooter    Boolean  @default(false)
+  sortOrder       Int      @default(0)
+
+  // Layout blocks as a JSON string (array of { id, type, config }).
+  // Lets the admin compose a page from blocks (heading, image, two
+  // columns, callout, button, divider, spacer, rich text) instead of a
+  // single content blob - the same block model as the home builder.
+  // Null/empty means "no blocks" and the storefront renders `content`.
+  // Stored as a string (not Json) to match the SQLite provider and the
+  // dimensions/metaKeywords/tags pattern. HTML fields sanitised on write.
+  blocks          String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  publishedAt     DateTime?
+
+  @@index([status])
+  @@index([slug])
+  @@index([pageType])
+}
+
+// ---------------------------------------------------------------------------
+// Blog
+//
+// Deliberately a SEPARATE model from Page rather than a `type` column on it.
+// A post carries things a static page never does - cover image, author,
+// publish date, tags, reading time - and it is listed chronologically at
+// /blog while pages are standalone at /p/<slug>. Overloading one table would
+// mean half its columns are always null.
+//
+// `content` is sanitised HTML (utils/sanitizeRichText.ts). It is rendered with
+// dangerouslySetInnerHTML, so it MUST be cleaned on write, never on read.
+// ---------------------------------------------------------------------------
+model BlogPost {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  title           String
+  content         String   @default("")
+  excerpt         String?
+
+  // Layout blocks as a JSON string (array of { id, type, config }) - the
+  // same block model as the page CMS (see the Page model). Null/empty
+  // means "no blocks": the storefront renders the legacy `content` column,
+  // and the editor loads it as a single rich-text section. Stored as a
+  // string to match the SQLite provider and the tags/dimensions pattern.
+  blocks          String?
+
+  coverImage      String?
+
+  // Free-text author name rather than a User relation: shops often publish
+  // under a shop name or a staff member who has no login.
+  author          String?
+
+  // JSON string array, e.g. ["shipping","guides"]. SQLite has no array type;
+  // parsed in one place (fromRow) so a corrupt value cannot break the page.
+  tags            String?
+
+  status          String   @default("draft")   // draft | published
+
+  // Pinned posts sort to the top of /blog regardless of date.
+  isFeatured      Boolean  @default(false)
+
+  // SEO. Empty values fall back to title/excerpt at render time.
+  metaTitle       String?
+  metaDescription String?
+
+  // Denormalised counter. Cheap to read on a list page; incrementing it is
+  // fire-and-forget so a failure never blocks rendering the post.
+  viewCount       Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  publishedAt     DateTime?
+
+  @@index([status])
+  @@index([slug])
+  @@index([publishedAt])
+}
+
+// ============================================
+// STOREFRONT FORMS (formerly in-memory)
+// ============================================
+//
+// Contact messages and newsletter subscribers used to live in module-level
+// arrays/Sets (modules/contact, modules/newsletter): lost on every restart
+// and invisible to a second API instance. These tables make both durable;
+// the routes' request/response contracts are unchanged.
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  // --- consent + deliverability -------------------------------------------
+  // The original model was id/email/createdAt only: no way to unsubscribe and
+  // no record of consent, so the list was legally unmailable under
+  // GDPR/CAN-SPAM even though the API happily collected addresses.
+  //
+  // status: 'subscribed' | 'unsubscribed'. Unsubscribes are a status change,
+  // never a delete - deleting the row would let a later signup silently
+  // re-add someone who opted out, and destroys the proof that they left.
+  status         String    @default("subscribed")
+  // Opaque, unguessable token for one-click unsubscribe links. Unique so a
+  // token identifies exactly one subscriber; nullable only for rows created
+  // before this migration (backfilled below).
+  unsubscribeToken String? @unique
+  // When and from where consent was given - the evidence regulators ask for.
+  consentAt      DateTime?
+  // 'footer' | 'checkout' | 'popup' | 'import' ...
+  source         String?
+  // Truncated IP at opt-in time. Additional consent evidence.
+  consentIp      String?
+  unsubscribedAt DateTime?
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Abandoned-cart recovery.
+//
+// Everything needed already existed - CartItem is persisted server-side with
+// updatedAt, users have emails, there is a job runner with a distributed lock,
+// and email.service.ts renders templates - but nothing joined them up.
+//
+// One row per (user, recovery attempt). The unique constraint on
+// (userId, stage) is what makes the sweep idempotent: re-running the job for
+// the same user and stage is a no-op instead of a second email.
+// ---------------------------------------------------------------------------
+model AbandonedCartEmail {
+  id         String    @id @default(uuid())
+  userId     String
+  // Which reminder in the sequence: 1 = first nudge, 2 = follow-up.
+  stage      Int
+  sentAt     DateTime  @default(now())
+  // Snapshot of what was in the cart when we mailed, for reporting.
+  itemCount  Int       @default(0)
+  cartValue  Float     @default(0)
+  // Set when an order is placed by this user after the email went out, so
+  // recovery rate is measurable rather than guessed.
+  recoveredAt DateTime?
+  orderId    String?
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stage])
+  @@index([sentAt])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Per-customer coupon usage.
+//
+// Coupon.usedCount is a single global counter, so "one per customer" and
+// "new customers only" were impossible to express, and a single-use code
+// could be shared publicly and drained by strangers.
+// ---------------------------------------------------------------------------
+model CouponRedemption {
+  id        String   @id @default(uuid())
+  couponId  String
+  userId    String
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([couponId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Product bundles ("frequently bought together", priced as a set).
+//
+// The recommendation data already existed via /bought-together, but there was
+// no way to monetise it: no bundle entity, no bundle price.
+// ---------------------------------------------------------------------------
+model Bundle {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  // Absolute price for the whole set when discountType = 'fixed', or a
+  // percentage off the summed item prices when 'percentage'.
+  discountType String  @default("percentage")
+  discountValue Float  @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       BundleItem[]
+
+  @@index([isActive])
+  @@index([slug])
+}
+
+model BundleItem {
+  id        String  @id @default(uuid())
+  bundleId  String
+  productId String
+  quantity  Int     @default(1)
+
+  bundle    Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, productId])
+  @@index([bundleId])
+}
+
+// ---------------------------------------------------------------------------
+// Email capture (exit-intent / welcome-discount popup).
+//
+// The newsletter had no acquisition mechanism at all. A capture row records
+// the popup impression -> submission funnel so the popup can be judged on
+// conversion rather than vibes.
+// ---------------------------------------------------------------------------
+model EmailCapture {
+  id         String   @id @default(uuid())
+  email      String
+  // 'exit_intent' | 'timed' | 'inline'
+  trigger    String   @default("exit_intent")
+  // The coupon code handed out in exchange for the address, if any.
+  couponCode String?
+  createdAt  DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+// CSRF double-submit tokens (see middleware/csrf.ts).
+//
+// The guard itself is not mounted (the API authenticates with Bearer
+// JWTs, which are CSRF-immune, and the web client does not use the
+// x-session-id/x-csrf-token flow). The token store was a module-level
+// Map - now a table, so the middleware is safe to mount later without
+// per-process state: two API instances agree on issued tokens.
+// One row per sessionId; minting refreshes token + expiry.
+model CsrfToken {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// Distributed lock (DB lease) guarding the in-process schedulers so only one
+// API instance runs each job when the API is scaled behind a load balancer.
+// One row per job name; a row is "held" while its heldUntil is in the future.
+// See jobs/distributedLock.ts.
+model ScheduledJobLock {
+  name      String   @id
+  token     String
+  heldUntil DateTime
+  updatedAt DateTime @updatedAt
+
+  @@map("scheduled_job_lock")
+}
+
+// ---------------------------------------------------------------------------
+// Per-locale content translations.
+//
+// The storefront ships in en / ku / ar / fa / tr (see apps/web/lib/i18n.ts).
+// Product, Category, Page and BlogPost rows carry a single default-language
+// set of content columns (name, description, title, content, ...). Those
+// columns are the store's default language (the fallback when a translation
+// is missing). This table holds optional per-locale overrides for the SAME
+// fields, keyed by entity type + entity id + locale, with the translated
+// fields stored as a JSON string (matching the dimensions/metaKeywords/blocks
+// JSON-string pattern on the SQLite provider).
+//
+// entityType is one of 'product' | 'category' | 'page' | 'blogPost'. The set
+// of translatable fields per entity is fixed in the API (see
+// modules/contentTranslations/translatableFields.ts), so a rogue row cannot
+// smuggle arbitrary keys into responses - the writer strips unknowns.
+//
+// A product with no Kurdish row simply renders its default-language columns;
+// a product with one gets the Kurdish name/description overlaid. Because a
+// row is (entityType, entityId, locale), adding a sixth language later is
+// purely new rows - no schema change.
+// ---------------------------------------------------------------------------
+model ContentTranslation {
+  id         String   @id @default(uuid())
+  entityType String // 'product' | 'category' | 'page' | 'blogPost'
+  entityId   String
+  locale     String // 'ku' | 'ar' | 'fa' | 'tr'
+  // JSON string of the translated fields, e.g. { "name": "...", "description": "..." }.
+  data       String   @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([entityType, entityId, locale])
+  @@index([entityType, entityId])
+  @@map("content_translation")
+}

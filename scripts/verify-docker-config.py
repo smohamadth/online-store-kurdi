@@ -43,15 +43,12 @@ def read(rel):
 # ---------------------------------------------------------------------------
 # 1. Provider vs compose DATABASE_URL
 # ---------------------------------------------------------------------------
-print("=== 1. schema provider matches the compose DATABASE_URL ===")
+print("=== 1. every compose DATABASE_URL has a matching schema + migrations ===")
 
-schema = read("apps/api/prisma/schema.prisma")
-ds = re.search(r"datasource\s+\w+\s*\{([\s\S]*?)\}", schema)
-provider = None
-if ds:
-    m = re.search(r'provider\s*=\s*"([^"]+)"', ds.group(1))
-    provider = m.group(1) if m else None
-check("schema.prisma declares a provider", provider is not None, f"provider={provider}")
+# The project supports both providers: SQLite for development and CI, and
+# PostgreSQL for deployment. scripts/entrypoint-api.sh picks the schema at
+# runtime from DATABASE_URL, so what matters is that whichever URL a compose
+# file uses, the corresponding schema AND migration set both exist and agree.
 
 EXPECTED = {
     "sqlite": ("file:",),
@@ -59,17 +56,52 @@ EXPECTED = {
     "mysql": ("mysql://",),
 }
 
-# The migration history is locked to one provider; migrations written for
-# SQLite cannot be applied to Postgres, so this must agree too.
-lock_provider = None
-try:
-    lm = re.search(r'provider\s*=\s*"([^"]+)"', read("apps/api/prisma/migrations/migration_lock.toml"))
-    lock_provider = lm.group(1) if lm else None
-except FileNotFoundError:
-    pass
-check("migration_lock.toml agrees with schema.prisma",
-      lock_provider == provider,
-      f"lock={lock_provider} schema={provider}")
+# (label, schema file, migrations dir)
+VARIANTS = [
+    ("sqlite", "apps/api/prisma/schema.prisma", "apps/api/prisma/migrations"),
+    ("postgresql", "apps/api/prisma/schema.postgres.prisma", "apps/api/prisma/migrations-postgres"),
+]
+
+
+def provider_of(rel):
+    try:
+        text = read(rel)
+    except FileNotFoundError:
+        return None
+    ds = re.search(r"datasource\s+\w+\s*\{([\s\S]*?)\}", text)
+    if not ds:
+        return None
+    m = re.search(r'provider\s*=\s*"([^"]+)"', ds.group(1))
+    return m.group(1) if m else None
+
+
+available = {}
+for label, schema_file, migrations_dir in VARIANTS:
+    prov = provider_of(schema_file)
+    check(f"{schema_file} declares provider '{label}'", prov == label, f"got {prov}")
+    if prov != label:
+        continue
+
+    lock_path = os.path.join(migrations_dir, "migration_lock.toml")
+    try:
+        lock = re.search(r'provider\s*=\s*"([^"]+)"', read(lock_path))
+        lock_provider = lock.group(1) if lock else None
+    except FileNotFoundError:
+        lock_provider = None
+    # The migration history is locked to one provider; a mismatch here means
+    # `migrate deploy` would refuse to run.
+    check(f"{lock_path} agrees with its schema", lock_provider == label,
+          f"lock={lock_provider} schema={label}")
+
+    has_migration = os.path.isdir(os.path.join(ROOT, migrations_dir)) and any(
+        f.endswith(".sql")
+        for root, _dirs, files in os.walk(os.path.join(ROOT, migrations_dir))
+        for f in files
+    )
+    check(f"{migrations_dir} contains at least one migration", has_migration)
+
+    if lock_provider == label and has_migration:
+        available[label] = True
 
 for compose in ("docker/docker-compose.prod.yml", "docker/docker-compose.yml"):
     try:
@@ -81,12 +113,17 @@ for compose in ("docker/docker-compose.prod.yml", "docker/docker-compose.yml"):
         check(f"{compose}: no DATABASE_URL to check", True, "not set here")
         continue
     for url in urls:
-        # Strip a ${VAR:?...} / ${VAR:-...} wrapper down to the literal scheme.
+        matched = [p for p, prefixes in EXPECTED.items() if url.startswith(prefixes)]
+        prov = matched[0] if matched else None
         scheme = url.split("://")[0] + "://" if "://" in url else url.split(":")[0] + ":"
-        prefixes = EXPECTED.get(provider or "", ())
-        ok = any(url.startswith(p) for p in prefixes)
-        check(f"{compose}: DATABASE_URL matches provider '{provider}'",
-              ok, f"url starts {scheme}, expected one of {prefixes}")
+        check(f"{compose}: DATABASE_URL scheme is one we support",
+              prov is not None,
+              scheme if prov else f"unrecognised scheme {scheme}")
+        if prov:
+            ok = available.get(prov, False)
+            check(f"{compose}: a '{prov}' schema + migration set exists", ok,
+                  "ready" if ok else
+                  f"URL is {scheme} but no usable {prov} schema/migrations were found")
 
 
 # ---------------------------------------------------------------------------

@@ -166,11 +166,21 @@ repo root). Highlights:
 
 ### Switching to PostgreSQL (optional)
 
-1. Set `provider = "postgresql"` in `apps/api/prisma/schema.prisma`
-2. Point `DATABASE_URL` at your instance, e.g.
+Nothing to edit — the PostgreSQL schema and migrations are already
+committed (`prisma/schema.postgres.prisma`, `prisma/migrations-postgres`).
+
+1. Point `DATABASE_URL` at your instance, e.g.
    `postgresql://store_user:store_password@localhost:5432/store_db`
    (the dev compose file already provides one with those credentials)
-3. `cd apps/api && npx prisma migrate dev` to build a fresh schema
+2. `cd apps/api && npx prisma migrate deploy --schema prisma/schema.postgres.prisma`
+3. `npx prisma generate --schema prisma/schema.postgres.prisma`
+
+Under Docker this is automatic: the entrypoint detects a `postgres://` URL
+and selects that schema itself.
+
+After changing `schema.prisma`, regenerate the PostgreSQL variant with
+`python3 scripts/generate-postgres-baseline.py --write` — a CI test fails if
+the two drift apart.
 
 The code is provider-neutral: it avoids SQLite-incompatible filters
 (`mode: 'insensitive'`) by doing small in-memory lookups instead, so
@@ -518,11 +528,17 @@ The installer generates fresh random secrets (`JWT_SECRET`,
 `mail` profile), converges the DB on first boot and seeds through the API
 container.
 
-The stack runs on **SQLite** by default, matching `provider` in
-`schema.prisma` — the database file lives on the `db_data` volume so it
-survives container replacement. PostgreSQL is opt-in: see §5, then start it
-with `docker compose --profile postgres up`. Note that the committed
-migration history is locked to SQLite, so switching means regenerating it.
+The Docker stack runs on **PostgreSQL** (data on the `postgres_data`
+volume). Development and CI still run on **SQLite** — `scripts/entrypoint-api.sh`
+reads `DATABASE_URL` and selects the matching schema at runtime, so the same
+image serves either.
+
+Because the committed SQLite history cannot be replayed on PostgreSQL (it uses
+PRAGMA table rebuilds and a `randomblob()` backfill), PostgreSQL gets a single
+generated baseline in `prisma/migrations-postgres`, alongside a generated
+`prisma/schema.postgres.prisma`. Both come from `schema.prisma` via
+`python3 scripts/generate-postgres-baseline.py --write`; regenerate them after
+any schema change, or `postgresBaseline.test.ts` fails.
 Full details: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** (Mode A Docker,
 Mode B bare-metal).
 
