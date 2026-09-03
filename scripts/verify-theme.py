@@ -320,8 +320,19 @@ def main():
 
             # Admin isolation: dashboard stays on its fixed palette while
             # the storefront is dark.
+            #
+            # The API login above only gives THIS SCRIPT a token; the browser
+            # has no session of its own, so /admin bounced to /login and the
+            # shell never rendered (the check reported NO-SHELL). Sign in
+            # through the real form first, as the other admin suites do.
+            goto(page, f"{WEB}/login")
+            page.fill('input[type="email"]', "admin@store.com")
+            page.fill('input[type="password"]', "admin123")
+            page.get_by_role("button", name="Sign In", exact=True).click()
+            page.wait_for_timeout(3500)
+
             goto(page, f"{WEB}/admin")
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(1200)
             # The admin shell pins its palette with a direct backgroundColor,
             # NOT by redefining --body-bg (ThemeProvider sets that on :root and
             # the admin deliberately ignores it). Asserting on the variable
