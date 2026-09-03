@@ -12,11 +12,46 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { env } from '../../config/environment';
 import { sendAbandonedCartEmail } from '../../services/email.service';
-import { buildUnsubscribeUrl } from '../newsletter/newsletter.helpers';
-import { UNSUBSCRIBED } from '../newsletter/newsletter.helpers';
+import {
+  buildUnsubscribeUrl, generateUnsubscribeToken, SUBSCRIBED, UNSUBSCRIBED,
+} from '../newsletter/newsletter.helpers';
 import {
   decideRecoveryEmail, MAX_AGE_HOURS, type CartCandidate,
 } from './abandonedCart.helpers';
+
+/**
+ * Guarantee the address has an unsubscribe token.
+ *
+ * Creates a row in the 'subscribed' state only in the sense that the customer
+ * is currently reachable for transactional-adjacent recovery mail; the point
+ * is that they now have a working opt-out. consentAt is deliberately NULL and
+ * the source records how the row came to exist, so this is never mistaken for
+ * marketing consent the customer actually gave.
+ */
+async function ensureUnsubscribeToken(email: string, existingId: string | null) {
+  const normalized = email.trim().toLowerCase();
+  try {
+    if (existingId) {
+      return await prisma.newsletterSubscriber.update({
+        where: { id: existingId },
+        data: { unsubscribeToken: generateUnsubscribeToken() },
+      });
+    }
+    return await prisma.newsletterSubscriber.create({
+      data: {
+        email: normalized,
+        status: SUBSCRIBED,
+        // No consent was given - this row exists so the opt-out link works.
+        consentAt: null,
+        source: 'abandoned-cart',
+        unsubscribeToken: generateUnsubscribeToken(),
+      },
+    });
+  } catch (err) {
+    logger.error('Failed to mint an unsubscribe token:', err);
+    return null;
+  }
+}
 
 export type SweepResult = {
   considered: number;
@@ -140,10 +175,31 @@ export async function runAbandonedCartSweep(opts: {
         continue;
       }
 
-      const subscriber = optOut as any;
+      // Every marketing email must carry a WORKING one-click unsubscribe.
+      //
+      // A customer who never joined the newsletter has no subscriber row, so
+      // there was no token and the link came out as `?token=` - which the
+      // endpoint rejects with 400. That is a dead unsubscribe link on
+      // marketing mail: a CAN-SPAM/GDPR violation and a guaranteed spam
+      // complaint. Mint a suppression row for them instead, so the link works
+      // and the opt-out is recorded for every future sweep.
+      let subscriber = optOut as any;
+      if (!subscriber?.unsubscribeToken) {
+        subscriber = await ensureUnsubscribeToken(cand.email!, subscriber?.id ?? null);
+      }
+      if (!subscriber?.unsubscribeToken) {
+        // Could not guarantee a working opt-out link, so do not send. Release
+        // the claim first or this user is silently skipped forever.
+        bump('no unsubscribe token');
+        await prisma.abandonedCartEmail
+          .delete({ where: { id: claimed.id } })
+          .catch(() => undefined);
+        continue;
+      }
+
       const unsubscribeUrl = buildUnsubscribeUrl(
         env.FRONTEND_URL,
-        subscriber?.unsubscribeToken ?? '',
+        subscriber.unsubscribeToken,
       );
 
       const ok = await sendAbandonedCartEmail({

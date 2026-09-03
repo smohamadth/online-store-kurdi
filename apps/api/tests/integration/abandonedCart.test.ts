@@ -299,3 +299,114 @@ describe('GET /api/marketing/abandoned-carts/stats', () => {
       .expect(403);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Every marketing email must carry a WORKING one-click unsubscribe link.
+//
+// Regression: the unsubscribe URL was built from the newsletter subscriber's
+// token, but a customer who never joined the newsletter has no subscriber row.
+// The link came out as `?token=` with an empty value, which the endpoint
+// rejects with 400 - a dead opt-out link on marketing mail (CAN-SPAM/GDPR)
+// and a guaranteed spam complaint.
+// ---------------------------------------------------------------------------
+describe('unsubscribe link in the recovery email', () => {
+  it('works for a customer who never joined the newsletter', async () => {
+    const { user } = await authHeader();
+    const p = await createProduct({ price: 25, quantity: 10 });
+    await abandonedCart(user.id, p.id, 2);
+
+    // No newsletter subscription exists for this user at all.
+    const before = await mockPrisma.newsletterSubscriber.findMany({});
+    expect(before).toHaveLength(0);
+
+    expect((await runAbandonedCartSweep()).sent).toBe(1);
+
+    // A suppression row is minted so the opt-out link resolves.
+    const sub = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+    expect(sub).toBeTruthy();
+    expect(sub.unsubscribeToken).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('marks the minted row as having given no marketing consent', async () => {
+    // The row exists so the opt-out works, NOT because the customer agreed to
+    // marketing. Recording consent here would manufacture evidence.
+    const { user } = await authHeader();
+    const p = await createProduct({ price: 25, quantity: 10 });
+    await abandonedCart(user.id, p.id, 2);
+    await runAbandonedCartSweep();
+
+    const sub = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+    expect(sub.consentAt ?? null).toBeNull();
+    expect(sub.source).toBe('abandoned-cart');
+  });
+
+  it('the minted token actually unsubscribes them', async () => {
+    const { user } = await authHeader();
+    const p = await createProduct({ price: 25, quantity: 10 });
+    await abandonedCart(user.id, p.id, 2);
+    await runAbandonedCartSweep();
+
+    const sub = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+    await request(app)
+      .get(`/api/newsletter/unsubscribe?token=${sub.unsubscribeToken}`)
+      .expect(200);
+
+    const after = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+    expect(after.status).toBe('unsubscribed');
+  });
+
+  it('and that opt-out stops the follow-up stage', async () => {
+    // The whole point of a working link: clicking it must actually end the
+    // sequence, not just the one message.
+    const { user } = await authHeader();
+    const p = await createProduct({ price: 25, quantity: 10 });
+    await abandonedCart(user.id, p.id, 2);
+    await runAbandonedCartSweep();
+
+    const sub = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+    await request(app).get(`/api/newsletter/unsubscribe?token=${sub.unsubscribeToken}`).expect(200);
+
+    // Age the cart into stage 2 and sweep again.
+    const items = await mockPrisma.cartItem.findMany({ where: { userId: user.id } });
+    await mockPrisma.cartItem.update({
+      where: { id: items[0].id },
+      data: { updatedAt: hoursAgo(30) },
+    });
+
+    const res = await runAbandonedCartSweep();
+    expect(res.sent).toBe(0);
+    expect(res.skipped['unsubscribed']).toBe(1);
+  });
+
+  it('reuses the existing token for a real subscriber', async () => {
+    // A genuine subscriber must keep their token; re-minting would break the
+    // unsubscribe link in every email already in their inbox.
+    const { user } = await authHeader();
+    const p = await createProduct({ price: 25, quantity: 10 });
+    await abandonedCart(user.id, p.id, 2);
+
+    await request(app).post('/api/newsletter/subscribe').send({ email: user.email }).expect(200);
+    const before = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+
+    await runAbandonedCartSweep();
+
+    const after = await mockPrisma.newsletterSubscriber.findUnique({
+      where: { email: String(user.email).toLowerCase() },
+    });
+    expect(after.unsubscribeToken).toBe(before.unsubscribeToken);
+    expect(after.consentAt).toBeTruthy();   // real consent preserved
+    expect(after.source).not.toBe('abandoned-cart');
+  });
+});

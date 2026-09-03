@@ -63,9 +63,11 @@ export default function BundleOffer({
 
   function addBundle(bundle: Bundle) {
     // Add each component as its own cart line so stock, shipping weight and
-    // fulfilment all behave normally. The bundle DISCOUNT is applied
-    // server-side at checkout; inventing a synthetic discounted line here
-    // would double-count it.
+    // fulfilment all behave normally. Lines carry the LIST price: the bundle
+    // discount is applied server-side at order placement (see
+    // computeBundleDiscount in the orders module), so discounting here would
+    // double-count it. The server re-derives the saving from its own bundle
+    // rows, meaning a stale client cannot talk checkout into a bigger one.
     for (const item of bundle.items) {
       addItem({
         productId: item.productId,

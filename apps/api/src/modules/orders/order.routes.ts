@@ -26,6 +26,7 @@ import { emit } from '../plugins/pluginHooks';
 import { calculateTaxForOrder } from '../tax/tax.service';
 import { calculateShippingForOrder } from '../shipping/shipping.service';
 import { markCartRecovered } from '../marketing/abandonedCart.service';
+import { computeBundleDiscount } from '../marketing/bundleMatch';
 import { validateCoupon, CouponValidationError } from '../coupons/coupon.service';
 import { readCookie, AFFILIATE_COOKIE } from '../affiliates/affiliate.helpers';
 import { z } from 'zod';
@@ -610,6 +611,64 @@ router.post('/', authenticate, async (req, res, next) => {
     }
     if (freeShippingCoupon) {
       finalShippingAmount = 0;
+    }
+
+    // ------------------------------------------------------------------
+    // Bundle discounts.
+    //
+    // The storefront advertises a bundle saving and adds the components at
+    // LIST price, on the understanding that checkout applies the discount.
+    // Nothing did, so a customer who saw "Save $25" was charged the full
+    // total - a price promise the store did not honour.
+    //
+    // Computed from the order's own line prices (not the product table) so a
+    // line already discounted for another reason is not double-counted, and
+    // added to any coupon discount rather than replacing it.
+    // ------------------------------------------------------------------
+    try {
+      const activeBundles = await prisma.bundle.findMany({
+        where: { isActive: true },
+        include: { items: true },
+      });
+      if (activeBundles.length > 0) {
+        const bundleResult = computeBundleDiscount(
+          (activeBundles as any[]).map((b) => ({
+            id: b.id,
+            slug: b.slug,
+            discountType: b.discountType,
+            discountValue: Number(b.discountValue ?? 0),
+            items: (b.items || []).map((i: any) => ({
+              productId: i.productId,
+              quantity: Number(i.quantity ?? 0),
+            })),
+          })),
+          orderItems.map((oi) => ({
+            productId: oi.productId,
+            quantity: Number(oi.quantity ?? 0),
+            unitPrice: Number(oi.unitPrice ?? 0),
+          })),
+        );
+        if (bundleResult.totalDiscount > 0) {
+          finalDiscountAmount = Math.round(
+            (finalDiscountAmount + bundleResult.totalDiscount) * 100
+          ) / 100;
+          logger.info(
+            `Bundle discount applied: ${bundleResult.matches.map((m) => m.slug).join(', ')} ` +
+            `= ${bundleResult.totalDiscount}`
+          );
+        }
+      }
+    } catch (err) {
+      // A bundle lookup failure must never block a sale. The customer is
+      // charged list price, which is the safe direction to fail.
+      logger.error('Bundle discount calculation failed:', err);
+    }
+
+    // The combined discount can exceed the subtotal (a 100%-off bundle plus a
+    // coupon). Clamp rather than letting the negative-total guard below
+    // reject an order the customer did nothing wrong to place.
+    if (finalDiscountAmount > finalSubtotal) {
+      finalDiscountAmount = finalSubtotal;
     }
 
     const finalTotalAmount = Math.round(
