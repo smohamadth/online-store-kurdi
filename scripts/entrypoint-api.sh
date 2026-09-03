@@ -40,11 +40,41 @@ case "${DATABASE_URL:-}" in
     SCHEMA=./prisma/schema.postgres.prisma
     MIGRATIONS=./prisma/migrations-postgres
     echo "==> store-api: PostgreSQL detected; using $SCHEMA"
-    # The Prisma client is provider-specific and the image was built with the
-    # SQLite one. Without this the API starts and then fails every query with
-    # "the URL must start with the protocol file:".
-    echo "==> store-api: regenerating the Prisma client for PostgreSQL"
-    "$PRISMA" generate --schema "$SCHEMA"
+    # The Prisma client is provider-specific and the image ships the SQLite
+    # one in the default location. Without swapping it the API starts, passes
+    # its healthcheck, and then fails EVERY query with "the URL must start
+    # with the protocol file:".
+    #
+    # A pre-generated client is copied in rather than running
+    # `prisma generate` here: generate downloads the query engine when it is
+    # not cached, so a boot-time generate makes container start-up depend on
+    # reaching binaries.prisma.sh. Both clients are built into the image
+    # (see Dockerfile.api), leaving this a local copy that works offline.
+    if [ -d ./prisma-clients/postgres ]; then
+      # Install into every node_modules that actually exists. In the image
+      # there is exactly one (/app/apps/api/node_modules); a bare-metal
+      # checkout has the hoisted root one instead. Guarding on the PARENT
+      # directory means a path that does not apply is skipped rather than
+      # silently creating a stray tree that nothing loads.
+      installed=0
+      for nm in ./node_modules ../../node_modules; do
+        if [ -d "$nm" ]; then
+          echo "==> store-api: installing the PostgreSQL Prisma client -> $nm/.prisma"
+          rm -rf "$nm/.prisma"
+          cp -r ./prisma-clients/postgres "$nm/.prisma"
+          installed=$((installed + 1))
+        fi
+      done
+      if [ "$installed" -eq 0 ]; then
+        echo "    x could not find a node_modules to install the client into" >&2
+        exit 1
+      fi
+    else
+      # Not a Docker image (bare-metal run, or an older build). Fall back to
+      # generating, which needs the engines cached or network access.
+      echo "==> store-api: no pre-built client; generating for PostgreSQL"
+      "$PRISMA" generate --schema "$SCHEMA"
+    fi
     ;;
   *)
     SCHEMA=./prisma/schema.prisma

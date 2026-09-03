@@ -22,6 +22,7 @@
 // variants / reviews) so the route serialises them identically.
 // ---------------------------------------------------------------------------
 import { Client } from '@elastic/elasticsearch';
+import { containsInsensitive } from '../../utils/caseInsensitive';
 import { env } from '../../config/environment';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../config/database';
@@ -55,14 +56,19 @@ const SEARCH_INCLUDE = {
 
 /** The original, dependency-free search: Prisma substring match on active rows. */
 async function postgresSearch(query: string, limit: number): Promise<any[]> {
-  // No `mode: 'insensitive'`: SQLite provider rejects it.
+  // containsInsensitive adds `mode: 'insensitive'` on PostgreSQL and omits it
+  // on SQLite. Hardcoding either is wrong: SQLite REJECTS the flag, while
+  // without it PostgreSQL's LIKE is case-sensitive - so a shopper searching
+  // "laptop" would stop finding "Laptop Pro" the moment the store moved to
+  // PostgreSQL, silently and with no error.
+  const match = containsInsensitive(query);
   return prisma.product.findMany({
     where: {
       status: 'active',
       OR: [
-        { name: { contains: query } },
-        { description: { contains: query } },
-        { sku: { contains: query } },
+        { name: match },
+        { description: match },
+        { sku: match },
       ],
     },
     include: SEARCH_INCLUDE,

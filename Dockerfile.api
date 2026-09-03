@@ -23,15 +23,30 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 RUN npm ci --no-audit --no-fund
 COPY . .
-# Root postinstall already ran prisma generate; run it explicitly so a
-# changed schema can never slip into the image ungenerated.
+# Generate BOTH Prisma clients at build time.
 #
-# The generated client is provider-specific, so the image cannot contain one
-# client for both databases. The default (SQLite) client is generated at build
-# time; the entrypoint regenerates against schema.postgres.prisma when
-# DATABASE_URL is a postgres:// URL, which is why the full node_modules
-# (including the prisma CLI) is carried into the runtime stage.
-RUN cd apps/api && npx prisma generate && npm run build
+# The client is provider-specific, so an image built only for SQLite fails
+# every query against Postgres with "the URL must start with the protocol
+# file:". Generating at runtime instead would work, but `prisma generate`
+# DOWNLOADS the query engine when it is not already cached - verified: with no
+# cached engine it reaches for binaries.prisma.sh. Making container start-up
+# depend on an outbound HTTPS call to a third party is a bad trade for a
+# store that may be firewalled, air-gapped, or simply booting during an
+# outage.
+#
+# So both are produced here, where the engines are already cached by npm ci,
+# and copied into place by the entrypoint. The SQLite client is generated
+# LAST so it lands in the default node_modules/.prisma location, preserving
+# today's behaviour for file: deployments.
+RUN cd apps/api \
+ && npx prisma generate --schema prisma/schema.postgres.prisma \
+ && cp -r ../../node_modules/.prisma /tmp/prisma-postgres \
+ && npx prisma generate \
+ && npm run build
+
+# Stash the Postgres client alongside the SQLite one. The entrypoint swaps it
+# in when DATABASE_URL is a postgres:// URL - a file copy, no network.
+RUN mkdir -p /app/prisma-clients && cp -r /tmp/prisma-postgres /app/prisma-clients/postgres
 
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
@@ -48,6 +63,10 @@ COPY --from=build /app/package.json ./../package.json
 # The web container gets its own copy at build time; the API container needs
 # these files so a fresh volume still contains the platform themes.
 COPY --from=build /app/apps/web/themes ./../web/themes
+# The pre-generated PostgreSQL client. The entrypoint copies it over
+# node_modules/.prisma when DATABASE_URL is a postgres:// URL, so switching
+# provider is a local file copy rather than a network round-trip at boot.
+COPY --from=build /app/prisma-clients/postgres ./prisma-clients/postgres
 COPY --from=build /app/scripts/entrypoint-api.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 EXPOSE 3001
