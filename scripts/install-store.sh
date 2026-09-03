@@ -60,16 +60,35 @@ echo "    node $(node -v), npm $(npm -v), mode: $MODE"
 log "Preparing apps/api/.env"
 ENV_FILE="$REPO_ROOT/apps/api/.env"
 if [ ! -f "$ENV_FILE" ]; then
-  JWT="$(openssl rand -hex 32 2>/dev/null || node -p 'require("crypto").randomBytes(32).toString("hex")')"
+  rand() { openssl rand -hex "$1" 2>/dev/null || node -p "require('crypto').randomBytes($1).toString('hex')"; }
+  JWT="$(rand 32)"
+  # docker-compose.prod.yml requires these (${VAR:?...}) - a deploy that does
+  # not set them refuses to start rather than coming up with a password
+  # published in this repository. Generate them here so the one-command
+  # install still works, and so every install gets DIFFERENT credentials.
+  MINIO_AK="$(rand 12)"
+  MINIO_SK="$(rand 24)"
+  PG_PW="$(rand 24)"
+
   cp "$REPO_ROOT/.env.example" "$ENV_FILE"
-  # .env.example ships an obviously-placeholder JWT secret; replace it.
-  if sed -i.bak "s/^JWT_SECRET=.*/JWT_SECRET=$JWT/" "$ENV_FILE" 2>/dev/null; then
-    rm -f "$ENV_FILE.bak"
-  else
-    # BSD sed (macOS)
-    sed -i '' "s/^JWT_SECRET=.*/JWT_SECRET=$JWT/" "$ENV_FILE"
-  fi
-  echo "    created $ENV_FILE with a fresh random JWT_SECRET"
+
+  # .env.example ships obvious placeholders; replace each with a real value.
+  # `sed -i` differs between GNU and BSD, hence the fallback.
+  set_env() {
+    if sed -i.bak "s|^$1=.*|$1=$2|" "$ENV_FILE" 2>/dev/null; then
+      rm -f "$ENV_FILE.bak"
+    else
+      sed -i '' "s|^$1=.*|$1=$2|" "$ENV_FILE"
+    fi
+    # Append when the key is absent from the template.
+    grep -q "^$1=" "$ENV_FILE" || echo "$1=$2" >> "$ENV_FILE"
+  }
+  set_env JWT_SECRET "$JWT"
+  set_env MINIO_ACCESS_KEY "$MINIO_AK"
+  set_env MINIO_SECRET_KEY "$MINIO_SK"
+  set_env POSTGRES_PASSWORD "$PG_PW"
+
+  echo "    created $ENV_FILE with freshly generated secrets"
   warn "edit $ENV_FILE before going live (SMTP, Stripe, FRONTEND_URL)"
 else
   echo "    $ENV_FILE already exists - keeping it"
@@ -126,9 +145,13 @@ if [ "$MODE" = "docker" ]; then
   # the containerised postgres).
   log "Building and starting the stack (docker compose, profile: mail)"
   COMPOSE="docker compose -f docker/docker-compose.prod.yml --profile mail"
+  # Every ${VAR:?...} in docker-compose.prod.yml must be exported here, or
+  # compose aborts before starting anything.
   ( cd "$REPO_ROOT" \
     && POSTGRES_PASSWORD="$(grep '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)" \
        JWT_SECRET="$(grep '^JWT_SECRET=' "$ENV_FILE" | cut -d= -f2-)" \
+       MINIO_ACCESS_KEY="$(grep '^MINIO_ACCESS_KEY=' "$ENV_FILE" | cut -d= -f2-)" \
+       MINIO_SECRET_KEY="$(grep '^MINIO_SECRET_KEY=' "$ENV_FILE" | cut -d= -f2-)" \
     $COMPOSE up -d --build )
 
   echo "    waiting for the API health endpoint..."

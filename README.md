@@ -512,9 +512,17 @@ git clone <repo> /opt/store && cd /opt/store
 ./scripts/install-store.sh     # compose (prod profile) + seed, one command
 ```
 
-The installer generates a fresh random `JWT_SECRET`, builds
-`docker-compose.prod.yml` (api + web + postgres + redis + minio + mailhog),
-converges the DB on first boot and seeds through the API container.
+The installer generates fresh random secrets (`JWT_SECRET`,
+`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`, `POSTGRES_PASSWORD`), builds
+`docker-compose.prod.yml` (api + web + redis + minio, plus mailhog under the
+`mail` profile), converges the DB on first boot and seeds through the API
+container.
+
+The stack runs on **SQLite** by default, matching `provider` in
+`schema.prisma` — the database file lives on the `db_data` volume so it
+survives container replacement. PostgreSQL is opt-in: see §5, then start it
+with `docker compose --profile postgres up`. Note that the committed
+migration history is locked to SQLite, so switching means regenerating it.
 Full details: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** (Mode A Docker,
 Mode B bare-metal).
 
