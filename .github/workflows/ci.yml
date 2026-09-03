@@ -70,11 +70,11 @@ jobs:
         run: npm run lint:web
 
       - name: Typecheck (API)
-        # The web side was already typechecked here but the API was not, so a
-        # type error in apps/api could only be caught by a human. It needs the
-        # generated Prisma client to be present (npm ci's postinstall does
-        # that) - without it every prisma-typed callback degrades to an
-        # implicit any and tsc reports ~100 spurious errors.
+        # apps/web was typechecked here but apps/api was not, so an API type
+        # error could only be caught by a human - the vitest transform does
+        # not typecheck. Needs the generated Prisma client (npm ci's
+        # postinstall provides it); without one, prisma-typed callbacks
+        # degrade to implicit any and tsc reports ~100 spurious errors.
         working-directory: apps/api
         run: npx tsc --noEmit
 
@@ -162,9 +162,9 @@ jobs:
       - name: Commerce rules (coupons, orders, stock)
         run: python3 scripts/verify-commerce.py
 
-      # Bulk product/category import + export against the live API. The script
-      # has been in the repo unrun, so this path had no automated coverage at
-      # all despite being a destructive admin feature.
+      # Bulk product/category import + export against the live API. The
+      # script was in the repo but never invoked, so this destructive admin
+      # path had no automated coverage.
       - name: Bulk import/export
         run: python3 scripts/verify-import-export.py
 
