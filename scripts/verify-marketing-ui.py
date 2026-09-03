@@ -175,7 +175,7 @@ try:
             page.on("console",
                     lambda m: console.append(m.text) if m.type == "error" else None)
 
-            goto(page, "{WEB}/products/{anchor['slug']}", 2000)
+            goto(page, f"{WEB}/products/{anchor['slug']}", 2000)
 
             offer = page.locator('[data-testid="bundle-offer"]')
             if offer.count() == 0:
@@ -216,7 +216,7 @@ try:
                           add.first.inner_text())
 
                     # Both components must land in the cart as separate lines.
-                    goto(page, "{WEB}/cart", 1500)
+                    goto(page, f"{WEB}/cart", 1500)
                     cart_text = page.inner_text("body")
                     check("first component is in the cart", anchor["name"] in cart_text)
                     check("second component is in the cart", second["name"] in cart_text)
@@ -279,7 +279,7 @@ try:
         for route in ("/cart", "/checkout"):
             ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
             page = ctx.new_page()
-            goto(page, "{WEB}{route}", 1500)
+            goto(page, f"{WEB}{route}", 1500)
             landed = page.url
             trigger_exit_intent(page)
             suppressed_route = any(r in landed for r in ("/cart", "/checkout"))
@@ -294,7 +294,7 @@ try:
         page = ctx.new_page()
         # Whether this lands on /checkout or bounces to /cart, both are
         # suppressed routes, which is all this case needs.
-        goto(page, "{WEB}/checkout", 1500)
+        goto(page, f"{WEB}/checkout", 1500)
         goto(page, WEB, 1200)
         trigger_exit_intent(page)
         check("visiting checkout does not burn the one showing",
