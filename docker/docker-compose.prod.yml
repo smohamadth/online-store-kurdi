@@ -19,7 +19,9 @@ services:
     environment:
       POSTGRES_DB: store_db
       POSTGRES_USER: store_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-store_password}
+      # Mandatory (:? not :-). A silent default means a production
+      # database reachable with a password published in this repo.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the environment}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -49,8 +51,10 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-store-access}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-store-secret}
+      # Mandatory: these are the object-store root credentials. A default
+      # here hands anyone who reads this file every uploaded file.
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY in the environment}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY (8+ chars) in the environment}
     volumes:
       - minio_data:/data
     networks:
@@ -87,15 +91,15 @@ services:
       NODE_ENV: production
       PORT: "3001"
       API_VERSION: v1
-      DATABASE_URL: postgresql://store_user:${POSTGRES_PASSWORD:-store_password}@postgres:5432/store_db
+      DATABASE_URL: postgresql://store_user:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the environment}@postgres:5432/store_db
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ chars) in the environment}
       JWT_EXPIRES_IN: 7d
       JWT_REFRESH_EXPIRES_IN: 30d
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-store-access}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-store-secret}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY in the environment}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY (8+ chars) in the environment}
       MINIO_BUCKET: store-files
       MINIO_USE_SSL: "false"
       SMTP_HOST: ${SMTP_HOST:-mailhog}

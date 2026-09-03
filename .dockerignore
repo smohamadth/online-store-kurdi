@@ -1,0 +1,77 @@
+# Build-context exclusions for Dockerfile.api and Dockerfile.web.
+#
+# Both images run `npm ci` from the lockfile and THEN `COPY . .`. Without this
+# file the copy overwrites the freshly installed tree with whatever the host
+# happens to have - a different platform's native binaries, a stale Prisma
+# client, or a partial install. That is a correctness problem, not just a slow
+# build: the host's node_modules is 953MB against 19MB of actual source, and
+# it is the wrong tree.
+#
+# Anything the Dockerfiles genuinely need (package.json, package-lock.json,
+# apps/**, prisma/**, scripts/entrypoint-api.sh, apps/web/themes) is
+# deliberately NOT excluded here.
+
+# --- dependency trees: reinstalled inside the image from the lockfile -------
+node_modules
+**/node_modules
+
+# --- build output: regenerated inside the image -----------------------------
+# Copying these in risks shipping a stale bundle built on the host, against
+# different env vars.
+apps/web/.next
+apps/web/out
+apps/api/dist
+**/dist
+**/.turbo
+
+# --- VCS --------------------------------------------------------------------
+# 13MB, and full history in a build context is a needless disclosure surface.
+.git
+.gitignore
+.gitattributes
+.github
+
+# --- local databases ---------------------------------------------------------
+# A developer's dev.db must never become the image's starting state; the
+# entrypoint runs `prisma migrate deploy` against the real volume instead.
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+apps/api/prisma/*.db
+apps/api/prisma/dev.db*
+
+# --- secrets ------------------------------------------------------------------
+# .env.example IS shipped (it is documentation); real env files are not, or a
+# developer's live credentials get baked into a distributable image layer.
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/api/.env.*
+!apps/api/.env.example
+!apps/api/.env.ci
+apps/web/.env.local
+apps/web/.env.*.local
+
+# --- logs and scratch ---------------------------------------------------------
+logs
+*.log
+npm-debug.log*
+coverage
+.nyc_output
+test-results
+playwright-report
+
+# --- editor / OS --------------------------------------------------------------
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# --- CI-only and docs ---------------------------------------------------------
+# Not needed at runtime; excluded to keep the context small and the image
+# free of things that only matter in the repo.
+docs
+*.md
+!README.md
