@@ -27,6 +27,80 @@ const SCALARS = new Set([
   'String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Decimal', 'BigInt', 'Bytes',
 ]);
 
+/** Prisma scalar -> the PostgreSQL type `prisma migrate` emits. */
+const PG_TYPE: Record<string, string> = {
+  String: 'TEXT',
+  Int: 'INTEGER',
+  Float: 'DOUBLE PRECISION',
+  Boolean: 'BOOLEAN',
+  DateTime: 'TIMESTAMP(3)',
+  Json: 'JSONB',
+  BigInt: 'BIGINT',
+  Bytes: 'BYTEA',
+};
+
+export type ColumnSpec = { type: string; nullable: boolean };
+
+/**
+ * Every scalar column the schema declares, with its expected PostgreSQL type
+ * and nullability, keyed by the real (possibly @@map'd) table name.
+ *
+ * Comparing NAMES alone is not enough: a column emitted as TEXT where the
+ * schema says Int, or as nullable where the schema says required, passes a
+ * name-only check and then fails at runtime against a real database.
+ */
+function schemaColumns(): Record<string, Record<string, ColumnSpec>> {
+  const src = readFileSync(SCHEMA, 'utf8');
+  const modelNames = new Set(
+    [...src.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1]),
+  );
+
+  const out: Record<string, Record<string, ColumnSpec>> = {};
+  for (const m of src.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) {
+    const [, name, body] = m;
+    const mapped = /@@map\("([^"]+)"\)/.exec(body);
+    const table = mapped ? mapped[1] : name;
+
+    const cols: Record<string, ColumnSpec> = {};
+    for (const rawLine of body.split('\n')) {
+      let line = rawLine.trim();
+      if (!line || line.startsWith('//') || line.startsWith('@@')) continue;
+      const c = line.indexOf('//');
+      if (c !== -1) line = line.slice(0, c).trim();
+      const at = line.indexOf('@');
+      const head = (at === -1 ? line : line.slice(0, at)).trim();
+
+      const f = /^(\w+)\s+([\w[\]?]+)$/.exec(head);
+      if (!f) continue;
+      const [, field, type] = f;
+      if (type.endsWith('[]')) continue;
+      const base = type.replace(/[?[\]]/g, '');
+      if (modelNames.has(base)) continue;
+      if (!PG_TYPE[base]) continue;
+      cols[field] = { type: PG_TYPE[base], nullable: type.endsWith('?') };
+    }
+    out[table] = cols;
+  }
+  return out;
+}
+
+/** The same, read back out of the generated baseline SQL. */
+function baselineColumns(): Record<string, Record<string, ColumnSpec>> {
+  const sql = readFileSync(BASELINE, 'utf8');
+  const out: Record<string, Record<string, ColumnSpec>> = {};
+  for (const m of sql.matchAll(/CREATE TABLE "(\w+)" \(([\s\S]*?)\n\);/g)) {
+    const [, table, body] = m;
+    const cols: Record<string, ColumnSpec> = {};
+    for (const line of body.split('\n')) {
+      const c = /^\s*"(\w+)"\s+([A-Z][A-Z0-9 ()]*?)(?:\s+NOT NULL|\s+DEFAULT|,|$)/.exec(line);
+      if (!c) continue;
+      cols[c[1]] = { type: c[2].trim(), nullable: !line.includes('NOT NULL') };
+    }
+    out[table] = cols;
+  }
+  return out;
+}
+
 /** Scalar columns each model declares, keyed by its real (possibly @@map'd) table. */
 function schemaTables(): Record<string, Set<string>> {
   const src = readFileSync(SCHEMA, 'utf8');
@@ -154,6 +228,122 @@ describe('PostgreSQL baseline matches schema.prisma', () => {
       'utf8',
     );
     expect(lock).toMatch(/provider\s*=\s*"postgresql"/);
+  });
+
+  it('gives every column the right PostgreSQL type', () => {
+    // A name-only comparison would pass with Float emitted as TEXT.
+    const declaredCols = schemaColumns();
+    const builtCols = baselineColumns();
+    const problems: string[] = [];
+    for (const [table, cols] of Object.entries(declaredCols)) {
+      for (const [col, spec] of Object.entries(cols)) {
+        const got = builtCols[table]?.[col];
+        if (!got) continue;                       // covered by the column test
+        if (got.type !== spec.type) {
+          problems.push(`${table}.${col}: expected ${spec.type}, got ${got.type}`);
+        }
+      }
+    }
+    expect(problems, problems.join('\n')).toEqual([]);
+  });
+
+  it('matches the schema on nullability', () => {
+    // A required column emitted as nullable lets bad rows in; a nullable one
+    // emitted NOT NULL rejects writes the application considers valid.
+    const declaredCols = schemaColumns();
+    const builtCols = baselineColumns();
+    const problems: string[] = [];
+    for (const [table, cols] of Object.entries(declaredCols)) {
+      for (const [col, spec] of Object.entries(cols)) {
+        const got = builtCols[table]?.[col];
+        if (!got) continue;
+        if (got.nullable !== spec.nullable) {
+          problems.push(
+            `${table}.${col}: schema nullable=${spec.nullable}, baseline nullable=${got.nullable}`,
+          );
+        }
+      }
+    }
+    expect(problems, problems.join('\n')).toEqual([]);
+  });
+
+  it('emits a foreign key for every relation that has one', () => {
+    // A missing FK is invisible until orphaned rows appear in production.
+    const src = readFileSync(SCHEMA, 'utf8');
+    const wanted = [...src.matchAll(/@relation\([^)]*fields:\s*\[/g)].length;
+    const sql = readFileSync(BASELINE, 'utf8');
+    const got = [...sql.matchAll(/ADD CONSTRAINT "\w+_\w+_fkey"/g)].length;
+    expect(got).toBe(wanted);
+  });
+
+  it('emits every declared index and unique constraint', () => {
+    // Losing an index is a silent performance cliff; losing a unique
+    // constraint is a correctness bug (duplicate coupon codes, two carts per
+    // product, a second row for the same subscriber).
+    const src = readFileSync(SCHEMA, 'utf8');
+    const sql = readFileSync(BASELINE, 'utf8');
+
+    const wantIdx = [...src.matchAll(/@@index\(\[/g)].length;
+    const gotIdx = [...sql.matchAll(/^CREATE INDEX /gm)].length;
+    expect(gotIdx).toBe(wantIdx);
+
+    const composites = [...src.matchAll(/@@unique\(\[/g)].length;
+    const fields = [...src.matchAll(/@unique\b/g)].length - composites;
+    const gotUnique = [...sql.matchAll(/^CREATE UNIQUE INDEX /gm)].length;
+    expect(gotUnique).toBe(composites + fields);
+  });
+
+  it('gives the distributed lock a primary key on name', () => {
+    // tryAcquireLock relies on a single-row conditional updateMany being
+    // atomic. Without the PK two API instances could both claim the lease and
+    // run the same job - duplicate abandoned-cart emails, double purges.
+    const sql = readFileSync(BASELINE, 'utf8');
+    expect(sql).toMatch(/CONSTRAINT "scheduled_job_lock_pkey" PRIMARY KEY \("name"\)/);
+  });
+
+  it('leaves @updatedAt columns without a database default', () => {
+    // Prisma sets @updatedAt client-side. A DB default here would mask a
+    // client that failed to send it, and diverge from what `prisma migrate`
+    // generates - which `migrate diff` in the entrypoint would then flag as
+    // drift on every boot.
+    const sql = readFileSync(BASELINE, 'utf8');
+    expect(sql).not.toMatch(/"updatedAt" TIMESTAMP\(3\) NOT NULL DEFAULT/);
+    expect(sql).toMatch(/"updatedAt" TIMESTAMP\(3\) NOT NULL/);
+  });
+
+  it('keeps every identifier within PostgreSQL\'s 63-byte limit', () => {
+    // PostgreSQL silently TRUNCATES identifiers at 63 bytes. Two constraint
+    // names that collide once truncated make the migration fail partway
+    // through, leaving a half-created database.
+    const sql = readFileSync(BASELINE, 'utf8');
+    const names = [
+      ...[...sql.matchAll(/CONSTRAINT "([^"]+)"/g)].map((m) => m[1]),
+      ...[...sql.matchAll(/CREATE (?:UNIQUE )?INDEX "([^"]+)"/g)].map((m) => m[1]),
+    ];
+    expect(names.length).toBeGreaterThan(300);
+
+    const tooLong = names.filter((n) => n.length > 63);
+    expect(tooLong, `over 63 bytes:\n${tooLong.join('\n')}`).toEqual([]);
+
+    const byPrefix = new Map<string, Set<string>>();
+    for (const n of names) {
+      const k = n.slice(0, 63);
+      if (!byPrefix.has(k)) byPrefix.set(k, new Set());
+      byPrefix.get(k)!.add(n);
+    }
+    const collisions = [...byPrefix.entries()].filter(([, v]) => v.size > 1);
+    expect(collisions.map(([k]) => k), 'identifiers collide when truncated').toEqual([]);
+  });
+
+  it('quotes identifiers that are PostgreSQL reserved words', () => {
+    // "User" and "Order" are reserved. Unquoted they are a syntax error, and
+    // this schema uses both as table names.
+    const sql = readFileSync(BASELINE, 'utf8');
+    for (const word of ['User', 'Order']) {
+      expect(sql).toMatch(new RegExp(`CREATE TABLE "${word}"`));
+      // No bare CREATE TABLE User / ALTER TABLE Order anywhere.
+      expect(sql).not.toMatch(new RegExp(`(CREATE|ALTER) TABLE ${word}\\b`));
+    }
   });
 
   it('pins the columns from the most recent schema work', () => {
