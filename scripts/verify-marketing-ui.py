@@ -117,7 +117,13 @@ def _admin_token():
 # ---------------------------------------------------------------------------
 # Fixture: a bundle built from two real, in-stock products.
 # ---------------------------------------------------------------------------
-token = _admin_token()
+try:
+    token = _admin_token()
+except Exception as exc:  # noqa: BLE001
+    print(f"::error::verify-marketing-ui: admin login failed: {exc!r}")
+    print("0/1 passed")
+    sys.exit(1)
+
 _, plist = _api("GET", "/products?limit=50")
 stocked = [
     p for p in plist.get("data", [])
@@ -296,10 +302,21 @@ try:
         ctx.close()
 
         browser.close()
+except Exception as exc:  # noqa: BLE001
+    # A crash here exits 1 with nothing in the annotations, which is exactly
+    # the situation that made the first failure undiagnosable.
+    import traceback
+    tb = traceback.format_exc().strip().replace("\n", " | ")
+    print(f"::error::verify-marketing-ui crashed: {exc!r}")
+    print(f"::error::traceback: {tb[-800:]}")
+    results.append(False)
 finally:
     # Leave the store as we found it.
-    if bundle_id:
-        _api("DELETE", f"/bundles/{bundle_id}", _admin_token())
+    try:
+        if bundle_id:
+            _api("DELETE", f"/bundles/{bundle_id}", _admin_token())
+    except Exception:  # noqa: BLE001
+        pass
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
