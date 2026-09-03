@@ -26,7 +26,16 @@ const router = Router();
 router.post('/abandoned-carts/run', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const dryRun = req.body?.dryRun === true || req.query?.dryRun === 'true';
-    const result = await runAbandonedCartSweep({ dryRun });
+
+    // Optional send cap, so a first live run can be deliberately small
+    // ("mail 10 people and see what happens") rather than all-or-nothing.
+    // Clamped: a caller must not be able to remove the cap entirely.
+    const rawLimit = Number(req.body?.limit);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), 500)
+      : undefined;
+
+    const result = await runAbandonedCartSweep({ dryRun, limit });
     res.json({ status: 'success', data: { dryRun, ...result } });
   } catch (err) {
     next(err);

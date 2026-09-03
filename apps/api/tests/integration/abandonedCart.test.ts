@@ -410,3 +410,206 @@ describe('unsubscribe link in the recovery email', () => {
     expect(after.source).not.toBe('abandoned-cart');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The send budget must cap EMAILS SENT, not candidates examined.
+//
+// The loop counted every candidate against `limit`, including ones it skipped.
+// Map iteration follows insertion order, which follows the query's row order,
+// and skip decisions are deterministic - so a store whose first N carts are
+// all ineligible (too old, already mailed) burned the whole budget on them and
+// mailed nobody. The same eligible customers were starved on every run,
+// forever, and the sweep reported "sent: 0" as if there were nothing to do.
+// ---------------------------------------------------------------------------
+describe('send budget', () => {
+  /** One eligible cart per user, all abandoned two hours ago. */
+  async function eligibleCarts(n: number, product: { id: string }) {
+    const users = [];
+    for (let i = 0; i < n; i++) {
+      const { user } = await authHeader();
+      await abandonedCart(user.id, product.id, 2);
+      users.push(user);
+    }
+    return users;
+  }
+
+  it('caps the number of emails actually sent', async () => {
+    const p = await createProduct({ price: 25, quantity: 500 });
+    await eligibleCarts(5, p);
+
+    const res = await runAbandonedCartSweep({ limit: 2 });
+    expect(res.sent).toBe(2);
+    expect(await mockPrisma.abandonedCartEmail.findMany({})).toHaveLength(2);
+  });
+
+  it('does not let skipped candidates consume the budget', async () => {
+    // Three carts that will always skip, then two that should be mailed.
+    // With a budget of 2 counted against EXAMINED candidates, the skips eat
+    // it and nobody is emailed.
+    const p = await createProduct({ price: 25, quantity: 500 });
+
+    // Too old to ever qualify (beyond MAX_AGE_HOURS is filtered in SQL, so
+    // use "already sent every stage" instead - skipped, but still fetched).
+    for (let i = 0; i < 3; i++) {
+      const { user } = await authHeader();
+      await abandonedCart(user.id, p.id, 2);
+      await mockPrisma.abandonedCartEmail.create({
+        data: { userId: user.id, stage: 1, itemCount: 1, cartValue: 25 },
+      });
+      await mockPrisma.abandonedCartEmail.create({
+        data: { userId: user.id, stage: 2, itemCount: 1, cartValue: 25 },
+      });
+    }
+
+    const wanted = await eligibleCarts(2, p);
+
+    const res = await runAbandonedCartSweep({ limit: 2 });
+    expect(res.sent).toBe(2);
+
+    // Both genuinely-eligible customers were reached.
+    for (const u of wanted) {
+      const rows = await mockPrisma.abandonedCartEmail.findMany({ where: { userId: u.id } });
+      expect(rows.length, `user ${u.id} should have been mailed`).toBeGreaterThan(0);
+    }
+  });
+
+  it('still examines every candidate so the skip report stays accurate', async () => {
+    const p = await createProduct({ price: 25, quantity: 500 });
+    const { user } = await authHeader();
+    await abandonedCart(user.id, p.id, 2);
+    await mockPrisma.abandonedCartEmail.create({
+      data: { userId: user.id, stage: 1, itemCount: 1, cartValue: 25 },
+    });
+    await mockPrisma.abandonedCartEmail.create({
+      data: { userId: user.id, stage: 2, itemCount: 1, cartValue: 25 },
+    });
+    await eligibleCarts(1, p);
+
+    const res = await runAbandonedCartSweep({ limit: 1 });
+    expect(res.sent).toBe(1);
+    // The skipped one is still counted and reported, not silently dropped.
+    expect(res.considered).toBe(2);
+    expect(res.skipped['no stage due']).toBe(1);
+  });
+
+  it('stops work once the budget is spent', async () => {
+    // The cap must be a real stop, not just a counter: a huge backlog must
+    // not mail everyone in one tick.
+    const p = await createProduct({ price: 25, quantity: 500 });
+    await eligibleCarts(6, p);
+
+    const res = await runAbandonedCartSweep({ limit: 3 });
+    expect(res.sent).toBe(3);
+    expect(await mockPrisma.abandonedCartEmail.findMany({})).toHaveLength(3);
+  });
+
+  it('counts dry-run sends against the budget too', async () => {
+    // Otherwise a dry run reports a volume the real run could never produce.
+    const p = await createProduct({ price: 25, quantity: 500 });
+    await eligibleCarts(5, p);
+
+    const res = await runAbandonedCartSweep({ limit: 2, dryRun: true });
+    expect(res.sent).toBe(2);
+    expect(await mockPrisma.abandonedCartEmail.findMany({})).toHaveLength(0);
+  });
+});
+
+describe('scan cap', () => {
+  it('bounds the work when almost nothing is eligible', async () => {
+    // Budgeting only SENDS would make the loop walk every candidate (three
+    // queries each) hunting for someone to mail. maxScan keeps a sweep over a
+    // large backlog bounded.
+    const p = await createProduct({ price: 25, quantity: 500 });
+    for (let i = 0; i < 5; i++) {
+      const { user } = await authHeader();
+      await abandonedCart(user.id, p.id, 2);
+      await mockPrisma.abandonedCartEmail.create({
+        data: { userId: user.id, stage: 1, itemCount: 1, cartValue: 25 },
+      });
+      await mockPrisma.abandonedCartEmail.create({
+        data: { userId: user.id, stage: 2, itemCount: 1, cartValue: 25 },
+      });
+    }
+
+    const res = await runAbandonedCartSweep({ limit: 10, maxScan: 2 });
+    expect(res.sent).toBe(0);
+    expect(res.scanTruncated).toBe(true);
+    // Only the scanned ones were evaluated, not all five.
+    const totalSkips = Object.values(res.skipped as Record<string, number>)
+      .reduce((a, b) => a + b, 0);
+    expect(totalSkips).toBe(2);
+  });
+
+  it('does not flag truncation when the whole backlog fits', async () => {
+    const p = await createProduct({ price: 25, quantity: 500 });
+    const { user } = await authHeader();
+    await abandonedCart(user.id, p.id, 2);
+
+    const res = await runAbandonedCartSweep({ limit: 10, maxScan: 100 });
+    expect(res.sent).toBe(1);
+    expect(res.scanTruncated).toBeUndefined();
+  });
+
+  it('the send budget still wins when candidates are eligible', async () => {
+    // A generous scan cap must not let more mail out than `limit` allows.
+    const p = await createProduct({ price: 25, quantity: 500 });
+    for (let i = 0; i < 4; i++) {
+      const { user } = await authHeader();
+      await abandonedCart(user.id, p.id, 2);
+    }
+
+    const res = await runAbandonedCartSweep({ limit: 2, maxScan: 1000 });
+    expect(res.sent).toBe(2);
+    expect(res.scanTruncated).toBeUndefined();
+  });
+});
+
+describe('POST /api/marketing/abandoned-carts/run honours a limit', () => {
+  it('accepts an explicit send cap', async () => {
+    const p = await createProduct({ price: 25, quantity: 500 });
+    for (let i = 0; i < 4; i++) {
+      const { user } = await authHeader();
+      await abandonedCart(user.id, p.id, 2);
+    }
+
+    const admin = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/marketing/abandoned-carts/run')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ limit: 2 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.sent).toBe(2);
+  });
+
+  it('clamps an absurd limit rather than letting a caller uncap the sweep', async () => {
+    const p = await createProduct({ price: 25, quantity: 500 });
+    const { user } = await authHeader();
+    await abandonedCart(user.id, p.id, 2);
+
+    const admin = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/marketing/abandoned-carts/run')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ limit: 999999 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.sent).toBe(1);
+  });
+
+  it.each([[0], [-5], ['abc'], [null]])('ignores a nonsense limit %j', async (bad) => {
+    const p = await createProduct({ price: 25, quantity: 500 });
+    const { user } = await authHeader();
+    await abandonedCart(user.id, p.id, 2);
+
+    const admin = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/marketing/abandoned-carts/run')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ limit: bad });
+
+    // Falls back to the default budget, so the sweep still works.
+    expect(res.status).toBe(200);
+    expect(res.body.data.sent).toBe(1);
+  });
+});

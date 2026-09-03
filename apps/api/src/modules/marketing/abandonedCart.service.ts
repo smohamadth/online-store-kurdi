@@ -58,6 +58,8 @@ export type SweepResult = {
   sent: number;
   skipped: Record<string, number>;
   errors: number;
+  /** True when the scan cap stopped the sweep before it ran out of candidates. */
+  scanTruncated?: boolean;
 };
 
 /**
@@ -69,11 +71,24 @@ export type SweepResult = {
 export async function runAbandonedCartSweep(opts: {
   now?: Date;
   dryRun?: boolean;
+  /** Cap on emails SENT in one sweep. */
   limit?: number;
+  /**
+   * Cap on candidates EXAMINED in one sweep.
+   *
+   * Separate from `limit` on purpose: capping sends alone means a store whose
+   * carts are nearly all ineligible would walk every one of them (three
+   * queries each) looking for someone to mail. This bounds the work; `limit`
+   * bounds the mail.
+   */
+  maxScan?: number;
 } = {}): Promise<SweepResult> {
   const now = opts.now ?? new Date();
   const dryRun = !!opts.dryRun;
   const limit = opts.limit ?? 500;
+  // 10x the send budget: enough slack to walk past a long run of ineligible
+  // carts and still reach real candidates, without ever becoming unbounded.
+  const maxScan = opts.maxScan ?? Math.max(limit * 10, 1000);
 
   const cutoff = new Date(now.getTime() - MAX_AGE_HOURS * 3600_000);
 
@@ -119,10 +134,24 @@ export async function runAbandonedCartSweep(opts: {
     result.skipped[reason] = (result.skipped[reason] ?? 0) + 1;
   };
 
-  let processed = 0;
+  // `limit` is a cap on EMAILS SENT, not on candidates examined.
+  //
+  // It used to count every candidate, including skipped ones. Map iteration
+  // follows the query's row order and skip decisions are deterministic, so a
+  // store whose first N carts were all ineligible burned the whole budget on
+  // them and mailed nobody - starving the same eligible customers on every
+  // run while reporting "sent: 0" as though there were nothing to do.
+  let examined = 0;
   for (const cand of byUser.values()) {
-    if (processed >= limit) break;
-    processed += 1;
+    if (result.sent >= limit) break;
+    if (examined >= maxScan) {
+      // Report the truncation rather than silently doing less work than the
+      // caller expects - "sent: 0" with no explanation is what made the old
+      // starvation bug invisible.
+      result.scanTruncated = true;
+      break;
+    }
+    examined += 1;
 
     try {
       const [alreadySent, ordersSince, optOut] = await Promise.all([
@@ -229,7 +258,9 @@ export async function runAbandonedCartSweep(opts: {
   }
 
   logger.info(
-    `Abandoned-cart sweep: considered=${result.considered} sent=${result.sent} errors=${result.errors}`,
+    `Abandoned-cart sweep: considered=${result.considered} examined=${examined} ` +
+    `sent=${result.sent} errors=${result.errors}` +
+    `${result.scanTruncated ? ' (scan cap reached)' : ''}`,
   );
   return result;
 }
