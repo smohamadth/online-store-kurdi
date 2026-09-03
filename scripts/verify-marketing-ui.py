@@ -1,0 +1,259 @@
+"""Browser proof that the marketing UI actually mounts and works.
+
+The component suites run in happy-dom against mocked modules, which proves the
+logic but NOT that these components survive being mounted in a real Next.js
+page: a bad import, a server/client boundary mistake, or a crash inside
+AppShell would pass every jsdom test and still leave a blank storefront.
+
+Covers:
+  - the exit-intent popup fires on a real storefront page, submits, and stays
+    dismissed across a reload;
+  - the popup is suppressed on /cart and /checkout (a popup over the payment
+    step costs a real order);
+  - a bundle created through the API renders on the product page with
+    server-computed pricing, and "Add all to cart" adds every component.
+
+Creates its own bundle fixture and deletes it at the end, so the suite is
+repeatable - a previous run's leftovers must not look like a regression.
+"""
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+from playwright.sync_api import sync_playwright
+
+WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
+API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
+
+results = []
+
+
+def check(name, ok, detail=""):
+    results.append(bool(ok))
+    print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+
+
+def _api(method, path, token=None, body=None):
+    req = urllib.request.Request(
+        f"{API}{path}",
+        method=method,
+        headers={
+            "Content-Type": "application/json",
+            **({"Authorization": f"Bearer {token}"} if token else {}),
+        },
+        data=json.dumps(body).encode() if body is not None else None,
+    )
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, json.loads(r.read() or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or "{}")
+        except Exception:
+            return e.code, {}
+
+
+def _admin_token():
+    _, d = _api("POST", "/auth/login",
+                body={"email": "admin@store.com", "password": "admin123"})
+    return d["data"]["accessToken"]
+
+
+# ---------------------------------------------------------------------------
+# Fixture: a bundle built from two real, in-stock products.
+# ---------------------------------------------------------------------------
+token = _admin_token()
+_, plist = _api("GET", "/products?limit=50")
+stocked = [
+    p for p in plist.get("data", [])
+    if (p.get("quantity") or 0) >= 2 and p.get("status") == "active" and p.get("slug")
+]
+check("at least two stocked products exist to bundle", len(stocked) >= 2,
+      f"found {len(stocked)}")
+
+bundle_id = None
+anchor = None
+if len(stocked) >= 2:
+    anchor, second = stocked[0], stocked[1]
+    # Remove a leftover from an interrupted run before recreating it.
+    _, existing = _api("GET", "/bundles")
+    for b in existing.get("data", []):
+        if b.get("slug") == "ui-verify-bundle":
+            _api("DELETE", f"/bundles/{b['id']}", token)
+
+    st, created = _api("POST", "/bundles", token, {
+        "name": "UI Verify Bundle",
+        "slug": "ui-verify-bundle",
+        "discountType": "percentage",
+        "discountValue": 20,
+        "items": [
+            {"productId": anchor["id"], "quantity": 1},
+            {"productId": second["id"], "quantity": 1},
+        ],
+    })
+    check("bundle fixture created", st == 201, f"status={st}")
+    bundle_id = (created.get("data") or {}).get("id")
+
+    expected_total = round(float(anchor["price"]) + float(second["price"]), 2)
+    expected_price = round(expected_total * 0.8, 2)
+    api_price = round(float((created.get("data") or {}).get("bundlePrice", 0)), 2)
+    check("API prices the bundle server-side", abs(api_price - expected_price) < 0.02,
+          f"expected {expected_price}, got {api_price}")
+
+try:
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+
+        # -------------------------------------------------------------------
+        # 1. Bundle widget on the product page.
+        # -------------------------------------------------------------------
+        if bundle_id and anchor:
+            ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
+            page = ctx.new_page()
+            console = []
+            page.on("console",
+                    lambda m: console.append(m.text) if m.type == "error" else None)
+
+            page.goto(f"{WEB}/products/{anchor['slug']}", wait_until="networkidle")
+            page.wait_for_timeout(2000)
+
+            offer = page.locator('[data-testid="bundle-offer"]')
+            check("bundle offer renders on the product page", offer.count() > 0)
+
+            if offer.count() > 0:
+                body = page.inner_text("body")
+                check("bundle name is shown", "UI Verify Bundle" in body)
+
+                now = page.locator('[data-testid="bundle-now-ui-verify-bundle"]')
+                check("discounted price is displayed", now.count() > 0,
+                      now.first.inner_text() if now.count() else "absent")
+
+                # The rendered price must match what the API computed - the
+                # component must never derive a price of its own.
+                if now.count() > 0:
+                    shown = now.first.inner_text()
+                    digits = "".join(c for c in shown if c.isdigit() or c == ".")
+                    check("displayed price matches the server's",
+                          abs(float(digits) - expected_price) < 0.02,
+                          f"shown {shown}, server {expected_price}")
+
+                add = page.locator('[data-testid="bundle-add-ui-verify-bundle"]')
+                check("add-all button is present", add.count() > 0)
+                if add.count() > 0:
+                    add.first.click()
+                    page.wait_for_timeout(1200)
+                    check("button confirms the add",
+                          "Added" in add.first.inner_text(),
+                          add.first.inner_text())
+
+                    # Both components must land in the cart as separate lines.
+                    page.goto(f"{WEB}/cart", wait_until="networkidle")
+                    page.wait_for_timeout(1500)
+                    cart_text = page.inner_text("body")
+                    check("first component is in the cart", anchor["name"] in cart_text)
+                    check("second component is in the cart", second["name"] in cart_text)
+
+            check("no console errors on the product page", len(console) == 0,
+                  "; ".join(console[:2]))
+            ctx.close()
+
+        # -------------------------------------------------------------------
+        # 2. Exit-intent popup on the storefront.
+        # -------------------------------------------------------------------
+        ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
+        page = ctx.new_page()
+        page.goto(WEB, wait_until="networkidle")
+        page.wait_for_timeout(1500)
+
+        check("popup is not shown before any trigger",
+              page.locator('[data-testid="email-capture-popup"]').count() == 0)
+
+        # Exit intent: pointer leaves through the TOP of the viewport.
+        page.evaluate(
+            """() => document.dispatchEvent(
+                new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
+        )
+        page.wait_for_timeout(800)
+        popup = page.locator('[data-testid="email-capture-popup"]')
+        check("popup opens on exit intent", popup.count() > 0)
+
+        if popup.count() > 0:
+            page.fill('[data-testid="email-capture-input"]', "ui-verify@example.com")
+            page.click('[data-testid="email-capture-submit"]')
+            page.wait_for_timeout(2000)
+            check("popup confirms the signup",
+                  page.locator('[data-testid="email-capture-success"]').count() > 0)
+
+            # The address must be a real, unsubscribable subscriber - not just
+            # a capture row - or we have recreated the unmailable-list problem.
+            _, subs = _api("GET", "/newsletter/subscribers", token)
+            emails = (subs.get("data") or {}).get("subscribers", [])
+            check("the captured address is on the newsletter list",
+                  "ui-verify@example.com" in emails)
+
+        # Once per browser: a reload must not bring it back.
+        page.reload(wait_until="networkidle")
+        page.wait_for_timeout(1200)
+        page.evaluate(
+            """() => document.dispatchEvent(
+                new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
+        )
+        page.wait_for_timeout(800)
+        check("popup stays dismissed after a reload",
+              page.locator('[data-testid="email-capture-popup"]').count() == 0)
+        ctx.close()
+
+        # -------------------------------------------------------------------
+        # 3. Suppression on cart/checkout, in a FRESH browser context so the
+        #    once-per-browser marker is not what is being observed.
+        # -------------------------------------------------------------------
+        # NOTE: /checkout bounces to /cart when the cart is empty, so a naive
+        # "go to /checkout and assert no popup" would pass for the wrong
+        # reason - it would really be testing /cart. Each route is asserted
+        # against the URL the browser actually settled on.
+        for route in ("/cart", "/checkout"):
+            ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
+            page = ctx.new_page()
+            page.goto(f"{WEB}{route}", wait_until="networkidle")
+            page.wait_for_timeout(1500)
+            landed = page.url
+            page.evaluate(
+                """() => document.dispatchEvent(
+                    new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
+            )
+            page.wait_for_timeout(800)
+            suppressed_route = any(r in landed for r in ("/cart", "/checkout"))
+            check(f"requesting {route} lands on a suppressed route",
+                  suppressed_route, f"landed on {landed}")
+            check(f"popup is suppressed on {route} (landed {landed.split(WEB)[-1] or '/'})",
+                  page.locator('[data-testid="email-capture-popup"]').count() == 0)
+            ctx.close()
+
+        # A suppressed route must not consume the single showing.
+        ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
+        page = ctx.new_page()
+        # Whether this lands on /checkout or bounces to /cart, both are
+        # suppressed routes, which is all this case needs.
+        page.goto(f"{WEB}/checkout", wait_until="networkidle")
+        page.wait_for_timeout(1500)
+        page.goto(WEB, wait_until="networkidle")
+        page.wait_for_timeout(1200)
+        page.evaluate(
+            """() => document.dispatchEvent(
+                new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
+        )
+        page.wait_for_timeout(800)
+        check("visiting checkout does not burn the one showing",
+              page.locator('[data-testid="email-capture-popup"]').count() > 0)
+        ctx.close()
+
+        browser.close()
+finally:
+    # Leave the store as we found it.
+    if bundle_id:
+        _api("DELETE", f"/bundles/{bundle_id}", _admin_token())
+
+print(f"\n{sum(results)}/{len(results)} passed")
+sys.exit(0 if all(results) else 1)
