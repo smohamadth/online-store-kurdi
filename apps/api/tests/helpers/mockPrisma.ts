@@ -183,6 +183,10 @@ const RELATION_TO_MODEL: Record<string, string> = {
   threePLSyncEvents: 'ThreePLSyncEvent',
   syncEvents: 'ThreePLSyncEvent',
   webhookSecret: 'WebhookSecret',
+  abandonedCartEmail: 'AbandonedCartEmail',
+  couponRedemption: 'CouponRedemption',
+  bundleItem: 'BundleItem',
+  emailCapture: 'EmailCapture',
   'GiftCard.transactions': 'GiftCardTransaction',
   'StoreCredit.transactions': 'StoreCreditTransaction',
   // Digital products
@@ -341,7 +345,7 @@ function match(row: Row, where: any, parentModel: string = ''): boolean {
       // ignore, real prisma does not have this
     } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
       // operator object?
-      const operators = ['contains', 'gte', 'lte', 'gt', 'lt', 'not', 'startsWith', 'endsWith', 'mode', 'in'];
+      const operators = ['contains', 'gte', 'lte', 'gt', 'lt', 'not', 'startsWith', 'endsWith', 'mode', 'in', 'notIn'];
       const isOperatorObj = operators.some((op) => op in v);
       if (isOperatorObj) {
         if ('contains' in v) {
@@ -365,6 +369,12 @@ function match(row: Row, where: any, parentModel: string = ''): boolean {
         }
         if ('in' in v) {
           if (!Array.isArray(v.in) || !v.in.includes(actual)) return false;
+        }
+        if ('notIn' in v) {
+          // Without this, `status: { notIn: [...] }` fell through as an
+          // unrecognised operator and matched everything - a filter that
+          // silently did nothing.
+          if (Array.isArray(v.notIn) && v.notIn.includes(actual)) return false;
         }
       } else {
         // plain object: treat as equality match on each key.
@@ -953,6 +963,9 @@ const KNOWN_MODELS = [
   // the routes in `modules/recommendations/` will hit these as soon
   // as we add the integration tests)
   'productEmbedding', 'productSimilarity',
+  // Marketing: abandoned-cart recovery, per-customer coupon limits,
+  // bundles, and email capture.
+  'abandonedCartEmail', 'couponRedemption', 'bundle', 'bundleItem', 'emailCapture',
 ];
 
 const prisma: any = {};

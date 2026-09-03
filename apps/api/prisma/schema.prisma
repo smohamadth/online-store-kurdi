@@ -45,6 +45,8 @@ model User {
   storeCredits    StoreCredit[]
   giftCardsIssued  GiftCard[]   @relation("GiftCardCreatedBy")
   affiliate       Affiliate?
+  abandonedCartEmails AbandonedCartEmail[]
+  couponRedemptions   CouponRedemption[]
 
   @@index([email])
   @@index([role])
@@ -213,6 +215,8 @@ model Product {
   updatedAt     DateTime  @updatedAt
   publishedAt   DateTime?
   
+  bundleItems   BundleItem[]
+
   @@index([slug])
   @@index([sku])
   @@index([categoryId])
@@ -692,6 +696,8 @@ model Coupon {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
+  redemptions   CouponRedemption[]
+
   @@index([code])
   @@index([isActive])
 }
@@ -1929,6 +1935,140 @@ model NewsletterSubscriber {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
+
+  // --- consent + deliverability -------------------------------------------
+  // The original model was id/email/createdAt only: no way to unsubscribe and
+  // no record of consent, so the list was legally unmailable under
+  // GDPR/CAN-SPAM even though the API happily collected addresses.
+  //
+  // status: 'subscribed' | 'unsubscribed'. Unsubscribes are a status change,
+  // never a delete - deleting the row would let a later signup silently
+  // re-add someone who opted out, and destroys the proof that they left.
+  status         String    @default("subscribed")
+  // Opaque, unguessable token for one-click unsubscribe links. Unique so a
+  // token identifies exactly one subscriber; nullable only for rows created
+  // before this migration (backfilled below).
+  unsubscribeToken String? @unique
+  // When and from where consent was given - the evidence regulators ask for.
+  consentAt      DateTime?
+  // 'footer' | 'checkout' | 'popup' | 'import' ...
+  source         String?
+  // Truncated IP at opt-in time. Additional consent evidence.
+  consentIp      String?
+  unsubscribedAt DateTime?
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Abandoned-cart recovery.
+//
+// Everything needed already existed - CartItem is persisted server-side with
+// updatedAt, users have emails, there is a job runner with a distributed lock,
+// and email.service.ts renders templates - but nothing joined them up.
+//
+// One row per (user, recovery attempt). The unique constraint on
+// (userId, stage) is what makes the sweep idempotent: re-running the job for
+// the same user and stage is a no-op instead of a second email.
+// ---------------------------------------------------------------------------
+model AbandonedCartEmail {
+  id         String    @id @default(uuid())
+  userId     String
+  // Which reminder in the sequence: 1 = first nudge, 2 = follow-up.
+  stage      Int
+  sentAt     DateTime  @default(now())
+  // Snapshot of what was in the cart when we mailed, for reporting.
+  itemCount  Int       @default(0)
+  cartValue  Float     @default(0)
+  // Set when an order is placed by this user after the email went out, so
+  // recovery rate is measurable rather than guessed.
+  recoveredAt DateTime?
+  orderId    String?
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stage])
+  @@index([sentAt])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Per-customer coupon usage.
+//
+// Coupon.usedCount is a single global counter, so "one per customer" and
+// "new customers only" were impossible to express, and a single-use code
+// could be shared publicly and drained by strangers.
+// ---------------------------------------------------------------------------
+model CouponRedemption {
+  id        String   @id @default(uuid())
+  couponId  String
+  userId    String
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([couponId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Product bundles ("frequently bought together", priced as a set).
+//
+// The recommendation data already existed via /bought-together, but there was
+// no way to monetise it: no bundle entity, no bundle price.
+// ---------------------------------------------------------------------------
+model Bundle {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  // Absolute price for the whole set when discountType = 'fixed', or a
+  // percentage off the summed item prices when 'percentage'.
+  discountType String  @default("percentage")
+  discountValue Float  @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       BundleItem[]
+
+  @@index([isActive])
+  @@index([slug])
+}
+
+model BundleItem {
+  id        String  @id @default(uuid())
+  bundleId  String
+  productId String
+  quantity  Int     @default(1)
+
+  bundle    Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, productId])
+  @@index([bundleId])
+}
+
+// ---------------------------------------------------------------------------
+// Email capture (exit-intent / welcome-discount popup).
+//
+// The newsletter had no acquisition mechanism at all. A capture row records
+// the popup impression -> submission funnel so the popup can be judged on
+// conversion rather than vibes.
+// ---------------------------------------------------------------------------
+model EmailCapture {
+  id         String   @id @default(uuid())
+  email      String
+  // 'exit_intent' | 'timed' | 'inline'
+  trigger    String   @default("exit_intent")
+  // The coupon code handed out in exchange for the address, if any.
+  couponCode String?
+  createdAt  DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
 }
 
 // CSRF double-submit tokens (see middleware/csrf.ts).

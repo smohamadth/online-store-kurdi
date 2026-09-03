@@ -12,7 +12,7 @@
 // being silently recorded.
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
-import { authenticate, authorize } from '../../middleware/auth';
+import { authenticate, authorize, optionalAuth } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
@@ -105,7 +105,7 @@ router.get('/coupons/:id', authenticate, authorize('admin', 'manager'), async (r
 // calls at order time - so the discount the customer saw is the discount
 // the order gets, and a code that stops being valid cannot be replayed.
 // authz-ok: checkout validates a code before the customer logs in
-router.post('/coupons/validate', async (req, res, next) => {
+router.post('/coupons/validate', optionalAuth, async (req, res, next) => {
   try {
     const { code, subtotal } = req.body;
 
@@ -117,7 +117,14 @@ router.post('/coupons/validate', async (req, res, next) => {
     }
 
     try {
-      const result = await validateCoupon({ code, subtotal: Number(subtotal || 0) });
+      // optionalAuth populates req.user when a token is present, so a
+      // signed-in shopper gets their own per-customer limits applied at
+      // preview time rather than being surprised at checkout.
+      const result = await validateCoupon({
+        code,
+        subtotal: Number(subtotal || 0),
+        userId: (req as any).user?.id,
+      });
       const coupon = await prisma.coupon.findUnique({ where: { id: result.coupon.id } });
       res.json({
         status: 'success',
@@ -151,6 +158,8 @@ router.post('/coupons', authenticate, authorize('admin'), async (req, res, next)
       minOrderAmount,
       maxDiscountAmount,
       usageLimit,
+      perCustomerLimit,
+      newCustomersOnly,
       startsAt,
       expiresAt,
       isActive,
@@ -196,6 +205,10 @@ router.post('/coupons', authenticate, authorize('admin'), async (req, res, next)
         minOrderAmount: couponNumber(minOrderAmount),
         maxDiscountAmount: couponNumber(maxDiscountAmount),
         usageLimit: couponUsageLimit(usageLimit),
+        // Per-customer cap: null means unlimited, which is the behaviour
+        // every pre-existing coupon had.
+        perCustomerLimit: couponUsageLimit(perCustomerLimit),
+        newCustomersOnly: Boolean(newCustomersOnly),
         startsAt: couponDate(startsAt),
         expiresAt: couponDate(expiresAt),
         isActive: isActive !== undefined ? Boolean(isActive) : true,
@@ -224,6 +237,8 @@ router.put('/coupons/:id', authenticate, authorize('admin'), async (req, res, ne
       minOrderAmount,
       maxDiscountAmount,
       usageLimit,
+      perCustomerLimit,
+      newCustomersOnly,
       startsAt,
       expiresAt,
       isActive,
@@ -272,6 +287,8 @@ router.put('/coupons/:id', authenticate, authorize('admin'), async (req, res, ne
         minOrderAmount: minOrderAmount !== undefined ? couponNumber(minOrderAmount) : undefined,
         maxDiscountAmount: maxDiscountAmount !== undefined ? couponNumber(maxDiscountAmount) : undefined,
         usageLimit: usageLimit !== undefined ? couponUsageLimit(usageLimit) : undefined,
+        perCustomerLimit: perCustomerLimit !== undefined ? couponUsageLimit(perCustomerLimit) : undefined,
+        newCustomersOnly: newCustomersOnly !== undefined ? Boolean(newCustomersOnly) : undefined,
         startsAt: startsAt !== undefined ? couponDate(startsAt) : undefined,
         expiresAt: expiresAt !== undefined ? couponDate(expiresAt) : undefined,
         isActive: isActive !== undefined ? Boolean(isActive) : undefined,

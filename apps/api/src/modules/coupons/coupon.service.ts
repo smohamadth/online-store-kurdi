@@ -12,6 +12,7 @@
 // so the public endpoint can render it and the order route can fail the order.
 // ---------------------------------------------------------------------------
 import { prisma } from '../../config/database';
+import { checkCustomerEligibility } from './couponEligibility';
 
 export class CouponValidationError extends Error {
   constructor(message: string) {
@@ -42,8 +43,14 @@ export async function validateCoupon(params: {
   couponId?: string;
   code?: string;
   subtotal: number;
+  /**
+   * Who is redeeming. Undefined means guest checkout: per-customer limits
+   * cannot be enforced without an identity, so a restricted coupon is
+   * refused rather than silently granted (see checkCustomerEligibility).
+   */
+  userId?: string;
 }): Promise<CouponValidationResult> {
-  const { couponId, code, subtotal } = params;
+  const { couponId, code, subtotal, userId } = params;
 
   const coupon = couponId
     ? await prisma.coupon.findUnique({ where: { id: couponId } })
@@ -69,6 +76,38 @@ export async function validateCoupon(params: {
 
   if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
     throw new CouponValidationError('This coupon has reached its usage limit');
+  }
+
+  // Per-customer restrictions. usedCount above is a global counter, so on its
+  // own it cannot express "one per customer" - a shared code would be drained
+  // by whoever found it first.
+  if (coupon.perCustomerLimit != null || coupon.newCustomersOnly) {
+    if (!userId) {
+      const guest = checkCustomerEligibility({
+        perCustomerLimit: coupon.perCustomerLimit,
+        newCustomersOnly: coupon.newCustomersOnly,
+        redemptionsByUser: 0,
+        priorOrderCount: 0,
+        isGuest: true,
+      });
+      if (!guest.eligible) throw new CouponValidationError(guest.reason);
+    } else {
+      const [redemptionsByUser, priorOrderCount] = await Promise.all([
+        prisma.couponRedemption.count({ where: { couponId: coupon.id, userId } }),
+        coupon.newCustomersOnly
+          ? prisma.order.count({
+              where: { userId, status: { notIn: ['cancelled', 'failed'] } },
+            })
+          : Promise.resolve(0),
+      ]);
+      const verdict = checkCustomerEligibility({
+        perCustomerLimit: coupon.perCustomerLimit,
+        newCustomersOnly: coupon.newCustomersOnly,
+        redemptionsByUser,
+        priorOrderCount,
+      });
+      if (!verdict.eligible) throw new CouponValidationError(verdict.reason);
+    }
   }
 
   if (coupon.minOrderAmount && subtotal < Number(coupon.minOrderAmount)) {

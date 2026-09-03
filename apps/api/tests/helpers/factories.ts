@@ -190,6 +190,8 @@ export async function createCoupon(overrides: Partial<{
   maxDiscountAmount: number | null;
   usageLimit: number | null;
   usedCount: number;
+  perCustomerLimit: number | null;
+  newCustomersOnly: boolean;
   isActive: boolean;
   startsAt: Date | null;
   expiresAt: Date | null;
@@ -204,6 +206,8 @@ export async function createCoupon(overrides: Partial<{
       maxDiscountAmount: overrides.maxDiscountAmount ?? null,
       usageLimit: overrides.usageLimit ?? null,
       usedCount: overrides.usedCount ?? 0,
+      perCustomerLimit: overrides.perCustomerLimit ?? null,
+      newCustomersOnly: overrides.newCustomersOnly ?? false,
       isActive: overrides.isActive ?? true,
       startsAt: overrides.startsAt ?? null,
       expiresAt: overrides.expiresAt ?? null,

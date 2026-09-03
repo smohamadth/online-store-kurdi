@@ -584,6 +584,9 @@ router.post('/', authenticate, async (req, res, next) => {
     // claimed.
     let finalDiscountAmount = 0;
     let freeShippingCoupon = false;
+    // Set once a coupon validates, so the redemption can be recorded against
+    // this customer after the order row exists.
+    let appliedCouponId: string | null = null;
     const claimedCouponId = couponId || null;
     const claimedCouponCode = couponCode || null;
     if (claimedCouponId || claimedCouponCode) {
@@ -592,7 +595,9 @@ router.post('/', authenticate, async (req, res, next) => {
           couponId: claimedCouponId || undefined,
           code: claimedCouponCode || undefined,
           subtotal: finalSubtotal,
+          userId: req.user!.id,
         });
+        appliedCouponId = couponResult.coupon.id;
         finalDiscountAmount = couponResult.discount;
         freeShippingCoupon = couponResult.coupon.type === 'free_shipping';
       } catch (err) {
@@ -1092,12 +1097,25 @@ router.post('/', authenticate, async (req, res, next) => {
       customer: { userId: req.user!.id, email: req.user!.email },
     });
 
-    // Track coupon usage if coupon was applied
-    if (couponId) {
+    // Track coupon usage if a coupon was applied.
+    //
+    // Keyed off appliedCouponId (the id the validator actually resolved), not
+    // the raw `couponId` request field: a customer who applied the coupon by
+    // CODE has couponId undefined, so the global usedCount was never
+    // incremented for them and a usageLimit-capped coupon could be redeemed
+    // an unlimited number of times through the code path.
+    if (appliedCouponId) {
       await prisma.coupon.update({
-        where: { id: couponId },
+        where: { id: appliedCouponId },
         data: { usedCount: { increment: 1 } },
       }).catch(err => logger.error('Failed to update coupon usage:', err));
+
+      // Per-customer ledger. This is what makes perCustomerLimit enforceable
+      // on the next order; the global counter above cannot distinguish
+      // between one customer redeeming twice and two customers redeeming once.
+      await prisma.couponRedemption.create({
+        data: { couponId: appliedCouponId, userId: req.user!.id, orderId: order.id },
+      }).catch(err => logger.error('Failed to record coupon redemption:', err));
     }
 
     // Send order confirmation email (non-blocking)
