@@ -3,9 +3,11 @@
 // response envelope. Auth/gating is the ROUTE's job - the controller
 // trusts that trackingGate (opt-in flag) and authorize() already ran.
 import { Request, Response, NextFunction } from 'express';
+import { buildFunnel, biggestDropOff, FUNNEL_STEPS } from './funnel.helpers';
 import { z } from 'zod';
 import { AnalyticsService } from './analytics.service';
 import { logger } from '../../utils/logger';
+import { prisma } from '../../config/database';
 import { parsePagination, parseDays } from '../../utils/pagination';
 
 /**
@@ -177,6 +179,48 @@ export class AnalyticsController {
       res.json({
         status: 'success',
         data: stats,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /api/analytics/funnel - conversion funnel.
+   *
+   * Counts UNIQUE users (falling back to sessionId for anonymous traffic) per
+   * step, not raw events: one shopper reloading a product page twenty times is
+   * one person in the funnel, and counting events would make the top step look
+   * enormous and every conversion rate look terrible.
+   */
+  getFunnel = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const days = Math.min(Math.max(parseInt(String(req.query.days ?? '30'), 10) || 30, 1), 365);
+      const since = new Date(Date.now() - days * 86400_000);
+
+      const events = await prisma.userEvent.findMany({
+        where: { timestamp: { gte: since } },
+        select: { eventType: true, userId: true, sessionId: true },
+      });
+
+      const uniques: Record<string, Set<string>> = {};
+      for (const e of events as any[]) {
+        const who = e.userId || e.sessionId;
+        if (!who) continue;
+        (uniques[e.eventType] ??= new Set()).add(who);
+      }
+
+      const counts: Record<string, number> = {};
+      for (const step of FUNNEL_STEPS) counts[step] = uniques[step]?.size ?? 0;
+
+      const stages = buildFunnel(counts as any);
+      res.json({
+        status: 'success',
+        data: {
+          days,
+          stages,
+          biggestDropOff: biggestDropOff(stages),
+        },
       });
     } catch (error) {
       next(error);

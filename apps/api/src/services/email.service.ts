@@ -579,3 +579,81 @@ export default {
   sendWelcomeEmail,
   sendPasswordResetEmail,
 };
+
+/**
+ * Abandoned-cart recovery email.
+ *
+ * Marketing mail, not transactional: it MUST carry a working one-click
+ * unsubscribe link, both because CAN-SPAM/GDPR require it and because the
+ * alternative is spam complaints that damage delivery of the store's
+ * order confirmations too.
+ */
+export async function sendAbandonedCartEmail(params: {
+  to: string;
+  firstName?: string | null;
+  items: Array<{ name: string; quantity: number; price: number }>;
+  cartValue: number;
+  cartUrl: string;
+  unsubscribeUrl: string;
+  stage: number;
+}): Promise<boolean> {
+  const { to, firstName, items, cartValue, cartUrl, unsubscribeUrl, stage } = params;
+
+  const subject = stage === 1
+    ? 'You left something in your cart'
+    : 'Still thinking it over?';
+
+  const rows = items.map((i) => `
+    <tr>
+      <td style="padding:8px 0;">${escapeHtml(i.name)} &times; ${Number(i.quantity) || 0}</td>
+      <td style="padding:8px 0; text-align:right;">${(Number(i.price) || 0).toFixed(2)}</td>
+    </tr>`).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #000; color: #fff; padding: 20px; text-align: center; }
+        .content { padding: 20px; }
+        .button { display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; }
+        .footer { font-size: 12px; color: #777; padding: 16px 20px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header"><h1>Your cart is waiting</h1></div>
+        <div class="content">
+          <p>Hi ${escapeHtml(firstName || 'there')},</p>
+          <p>You left these items in your cart:</p>
+          <table style="width:100%; border-collapse:collapse;">${rows}</table>
+          <p style="text-align:right; font-weight:bold; margin-top:12px;">
+            Total: ${(Number(cartValue) || 0).toFixed(2)}
+          </p>
+          <p style="text-align:center; margin-top:30px;">
+            <a class="button" href="${escapeHtml(cartUrl)}">Complete your order</a>
+          </p>
+        </div>
+        <div class="footer">
+          <a href="${escapeHtml(unsubscribeUrl)}">Unsubscribe from these reminders</a>
+        </div>
+      </div>
+    </body>
+    </html>`;
+
+  const text = [
+    `Hi ${firstName || 'there'},`,
+    '',
+    'You left these items in your cart:',
+    ...items.map((i) => `  - ${i.name} x ${i.quantity}`),
+    '',
+    `Total: ${(Number(cartValue) || 0).toFixed(2)}`,
+    `Complete your order: ${cartUrl}`,
+    '',
+    `Unsubscribe: ${unsubscribeUrl}`,
+  ].join('\n');
+
+  return sendEmail(to, subject, html, text);
+}

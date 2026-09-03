@@ -72,4 +72,12 @@ router.get(
   analyticsController.getRealTimeStats
 );
 
+// GET /api/analytics/funnel - conversion funnel (view -> cart -> checkout -> purchase)
+router.get(
+  '/funnel',
+  authenticate,
+  authorize('admin', 'manager'),
+  analyticsController.getFunnel
+);
+
 export default router;

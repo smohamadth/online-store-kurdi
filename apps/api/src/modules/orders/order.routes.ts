@@ -25,6 +25,7 @@ import {
 import { emit } from '../plugins/pluginHooks';
 import { calculateTaxForOrder } from '../tax/tax.service';
 import { calculateShippingForOrder } from '../shipping/shipping.service';
+import { markCartRecovered } from '../marketing/abandonedCart.service';
 import { validateCoupon, CouponValidationError } from '../coupons/coupon.service';
 import { readCookie, AFFILIATE_COOKIE } from '../affiliates/affiliate.helpers';
 import { z } from 'zod';
@@ -1096,6 +1097,12 @@ router.post('/', authenticate, async (req, res, next) => {
       })),
       customer: { userId: req.user!.id, email: req.user!.email },
     });
+
+    // Close the loop on abandoned-cart recovery: if this customer was mailed
+    // a reminder, record that it converted. Without this the feature can only
+    // report "emails sent", never "carts recovered".
+    markCartRecovered(req.user!.id, order.id).catch((err) =>
+      logger.error('Failed to attribute cart recovery:', err));
 
     // Track coupon usage if a coupon was applied.
     //

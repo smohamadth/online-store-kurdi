@@ -138,6 +138,11 @@ const RELATION_TO_MODEL: Record<string, string> = {
   menuItems: 'MenuItem',
   'Menu.items': 'MenuItem',
   'Order.items': 'OrderItem',
+  // Bundles reuse the generic `items` relation name, which maps to OrderItem
+  // by default; without this the include resolves to the wrong store and the
+  // bundle looks empty (and prices at 0).
+  'Bundle.items': 'BundleItem',
+  'bundle.items': 'BundleItem',
   items: 'OrderItem',
   userEvent: 'UserEvent',
   userEvents: 'UserEvent',
@@ -313,7 +318,15 @@ function applyUpdateData(row: Row, data: any): Row {
       merged[k] = v;
     }
   }
-  merged.updatedAt = new Date();
+  // Mirrors Prisma's @updatedAt. An EXPLICIT updatedAt in the update payload
+  // wins, though: time-dependent features (abandoned-cart ageing, expiry
+  // sweeps) can only be tested by backdating a row, and silently discarding
+  // the value made those tests look like the feature was broken.
+  if (data && Object.prototype.hasOwnProperty.call(data, 'updatedAt')) {
+    merged.updatedAt = (data as any).updatedAt;
+  } else {
+    merged.updatedAt = new Date();
+  }
   return merged;
 }
 

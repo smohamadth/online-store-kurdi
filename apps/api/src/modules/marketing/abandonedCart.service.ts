@@ -1,0 +1,201 @@
+/**
+ * Abandoned-cart recovery sweep.
+ *
+ * Everything this needs already existed - CartItem is persisted server-side
+ * with updatedAt, users have emails, there is a job runner with a distributed
+ * lock, and email.service renders templates - but nothing joined them up.
+ *
+ * The selection rules live in abandonedCart.helpers (pure, unit-tested); this
+ * module is the I/O around them.
+ */
+import { prisma } from '../../config/database';
+import { logger } from '../../utils/logger';
+import { env } from '../../config/environment';
+import { sendAbandonedCartEmail } from '../../services/email.service';
+import { buildUnsubscribeUrl } from '../newsletter/newsletter.helpers';
+import { UNSUBSCRIBED } from '../newsletter/newsletter.helpers';
+import {
+  decideRecoveryEmail, MAX_AGE_HOURS, type CartCandidate,
+} from './abandonedCart.helpers';
+
+export type SweepResult = {
+  considered: number;
+  sent: number;
+  skipped: Record<string, number>;
+  errors: number;
+};
+
+/**
+ * Find carts eligible for a recovery email and send them.
+ *
+ * `dryRun` reports what WOULD be sent without mailing anyone - the only safe
+ * way to try this against production data for the first time.
+ */
+export async function runAbandonedCartSweep(opts: {
+  now?: Date;
+  dryRun?: boolean;
+  limit?: number;
+} = {}): Promise<SweepResult> {
+  const now = opts.now ?? new Date();
+  const dryRun = !!opts.dryRun;
+  const limit = opts.limit ?? 500;
+
+  const cutoff = new Date(now.getTime() - MAX_AGE_HOURS * 3600_000);
+
+  // Only carts touched inside the window are candidates. Anything older is
+  // excluded in SQL rather than fetched and discarded.
+  const items = await prisma.cartItem.findMany({
+    where: { updatedAt: { gte: cutoff } },
+    include: { product: true, user: true },
+  });
+
+  // Group lines into one candidate per user.
+  const byUser = new Map<string, {
+    userId: string; email: string | null; firstName: string | null;
+    updatedAt: Date; itemCount: number; cartValue: number;
+    lines: Array<{ name: string; quantity: number; price: number }>;
+  }>();
+
+  for (const it of items as any[]) {
+    const userId = it.userId;
+    const price = Number(it.product?.price ?? 0);
+    const qty = Number(it.quantity ?? 0);
+    const cur = byUser.get(userId) ?? {
+      userId,
+      email: it.user?.email ?? null,
+      firstName: it.user?.firstName ?? null,
+      updatedAt: new Date(it.updatedAt),
+      itemCount: 0,
+      cartValue: 0,
+      lines: [],
+    };
+    cur.itemCount += qty;
+    cur.cartValue += price * qty;
+    cur.lines.push({ name: it.product?.name ?? 'Item', quantity: qty, price });
+    // The cart's age is defined by its most RECENT change: adding a line
+    // means the shopper is still active, so the clock should restart.
+    const t = new Date(it.updatedAt);
+    if (t > cur.updatedAt) cur.updatedAt = t;
+    byUser.set(userId, cur);
+  }
+
+  const result: SweepResult = { considered: byUser.size, sent: 0, skipped: {}, errors: 0 };
+  const bump = (reason: string) => {
+    result.skipped[reason] = (result.skipped[reason] ?? 0) + 1;
+  };
+
+  let processed = 0;
+  for (const cand of byUser.values()) {
+    if (processed >= limit) break;
+    processed += 1;
+
+    try {
+      const [alreadySent, ordersSince, optOut] = await Promise.all([
+        prisma.abandonedCartEmail.findMany({ where: { userId: cand.userId } }),
+        prisma.order.count({
+          where: { userId: cand.userId, createdAt: { gte: cand.updatedAt } },
+        }),
+        cand.email
+          ? prisma.newsletterSubscriber.findUnique({ where: { email: cand.email.toLowerCase() } })
+          : Promise.resolve(null),
+      ]);
+
+      const candidate: CartCandidate = {
+        userId: cand.userId,
+        email: cand.email,
+        updatedAt: cand.updatedAt,
+        itemCount: cand.itemCount,
+        cartValue: cand.cartValue,
+        stagesSent: (alreadySent as any[]).map((r) => r.stage),
+        orderedSince: ordersSince > 0,
+        unsubscribed: (optOut as any)?.status === UNSUBSCRIBED,
+      };
+
+      const decision = decideRecoveryEmail(candidate, now);
+      if (!decision.send) {
+        bump(decision.reason);
+        continue;
+      }
+
+      if (dryRun) {
+        result.sent += 1;
+        continue;
+      }
+
+      // Claim the (user, stage) slot BEFORE sending. The unique constraint
+      // means a concurrent sweep loses the race here rather than both
+      // discovering the row is missing and each sending a copy.
+      let claimed: any;
+      try {
+        claimed = await prisma.abandonedCartEmail.create({
+          data: {
+            userId: cand.userId,
+            stage: decision.stage,
+            itemCount: cand.itemCount,
+            cartValue: cand.cartValue,
+          },
+        });
+      } catch {
+        bump('already claimed');
+        continue;
+      }
+
+      const subscriber = optOut as any;
+      const unsubscribeUrl = buildUnsubscribeUrl(
+        env.FRONTEND_URL,
+        subscriber?.unsubscribeToken ?? '',
+      );
+
+      const ok = await sendAbandonedCartEmail({
+        to: cand.email!,
+        firstName: cand.firstName,
+        items: cand.lines,
+        cartValue: cand.cartValue,
+        cartUrl: `${String(env.FRONTEND_URL).replace(/\/+$/, '')}/cart`,
+        unsubscribeUrl,
+        stage: decision.stage,
+      });
+
+      if (ok) {
+        result.sent += 1;
+      } else {
+        // Release the claim so the next sweep can retry, otherwise a
+        // transient SMTP failure permanently burns that stage for this user.
+        result.errors += 1;
+        await prisma.abandonedCartEmail
+          .delete({ where: { id: claimed.id } })
+          .catch(() => undefined);
+      }
+    } catch (err) {
+      result.errors += 1;
+      logger.error('Abandoned-cart sweep error for a user:', err);
+    }
+  }
+
+  logger.info(
+    `Abandoned-cart sweep: considered=${result.considered} sent=${result.sent} errors=${result.errors}`,
+  );
+  return result;
+}
+
+/**
+ * Mark a recovery email as converted.
+ *
+ * Called after an order is placed. Without this the feature cannot be judged:
+ * "we sent 400 emails" is not a result, "we recovered 38 carts" is.
+ */
+export async function markCartRecovered(userId: string, orderId: string): Promise<void> {
+  try {
+    const open = await prisma.abandonedCartEmail.findMany({
+      where: { userId, recoveredAt: null },
+    });
+    for (const row of open as any[]) {
+      await prisma.abandonedCartEmail.update({
+        where: { id: row.id },
+        data: { recoveredAt: new Date(), orderId },
+      });
+    }
+  } catch (err) {
+    logger.error('Failed to mark cart recovered:', err);
+  }
+}
