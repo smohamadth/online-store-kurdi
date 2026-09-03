@@ -277,9 +277,14 @@ def main():
                 mpage.wait_for_timeout(400)
                 drawer_bg = css(mpage, """
                     (() => {
-                        const drawers = [...document.querySelectorAll('div')].filter(d =>
-                            getComputedStyle(d).transform.includes('translateX(0')) &&
-                            getComputedStyle(d).position === 'absolute');
+                        // NB: the predicate must stay INSIDE filter()'s
+                        // callback. Closing the call after .includes(...)
+                        // and continuing with && is a syntax error, which is
+                        // what this script did before it was ever run.
+                        const drawers = [...document.querySelectorAll('div')].filter(
+                            (d) => getComputedStyle(d).transform.includes('translateX(0') &&
+                                   getComputedStyle(d).position === 'absolute'
+                        );
                         return drawers.length ? getComputedStyle(drawers[0]).backgroundColor : '';
                     })()
                 """)
