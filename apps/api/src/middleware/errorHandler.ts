@@ -14,6 +14,7 @@ import { Request, Response, NextFunction } from 'express';
 import { env, isDevelopment } from '../config/environment';
 import { Sentry, isSentryEnabled } from '../config/sentry';
 import { logger } from '../utils/logger';
+import { redactUrl } from '../utils/redact';
 
 // Custom error class
 export class AppError extends Error {
@@ -83,7 +84,10 @@ export const errorHandler = (
   logger.error('Error occurred:', {
     error: err.message,
     stack: err.stack,
-    url: req.url,
+    // Redacted: req.url carries the query string, and one-click links (the
+    // newsletter unsubscribe token) put a live credential there. An error on
+    // such a request would otherwise write it to logs/error.log.
+    url: redactUrl(req.url),
     method: req.method,
     ip: req.ip,
     userAgent: req.get('User-Agent'),
@@ -97,7 +101,10 @@ export const errorHandler = (
   // the right request.
   if (isSentryEnabled()) {
     Sentry.captureException(err, {
-      extra: { url: req.url, method: req.method, code: (err as any).code },
+      // Redacted here as well as in beforeSend: that hook scrubs
+      // event.request.url, but `extra` is a free-form bag it does not touch,
+      // so an unredacted URL here would still ship the token to Sentry.
+      extra: { url: redactUrl(req.url), method: req.method, code: (err as any).code },
     });
   }
 

@@ -3,6 +3,7 @@
 // response envelope. Auth/gating is the ROUTE's job - the controller
 // trusts that trackingGate (opt-in flag) and authorize() already ran.
 import { Request, Response, NextFunction } from 'express';
+import { truncateIp } from '../../utils/redact';
 import { buildFunnel, biggestDropOff, FUNNEL_STEPS } from './funnel.helpers';
 import { z } from 'zod';
 import { AnalyticsService } from './analytics.service';
@@ -60,7 +61,13 @@ export class AnalyticsController {
         searchQuery,
         metadata,
         userAgent: req.get('User-Agent'),
-        ipAddress: req.ip,
+        // Truncated: a full IP is personal data under GDPR, and these rows
+        // are retained indefinitely. The last octet is dropped, which keeps
+        // the coarse-location signal analytics actually uses. The newsletter
+        // consent record already did this; analytics storing the full address
+        // made the store's PII handling inconsistent with its own privacy
+        // page.
+        ipAddress: truncateIp(req.ip),
       });
 
       res.json({
@@ -87,7 +94,13 @@ export class AnalyticsController {
         userId: req.user?.id,
         sessionId,
         userAgent: req.get('User-Agent'),
-        ipAddress: req.ip,
+        // Truncated: a full IP is personal data under GDPR, and these rows
+        // are retained indefinitely. The last octet is dropped, which keeps
+        // the coarse-location signal analytics actually uses. The newsletter
+        // consent record already did this; analytics storing the full address
+        // made the store's PII handling inconsistent with its own privacy
+        // page.
+        ipAddress: truncateIp(req.ip),
       }));
 
       await this.analyticsService.trackEvents(enrichedEvents);

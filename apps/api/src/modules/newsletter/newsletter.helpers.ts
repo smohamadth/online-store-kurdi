@@ -45,22 +45,12 @@ export function normalizeEmail(email: string): string {
 /**
  * Truncate an IP for consent logging.
  *
- * Full IPs are personal data under GDPR; the last octet (or the low 80 bits of
- * a v6 address) is dropped so the record still evidences "consent came from
- * this network" without retaining an identifier.
+ * Re-exported from utils/redact so there is ONE definition. Two copies of a
+ * privacy control drift, and the drift is silent: analytics was storing full
+ * IPs while this module truncated them.
  */
-export function truncateIp(ip: string | undefined | null): string | null {
-  if (!ip) return null;
-  const clean = String(ip).replace(/^::ffff:/, '').trim();
-  if (!clean) return null;
-  if (clean.includes(':')) {
-    const parts = clean.split(':').filter(Boolean);
-    return parts.slice(0, 3).join(':') + '::';
-  }
-  const octets = clean.split('.');
-  if (octets.length !== 4) return null;
-  return `${octets[0]}.${octets[1]}.${octets[2]}.0`;
-}
+export { truncateIp } from '../../utils/redact';
+
 
 /**
  * Build the one-click unsubscribe URL placed in every marketing email.

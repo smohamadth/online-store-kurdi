@@ -28,7 +28,10 @@ export interface UserEvent {
   metadata?: Record<string, any>;
   timestamp?: Date;
   userAgent?: string;
-  ipAddress?: string;
+  // `string | null` because truncateIp returns null for an absent or
+  // unparseable address - which is the value we WANT stored, rather than a
+  // full address falling through.
+  ipAddress?: string | null;
 }
 
 // Analytics service for tracking user behavior

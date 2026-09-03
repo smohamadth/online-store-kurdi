@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/node';
+import { redactUrl } from '../utils/redact';
 import { env } from './environment';
 
 /**
@@ -29,6 +30,35 @@ export function initSentry(): void {
     // The server log already carries structured errors; sending both
     // doubles the noise in the Sentry issue stream.
     denyUrls: [/\/health$/],
+    // Scrub credentials out of anything leaving the process.
+    //
+    // Sentry's http integration reports the request URL with its query
+    // string, and one-click links (the newsletter unsubscribe token) put a
+    // live credential there. Without this, enabling Sentry ships those
+    // tokens to a third party - a worse leak than the local log, because it
+    // crosses a trust boundary.
+    beforeSend(event) {
+      try {
+        if (event.request?.url) {
+          event.request.url = redactUrl(event.request.url);
+        }
+        if (event.request?.query_string) {
+          const qs = event.request.query_string;
+          event.request.query_string =
+            typeof qs === 'string'
+              ? redactUrl(`?${qs}`).replace(/^\?/, '')
+              : qs;
+        }
+        if (Array.isArray(event.breadcrumbs)) {
+          for (const b of event.breadcrumbs) {
+            if (typeof b.data?.url === 'string') b.data.url = redactUrl(b.data.url);
+          }
+        }
+      } catch {
+        // Never let scrubbing failure drop the error report itself.
+      }
+      return event;
+    },
   });
   enabled = true;
 }

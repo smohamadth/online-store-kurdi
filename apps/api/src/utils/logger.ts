@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 import winston from 'winston';
 import { env, isDevelopment } from '../config/environment';
+import { redactLogLine, redactUrl } from './redact';
 
 // JSON line format - machine-parseable for log shippers; humans read the
 // dev console format below instead.
@@ -64,7 +65,12 @@ export const logger = winston.createLogger({
 // place to filter/rotate) instead of its own console output.
 export const loggerStream = {
   write: (message: string) => {
-    logger.info(message.trim());
+    // Redact before writing. The access log records the full request line
+    // including the query string, and the newsletter unsubscribe token
+    // travels there by necessity (it is a one-click link in an email) - so
+    // every unsubscribe click was writing a live credential to logs/app.log,
+    // where log shippers and backups keep it indefinitely.
+    logger.info(redactLogLine(message.trim()));
   },
 };
 
@@ -90,7 +96,7 @@ export const log = {
   request: (req: any, res: any, responseTime: number) => {
     logger.info('HTTP Request', {
       method: req.method,
-      url: req.url,
+      url: redactUrl(req.url),
       status: res.statusCode,
       responseTime: `${responseTime}ms`,
       userAgent: req.get('User-Agent'),
