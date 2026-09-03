@@ -35,6 +35,11 @@ import {
   startScheduler as startCurrencyScheduler,
   stopScheduler as stopCurrencyScheduler,
 } from './jobs/currency.scheduler';
+// Same name-collision caveat as above: alias the marketing scheduler too.
+import {
+  startScheduler as startMarketingScheduler,
+  stopScheduler as stopMarketingScheduler,
+} from './jobs/marketing-scheduler';
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
@@ -45,6 +50,7 @@ async function gracefulShutdown(signal: string) {
     // while we're tearing down.
     stopScheduler();
     stopCurrencyScheduler();
+    stopMarketingScheduler();
 
     // Close HTTP server
     httpServer.close(() => {
@@ -179,6 +185,9 @@ async function startServer() {
       // doesn't compete with startup.
       startScheduler();
       startCurrencyScheduler();
+      // Abandoned-cart recovery. No-ops unless ABANDONED_CART_SCHEDULER=on:
+      // a store must opt in before it starts emailing customers.
+      startMarketingScheduler();
       if (alsoBindIpv6Loopback) {
         // net.Server can only listen once, so open a twin server that feeds
         // the same Express app.

@@ -26,6 +26,7 @@ import sys
 import urllib.error
 import urllib.request
 
+from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
@@ -34,9 +35,34 @@ API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
 results = []
 
 
+def goto(page, url, settle=0):
+    """Navigate reliably.
+
+    `networkidle` means "no network connections for 500ms", which a long-poll,
+    a retrying request or a hanging asset prevents forever - Playwright
+    discourages it and regression-ui.py already had whole sweeps aborted by
+    it. Wait for `load` (the hard requirement) and treat networkidle as
+    best-effort.
+    """
+    page.goto(url, wait_until="load", timeout=60000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except PWTimeout:
+        pass
+    if settle:
+        page.wait_for_timeout(settle)
+
+
+
 def check(name, okv, detail=""):
     results.append(bool(okv))
     print(("PASS  " if okv else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not okv:
+        # Raw job logs are not always reachable from a sandbox, but ::error::
+        # annotations are exposed through the checks API - so a red run is
+        # diagnosable without the log.
+        safe = f"{name}: {detail}".replace("\n", " ").replace("\r", " ")
+        print(f"::error::verify-theme: {safe}")
 
 
 def call(method, path, token=None, body=None):
@@ -148,7 +174,7 @@ def main():
                 st, _ = call("PUT", "/theme", admin, values)
                 check(f"{name}: preset applied", st == 200, f"PUT /theme {st}")
 
-                page.goto(WEB, wait_until="networkidle")
+                goto(page, WEB)
                 page.wait_for_timeout(600)  # ThemeProvider paints from the API
 
                 header_bg = norm(css(page, "getComputedStyle(document.querySelector('header')).backgroundColor"))
@@ -243,7 +269,7 @@ def main():
             # Mobile drawer opens on --card-bg.
             mob = browser.new_context(viewport={"width": 390, "height": 844})
             mpage = mob.new_page()
-            mpage.goto(WEB, wait_until="networkidle")
+            goto(mpage, WEB)
             mpage.wait_for_timeout(600)
             hamburger = mpage.query_selector("header button")
             if hamburger:
@@ -268,7 +294,7 @@ def main():
                 "showAnnouncement": True, "announcementText": "THEME TEST ANNOUNCEMENT",
                 "announcementBg": "#123456", "announcementText2": "#fedcba",
             })
-            page.goto(WEB, wait_until="networkidle")
+            goto(page, WEB)
             page.wait_for_timeout(600)
             bar = page.query_selector("text=THEME TEST ANNOUNCEMENT")
             if bar:
@@ -291,7 +317,7 @@ def main():
 
             # Admin isolation: dashboard stays on its fixed palette while
             # the storefront is dark.
-            page.goto(f"{WEB}/admin", wait_until="networkidle")
+            goto(page, f"{WEB}/admin")
             page.wait_for_timeout(800)
             admin_bg = css(page, """
                 (() => {
@@ -305,7 +331,7 @@ def main():
             # Reduced motion collapses transitions.
             rm = browser.new_context(reduced_motion="reduce")
             rpage = rm.new_page()
-            rpage.goto(WEB, wait_until="networkidle")
+            goto(rpage, WEB)
             dur = css(rpage, """
                 (() => {
                     const probe = document.createElement('div');
@@ -340,4 +366,16 @@ def main():
     sys.exit(0 if all(results) else 1)
 
 
-main()
+try:
+    main()
+except SystemExit:
+    raise
+except Exception as exc:  # noqa: BLE001
+    # Without this a crash before the first check exits 1 with nothing in the
+    # annotations - exactly the situation that cost several rounds on
+    # verify-marketing-ui.
+    import traceback
+    tb = traceback.format_exc().strip().replace("\n", " | ")
+    print(f"::error::verify-theme crashed: {exc!r}")
+    print(f"::error::traceback: {tb[-800:]}")
+    sys.exit(1)
