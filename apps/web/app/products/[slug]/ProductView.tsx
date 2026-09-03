@@ -27,6 +27,7 @@ import { trackRecentlyViewed } from '@/lib/recentlyViewed';
 import { trackEvent } from '@/lib/tracking';
 import { api, Product, getCategoryEmoji, getImageUrl, getProductImage } from '@/lib/api';
 import ReviewSection from '@/components/ReviewSection';
+import BundleOffer from '@/components/BundleOffer';
 import ProductCarousel from '@/components/ProductCarousel';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import ShareButtons from '@/components/ShareButtons';
@@ -1038,6 +1039,10 @@ export default function ProductView() {
           dangerouslySetInnerHTML={{ __html: product.description || '' }}
         />
       </div>
+
+      {/* Bundles containing this product, priced server-side. Renders
+          nothing when there are none or when a component is out of stock. */}
+      <BundleOffer productId={product.id} />
 
       {/* Reviews Section */}
       <ReviewSection productId={product.id} productName={product.name} />

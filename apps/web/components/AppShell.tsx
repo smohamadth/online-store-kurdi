@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 import AffiliateRefCapture from '@/components/AffiliateRefCapture';
+import EmailCapturePopup from '@/components/EmailCapturePopup';
 import { useStoreSettings } from '@/lib/settings';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
@@ -996,6 +997,9 @@ export default function AppShell({
               API, records the affiliate click and sets the attribution
               cookie (once per code per browser). Renders nothing. */}
           <AffiliateRefCapture />
+          {/* Exit-intent newsletter capture. Shows at most once per browser
+              and suppresses itself on admin, cart and checkout routes. */}
+          <EmailCapturePopup />
           <RouteProgress />
           <ToastContainer />
           <div
