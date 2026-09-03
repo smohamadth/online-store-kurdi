@@ -67,7 +67,7 @@ export async function runAbandonedCartSweep(opts: {
       updatedAt: new Date(it.updatedAt),
       itemCount: 0,
       cartValue: 0,
-      lines: [],
+      lines: [] as Array<{ name: string; quantity: number; price: number }>,
     };
     cur.itemCount += qty;
     cur.cartValue += price * qty;

@@ -690,12 +690,18 @@ model Coupon {
   maxDiscountAmount Float?
   usageLimit    Int?
   usedCount     Int       @default(0)
+  // Per-customer cap. NULL = unlimited, which is what every coupon predating
+  // this feature has, so their behaviour is unchanged. usedCount above is a
+  // GLOBAL counter and cannot express "one per customer".
+  perCustomerLimit Int?
+  // Restrict to customers with no prior completed order.
+  newCustomersOnly Boolean @default(false)
   isActive      Boolean   @default(true)
   startsAt      DateTime?
   expiresAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  
+
   redemptions   CouponRedemption[]
 
   @@index([code])
