@@ -348,6 +348,9 @@ jobs:
         
       - name: Marketing UI (popup + bundles)
         run: python3 scripts/verify-marketing-ui.py
+
+      - name: Theme presets reach the UI
+        run: python3 scripts/verify-theme.py
         
       - name: Server logs
         if: always()
