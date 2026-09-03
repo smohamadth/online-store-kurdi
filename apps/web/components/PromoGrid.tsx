@@ -4,18 +4,26 @@
 
 'use client';
 
+import { useContext } from 'react';
 import Link from 'next/link';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import { I18nSeedContext } from '@/lib/i18n';
 import { getImageUrl } from '@/lib/api';
 import { useIsMobile } from '@/lib/hooks';
 import { looksLikeScrim, type Banner } from './HeroGallery';
 
 export default function PromoGrid({ banners }: { banners: Banner[] }) {
   const isMobile = useIsMobile();
+  const seed = useContext(I18nSeedContext);
+  const isRtl = seed?.dir === 'rtl';
+
   if (!banners || banners.length === 0) return null;
 
   const visible = banners.slice(0, 6);
-  const cols = Math.min(visible.length, 3);
+  // Column count chosen so the last row is never a single orphan tile.
+  // `Math.min(length, 3)` put four banners in a 3-wide grid, leaving one tile
+  // stretched alone underneath three - four belongs in a 2x2.
+  const cols = columnsFor(visible.length);
 
   return (
     <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px 0' }}>
@@ -49,7 +57,13 @@ export default function PromoGrid({ banners }: { banners: Banner[] }) {
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  background: 'linear-gradient(90deg, rgba(0,0,0,0.6), rgba(0,0,0,0.05))',
+                  // The scrim darkens the edge the text starts from, so it
+                  // has to follow the reading direction: pinned to 90deg the
+                  // copy in an RTL locale sat over the transparent end and
+                  // was unreadable against a light image.
+                  background: isRtl
+                    ? 'linear-gradient(270deg, rgba(0,0,0,0.6), rgba(0,0,0,0.05))'
+                    : 'linear-gradient(90deg, rgba(0,0,0,0.6), rgba(0,0,0,0.05))',
                 }}
               />
               <div
@@ -90,4 +104,17 @@ export default function PromoGrid({ banners }: { banners: Banner[] }) {
       </div>
     </section>
   );
+}
+
+/**
+ * Columns for a given tile count, avoiding a lone tile on the last row.
+ *
+ *   1 -> 1      4 -> 2 (2x2)
+ *   2 -> 2      5 -> 3 (3+2)
+ *   3 -> 3      6 -> 3 (3+3)
+ */
+function columnsFor(n: number): number {
+  if (n <= 1) return 1;
+  if (n === 2 || n === 4) return 2;
+  return 3;
 }
