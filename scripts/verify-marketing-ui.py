@@ -22,6 +22,7 @@ import sys
 import urllib.error
 import urllib.request
 
+from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
@@ -29,10 +30,62 @@ API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
 
 results = []
 
+def trigger_exit_intent(page):
+    """Simulate the shopper's pointer leaving through the top of the window.
+
+    Tries a real pointer movement first (page.mouse), because that is what the
+    component is actually built for. Chromium clamps mouse coordinates to the
+    viewport, so it cannot produce the clientY <= 0 the handler looks for -
+    hence the synthetic dispatch as well. Doing both means the check exercises
+    the real path when it can and still reaches the handler when it cannot.
+    """
+    try:
+        page.mouse.move(700, 400)
+        page.mouse.move(700, 0)
+    except Exception:
+        pass
+    page.evaluate(
+        """() => {
+            const ev = new MouseEvent('mouseout', {
+                bubbles: true, cancelable: true, clientX: 700, clientY: -5,
+            });
+            // relatedTarget is readonly on the constructor in some engines;
+            // define it explicitly so the handler's null check is meaningful.
+            Object.defineProperty(ev, 'relatedTarget', { value: null });
+            document.dispatchEvent(ev);
+        }"""
+    )
+    page.wait_for_timeout(800)
+
+
+def goto(page, url, settle=1500):
+    """Navigate reliably.
+
+    `networkidle` means "no network connections for 500ms", which a long-poll,
+    a retrying request or a hanging third-party asset prevents forever -
+    Playwright itself discourages it. regression-ui.py already hit this and
+    aborted whole sweeps. Wait for `load` (a hard requirement), then treat
+    networkidle as best-effort.
+    """
+    page.goto(url, wait_until="load", timeout=60000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except PWTimeout:
+        pass
+    page.wait_for_timeout(settle)
+
+
+
 
 def check(name, ok, detail=""):
     results.append(bool(ok))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        # Raw job logs are not always reachable, but ::error:: annotations are
+        # exposed through the checks API - so a failure here is diagnosable
+        # without the log.
+        safe = f"{name}: {detail}".replace("\n", " ").replace("\r", " ")
+        print(f"::error::verify-marketing-ui: {safe}")
 
 
 def _api(method, path, token=None, body=None):
@@ -116,11 +169,19 @@ try:
             page.on("console",
                     lambda m: console.append(m.text) if m.type == "error" else None)
 
-            page.goto(f"{WEB}/products/{anchor['slug']}", wait_until="networkidle")
-            page.wait_for_timeout(2000)
+            goto(page, "{WEB}/products/{anchor['slug']}", 2000)
 
             offer = page.locator('[data-testid="bundle-offer"]')
-            check("bundle offer renders on the product page", offer.count() > 0)
+            if offer.count() == 0:
+                # Report enough to tell "API returned nothing" apart from
+                # "component did not mount".
+                _, listed = _api("GET", "/bundles")
+                slugs = [b.get("slug") for b in listed.get("data", [])]
+                detail = (f"api bundles={slugs}; url={page.url}; "
+                          f"console_errors={console[:2]}")
+            else:
+                detail = ""
+            check("bundle offer renders on the product page", offer.count() > 0, detail)
 
             if offer.count() > 0:
                 body = page.inner_text("body")
@@ -149,8 +210,7 @@ try:
                           add.first.inner_text())
 
                     # Both components must land in the cart as separate lines.
-                    page.goto(f"{WEB}/cart", wait_until="networkidle")
-                    page.wait_for_timeout(1500)
+                    goto(page, "{WEB}/cart", 1500)
                     cart_text = page.inner_text("body")
                     check("first component is in the cart", anchor["name"] in cart_text)
                     check("second component is in the cart", second["name"] in cart_text)
@@ -164,20 +224,21 @@ try:
         # -------------------------------------------------------------------
         ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
         page = ctx.new_page()
-        page.goto(WEB, wait_until="networkidle")
-        page.wait_for_timeout(1500)
+        goto(page, WEB, 1500)
 
         check("popup is not shown before any trigger",
               page.locator('[data-testid="email-capture-popup"]').count() == 0)
 
         # Exit intent: pointer leaves through the TOP of the viewport.
-        page.evaluate(
-            """() => document.dispatchEvent(
-                new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
-        )
-        page.wait_for_timeout(800)
+        trigger_exit_intent(page)
         popup = page.locator('[data-testid="email-capture-popup"]')
-        check("popup opens on exit intent", popup.count() > 0)
+        if popup.count() == 0:
+            marker = page.evaluate(
+                "() => localStorage.getItem('email_capture_done')")
+            popup_detail = f"url={page.url}; dismissed_marker={marker}"
+        else:
+            popup_detail = ""
+        check("popup opens on exit intent", popup.count() > 0, popup_detail)
 
         if popup.count() > 0:
             page.fill('[data-testid="email-capture-input"]', "ui-verify@example.com")
@@ -194,13 +255,9 @@ try:
                   "ui-verify@example.com" in emails)
 
         # Once per browser: a reload must not bring it back.
-        page.reload(wait_until="networkidle")
+        page.reload(wait_until="load", timeout=60000)
         page.wait_for_timeout(1200)
-        page.evaluate(
-            """() => document.dispatchEvent(
-                new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
-        )
-        page.wait_for_timeout(800)
+        trigger_exit_intent(page)
         check("popup stays dismissed after a reload",
               page.locator('[data-testid="email-capture-popup"]').count() == 0)
         ctx.close()
@@ -216,14 +273,9 @@ try:
         for route in ("/cart", "/checkout"):
             ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
             page = ctx.new_page()
-            page.goto(f"{WEB}{route}", wait_until="networkidle")
-            page.wait_for_timeout(1500)
+            goto(page, "{WEB}{route}", 1500)
             landed = page.url
-            page.evaluate(
-                """() => document.dispatchEvent(
-                    new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
-            )
-            page.wait_for_timeout(800)
+            trigger_exit_intent(page)
             suppressed_route = any(r in landed for r in ("/cart", "/checkout"))
             check(f"requesting {route} lands on a suppressed route",
                   suppressed_route, f"landed on {landed}")
@@ -236,15 +288,9 @@ try:
         page = ctx.new_page()
         # Whether this lands on /checkout or bounces to /cart, both are
         # suppressed routes, which is all this case needs.
-        page.goto(f"{WEB}/checkout", wait_until="networkidle")
-        page.wait_for_timeout(1500)
-        page.goto(WEB, wait_until="networkidle")
-        page.wait_for_timeout(1200)
-        page.evaluate(
-            """() => document.dispatchEvent(
-                new MouseEvent('mouseout', {relatedTarget: null, clientY: -5, bubbles: true}))"""
-        )
-        page.wait_for_timeout(800)
+        goto(page, "{WEB}/checkout", 1500)
+        goto(page, WEB, 1200)
+        trigger_exit_intent(page)
         check("visiting checkout does not burn the one showing",
               page.locator('[data-testid="email-capture-popup"]').count() > 0)
         ctx.close()
