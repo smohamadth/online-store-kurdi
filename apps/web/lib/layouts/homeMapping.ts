@@ -65,24 +65,60 @@ function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
-/** Align studio config keys with HomeView renderers (quote.text, video.src, …). */
+function firstString(...vals: unknown[]): string | undefined {
+  for (const v of vals) {
+    if (typeof v === 'string' && v.length) return v;
+  }
+  return undefined;
+}
+
+/**
+ * One item/config schema for Theme Studio + Home builder.
+ * Home: testimonials `{ name, text }`, quote `quote`, gallery `image`, video `url`.
+ * Studio renderer historically used `author` / `text` / `src`. Fill both aliases.
+ */
 export function normalizeStudioConfig(type: BlockType, cfg: Record<string, unknown>): Record<string, unknown> {
   const next = { ...cfg };
-  if (type === 'quote' && next.quote == null && next.text != null) next.quote = next.text;
-  if (type === 'video' && next.url == null && next.src != null) next.url = next.src;
-  if ((type === 'image' || type === 'textImage') && next.image == null) {
-    next.image = next.src ?? next.url;
+  if (type === 'quote') {
+    const body = firstString(next.quote, next.text);
+    if (body != null) {
+      next.quote = next.quote ?? body;
+      next.text = next.text ?? body;
+    }
+  }
+  if (type === 'video') {
+    const src = firstString(next.url, next.src);
+    if (src != null) {
+      next.url = next.url ?? src;
+      next.src = next.src ?? src;
+    }
+  }
+  if (type === 'image' || type === 'textImage') {
+    const img = firstString(next.image, next.src, next.url);
+    if (img != null) {
+      next.image = next.image ?? img;
+      next.src = next.src ?? img;
+    }
   }
   if (type === 'testimonials' && Array.isArray(next.items)) {
     next.items = next.items.map((it) => {
       const row = asRecord(it);
-      return { ...row, name: row.name ?? row.author };
+      const who = firstString(row.name, row.author);
+      return { ...row, name: row.name ?? who, author: row.author ?? who };
+    });
+  }
+  if (type === 'logoStrip' && Array.isArray(next.items)) {
+    next.items = next.items.map((it) => {
+      const row = asRecord(it);
+      const name = firstString(row.name, row.text);
+      return { ...row, name: row.name ?? name };
     });
   }
   if (type === 'gallery' && Array.isArray(next.items)) {
     next.items = next.items.map((it) => {
       const row = asRecord(it);
-      return { ...row, image: row.image ?? row.src ?? row.url };
+      const img = firstString(row.image, row.src, row.url);
+      return { ...row, image: row.image ?? img, src: row.src ?? img, url: row.url ?? img };
     });
   }
   return next;

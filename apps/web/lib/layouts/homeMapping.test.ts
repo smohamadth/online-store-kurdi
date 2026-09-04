@@ -74,6 +74,21 @@ describe('blockToHomeSection', () => {
     expect(v.config.url).toBe('https://youtu.be/x');
   });
 
+  it('maps Home-builder testimonial/gallery keys onto studio aliases', () => {
+    const t = blockToHomeSection(
+      block({ type: 'testimonials', config: { items: [{ name: 'Ali', text: 'Great', role: 'Buyer' }] } }),
+    );
+    const items = t.config.items as { name: string; author: string; text: string }[];
+    expect(items[0].name).toBe('Ali');
+    expect(items[0].author).toBe('Ali');
+    const g = blockToHomeSection(
+      block({ type: 'gallery', config: { items: [{ image: '/g.jpg', caption: 'Look' }] } }),
+    );
+    const gItems = g.config.items as { image: string; src: string }[];
+    expect(gItems[0].image).toBe('/g.jpg');
+    expect(gItems[0].src).toBe('/g.jpg');
+  });
+
   it('derives sortOrder from grid position (row-major, then column)', () => {
     const a = blockToHomeSection(block({ id: 'a', rowStart: 1, colStart: 1 }));
     const b = blockToHomeSection(block({ id: 'b', rowStart: 1, colStart: 2 }));

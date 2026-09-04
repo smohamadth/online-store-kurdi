@@ -65,9 +65,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** not a bug. Builder and `ComparisonTable` both use **1-based** `highlight` (`0`/null = none). Seed `highlight: 2` is the second column. Covered by tests.
 
 ### 13. Testimonials field names differ between Home builder and Studio renderer
-**Where:** Home builder items use `{ name, role, rating, text }`. `LayoutRenderer` testimonials read `t.author`. Quote: Home uses `cfg.quote`; Studio quote block uses `config.text`. Gallery: Home uses `image`; Studio gallery looks at `src`/`url`. Logo: Home `logos` vs Studio `logoStrip`.  
-**Bug:** Copy-paste / mapping produces empty blocks.  
-**Fix direction:** Normalize in `blockToHomeSection` or share one item schema.
+**Status:** fixed. `normalizeStudioConfig` fills both aliases (`name`/`author`, `quote`/`text`, `image`/`src`) and `LayoutRenderer` runs it before draw, so Home-builder JSON previews in Studio.
 
 ### 14. Featured/new/trending Studio blocks on non-home pages replace real chrome
 **Where:** `KNOWN_GAPS` §13.3 — a products-page layout with only a hero **hides the filter sidebar and pagination**. `productDetail` renderer’s “Add to cart” is a **div**, not a button (dead). `categoryGrid` reads `d.products` not categories.  

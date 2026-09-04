@@ -283,6 +283,16 @@ describe('LayoutRenderer marketing blocks', () => {
     expect(screen.getByText(/Nice/)).toBeTruthy();
   });
 
+  it('renders Home-builder testimonial/quote/gallery keys in the studio preview', () => {
+    renderBlock('testimonials', { items: [{ name: 'Pat', text: 'Solid', role: 'Verified' }] });
+    expect(screen.getByText(/Solid/)).toBeTruthy();
+    expect(screen.getByText('Pat')).toBeTruthy();
+    renderBlock('quote', { quote: 'Keep it simple', author: 'Ada' });
+    expect(screen.getByText(/Keep it simple/)).toBeTruthy();
+    const { container } = renderBlock('gallery', { items: [{ image: '/look.jpg' }] });
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('/look.jpg');
+  });
+
   it('renders a gallery of images from items', () => {
     const { container } = renderBlock('gallery', { items: [{ src: '/g1.jpg' }, { src: '/g2.jpg' }] });
     expect(container.querySelectorAll('img')).toHaveLength(2);

@@ -16,6 +16,7 @@
 import { ReactNode, CSSProperties } from 'react';
 import { PageLayout, LayoutBlock } from './types';
 import { toEmbedUrl, itemsOf } from './blockUtils';
+import { normalizeStudioConfig } from './homeMapping';
 
 /** Data a page hands to a block so it can render real content. */
 export interface LayoutData {
@@ -512,9 +513,13 @@ export function LayoutRenderer({ layout, data }: { layout: PageLayout; data: Lay
           gridRow: `${block.rowStart} / span ${block.rowSpan}`,
           minWidth: 0,
         };
+        const normalized: LayoutBlock = {
+          ...block,
+          config: normalizeStudioConfig(block.type, block.config || {}),
+        };
         return (
           <div key={block.id} style={style} data-block-type={block.type}>
-            {renderer(block, data)}
+            {renderer(normalized, data)}
           </div>
         );
       })}
