@@ -68,12 +68,10 @@ async function fetchMenu(location: string) {
 // authz-ok: public storefront bundle; mirrors the public endpoints and scrubs gateway secrets
 router.get('/bootstrap', async (_req, res, next) => {
   try {
-    // Sections come from the same seed-and-parse helpers as the public
-    // home-sections route (imported, not copied, so they cannot drift).
     // Settings mirror GET /api/settings: the default row is created on
     // first read when missing, and the secret-free capability flags are
     // appended exactly as that route appends them.
-    await ensureSeeded();
+    // Home sections are read-only here (P1.11): seeding is admin reset / db seed.
     let settingsRow = await prisma.storeSettings.findUnique({ where: { id: 'default' } });
     if (!settingsRow) {
       settingsRow = await prisma.storeSettings.create({ data: { id: 'default' } });

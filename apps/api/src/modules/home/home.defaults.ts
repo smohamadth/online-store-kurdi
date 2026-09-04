@@ -1,11 +1,9 @@
 /**
  * The home page the store ships with.
  *
- * These rows are inserted the first time /api/home-sections is asked for, so a
- * fresh install has a complete, editable home page instead of an empty one.
- * Editing a row in the admin never re-seeds it - we only insert keys that are
- * missing, so an admin who deletes a block does not get it back on restart
- * (deleting is done by hiding, see isVisible).
+ * These rows are inserted by `prisma db seed` and by admin “Restore default
+ * layout”. Public GET never writes. An admin who deletes a block does not get
+ * it back on the next homepage hit.
  */
 
 export interface HomeSectionSeed {

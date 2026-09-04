@@ -15,6 +15,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { seedEmailTemplates } from './seed-email-templates';
 import { seedContentTranslations } from './seed-translations';
+import { HOME_SECTION_SEED } from '../src/modules/home/home.defaults';
 
 const prisma = new PrismaClient();
 
@@ -423,6 +424,7 @@ async function main() {
 
   // Seed email templates
   await seedEmailTemplates();
+  const homeSectionCount = await seedHomeSections();
   const bannerCount = await seedBanners();
   await seedShipping();
   const cmsCount = await seedCmsContent();
@@ -438,6 +440,7 @@ async function main() {
   console.log(`   - Reviews: 3`);
   console.log(`   - Coupons: 2`);
   console.log(`   - Analytics events: 50`);
+  console.log(`   - Home sections: ${homeSectionCount}`);
   console.log(`   - Banners (homepage gallery): ${bannerCount}`);
   console.log(`   - Shipping: 1 zone, 2 methods`);
   console.log(`   - CMS pages + blog posts: ${cmsCount}`);

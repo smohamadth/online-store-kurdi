@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
-import { HOME_SECTION_SEED, ALL_TYPES } from './home.defaults';
+import { ALL_TYPES } from './home.defaults';
+import { seedMissingHomeSections } from './home.seed';
 import { scrubBuilderConfig } from '../../utils/scrubBuilderConfig';
 
 const router = Router();
@@ -23,34 +24,7 @@ const router = Router();
  * serialisation happens in exactly one place: toRow()/fromRow() below.
  */
 
-/** Insert any shipped block whose key is missing. Never overwrites edits. */
-export async function ensureSeeded() {
-  const existing = await prisma.homeSection.findMany({ select: { key: true } });
-  const have = new Set(existing.map((s) => s.key));
-  const missing = HOME_SECTION_SEED.filter((s) => !have.has(s.key));
-  if (missing.length === 0) return;
-
-  for (const s of missing) {
-    // createMany + skipDuplicates is not supported on SQLite for this shape,
-    // and a concurrent request could race us, so tolerate a unique violation.
-    try {
-      await prisma.homeSection.create({
-        data: {
-          key: s.key,
-          type: s.type,
-          title: s.title ?? null,
-          subtitle: s.subtitle ?? null,
-          isVisible: s.isVisible,
-          sortOrder: s.sortOrder,
-          config: s.config ? JSON.stringify(s.config) : null,
-        },
-      });
-    } catch (err: any) {
-      if (err?.code !== 'P2002') throw err;
-    }
-  }
-  logger.info(`Seeded ${missing.length} home section(s)`);
-}
+export { seedMissingHomeSections as ensureSeeded } from './home.seed';
 
 /** Parse the stored JSON string; a corrupt value must not break the page. */
 export function fromRow(row: any) {
@@ -102,7 +76,6 @@ const reorderSchema = z.object({
 // ---------------------------------------------------------------- public read
 router.get('/', async (_req, res, next) => {
   try {
-    await ensureSeeded();
     const rows = await prisma.homeSection.findMany({ orderBy: { sortOrder: 'asc' } });
     res.json({ status: 'success', data: rows.map(fromRow) });
   } catch (err) {
@@ -229,7 +202,7 @@ router.delete('/:id', authenticate, authorize('admin', 'manager'), async (req, r
 router.post('/reset', authenticate, authorize('admin', 'manager'), async (_req, res, next) => {
   try {
     await prisma.homeSection.deleteMany({});
-    await ensureSeeded();
+    await seedMissingHomeSections();
     const rows = await prisma.homeSection.findMany({ orderBy: { sortOrder: 'asc' } });
     logger.info('Home sections reset to defaults');
     res.json({ status: 'success', data: rows.map(fromRow) });

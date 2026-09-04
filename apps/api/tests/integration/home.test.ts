@@ -2,7 +2,7 @@
  * Home page sections integration tests.
  *
  * Notable paths:
- *   - first read seeds the shipped defaults (ensureSeeded)
+ *   - public GET does not seed; admin reset does
  *   - rich text is sanitised on write
  *   - reorder with an unknown id is rejected
  */
@@ -17,18 +17,28 @@ beforeAll(async () => { app = await getTestApp(); });
 afterAll(async () => { await mockPrisma.$disconnect(); });
 beforeEach(async () => { await cleanDatabase(); });
 
+async function resetHome(token: string) {
+  const res = await request(app)
+    .post('/api/home-sections/reset')
+    .set('Authorization', `Bearer ${token}`);
+  expect(res.status).toBe(200);
+  return res;
+}
+
 describe('GET /api/home-sections (public)', () => {
-  it('seeds the default sections and returns them', async () => {
-    const res = await request(app).get('/api/home-sections');
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.data)).toBe(true);
-    expect(res.body.data.length).toBeGreaterThan(0);
+  it('does not insert rows on a public read', async () => {
+    const empty = await request(app).get('/api/home-sections');
+    expect(empty.status).toBe(200);
+    expect(empty.body.data).toEqual([]);
+    const again = await request(app).get('/api/home-sections');
+    expect(again.body.data).toEqual([]);
   });
 });
 
 describe('PUT /api/home-sections/:id (admin)', () => {
   it('updates a section', async () => {
     const { token } = await authHeader({ role: 'admin' });
+    await resetHome(token);
     const list = await request(app).get('/api/home-sections');
     const id = list.body.data[0].id;
     const res = await request(app)
@@ -40,6 +50,7 @@ describe('PUT /api/home-sections/:id (admin)', () => {
 
   it('sanitises a richText config.html on write', async () => {
     const { token } = await authHeader({ role: 'admin' });
+    await resetHome(token);
     const list = await request(app).get('/api/home-sections');
     const rich = list.body.data.find((s: any) => s.type === 'richText');
     if (!rich) return; // no rich text block seeded
@@ -54,6 +65,7 @@ describe('PUT /api/home-sections/:id (admin)', () => {
 describe('PUT /api/home-sections/reorder', () => {
   it('reorders sections', async () => {
     const { token } = await authHeader({ role: 'admin' });
+    await resetHome(token);
     const list = await request(app).get('/api/home-sections');
     const ids = list.body.data.map((s: any) => s.id);
     const res = await request(app)
@@ -139,14 +151,15 @@ describe('POST /api/home-sections (admin)', () => {
 describe('POST /api/home-sections/reset (admin)', () => {
   it('resets to the shipped defaults', async () => {
     const { token } = await authHeader({ role: 'admin' });
-    const res = await request(app).post('/api/home-sections/reset').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
+    const res = await resetHome(token);
+    expect(res.body.data.length).toBeGreaterThan(0);
   });
 });
 
 describe('DELETE /api/home-sections/:id (admin)', () => {
   it('removes a block', async () => {
     const { token } = await authHeader({ role: 'admin' });
+    await resetHome(token);
     const list = await request(app).get('/api/home-sections');
     const id = list.body.data[0].id;
     const res = await request(app)

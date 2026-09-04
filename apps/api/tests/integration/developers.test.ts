@@ -100,11 +100,7 @@ describe('GET /api/developers (manifest)', () => {
 
 describe('GET /api/developers/bootstrap', () => {
   it('returns every bundle member on a clean store', async () => {
-    // Prime the settings row + home sections the same way the public
-    // endpoints do (the bootstrap itself also seeds, mirroring
-    // GET /api/home-sections).
     await request(app).get('/api/settings');
-    await request(app).get('/api/home-sections');
 
     const res = await request(app).get('/api/developers/bootstrap');
     expect(res.status).toBe(200);
