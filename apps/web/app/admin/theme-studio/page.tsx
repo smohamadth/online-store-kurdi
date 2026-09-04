@@ -31,6 +31,7 @@ import { defaultLayoutFor } from '@/lib/layouts/defaults';
 import { LayoutRenderer } from '@/lib/layouts/render';
 import { addBlock, moveBlock, resizeBlock, removeBlock } from '@/lib/layouts/edit';
 import { CONFIG_FIELDS, LIST_BLOCK_TYPES, type ConfigField } from '@/lib/layouts/blockUtils';
+import { isPlatformBundledTheme } from '@/lib/themeBundled';
 
 interface ThemeStudioTheme {
   key: string;
@@ -185,8 +186,14 @@ export default function ThemeStudioPage() {
     await selectTheme(key);
   };
 
+  const bundled = isPlatformBundledTheme(current?.key);
+
   const save = async () => {
     if (!current) return;
+    if (isPlatformBundledTheme(current.key)) {
+      notify('error', 'Bundled themes are read-only. Create a new theme (duplicate) to save your edits.');
+      return;
+    }
     setSaving(true);
     const updated: ThemeStudioTheme = {
       ...current,
@@ -251,7 +258,12 @@ export default function ThemeStudioPage() {
           >
             + New theme
           </button>
-          <button onClick={save} disabled={saving || !current} style={{ ...btnPrimary, background: '#111' }}>
+          <button
+            onClick={save}
+            disabled={saving || !current || bundled}
+            title={bundled ? 'Duplicate this theme first — bundled themes cannot be overwritten' : undefined}
+            style={{ ...btnPrimary, background: '#111', opacity: bundled ? 0.5 : 1 }}
+          >
             {saving ? 'Saving…' : 'Save theme'}
           </button>
         </div>
@@ -307,7 +319,19 @@ export default function ThemeStudioPage() {
                   onChange={(e) => setCurrent({ ...current, name: e.target.value })}
                   style={{ ...inputField, fontWeight: 600, flex: 1 }}
                 />
-                <button onClick={deleteCurrent} style={{ ...btnPrimary, background: '#dc2626' }}>Delete</button>
+                <button
+                  onClick={deleteCurrent}
+                  disabled={bundled}
+                  title={bundled ? 'Bundled themes cannot be deleted' : undefined}
+                  style={{ ...btnPrimary, background: '#dc2626', opacity: bundled ? 0.5 : 1 }}
+                >
+                  Delete
+                </button>
+                {bundled && (
+                  <p style={{ width: '100%', fontSize: 13, color: '#666', margin: 0 }}>
+                    This is a platform theme. Use “+ New theme” to duplicate it, then save.
+                  </p>
+                )}
               </div>
 
               {/* Page tabs */}

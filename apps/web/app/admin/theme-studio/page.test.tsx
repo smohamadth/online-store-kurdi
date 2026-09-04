@@ -168,6 +168,25 @@ describe('ThemeStudioPage', () => {
     expect(putBody.layouts.products.blocks.some((b: any) => b.type === 'newsletter')).toBe(true);
   });
 
+  it('disables Save and Delete on a bundled theme', async () => {
+    const bundled = { ...theme, key: 'bold', name: 'Bold' };
+    const fetchMock = vi.fn(async (url: string, opts?: any) => {
+      const u = String(url);
+      if (u.includes('/theme-studio/themes') && u.endsWith('/themes')) return okJson(['bold']);
+      if (u.includes('/theme-studio/themes/bold')) return okJson(bundled);
+      return okJson({});
+    });
+    (global.fetch as any) = fetchMock;
+
+    render(<ThemeStudioPage />);
+    await waitFor(() => expect(screen.getByText('Bold')).toBeTruthy());
+    fireEvent.click(screen.getByText('Bold'));
+    await waitFor(() => expect(screen.getByText(/platform theme/i)).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'Save theme' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Delete' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock.mock.calls.some(([, o]) => (o as any)?.method === 'PUT')).toBe(false);
+  });
+
   it('stacks the 3-column layout to a single column on mobile', async () => {
     (useIsMobile as any).mockReturnValue(true);
     const fetchMock = vi.fn(async (url: string, opts?: any) => {

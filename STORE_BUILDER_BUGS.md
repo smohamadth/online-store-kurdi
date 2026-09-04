@@ -28,9 +28,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. Live home always uses `HomeSection` rows via `pickStorefrontHomeSections`. Studio `layouts.home` stays a studio canvas only.
 
 ### 2. Saving a bundled theme in Theme Studio always fails
-**Where:** `themeStudio.service.ts` `saveTheme` / `isBundledTheme` (`.bundled` marker + `default`).  
-**Bug:** The UI lists Bold/Minimal/Dawnlight/Pulse and offers **Save theme**. The API refuses overwrites of bundled keys. The merchant thinks the studio is broken.  
-**Fix direction:** Duplicate-on-edit (force a new key) or disable Save/Delete on bundled themes with copy that says “duplicate first”.
+**Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
 
 ### 3. Studio preview is not the storefront
 **Where:** `theme-studio/page.tsx` renders `<LayoutRenderer layout={layout} data={{}} />`; `layouts/render.tsx` BLOCK_RENDERERS.  
