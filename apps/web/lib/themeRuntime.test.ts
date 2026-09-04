@@ -135,6 +135,8 @@ describe('fetchThemeCatalog', () => {
     }) as any;
 
     const { themes, invalid } = await fetchThemeCatalog();
+    expect(vi.mocked(globalThis.fetch).mock.calls[0][0]).toMatch(/\/themes$/);
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0][0])).not.toContain('localhost');
     expect(themes.map((t) => t.key)).toEqual(['solar', 'luna']);
     expect(invalid).toEqual(['broken']);
     expect(isInstalledThemeKey('solar')).toBe(true);

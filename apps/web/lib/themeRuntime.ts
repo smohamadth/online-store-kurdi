@@ -41,10 +41,9 @@
 
 import { THEMES, getTheme, type ThemeConfig } from './themeRegistry';
 import { themeConfigSchema } from './themeConfigSchema';
+import { CLIENT_API_BASE } from './apiBase';
 
 const runtimeCache = new Map<string, ThemeConfig>();
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 /**
  * Parse + cache a raw on-disk theme config (from /api/theme's
@@ -72,7 +71,7 @@ export function clearRuntimeThemeCache(): void {
  * touching the shared cache.
  */
 export async function fetchThemeCatalog(): Promise<{ themes: ThemeConfig[]; invalid: string[] }> {
-  const res = await fetch(`${API_URL}/themes`, { cache: 'no-store' });
+  const res = await fetch(`${CLIENT_API_BASE}/themes`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`GET /api/themes returned ${res.status}`);
   }

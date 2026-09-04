@@ -84,8 +84,7 @@ CTA `buttonHref` and image `src` are not scheme-checked (javascript:).
 **Fix direction:** Page-native blocks must call the real page widgets, or refuse to replace chrome unless `productList`/`pageContent` is present.
 
 ### 15. `fetchThemeCatalog` uses `NEXT_PUBLIC_API_URL` / localhost, not `CLIENT_API_BASE`
-**Where:** `themeRuntime.ts` `API_URL`. Browser on a preview host cannot reach `localhost:3001`. Installed themes never overlay.  
-**Fix direction:** Use `CLIENT_API_BASE` / relative `/api/themes` like the rest of the storefront.
+**Status:** fixed. Catalog fetch uses `CLIENT_API_BASE` (same-origin `/api` on loopback).
 
 ---
 
