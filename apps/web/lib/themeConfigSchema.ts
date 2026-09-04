@@ -119,6 +119,8 @@ export const themeConfigSchema = z
       ),
     author: z.string().min(1).max(120),
     preview: z.string().min(1),
+    /** Merchant-facing niche label, e.g. "Fashion", "Craft". */
+    niche: z.string().min(1).max(40).optional(),
     features: themeFeaturesSchema,
     tokens: z.record(z.string(), themeTokenSchema),
     sections: z.record(z.string(), z.string()).optional(),
