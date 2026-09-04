@@ -27,6 +27,7 @@ export default defineConfig({
       'lib/themeSections.test.{ts,tsx}',
       'lib/theme-featured.test.{ts,tsx}',
       'lib/theme-distinctness.test.{ts,tsx}',
+      'lib/theme-niche.test.{ts,tsx}',
       'lib/themeConfigSchema.test.{ts,tsx}',
       'lib/layouts/render.test.{ts,tsx}',
       'lib/layouts/useActiveLayout.test.{ts,tsx}',

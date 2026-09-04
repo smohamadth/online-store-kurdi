@@ -39,6 +39,7 @@ export default function PulseFeatured({ title, subtitle, products, config }: Sec
   return (
     <section
       data-section="featured"
+      data-niche="DTC & apps"
       data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #f8fafc)',

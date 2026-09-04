@@ -27,6 +27,7 @@ export default function MinimalCategories({ title, subtitle, categories, config 
   return (
     <section
       data-section="categories"
+      data-niche="Craft & editorial"
       data-theme={theme.activeTheme}
       style={{
         padding: '64px 24px 96px',
@@ -114,8 +115,23 @@ export default function MinimalCategories({ title, subtitle, categories, config 
                 style={{
                   fontSize: '20px',
                   fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'baseline',
+                  gap: '16px',
                 }}
               >
+                <span
+                  aria-hidden="true"
+                  data-index=""
+                  style={{
+                    fontSize: '13px',
+                    letterSpacing: '0.12em',
+                    color: 'var(--muted, #6b6b65)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </span>
                 {cat.name}
               </span>
               <span

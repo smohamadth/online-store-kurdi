@@ -55,6 +55,7 @@ export default function BoldHero({ banners }: SectionProps) {
   return (
     <section
       data-section="hero"
+      data-niche="Fashion drop"
       data-theme={theme.activeTheme}
       style={{
         // minHeight 80vh on mobile (taller than the default's
@@ -70,6 +71,7 @@ export default function BoldHero({ banners }: SectionProps) {
         backgroundColor: 'var(--body-bg, #0a0a0a)',
         color: 'var(--body-text, #fafafa)',
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
       {/* Left half: copy */}
@@ -232,6 +234,26 @@ export default function BoldHero({ banners }: SectionProps) {
           </span>
         )}
       </div>
+      <p
+        data-drop-ticker=""
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          insetInline: 0,
+          insetBlockEnd: 0,
+          margin: 0,
+          padding: '10px 16px',
+          backgroundColor: 'var(--accent, #facc15)',
+          color: 'var(--body-bg, #0a0a0a)',
+          fontSize: '11px',
+          fontWeight: 900,
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          textAlign: 'center',
+        }}
+      >
+        New drop · Limited run · No restocks · New drop · Limited run
+      </p>
     </section>
   );
 }

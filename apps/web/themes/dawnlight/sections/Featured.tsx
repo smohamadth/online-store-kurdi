@@ -36,6 +36,7 @@ export default function DawnlightFeatured({ title, subtitle, products, config }:
   return (
     <section
       data-section="featured"
+      data-niche="Home & lifestyle"
       data-theme={theme.activeTheme}
       style={{
         maxWidth: 'var(--container, 1200px)',

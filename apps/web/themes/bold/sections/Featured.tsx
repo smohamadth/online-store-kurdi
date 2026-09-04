@@ -54,6 +54,7 @@ export default function BoldFeatured({ title, subtitle, products, config }: Sect
   return (
     <section
       data-section="featured"
+      data-niche="Fashion drop"
       data-theme={theme.activeTheme}
       style={{
         // Bold's section spacing is bigger than Minimal's.

@@ -47,6 +47,7 @@ export default function PulseHero({ banners }: SectionProps) {
   return (
     <section
       data-section="hero"
+      data-niche="DTC & apps"
       data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #f8fafc)',
@@ -99,7 +100,11 @@ export default function PulseHero({ banners }: SectionProps) {
               margin: 0,
             }}
           >
-            {headline}
+            {headline.split(' ').slice(0, -1).join(' ')}
+            {headline.includes(' ') ? ' ' : ''}
+            <span data-accent-word="" style={{ color: 'var(--accent, #4f46e5)' }}>
+              {headline.split(' ').slice(-1)[0]}
+            </span>
           </h1>
           {body && (
             <p

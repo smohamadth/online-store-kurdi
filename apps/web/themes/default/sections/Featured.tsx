@@ -24,11 +24,12 @@ export default function DefaultFeatured({ title, subtitle, products, config }: S
   const viewAllLabel = String(config?.linkText ?? 'View all products').replace(/\s*[→←]\s*$/, '');
   const viewAllHref = (config?.linkHref as string) || '/products';
 
-  if (list.length === 0) return null;
+  if (list.length === 0 && !title && !subtitle) return null;
 
   return (
     <section
       data-section="featured"
+      data-niche="General retail"
       data-theme={theme.activeTheme}
       style={{
         maxWidth: 'var(--container, 1200px)',
@@ -143,6 +144,11 @@ export default function DefaultFeatured({ title, subtitle, products, config }: S
                 )}
               </div>
               <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                {product.category?.name && (
+                  <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', margin: 0 }}>
+                    {product.category.name}
+                  </p>
+                )}
                 <h3 style={{ fontSize: '15px', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>{product.name}</h3>
                 {rating > 0 && (
                   <p

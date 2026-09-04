@@ -40,6 +40,7 @@ export default function MinimalHero({ banners }: SectionProps) {
   return (
     <section
       data-section="hero"
+      data-niche="Craft & editorial"
       data-theme={theme.activeTheme}
       style={{
         // The "min-height" is calibrated for a 17px base font: at
@@ -73,6 +74,17 @@ export default function MinimalHero({ banners }: SectionProps) {
         >
           {first?.badge || settings.storeName}
         </p>
+        <span
+          aria-hidden="true"
+          data-editorial-rule=""
+          style={{
+            display: 'block',
+            width: '48px',
+            height: '1px',
+            backgroundColor: 'var(--accent, #8b6f47)',
+            marginBottom: '24px',
+          }}
+        />
         <h1
           style={{
             // 56px on desktop, 36px on mobile via a CSS calc.
@@ -94,7 +106,8 @@ export default function MinimalHero({ banners }: SectionProps) {
           <p
             style={{
               fontSize: '17px',
-              lineHeight: 1.6,
+              lineHeight: 1.7,
+              fontStyle: 'italic',
               color: 'var(--muted, #6b6b65)',
               maxWidth: '52ch',
               margin: 0,

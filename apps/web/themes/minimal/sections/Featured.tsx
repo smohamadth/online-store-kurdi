@@ -34,6 +34,7 @@ export default function MinimalFeatured({ title, subtitle, products, config }: S
   return (
     <section
       data-section="featured"
+      data-niche="Craft & editorial"
       data-theme={theme.activeTheme}
       style={{
         // Generous padding - the minimal theme's signature is

@@ -23,6 +23,7 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
   return (
     <section
       data-section="categories"
+      data-niche="Home & lifestyle"
       data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #ffffff)',
@@ -87,7 +88,7 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
             >
               <div
                 style={{
-                  aspectRatio: '4 / 3',
+                  aspectRatio: '16 / 10',
                   backgroundColor: 'var(--surface-2, #f7f7f7)',
                   border: '1px solid var(--border, #e6e6e6)',
                   transition: 'border-color 0.18s ease',

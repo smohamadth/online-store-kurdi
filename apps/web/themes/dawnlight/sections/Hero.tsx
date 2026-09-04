@@ -43,7 +43,7 @@ export default function DawnlightHero({ banners }: SectionProps) {
   };
 
   return (
-    <section data-section="hero" data-theme={theme.activeTheme}>
+    <section data-section="hero" data-niche="Home & lifestyle" data-theme={theme.activeTheme}>
       {/* Primary band: full-bleed image with a left-aligned copy column. */}
       <div
         style={{
@@ -76,6 +76,7 @@ export default function DawnlightHero({ banners }: SectionProps) {
               // palette such as the shipped "Midnight".
               backgroundColor: 'color-mix(in srgb, var(--card-bg, #ffffff) 94%, transparent)',
               border: '1px solid var(--border, #e6e6e6)',
+              borderInlineStart: '4px solid var(--accent, #6b7c3e)',
               padding: '40px 44px',
               maxWidth: '520px',
             }}

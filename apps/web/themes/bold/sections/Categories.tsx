@@ -35,6 +35,7 @@ export default function BoldCategories({ title, subtitle, categories, config }: 
   return (
     <section
       data-section="categories"
+      data-niche="Fashion drop"
       data-theme={theme.activeTheme}
       style={{
         // A dark band that breaks up the page visually.

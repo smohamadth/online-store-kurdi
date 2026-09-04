@@ -32,6 +32,7 @@ export default function PulseCategories({ title, subtitle, categories, config }:
   return (
     <section
       data-section="categories"
+      data-niche="DTC & apps"
       data-theme={theme.activeTheme}
       style={{
         backgroundColor: 'var(--body-bg, #f8fafc)',
