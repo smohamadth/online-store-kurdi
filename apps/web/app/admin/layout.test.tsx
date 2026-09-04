@@ -41,6 +41,17 @@ describe('AdminLayout', () => {
     expect(screen.getAllByText('Orders').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Languages').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('☰')).toBeNull();
+    expect(screen.getByDisplayValue('English')).toBeTruthy();
+  });
+
+  it('switches chrome to Persian from the language picker', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    render(<AdminLayout><div>Dashboard content</div></AdminLayout>);
+    await waitFor(() => expect(screen.getByText('Welcome, Ada')).toBeTruthy());
+    fireEvent.change(screen.getByDisplayValue('English'), { target: { value: 'fa' } });
+    expect(screen.getByText('خوش آمدید، Ada')).toBeTruthy();
+    expect(screen.getAllByText('سفارش‌ها').length).toBeGreaterThanOrEqual(1);
+    expect(document.querySelector('[data-admin-shell]')?.getAttribute('dir')).toBe('rtl');
   });
 
   it('shows a hamburger and slides the sidebar open on mobile', async () => {

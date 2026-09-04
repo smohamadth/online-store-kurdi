@@ -39,7 +39,11 @@ export default function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        setApiStatus('disconnected');
+        setLoading(false);
+        return;
+      }
 
       // Single source of truth: real aggregates computed in the database.
       // Previously this page pulled 100 products + the orders list and summed

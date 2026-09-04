@@ -65,7 +65,7 @@ export function resetStorefrontI18n() {
   state = structuredClone(DEFAULT_STATE);
 }
 
-const langSchema = z.object({
+export const langSchema = z.object({
   code: z.string().min(2).max(8).regex(/^[a-z][a-z0-9-]*$/i),
   name: z.string().min(1).max(80),
   dir: z.enum(['ltr', 'rtl']),
@@ -73,7 +73,7 @@ const langSchema = z.object({
   enabled: z.boolean(),
 });
 
-const putSchema = z.object({
+export const putSchema = z.object({
   languages: z.array(langSchema).min(1).max(40),
   strings: z.record(z.record(z.string().max(2000))).optional(),
 });
@@ -82,7 +82,7 @@ router.get('/storefront', (_req, res) => {
   res.json({ status: 'success', data: state });
 });
 
-router.put('/storefront', authenticate, authorize('admin'), (req, res, next) => {
+router.put('/storefront', authenticate, authorize('admin', 'manager'), (req, res, next) => {
   try {
     const body = putSchema.parse(req.body);
     const codes = body.languages.map((l) => l.code.toLowerCase());
@@ -100,7 +100,8 @@ router.put('/storefront', authenticate, authorize('admin'), (req, res, next) => 
         flag: l.flag || '🏳️',
         enabled: l.enabled,
       })),
-      strings: body.strings || {},
+      // Omitting `strings` must not wipe existing overlays (language-only saves).
+      strings: body.strings !== undefined ? body.strings : state.strings,
     };
     saveToDisk();
     res.json({ status: 'success', data: state });

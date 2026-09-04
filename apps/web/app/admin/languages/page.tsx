@@ -33,8 +33,10 @@ export default function AdminLanguagesPage() {
   useEffect(() => { load().catch(() => setStatus('Could not load languages')); }, []);
 
   function selectLang(code: string) {
+    const merged = { ...strings, [editCode]: draft };
+    setStrings(merged);
     setEditCode(code);
-    setDraft({ ...(translations[code] || translations.en), ...(strings[code] || {}) });
+    setDraft({ ...(translations[code] || translations.en), ...(merged[code] || {}) });
   }
 
   async function save(nextLangs = languages, nextStrings = { ...strings, [editCode]: draft }) {
@@ -56,7 +58,7 @@ export default function AdminLanguagesPage() {
 
   function addLanguage() {
     const code = newCode.trim().toLowerCase();
-    if (!code || languages.some((l) => l.code === code)) {
+    if (!/^[a-z][a-z0-9-]{1,7}$/.test(code) || languages.some((l) => l.code === code)) {
       setStatus('Enter a unique language code (e.g. de, ckb).');
       return;
     }
@@ -84,7 +86,12 @@ export default function AdminLanguagesPage() {
                 type="checkbox"
                 checked={l.enabled}
                 onChange={(e) => {
-                  const next = languages.map((x) => x.code === l.code ? { ...x, enabled: e.target.checked } : x);
+                  const enabled = e.target.checked;
+                  if (!enabled && languages.filter((x) => x.enabled).length <= 1) {
+                    setStatus('At least one language must stay enabled.');
+                    return;
+                  }
+                  const next = languages.map((x) => x.code === l.code ? { ...x, enabled } : x);
                   setLanguages(next);
                 }}
               />

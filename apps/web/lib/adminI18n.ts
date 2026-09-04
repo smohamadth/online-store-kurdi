@@ -127,7 +127,7 @@ const ku: Record<string, string> = {
   'nav.affiliates': 'هاوبەشەکانی فرۆشتن',
   'nav.shipping': 'گەیاندن',
   'nav.tax': 'باج',
-  'nav.finance': ' دارایی',
+  'nav.finance': 'دارایی',
   'nav.accounting': 'ژمێریاری',
   'nav.payments': 'دەروازەکانی پارەدان',
   'nav.customers': 'کڕیاران',
@@ -148,9 +148,6 @@ const ku: Record<string, string> = {
   'nav.languages': 'زمانەکان',
   'lang.panel': 'زمانی پانێڵی بەڕێوەبەر',
 };
-
-// Fix accidental space in finance
-ku['nav.finance'] = 'دارایی';
 
 export const adminDictionaries: Record<string, Record<string, string>> = { en, fa, ku };
 
@@ -175,7 +172,14 @@ export function useAdminI18n() {
   const [language, setLanguage] = useState<AdminLang>('en');
 
   useEffect(() => {
-    setLanguage(readAdminLanguage());
+    const sync = () => setLanguage(readAdminLanguage());
+    sync();
+    window.addEventListener('adminLanguageChange', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('adminLanguageChange', sync);
+      window.removeEventListener('storage', sync);
+    };
   }, []);
 
   const changeLanguage = useCallback((code: string) => {

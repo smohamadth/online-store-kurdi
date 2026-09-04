@@ -328,11 +328,11 @@ export default function AdminLayout({
                       aria-hidden="true"
                       style={{
                         position: 'absolute',
-                        left: 0,
+                        insetInlineStart: 0,
                         top: '18%',
                         bottom: '18%',
                         width: '3px',
-                        borderRadius: '0 3px 3px 0',
+                        borderRadius: adminDir === 'rtl' ? '3px 0 0 3px' : '0 3px 3px 0',
                         backgroundColor: active ? '#6366f1' : 'transparent',
                       }}
                     />
@@ -575,10 +575,10 @@ export default function AdminLayout({
             padding: '18px 0 0',
             position: 'fixed',
             top: 0,
-            left: 0,
+            insetInlineStart: 0,
             height: '100vh',
             zIndex: 1000,
-            transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transform: sidebarOpen ? 'translateX(0)' : (adminDir === 'rtl' ? 'translateX(100%)' : 'translateX(-100%)'),
             transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -609,8 +609,21 @@ export default function AdminLayout({
               </h2>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <label style={{ fontSize: '12px', color: '#888', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>{t('lang.panel')}</span>
+                <select
+                  aria-label={t('lang.panel')}
+                  value={adminLang}
+                  onChange={(e) => changeAdminLang(e.target.value)}
+                  style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd' }}
+                >
+                  {adminLangs.map((l) => (
+                    <option key={l.code} value={l.code}>{l.native}</option>
+                  ))}
+                </select>
+              </label>
               <span style={{ fontSize: '14px', color: '#666' }}>
-                {isMobile ? user.firstName : `Welcome, ${user.firstName}`}
+                {isMobile ? user.firstName : t('admin.welcome', { name: user.firstName })}
               </span>
             </div>
           </div>

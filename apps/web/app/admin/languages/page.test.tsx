@@ -54,4 +54,23 @@ describe('AdminLanguagesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add language' }));
     await waitFor(() => expect(screen.getByText(/Saved/)).toBeTruthy());
   });
+
+  it('keeps unsaved text when switching languages', async () => {
+    render(<AdminLanguagesPage />);
+    const home = await screen.findByLabelText('nav.home');
+    fireEvent.change(home, { target: { value: 'Start here' } });
+    fireEvent.click(screen.getByText(/کوردی/));
+    fireEvent.click(screen.getByText(/English/));
+    expect((screen.getByLabelText('nav.home') as HTMLInputElement).value).toBe('Start here');
+  });
+
+  it('refuses to disable the last enabled language', async () => {
+    render(<AdminLanguagesPage />);
+    await screen.findByText(/Storefront languages/);
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+    expect(await screen.findByText(/At least one language must stay enabled/)).toBeTruthy();
+    expect((boxes[1] as HTMLInputElement).checked).toBe(true);
+  });
 });
