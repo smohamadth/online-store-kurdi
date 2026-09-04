@@ -1,8 +1,9 @@
 {
   "key": "pulse",
   "name": "Pulse",
-  "description": "A modern, rounded theme in the spirit of the Medusa Next.js storefront, one of the most-starred open commerce starters: off-white canvas, white cards with soft shadows and generous corner radii, an indigo accent, pill buttons and a dark footer. For new brands, apps, and anything that should feel current.",
-  "version": "1.0.0",
+  "niche": "DTC & apps",
+  "description": "Rounded, current storefront for new brands and digital-native shops: indigo accent, pill CTAs, card canvas, dark footer.",
+  "version": "1.2.0",
   "author": "Store Builder Platform",
   "preview": "/themes/pulse/preview.png",
   "features": {
@@ -48,5 +49,21 @@
     "hero": "@/themes/pulse/sections/Hero",
     "featured": "@/themes/pulse/sections/Featured",
     "categories": "@/themes/pulse/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 28,
+      "blocks": [
+        { "id": "hero", "type": "hero", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": {} },
+        { "id": "trust", "type": "trustBar", "colStart": 1, "colSpan": 12, "rowStart": 2, "rowSpan": 1, "config": {} },
+        { "id": "feat", "type": "featured", "colStart": 1, "colSpan": 12, "rowStart": 3, "rowSpan": 1, "config": {} },
+        { "id": "cats", "type": "categories", "colStart": 1, "colSpan": 12, "rowStart": 4, "rowSpan": 1, "config": {} },
+        { "id": "new", "type": "newArrivals", "colStart": 1, "colSpan": 12, "rowStart": 5, "rowSpan": 1, "config": {} },
+        { "id": "deal", "type": "dealCountdown", "colStart": 1, "colSpan": 12, "rowStart": 6, "rowSpan": 1, "config": {} },
+        { "id": "quotes", "type": "testimonials", "colStart": 1, "colSpan": 12, "rowStart": 7, "rowSpan": 1, "config": {} },
+        { "id": "news", "type": "newsletter", "colStart": 1, "colSpan": 12, "rowStart": 8, "rowSpan": 1, "config": {} }
+      ]
+    }
   }
 }

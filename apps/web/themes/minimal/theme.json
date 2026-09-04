@@ -1,14 +1,15 @@
 {
   "key": "minimal",
   "name": "Minimal",
-  "description": "A text-first theme for writers, makers, and craft sellers. Generous whitespace, serif headings, no marketing chrome. Lets the products speak.",
-  "version": "1.0.0",
+  "niche": "Craft & editorial",
+  "description": "Text-first atelier for writers, makers, and craft sellers. Narrow serif column, no marketing chrome — products and copy do the work.",
+  "version": "1.2.0",
   "author": "Platform Team",
   "preview": "/themes/minimal/preview.png",
   "features": {
-    "rtl": false,
+    "rtl": true,
     "darkMode": false,
-    "paid": true
+    "paid": false
   },
   "tokens": {
     "primaryColor": "#1a1a1a",
@@ -48,5 +49,17 @@
     "hero": "@/themes/minimal/sections/Hero",
     "featured": "@/themes/minimal/sections/Featured",
     "categories": "@/themes/minimal/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 40,
+      "blocks": [
+        { "id": "hero", "type": "hero", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": {} },
+        { "id": "feat", "type": "featured", "colStart": 1, "colSpan": 12, "rowStart": 2, "rowSpan": 1, "config": {} },
+        { "id": "cats", "type": "categories", "colStart": 1, "colSpan": 12, "rowStart": 3, "rowSpan": 1, "config": {} },
+        { "id": "news", "type": "newsletter", "colStart": 1, "colSpan": 12, "rowStart": 4, "rowSpan": 1, "config": {} }
+      ]
+    }
   }
 }

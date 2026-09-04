@@ -38,6 +38,8 @@ import { SectionHeading } from '@/components/HomeSections';
 
 // Theme default sections.
 import DefaultHero from '@/themes/default/sections/Hero';
+import DefaultFeatured from '@/themes/default/sections/Featured';
+import DefaultCategories from '@/themes/default/sections/Categories';
 import MinimalHero from '@/themes/minimal/sections/Hero';
 import MinimalFeatured from '@/themes/minimal/sections/Featured';
 import MinimalCategories from '@/themes/minimal/sections/Categories';
@@ -107,6 +109,8 @@ const THEME_SECTION_COMPONENTS: Record<string, SectionComponent> = {
   // HeroGallery. We keep this here so the override path is
   // consistent across themes.
   'default/hero': DefaultHero,
+  'default/featured': DefaultFeatured,
+  'default/categories': DefaultCategories,
   // Minimal theme overrides.
   'minimal/hero': MinimalHero,
   'minimal/featured': MinimalFeatured,
@@ -129,14 +133,9 @@ const THEME_SECTION_COMPONENTS: Record<string, SectionComponent> = {
  * Platform default components. Used when the active theme doesn't
  * ship an override for a section.
  *
- * NOTE: only `hero` has one. featured / categories are intentionally
- * ABSENT here: their platform renderers live inline in HomeView.tsx as
- * the `fallback` of ThemeSectionRenderer. Mapping them to a component
- * (even `() => null`) would make useSection() return a truthy value,
- * and the renderer would render that component INSTEAD of the fallback
- * - which is exactly how the default theme shipped a home page with no
- * featured section and no category section at all (the CI home-builder
- * suite caught the missing "Featured Products" heading).
+ * NOTE: featured / categories have no platform-wide default here.
+ * Bundled themes (including `default`) register their own overrides.
+ * Unmapped keys fall through to HomeView's inline JSX via ThemeSectionRenderer.
  */
 const PLATFORM_DEFAULT_SECTIONS: Record<string, SectionComponent> = {
   hero: HeroGallery,

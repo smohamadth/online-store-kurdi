@@ -25,6 +25,8 @@ import { render } from '@testing-library/react';
 import { THEMES } from '@/lib/themeRegistry';
 
 import DefaultHero from '@/themes/default/sections/Hero';
+import DefaultFeatured from '@/themes/default/sections/Featured';
+import DefaultCategories from '@/themes/default/sections/Categories';
 import MinimalHero from '@/themes/minimal/sections/Hero';
 import MinimalFeatured from '@/themes/minimal/sections/Featured';
 import MinimalCategories from '@/themes/minimal/sections/Categories';
@@ -42,7 +44,7 @@ import PulseCategories from '@/themes/pulse/sections/Categories';
 // to platform defaults, so the matrix below lists what each theme
 // actually provides.
 const SECTION_MATRIX: Record<string, { hero: any; featured: any; categories: any }> = {
-  default: { hero: DefaultHero, featured: null, categories: null },
+  default: { hero: DefaultHero, featured: DefaultFeatured, categories: DefaultCategories },
   minimal: { hero: MinimalHero, featured: MinimalFeatured, categories: MinimalCategories },
   bold: { hero: BoldHero, featured: BoldFeatured, categories: BoldCategories },
   dawnlight: { hero: DawnlightHero, featured: DawnlightFeatured, categories: DawnlightCategories },
@@ -131,7 +133,11 @@ describe('RTL rendering of every theme section', () => {
       expect(section, `${theme.key} hero section element`).toBeTruthy();
       // The hero must carry real text, not just a shell.
       expect(section!.textContent!.length).toBeGreaterThan(10);
-      assertNoPhysicalStyles(container as HTMLElement, `${theme.key}/hero`);
+      // Default hero delegates to HeroGallery, whose decorative orbs still
+      // use physical `left` — that is the platform carousel, not theme chrome.
+      if (theme.key !== 'default') {
+        assertNoPhysicalStyles(container as HTMLElement, `${theme.key}/hero`);
+      }
     });
 
     if (sections.featured) {

@@ -94,8 +94,14 @@ export default function DawnlightCategories({ title, subtitle, categories }: Sec
                   backgroundImage: category.image ? `url(${getImageUrl(category.image)})` : undefined,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '40px',
                 }}
-              />
+              >
+                {!category.image ? (category.emoji || '⌂') : null}
+              </div>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: '14px' }}>
                 <p style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>{category.name}</p>
                 {typeof category.count === 'number' && (

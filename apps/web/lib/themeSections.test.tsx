@@ -121,22 +121,17 @@ describe('useSection', () => {
     expect(component).toBeNull();
   });
 
-  // Regression: the default theme ships only a hero override. featured /
-  // categories must resolve to null (NOT to a null-rendering component),
-  // so ThemeSectionRenderer falls back to HomeView's inline JSX. When
-  // they were mapped to `() => null`, the default-theme home page rendered
-  // no featured section and no category section at all.
-  it('returns null for featured/categories under the default theme', () => {
+  it('returns default featured/categories overrides under the default theme', () => {
     mockState.useTheme.mockReturnValue({ activeTheme: 'default' });
-    const seen: Record<string, SectionComponent | null> = {};
+    const seen: Record<string, string | null> = {};
     function Probe() {
-      seen.featured = useSection('featured');
-      seen.categories = useSection('categories');
+      seen.featured = useSection('featured')?.name ?? null;
+      seen.categories = useSection('categories')?.name ?? null;
       return null;
     }
     render(<Probe />);
-    expect(seen.featured).toBeNull();
-    expect(seen.categories).toBeNull();
+    expect(seen.featured).toBe('DefaultFeatured');
+    expect(seen.categories).toBe('DefaultCategories');
   });
 });
 
@@ -184,16 +179,16 @@ describe('ThemeSectionRenderer', () => {
   // the default-theme home page lost its entire featured section
   // (and its categories section) - caught by the CI home-builder
   // suite's missing "Featured Products" heading.
-  it('renders the fallback for featured under the default theme', () => {
+  it('renders the default featured override (not the inline fallback)', () => {
     mockState.useTheme.mockReturnValue({ activeTheme: 'default' });
     render(
       <ThemeSectionRenderer
         section="featured"
         fallback={<div data-testid="fallback">FALLBACK</div>}
-        props={{}}
+        props={{ products: [] }}
       />,
     );
-    expect(screen.getByTestId('fallback')).toBeTruthy();
+    expect(screen.queryByTestId('fallback')).toBeNull();
   });
 
   it('renders the fallback when the section is unknown to all themes', () => {

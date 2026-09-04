@@ -1,8 +1,9 @@
 {
   "key": "dawnlight",
   "name": "Dawnlight",
-  "description": "A clean, light, flat theme in the spirit of Shopify's Dawn reference theme: white canvas, near-black type, hairline borders, square corners, generous whitespace. Marketing chrome kept to a minimum so the catalogue does the talking.",
-  "version": "1.0.0",
+  "niche": "Home & lifestyle",
+  "description": "Quiet paper storefront for home goods and lifestyle: cream canvas, olive accent, square corners, hairline borders. Catalogue-led, not promo-led.",
+  "version": "1.2.0",
   "author": "Store Builder Platform",
   "preview": "/themes/dawnlight/preview.png",
   "features": {
@@ -11,26 +12,26 @@
     "paid": false
   },
   "tokens": {
-    "primaryColor": "#121212",
-    "primaryTextColor": "#ffffff",
-    "accentColor": "#121212",
-    "bodyBg": "#ffffff",
-    "cardBg": "#ffffff",
-    "bodyText": "#121212",
-    "mutedText": "#5c5c5c",
-    "borderColor": "#e6e6e6",
-    "headerBg": "#ffffff",
-    "headerText": "#121212",
-    "footerBg": "#f5f5f5",
-    "footerText": "#121212",
-    "priceColor": "#121212",
+    "primaryColor": "#2c2a26",
+    "primaryTextColor": "#f7f5f0",
+    "accentColor": "#6b7c3e",
+    "bodyBg": "#f7f5f0",
+    "cardBg": "#fffcf7",
+    "bodyText": "#2c2a26",
+    "mutedText": "#6b675e",
+    "borderColor": "#ddd8cc",
+    "headerBg": "#fffcf7",
+    "headerText": "#2c2a26",
+    "footerBg": "#ebe6da",
+    "footerText": "#2c2a26",
+    "priceColor": "#2c2a26",
     "saleColor": "#b42318",
     "fontFamily": "system",
     "baseFontSize": 16,
     "headingWeight": 600,
     "radius": 0,
     "buttonRadius": 0,
-    "containerWidth": 1200,
+    "containerWidth": 1180,
     "cardShadow": "none",
     "productsPerRow": 4,
     "showTrustBar": true,
@@ -41,12 +42,26 @@
     "showCategories": true,
     "showFeatured": true,
     "showNewArrivals": true,
-    "announcementBg": "#121212",
-    "announcementText2": "#ffffff"
+    "announcementBg": "#2c2a26",
+    "announcementText2": "#f7f5f0"
   },
   "sections": {
     "hero": "@/themes/dawnlight/sections/Hero",
     "featured": "@/themes/dawnlight/sections/Featured",
     "categories": "@/themes/dawnlight/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 32,
+      "blocks": [
+        { "id": "hero", "type": "hero", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": {} },
+        { "id": "cats", "type": "categories", "colStart": 1, "colSpan": 12, "rowStart": 2, "rowSpan": 1, "config": {} },
+        { "id": "feat", "type": "featured", "colStart": 1, "colSpan": 12, "rowStart": 3, "rowSpan": 1, "config": {} },
+        { "id": "new", "type": "newArrivals", "colStart": 1, "colSpan": 12, "rowStart": 4, "rowSpan": 1, "config": {} },
+        { "id": "trust", "type": "trustBar", "colStart": 1, "colSpan": 12, "rowStart": 5, "rowSpan": 1, "config": {} },
+        { "id": "news", "type": "newsletter", "colStart": 1, "colSpan": 12, "rowStart": 6, "rowSpan": 1, "config": {} }
+      ]
+    }
   }
 }

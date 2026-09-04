@@ -408,6 +408,13 @@ describe('themeRegistry', () => {
     expect(listThemeKeys()).toContain('minimal');
   });
 
+  it('the default theme ships hero, featured and categories overrides', () => {
+    const t = THEMES.find((th) => th.key === 'default')!;
+    expect(Object.keys(t.sections!)).toEqual(
+      expect.arrayContaining(['hero', 'featured', 'categories']),
+    );
+  });
+
   it('the default theme is free', () => {
     const t = THEMES.find((th) => th.key === 'default');
     expect(t?.features.paid).toBe(false);

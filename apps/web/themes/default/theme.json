@@ -1,8 +1,9 @@
 {
   "key": "default",
   "name": "Default",
-  "description": "The platform's default storefront. Clean, modern, conversion-focused. Works for any product type.",
-  "version": "1.0.0",
+  "niche": "General retail",
+  "description": "Conversion-first general storefront: four-column grid, trust bar, deals, and stats. Best for mixed catalogues and everyday shops.",
+  "version": "1.2.0",
   "author": "Platform Team",
   "preview": "/themes/default/preview.png",
   "features": {
@@ -45,6 +46,25 @@
     "announcementText2": "#ffffff"
   },
   "sections": {
-    "hero": "@/themes/default/sections/Hero"
+    "hero": "@/themes/default/sections/Hero",
+    "featured": "@/themes/default/sections/Featured",
+    "categories": "@/themes/default/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 24,
+      "blocks": [
+        { "id": "hero", "type": "hero", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": {} },
+        { "id": "trust", "type": "trustBar", "colStart": 1, "colSpan": 12, "rowStart": 2, "rowSpan": 1, "config": {} },
+        { "id": "cats", "type": "categories", "colStart": 1, "colSpan": 12, "rowStart": 3, "rowSpan": 1, "config": {} },
+        { "id": "feat", "type": "featured", "colStart": 1, "colSpan": 12, "rowStart": 4, "rowSpan": 1, "config": {} },
+        { "id": "new", "type": "newArrivals", "colStart": 1, "colSpan": 12, "rowStart": 5, "rowSpan": 1, "config": {} },
+        { "id": "deal", "type": "dealCountdown", "colStart": 1, "colSpan": 12, "rowStart": 6, "rowSpan": 1, "config": {} },
+        { "id": "stats", "type": "stats", "colStart": 1, "colSpan": 12, "rowStart": 7, "rowSpan": 1, "config": {} },
+        { "id": "quotes", "type": "testimonials", "colStart": 1, "colSpan": 12, "rowStart": 8, "rowSpan": 1, "config": {} },
+        { "id": "news", "type": "newsletter", "colStart": 1, "colSpan": 12, "rowStart": 9, "rowSpan": 1, "config": {} }
+      ]
+    }
   }
 }

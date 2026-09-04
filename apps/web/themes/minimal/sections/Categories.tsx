@@ -27,6 +27,7 @@ export default function MinimalCategories({ title, subtitle, categories, config 
   return (
     <section
       data-section="categories"
+      data-theme={theme.activeTheme}
       style={{
         padding: '64px 24px 96px',
         maxWidth: 'var(--container, 960px)',
