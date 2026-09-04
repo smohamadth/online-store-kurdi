@@ -145,11 +145,8 @@ export function tokensToTheme(activeTheme: ThemeConfig, customizations: Partial<
     announcementBg: (t.announcementBg as string) ?? '#111111',
     announcementText2: (t.announcementText2 as string) ?? '#ffffff',
     showAnnouncement: false,
-    customCss: null,
     ...safeCustomizations,
-    customCss: scrubCustomCss(
-      (safeCustomizations as Partial<Theme>).customCss ?? null,
-    ),
+    customCss: scrubCustomCss(rawCustomCss ?? null),
     // activeTheme is always the config's key. The customizations
     // cannot override it (we strip it above). This is the
     // single source of truth for which theme is active.

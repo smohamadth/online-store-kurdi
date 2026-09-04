@@ -84,7 +84,8 @@ PRODUCT_HEADERS = (
     "name,sku,slug,description,shortDescription,type,status,price,compareAtPrice,"
     "costPrice,trackInventory,quantity,lowStockThreshold,allowBackorder,backorderLimit,"
     "expectedRestockAt,downloadUrl,downloadLimit,downloadExpiry,weight,weightUnit,"
-    "dimensions,category,metaTitle,metaDescription,metaKeywords,images,variants"
+    "dimensions,category,metaTitle,metaDescription,metaKeywords,images,options,variants,"
+    "variantSkus,variantNames,variantPrices,variantQuantities,variantOptions"
 )
 
 admin_token = login("admin@store.com", "admin123")
