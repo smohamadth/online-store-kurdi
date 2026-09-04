@@ -49,19 +49,5 @@
     "hero": "@/themes/dawnlight/sections/Hero",
     "featured": "@/themes/dawnlight/sections/Featured",
     "categories": "@/themes/dawnlight/sections/Categories"
-  },
-  "layouts": {
-    "home": {
-      "columns": 12,
-      "gap": 32,
-      "blocks": [
-        { "id": "hero", "type": "hero", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": {} },
-        { "id": "cats", "type": "categories", "colStart": 1, "colSpan": 12, "rowStart": 2, "rowSpan": 1, "config": {} },
-        { "id": "feat", "type": "featured", "colStart": 1, "colSpan": 12, "rowStart": 3, "rowSpan": 1, "config": {} },
-        { "id": "new", "type": "newArrivals", "colStart": 1, "colSpan": 12, "rowStart": 4, "rowSpan": 1, "config": {} },
-        { "id": "trust", "type": "trustBar", "colStart": 1, "colSpan": 12, "rowStart": 5, "rowSpan": 1, "config": {} },
-        { "id": "news", "type": "newsletter", "colStart": 1, "colSpan": 12, "rowStart": 6, "rowSpan": 1, "config": {} }
-      ]
-    }
   }
 }
