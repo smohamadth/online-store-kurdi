@@ -637,27 +637,3 @@ function CategoryTile({
     </Link>
   );
 }
-          src={getImageUrl(category.image!)}
-            alt={category.name}
-            onError={() => setImgFailed(true)}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transition: 'transform 500ms ease',
-              transform: hovered ? 'scale(1.07)' : 'scale(1)',
-            }}
-          />
-        ) : (
-          <PlaceholderTile label="Category" emoji={category.emoji} seed={category.name} />
-        )}
-      </div>
-      <div style={{ padding: '14px 16px' }}>
-        <h3 style={{ fontWeight: 700, fontSize: '15px' }}>{category.name}</h3>
-        <p style={{ fontSize: '13px', color: 'var(--muted, #777)', marginTop: '3px' }}>
-          {category.count} {category.count === 1 ? 'product' : 'products'}
-        </p>
-      </div>
-    </Link>
-  );
-}
