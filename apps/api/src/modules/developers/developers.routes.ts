@@ -14,7 +14,7 @@
 import { Router } from 'express';
 import { prisma } from '../../config/database';
 import { isStripeConfigured } from '../../config/stripe';
-import { ensureSeeded, fromRow } from '../home/home.routes';
+import { fromRow } from '../home/home.routes';
 import { getEnabledGateways } from '../payments/gatewayConfig';
 import { PUBLIC_ENDPOINTS, MANIFEST_VERSION } from './publicEndpoints';
 
