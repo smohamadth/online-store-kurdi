@@ -50,6 +50,7 @@ import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { pickStorefrontHomeSections } from '@/lib/layouts/homeMapping';
 import { heroOptionsFromSectionConfig } from '@/lib/heroOptions';
 import { featuredProductsToShow } from '@/lib/featuredGrid';
+import { isHomeSectionVisible } from '@/lib/homeVisibility';
 import { API_BASE } from '@/lib/http';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import RecentlyViewed from '@/components/RecentlyViewed';
@@ -185,27 +186,6 @@ export default function HomeView() {
   };
 
   /* ------------------------------------------------------------ render */
-
-  /**
-   * Legacy toggles still win.
-   *
-   * `theme.showTrustBar` etc. predate the section rows. If an admin turned a
-   * section off there, honour it — otherwise upgrading would silently switch
-   * hidden sections back on.
-   */
-  const legacyHidden = (key: string): boolean => {
-    const map: Record<string, boolean> = {
-      trustBar: theme.showTrustBar === false,
-      categories: theme.showCategories === false,
-      featured: theme.showFeatured === false,
-      newArrivals: theme.showNewArrivals === false,
-      dealCountdown: theme.showDealCountdown === false,
-      testimonials: theme.showTestimonials === false,
-      stats: theme.showStats === false,
-      newsletter: theme.showNewsletter === false,
-    };
-    return map[key] === true;
-  };
 
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
 
@@ -477,6 +457,36 @@ export default function HomeView() {
             title={s.title}
             subtitle={s.subtitle}
             description={cfg.description}
+            im  return (
+          <ComparisonTable
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            columns={cfg.columns}
+            rows={cfg.rows}
+            highlight={typeof cfg.highlight === 'number' ? cfg.highlight : null}
+          />
+        );
+
+      case 'quote':
+        return (
+          <PullQuote
+            key={s.id}
+            quote={cfg.quote}
+            author={cfg.author}
+            role={cfg.role}
+            avatar={cfg.avatar}
+            background={cfg.background}
+          />
+        );
+
+      case 'lookbook':
+        return (
+          <LookbookSection
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            description={cfg.description}
             image={cfg.image}
             imagePosition={cfg.imagePosition === 'end' ? 'end' : 'start'}
             buttonText={cfg.buttonText}
@@ -546,7 +556,7 @@ export default function HomeView() {
   };
 
   const visible = pickStorefrontHomeSections(sections)
-    .filter((s) => s.isVisible && !legacyHidden(s.key))
+    .filter(isHomeSectionVisible)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (

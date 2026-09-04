@@ -47,12 +47,10 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** partial. `featuredProductsToShow` honours `config.limit` and no longer drops leftover cards. `GET /products/featured` is still “latest”, not a featured flag.
 
 ### 7. Deal countdown / gallery / banners link to `/deals` (no route)
-**Where:** seed + `HomeBuilder` defaults `buttonHref: '/deals'`; gallery “On sale” → `/deals`. There is `apps/web/app/deals`? (check) — if missing, those CTAs 404.  
-**Fix direction:** Point at `/products?onSale=1` (or whatever the filter query is) or add a real deals page.
+**Status:** not a bug. `apps/web/app/deals` exists (`DealsView.tsx`).
 
 ### 8. Dual visibility: token toggles override the builder
-**Where:** `HomeView.legacyHidden`. Appearance “Sections” checkboxes (`showTrustBar` etc.) hide blocks even when Home builder `isVisible` is on. Studio home path also calls `legacyHidden`.  
-**Fix direction:** One source of truth (section rows). Treat token flags as deprecated or sync them on save.
+**Status:** fixed. `isHomeSectionVisible` uses only `HomeSection.isVisible`. Theme `show*` tokens no longer hide builder-visible blocks.
 
 ### 9. Theme Studio cannot edit bundled themes, cannot persist drafts across Save correctly
 **Where:** `save()` merges `drafts` into `current.layouts` but **does not clear `drafts`**. Switching theme resets drafts; switching **page** keeps them (good) but unsaved token edits live on `current` with **no dirty flag / no beforeunload**.  
