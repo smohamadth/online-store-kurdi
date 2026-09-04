@@ -128,6 +128,26 @@ describe('ComparisonTable', () => {
     expect(container.querySelector('table')?.getAttribute('data-highlight')).toBe('2');
   });
 
+  it('treats highlight as 1-based (0 disables, 1 is the first column)', () => {
+    const none = render(
+      <ComparisonTable
+        columns={[{ name: 'A' }, { name: 'B' }]}
+        rows={[{ label: 'X', values: ['1', '2'] }]}
+        highlight={0}
+      />
+    );
+    expect(none.container.querySelector('table')?.getAttribute('data-highlight')).toBeNull();
+    none.unmount();
+    const first = render(
+      <ComparisonTable
+        columns={[{ name: 'A' }, { name: 'B' }]}
+        rows={[{ label: 'X', values: ['1', '2'] }]}
+        highlight={1}
+      />
+    );
+    expect(first.container.querySelector('table')?.getAttribute('data-highlight')).toBe('1');
+  });
+
   it('renders nothing without columns or rows', () => {
     const a = render(<ComparisonTable columns={[]} rows={[]} />);
     expect(a.container.innerHTML).toBe('');

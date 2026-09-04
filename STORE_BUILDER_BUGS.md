@@ -62,8 +62,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. Public GET and developers bootstrap are read-only. Seed via admin reset and `prisma db seed`.
 
 ### 12. Comparison “highlighted column” off-by-one
-**Where:** HomeBuilder select: value `0` = None, `i+1` = column i. Default seed `highlight: 2`. Storefront `ComparisonTable` likely treats `highlight` as 0-based index. Easy to highlight the wrong column or none.  
-**Fix direction:** One convention (0-based index or `null`) and tests.
+**Status:** not a bug. Builder and `ComparisonTable` both use **1-based** `highlight` (`0`/null = none). Seed `highlight: 2` is the second column. Covered by tests.
 
 ### 13. Testimonials field names differ between Home builder and Studio renderer
 **Where:** Home builder items use `{ name, role, rating, text }`. `LayoutRenderer` testimonials read `t.author`. Quote: Home uses `cfg.quote`; Studio quote block uses `config.text`. Gallery: Home uses `image`; Studio gallery looks at `src`/`url`. Logo: Home `logos` vs Studio `logoStrip`.  
