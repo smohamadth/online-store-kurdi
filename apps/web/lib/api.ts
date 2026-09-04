@@ -94,7 +94,9 @@ class ApiClient {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = API_URL;
+    // Browser-safe base: loopback NEXT_PUBLIC_API_URL is unreachable from
+    // a preview/sandbox tab, so featured/search must use CLIENT_API_BASE.
+    this.baseUrl = CLIENT_API_BASE;
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {

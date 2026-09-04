@@ -75,6 +75,22 @@ describe('PUT /api/home-sections/reorder', () => {
     expect(res.status).toBe(200);
   });
 
+  it('appends omitted ids after the payload instead of interleaving them', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    await resetHome(token);
+    const list = await request(app).get('/api/home-sections');
+    const ids = list.body.data.map((s: any) => s.id);
+    expect(ids.length).toBeGreaterThan(2);
+    const res = await request(app)
+      .put('/api/home-sections/reorder')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ order: [ids[1], ids[0]] });
+    expect(res.status).toBe(200);
+    const next = res.body.data.map((s: any) => s.id);
+    expect(next.slice(0, 2)).toEqual([ids[1], ids[0]]);
+    expect(next.slice(2)).toEqual(ids.slice(2));
+  });
+
   it('rejects an unknown id', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const res = await request(app)

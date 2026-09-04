@@ -656,5 +656,5 @@ const previewModeButton: React.CSSProperties = {
   background: '#fff', color: '#333', cursor: 'pointer',
 };
 const previewModeButtonActive: React.CSSProperties = {
-  background: 'var(--primary, #111)', color: '#fff', border: '1px solid transparent',
+  background: 'var(--brand, #111)', color: '#fff', border: '1px solid transparent',
 };

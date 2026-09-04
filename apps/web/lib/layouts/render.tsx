@@ -14,6 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import { ReactNode, CSSProperties } from 'react';
+import Link from 'next/link';
 import { PageLayout, LayoutBlock } from './types';
 import { toEmbedUrl, itemsOf } from './blockUtils';
 import { normalizeStudioConfig } from './homeMapping';
@@ -48,6 +49,78 @@ export function responsiveGrid(perRow: number, gap = 16, container = 1280): stri
   return `repeat(auto-fit, minmax(min(100%, ${min}px), 1fr))`;
 }
 
+const tileStyle: CSSProperties = {
+  padding: 16,
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
+  textDecoration: 'none',
+  color: 'inherit',
+  display: 'block',
+};
+
+function productTile(p: any) {
+  const inner = (
+    <>
+      <div style={{ fontWeight: 600 }}>{p.name}</div>
+      {p.price ? <div style={{ color: 'var(--muted)' }}>{String(p.price)}</div> : null}
+    </>
+  );
+  if (p.slug) {
+    return (
+      <Link key={p.id} href={`/products/${p.slug}`} style={tileStyle}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div key={p.id} style={tileStyle}>
+      {inner}
+    </div>
+  );
+}
+
+function categoryTile(c: any) {
+  const inner = (
+    <>
+      {c.emoji ? <div style={{ fontSize: 26 }}>{c.emoji}</div> : null}
+      <div style={{ fontWeight: 600 }}>{c.name}</div>
+    </>
+  );
+  if (c.slug) {
+    return (
+      <Link key={c.slug ?? c.id} href={`/category/${c.slug}`} style={{ ...tileStyle, textAlign: 'center' }}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div key={c.slug ?? c.id} style={{ ...tileStyle, textAlign: 'center' }}>
+      {inner}
+    </div>
+  );
+}
+
+function postTile(post: any) {
+  const inner = (
+    <>
+      <div style={{ fontWeight: 600 }}>{post.title}</div>
+      {post.excerpt && <div style={{ color: 'var(--muted)', fontSize: 14, marginTop: 4 }}>{post.excerpt}</div>}
+    </>
+  );
+  if (post.slug) {
+    return (
+      <Link key={post.slug ?? post.id} href={`/blog/${post.slug}`} style={tileStyle}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div key={post.slug ?? post.id} style={tileStyle}>
+      {inner}
+    </div>
+  );
+}
+
 /** A shared product-grid renderer used by newArrivals / trending. */
 function productGrid(b: LayoutBlock, d: LayoutData, fallbackTitle: string) {
   const items = (d.products ?? []) as any[];
@@ -58,11 +131,7 @@ function productGrid(b: LayoutBlock, d: LayoutData, fallbackTitle: string) {
     <div>
       <h2 style={{ margin: '0 0 16px' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
-        {shown.map((p) => (
-          <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-            <div style={{ fontWeight: 600 }}>{p.name}</div>
-          </div>
-        ))}
+        {shown.map((p) => productTile(p))}
       </div>
     </div>
   );
@@ -110,12 +179,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     if (!cats.length) return null;
     return (
       <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
-        {cats.slice(0, Number(b.config.limit ?? 8) || 8).map((c) => (
-          <div key={c.slug} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)', textAlign: 'center' }}>
-            <div style={{ fontSize: 26 }}>{c.emoji ?? '📦'}</div>
-            <div style={{ fontWeight: 600 }}>{c.name}</div>
-          </div>
-        ))}
+        {cats.slice(0, Number(b.config.limit ?? 8) || 8).map((c) => categoryTile({ ...c, emoji: c.emoji ?? '📦' }))}
       </div>
     );
   },
@@ -128,11 +192,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
           <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
-          {items.slice(0, Number(b.config.limit ?? 8) || 8).map((p) => (
-            <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontWeight: 600 }}>{p.name}</div>
-            </div>
-          ))}
+          {items.slice(0, Number(b.config.limit ?? 8) || 8).map((p) => productTile(p))}
         </div>
       </div>
     );
@@ -411,12 +471,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
           <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 4) || 4), gap: 16 }}>
-          {items.map((p) => (
-            <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontWeight: 600 }}>{p.name}</div>
-              <div style={{ color: 'var(--muted)' }}>{p.price ? String(p.price) : ''}</div>
-            </div>
-          ))}
+          {items.map((p) => productTile(p))}
         </div>
       </div>
     );
@@ -427,11 +482,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
       <div>
         {(b.config.title || d.title) && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>}
         <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3), gap: 16 }}>
-          {items.map((c) => (
-            <div key={c.slug ?? c.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontWeight: 600 }}>{c.name}</div>
-            </div>
-          ))}
+          {items.map((c) => categoryTile(c))}
         </div>
       </div>
     );
@@ -468,12 +519,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
       <div>
         {(b.config.title || d.title) && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>}
         <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3), gap: 16 }}>
-          {posts.map((post) => (
-            <div key={post.slug ?? post.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontWeight: 600 }}>{post.title}</div>
-              {post.excerpt && <div style={{ color: 'var(--muted)', fontSize: 14, marginTop: 4 }}>{post.excerpt}</div>}
-            </div>
-          ))}
+          {posts.map((post) => postTile(post))}
         </div>
       </div>
     );

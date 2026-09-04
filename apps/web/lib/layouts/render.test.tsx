@@ -60,6 +60,24 @@ describe('LayoutRenderer', () => {
     expect(screen.getByText('Favourites')).toBeTruthy();
   });
 
+  it('links product tiles to /products/:slug when a slug is present', () => {
+    const layout: PageLayout = {
+      columns: 12,
+      gap: 24,
+      blocks: [
+        { id: 'f', type: 'featured', colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1, config: {} },
+      ],
+    };
+    render(
+      <LayoutRenderer
+        layout={layout}
+        data={{ products: [{ id: 'p1', name: 'One', slug: 'one' }] }}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /One/ }) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/products/one');
+  });
+
   it('passes page data to blocks that need it', () => {
     const layout: PageLayout = {
       columns: 12,

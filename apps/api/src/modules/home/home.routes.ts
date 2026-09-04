@@ -89,7 +89,10 @@ router.put('/reorder', authenticate, authorize('admin', 'manager'), async (req, 
   try {
     const { order } = reorderSchema.parse(req.body);
 
-    const rows = await prisma.homeSection.findMany({ select: { id: true } });
+    const rows = await prisma.homeSection.findMany({
+      select: { id: true },
+      orderBy: { sortOrder: 'asc' },
+    });
     const known = new Set(rows.map((r) => r.id));
     const unknown = order.filter((id) => !known.has(id));
     if (unknown.length) {
@@ -102,8 +105,14 @@ router.put('/reorder', authenticate, authorize('admin', 'manager'), async (req, 
       });
     }
 
+    // Listed ids first (deduped), then any omitted rows in their previous
+    // order — a partial payload must not interleave leftover sortOrders.
+    const listed = [...new Set(order)];
+    const omitted = rows.map((r) => r.id).filter((id) => !listed.includes(id));
+    const nextOrder = [...listed, ...omitted];
+
     await prisma.$transaction(
-      order.map((id, i) =>
+      nextOrder.map((id, i) =>
         prisma.homeSection.update({ where: { id }, data: { sortOrder: (i + 1) * 10 } })
       )
     );

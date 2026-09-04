@@ -90,7 +90,7 @@ Edits require opening `/` in another tab. No device frames. Theme Studio preview
 Reset wipes **all** home sections (`deleteMany` + seed). No per-block revert, no history. Studio delete of a custom theme is permanent (OK) but bundled duplicate flow is missing (P0.2).
 
 ### 20. Reorder can drop sections not in the payload
-`PUT /reorder` updates only ids in `order`. If the client sends a partial list, omitted rows keep old `sortOrder` and interleave. HomeBuilder sends the full list today — still a footgun.
+**Status:** fixed. Omitted ids are appended after the payload (previous relative order), so leftover `sortOrder` values cannot interleave.
 
 ### 21. `config` is `z.record(z.any())` — unbounded
 A huge gallery / FAQ JSON is free DB bloat (analytics already learned this lesson). No max items, no max HTML length.
@@ -99,10 +99,10 @@ A huge gallery / FAQ JSON is free DB bloat (analytics already learned this lesso
 Gallery → `folder="banners"`; logos/lookbook → `folder="categories"`. Confusing in MinIO and easy to hit allowlist bugs.
 
 ### 23. RTL / physical CSS in builder UI
-HomeBuilder `text-align` left in richText align select is **content** (storefront should use `start`). Studio preview button active uses `--primary` not `--brand`.
+HomeBuilder `text-align` left in richText align select is **content** (storefront should use `start`). Studio preview-mode active button now uses `--brand` (partial).
 
 ### 24. `getFeaturedProducts` in `lib/api.ts` uses a second API client (`localhost` fallback)
-Inconsistent with `http.ts` / `CLIENT_API_BASE`. Preview/sandbox breakage class.
+**Status:** fixed. `ApiClient` uses `CLIENT_API_BASE` (same-origin `/api` on loopback).
 
 ### 25. Theme Studio token editor is a subset
 Only some colours + font/size/radius. Missing `productsPerRow`, `cardShadow`, `show*` toggles, `containerWidth`, `headingWeight` — so Studio themes never match bundled density.
@@ -120,7 +120,11 @@ Reset restores seed. `ensureSeeded` on GET re-inserts **new** platform keys afte
 - No `beforeunload` when Home builder `dirty` is set.
 - Drag handle is mouse-only (arrows exist — OK); drop hint can miss last card.
 - Studio `loadThemes` N+1 fetches (list keys then GET each).
+<<<<<<< HEAD
 - Studio `LayoutRenderer` product cards are not links (`/products/:slug`).
+=======
+- Studio `LayoutRenderer` product cards are not links (`/products/:slug`). **Fixed** (also category `/category/:slug`, blog `/blog/:slug`).
+>>>>>>> 0f728bd (fix(builder): keep partial reorder, merch links, and browser-safe API)
 - Comparison editor `true`/`false` strings vs booleans.
 - Video autoplay without muted (Home builder notes this; still a checkbox combo).
 - Tests to add: hero seed shape vs `heroOptionsFromConfig`; `blockToHomeSection` coverage for every `BlockType`; HomeView does not drop featured remainder; bundled theme PUT returns 403 and UI shows it; `layouts.home` vs DB sections switch.
