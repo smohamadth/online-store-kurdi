@@ -513,6 +513,28 @@ const dictionaries: Record<string, Record<string, string>> = {
 /** The per-language dictionaries, keyed by locale code. */
 export const translations = dictionaries;
 
+/** Admin-editable overlays loaded from GET /api/i18n/storefront. */
+let storefrontOverlay: Record<string, Record<string, string>> = {};
+let extraLanguages: { code: string; name: string; dir: 'ltr' | 'rtl'; flag: string }[] = [];
+let enabledCodes: string[] | null = null;
+
+export function applyStorefrontI18nCatalog(data: {
+  languages?: { code: string; name: string; dir: 'ltr' | 'rtl'; flag?: string; enabled?: boolean }[];
+  strings?: Record<string, Record<string, string>>;
+}) {
+  storefrontOverlay = data.strings || {};
+  if (data.languages?.length) {
+    enabledCodes = data.languages.filter((l) => l.enabled !== false).map((l) => l.code);
+    extraLanguages = data.languages
+      .filter((l) => !languages.some((b) => b.code === l.code))
+      .map((l) => ({ code: l.code, name: l.name, dir: l.dir, flag: l.flag || '🏳️' }));
+  }
+}
+
+function lookup(lang: string, key: string): string | undefined {
+  return storefrontOverlay[lang]?.[key] || dictionaries[lang]?.[key];
+}
+
 /** Every translation key in the English (source) dictionary, sorted. */
 export const allTranslationKeys = Object.keys(translations.en).sort();
 
@@ -540,6 +562,13 @@ export function useTranslation() {
   const seed = useContext(I18nSeedContext);
   const [language, setLanguage] = useState<string>(seed?.lang ?? 'en');
   const [direction, setDirection] = useState<'ltr' | 'rtl'>(seed?.dir ?? 'ltr');
+
+  useEffect(() => {
+    fetch('/api/i18n/storefront')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.data) applyStorefrontI18nCatalog(j.data); })
+      .catch(() => { /* built-in dictionaries remain */ });
+  }, []);
 
   useEffect(() => {
     // When the server has already resolved a locale for us, trust it.
@@ -580,10 +609,15 @@ export function useTranslation() {
   };
 
   const t = (key: string, fallback?: string): string => {
-    return translations[language]?.[key] || translations['en']?.[key] || fallback || key;
+    return lookup(language, key) || lookup('en', key) || fallback || key;
   };
 
-  return { t, language, direction, changeLanguage, languages };
+  const visibleLanguages = languages
+    .concat(extraLanguages)
+    .filter((l, i, arr) => arr.findIndex((x) => x.code === l.code) === i)
+    .filter((l) => !enabledCodes || enabledCodes.includes(l.code));
+
+  return { t, language, direction, changeLanguage, languages: visibleLanguages };
 }
 
 // Translation component helper

@@ -39,6 +39,7 @@ describe('AdminLayout', () => {
     // Nav items visible, hamburger NOT present on desktop.
     expect(screen.getByText('Dashboard content')).toBeTruthy();
     expect(screen.getAllByText('Orders').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Languages').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('☰')).toBeNull();
   });
 

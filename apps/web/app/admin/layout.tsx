@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/http';
+import { useAdminI18n } from '@/lib/adminI18n';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -38,6 +39,7 @@ export default function AdminLayout({
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
+  const { t, language: adminLang, dir: adminDir, changeLanguage: changeAdminLang, languages: adminLangs } = useAdminI18n();
 
   useEffect(() => {
     checkAdminAuth();
@@ -120,7 +122,7 @@ export default function AdminLayout({
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <p style={{ color: '#666' }}>Loading admin panel...</p>
+        <p style={{ color: '#666' }}>{t('admin.loading')}</p>
       </div>
     );
   }
@@ -141,63 +143,65 @@ export default function AdminLayout({
    * Order and labels are unchanged where they were already sensible; nothing
    * has been removed, so no existing route becomes unreachable.
    */
-  const menuGroups: { heading: string | null; items: { path: string; label: string; icon: string }[] }[] = [
+  const menuGroups: { headingKey: string | null; items: { path: string; labelKey: string; icon: string }[] }[] = [
     {
-      heading: null,
-      items: [{ path: '/admin', label: 'Dashboard', icon: '📊' }],
+      headingKey: null,
+      items: [{ path: '/admin', labelKey: 'nav.dashboard', icon: '📊' }],
     },
     {
-      heading: 'Catalogue',
+      headingKey: 'nav.catalogue',
       items: [
-        { path: '/admin/products', label: 'Products', icon: '📦' },
-        { path: '/admin/variants', label: 'Variants', icon: '🏷️' },
-        { path: '/admin/categories', label: 'Categories', icon: '🏷️' },
-        { path: '/admin/inventory', label: 'Inventory', icon: '📋' },
-        { path: '/admin/import-export', label: 'Import / Export', icon: '⇅' },
+        { path: '/admin/products', labelKey: 'nav.products', icon: '📦' },
+        { path: '/admin/variants', labelKey: 'nav.variants', icon: '🏷️' },
+        { path: '/admin/categories', labelKey: 'nav.categories', icon: '🏷️' },
+        { path: '/admin/inventory', labelKey: 'nav.inventory', icon: '📋' },
+        { path: '/admin/import-export', labelKey: 'nav.importExport', icon: '⇅' },
       ],
     },
     {
-      heading: 'Selling',
+      headingKey: 'nav.selling',
       items: [
-        { path: '/admin/orders', label: 'Orders', icon: '🛒' },
-        { path: '/admin/coupons', label: 'Coupons', icon: '🎟️' },
-        { path: '/admin/gift-cards', label: 'Gift cards', icon: '🎁' },
-        { path: '/admin/affiliates', label: 'Affiliates', icon: '🤝' },
-        { path: '/admin/shipping', label: 'Shipping', icon: '🚚' },
-        { path: '/admin/tax', label: 'Tax', icon: '💰' },
+        { path: '/admin/orders', labelKey: 'nav.orders', icon: '🛒' },
+        { path: '/admin/coupons', labelKey: 'nav.coupons', icon: '🎟️' },
+        { path: '/admin/gift-cards', labelKey: 'nav.giftCards', icon: '🎁' },
+        { path: '/admin/affiliates', labelKey: 'nav.affiliates', icon: '🤝' },
+        { path: '/admin/shipping', labelKey: 'nav.shipping', icon: '🚚' },
+        { path: '/admin/tax', labelKey: 'nav.tax', icon: '💰' },
       ],
     },
     {
-      heading: 'Finance',
+      headingKey: 'nav.finance',
       items: [
-        { path: '/admin/accounting', label: 'Accounting', icon: '🧾' },
-        { path: '/admin/payments', label: 'Payment Gateways', icon: '💳' },
+        { path: '/admin/accounting', labelKey: 'nav.accounting', icon: '🧾' },
+        { path: '/admin/payments', labelKey: 'nav.payments', icon: '💳' },
       ],
     },
     {
-      heading: 'Customers',
+      headingKey: 'nav.customers',
       items: [
-        { path: '/admin/users', label: 'Users', icon: '👥' },
-        { path: '/admin/reviews', label: 'Reviews', icon: '⭐' },
+        { path: '/admin/users', labelKey: 'nav.users', icon: '👥' },
+        { path: '/admin/reviews', labelKey: 'nav.reviews', icon: '⭐' },
       ],
     },
     {
-      heading: 'Storefront',
+      headingKey: 'nav.storefront',
       items: [
-        { path: '/admin/pages', label: 'Pages', icon: '📄' },
-        { path: '/admin/blog', label: 'Blog', icon: '✍️' },
-        { path: '/admin/appearance', label: 'Appearance', icon: '🎨' },
-        { path: '/admin/plugins', label: 'Plugins', icon: '🧩' },
-        { path: '/admin/banners', label: 'Gallery & Banners', icon: '🖼️' },
-        { path: '/admin/menus', label: 'Menus', icon: '📑' },
+        { path: '/admin/pages', labelKey: 'nav.pages', icon: '📄' },
+        { path: '/admin/blog', labelKey: 'nav.blog', icon: '✍️' },
+        { path: '/admin/appearance', labelKey: 'nav.appearance', icon: '🎨' },
+        { path: '/admin/theme-studio', labelKey: 'nav.themeStudio', icon: '🖌️' },
+        { path: '/admin/plugins', labelKey: 'nav.plugins', icon: '🧩' },
+        { path: '/admin/banners', labelKey: 'nav.banners', icon: '🖼️' },
+        { path: '/admin/menus', labelKey: 'nav.menus', icon: '📑' },
       ],
     },
     {
-      heading: 'System',
+      headingKey: 'nav.system',
       items: [
-        { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
-        { path: '/admin/settings', label: 'Store Settings', icon: '⚙️' },
-        { path: '/admin/profile', label: 'My Profile', icon: '👤' },
+        { path: '/admin/analytics', labelKey: 'nav.analytics', icon: '📈' },
+        { path: '/admin/languages', labelKey: 'nav.languages', icon: '🌐' },
+        { path: '/admin/settings', labelKey: 'nav.settings', icon: '⚙️' },
+        { path: '/admin/profile', labelKey: 'nav.profile', icon: '👤' },
       ],
     },
   ];
@@ -211,7 +215,7 @@ export default function AdminLayout({
       <div style={{ padding: '0 20px', marginBottom: '16px', marginTop: isMobile ? '16px' : '0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }} onClick={() => isMobile && setSidebarOpen(false)}>
-            <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 {t('admin.brand')}</h1>
           </Link>
           {isMobile && (
             <button
@@ -235,7 +239,7 @@ export default function AdminLayout({
           )}
         </div>
         <p style={{ fontSize: '12px', color: '#8888aa', marginTop: '4px' }}>
-          Online Store Management
+          {t('admin.subtitle')}
         </p>
       </div>
 
@@ -272,8 +276,8 @@ export default function AdminLayout({
         }}
       >
         {menuGroups.map((group, gi) => (
-          <div key={group.heading ?? `group-${gi}`} style={{ marginBottom: '10px' }}>
-            {group.heading && (
+          <div key={group.headingKey ?? `group-${gi}`} style={{ marginBottom: '10px' }}>
+            {group.headingKey && (
               <p
                 style={{
                   fontSize: '11px',
@@ -285,7 +289,7 @@ export default function AdminLayout({
                   margin: '0 0 4px',
                 }}
               >
-                {group.heading}
+                {t(group.headingKey)}
               </p>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -353,7 +357,7 @@ export default function AdminLayout({
                         textOverflow: 'ellipsis',
                       }}
                     >
-                      {item.label}
+                      {t(item.labelKey)}
                     </span>
                   </Link>
                 );
@@ -431,7 +435,7 @@ export default function AdminLayout({
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            View Store
+            {t('admin.viewStore')}
           </Link>
           <button
             onClick={handleLogout}
@@ -447,7 +451,7 @@ export default function AdminLayout({
               minHeight: '36px',
             }}
           >
-            Logout
+            {t('admin.logout')}
           </button>
         </div>
       </div>
@@ -470,7 +474,7 @@ export default function AdminLayout({
       // bigger project than the value it would add. Storefront (and the
       // account area) is fully RTL - only this shell opts out. To revisit,
       // remove this attribute and run the RTL sweep over app/admin.
-      dir="ltr"
+      dir={adminDir}
       style={{
         display: 'flex',
         // `height`, not `minHeight`: with minHeight the shell grew to the
@@ -521,7 +525,7 @@ export default function AdminLayout({
             ☰
           </button>
           <Link href="/admin" style={{ textDecoration: 'none', color: 'white' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 Admin Panel</h1>
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold' }}>🛒 {t('admin.brand')}</h1>
           </Link>
           <div style={{ width: '32px' }} />
         </div>
@@ -601,7 +605,7 @@ export default function AdminLayout({
           }}>
             <div>
               <h2 style={{ fontSize: isMobile ? '16px' : '18px', fontWeight: 'bold' }}>
-                {menuItems.find(item => isActive(item.path))?.label || 'Dashboard'}
+                {menuItems.find(item => isActive(item.path)) ? t(menuItems.find(item => isActive(item.path))!.labelKey) : t('nav.dashboard')}
               </h2>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>

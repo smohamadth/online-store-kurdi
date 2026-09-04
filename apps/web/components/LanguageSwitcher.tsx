@@ -6,10 +6,10 @@
 'use client';
 
 import { useState } from 'react';
-import { languages, useTranslation } from '@/lib/i18n';
+import { useTranslation } from '@/lib/i18n';
 
 export default function LanguageSwitcher() {
-  const { language, changeLanguage, direction } = useTranslation();
+  const { language, changeLanguage, direction, languages } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   const currentLang = languages.find(l => l.code === language);

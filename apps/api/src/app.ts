@@ -64,6 +64,7 @@ import accountingRoutes from './modules/accounting/accounting.routes';
 import affiliateRoutes from './modules/affiliates/affiliate.routes';
 import affiliateAdminRoutes from './modules/affiliates/affiliate.admin.routes';
 import contentTranslationsRoutes from './modules/contentTranslations/contentTranslations.routes';
+import storefrontI18nRoutes from './modules/i18n/storefrontI18n.routes';
 import importExportRoutes from './modules/importExport/routes';
 import homeSectionRoutes from './modules/home/home.routes';
 import developersRoutes from './modules/developers/developers.routes';
