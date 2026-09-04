@@ -44,6 +44,17 @@ describe('AdminLanguagesPage', () => {
     expect(await screen.findByText(/Storefront languages/)).toBeTruthy();
     expect(screen.getByText(/English/)).toBeTruthy();
     expect(screen.getByLabelText('nav.home')).toBeTruthy();
+    expect(screen.getByLabelText('nav.products')).toBeTruthy();
+    expect(screen.getByLabelText('footer.privacy')).toBeTruthy();
+    expect(screen.getByTestId('en-nav.home').textContent).toBe('Home');
+  });
+
+  it('filters strings by search', async () => {
+    render(<AdminLanguagesPage />);
+    await screen.findByLabelText('nav.home');
+    fireEvent.change(screen.getByLabelText('Search strings'), { target: { value: 'cart.title' } });
+    expect(screen.getByLabelText('cart.title')).toBeTruthy();
+    expect(screen.queryByLabelText('nav.home')).toBeNull();
   });
 
   it('can add a language', async () => {
