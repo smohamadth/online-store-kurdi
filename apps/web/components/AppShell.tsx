@@ -945,7 +945,7 @@ function DynamicFooter() {
         textAlign: 'center',
       }}>
         <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>
-          © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
+          © {new Date().getFullYear()} {settings.storeName}. {t('footer.allRights')}
         </p>
       </div>
     </footer>
