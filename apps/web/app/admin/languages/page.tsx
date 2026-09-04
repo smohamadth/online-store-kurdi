@@ -14,7 +14,7 @@ function keysForCatalog(strings: Record<string, Record<string, string>>): string
   for (const bag of Object.values(strings)) {
     for (const k of Object.keys(bag || {})) extra.add(k);
   }
-  return [...allTranslationKeys, ...[...extra].filter((k) => !allTranslationKeys.includes(k)).sort()];
+  return [...allTranslationKeys, ...Array.from(extra).filter((k) => !allTranslationKeys.includes(k)).sort()];
 }
 
 function seedDraft(
@@ -127,7 +127,7 @@ export default function AdminLanguagesPage() {
       if (!map.has(g)) map.set(g, []);
       map.get(g)!.push(key);
     }
-    return [...map.entries()];
+    return Array.from(map.entries());
   }, [visibleKeys]);
 
   return (
@@ -201,7 +201,7 @@ export default function AdminLanguagesPage() {
                 <h3 style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#666', margin: '8px 0' }}>
                   {group}
                 </h3>
-                {groupKeys.map((key) => (
+                {groupKeys.map((key: string) => (
                   <label key={key} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 200px) minmax(140px, 1fr) minmax(160px, 1.2fr)', gap: 8, marginBottom: 8, fontSize: 13, alignItems: 'center' }}>
                     <span style={{ color: '#666', fontFamily: 'monospace' }}>{key}</span>
                     <span style={{ color: '#888', fontSize: 12 }} data-testid={`en-${key}`}>{translations.en[key] || '—'}</span>

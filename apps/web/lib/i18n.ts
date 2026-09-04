@@ -592,7 +592,12 @@ export function applyStorefrontI18nCatalog(data: {
     enabledCodes = data.languages.filter((l) => l.enabled !== false).map((l) => l.code);
     extraLanguages = data.languages
       .filter((l) => !languages.some((b) => b.code === l.code))
-      .map((l) => ({ code: l.code, name: l.name, dir: l.dir, flag: l.flag || '🏳️' }));
+      .map((l) => ({
+        code: l.code,
+        name: l.name,
+        dir: l.dir === 'rtl' ? 'rtl' as const : 'ltr' as const,
+        flag: l.flag || '🏳️',
+      }));
   }
 }
 
@@ -601,11 +606,10 @@ function lookup(lang: string, key: string): string | undefined {
 }
 
 function dirFor(code: string): 'ltr' | 'rtl' {
-  return (
+  const d =
     languages.find((l) => l.code === code)?.dir ||
-    extraLanguages.find((l) => l.code === code)?.dir ||
-    'ltr'
-  );
+    extraLanguages.find((l) => l.code === code)?.dir;
+  return d === 'rtl' ? 'rtl' : 'ltr';
 }
 
 function persistLangCookie(code: string) {
