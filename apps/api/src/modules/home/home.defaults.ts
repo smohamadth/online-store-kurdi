@@ -26,7 +26,16 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
     subtitle: null,
     isVisible: true,
     sortOrder: 10,
-    config: { autoplay: true, intervalMs: 6000, height: 'medium' },
+    config: {
+      hero: {
+        layout: 'slideshow',
+        height: 'standard',
+        autoPlay: true,
+        intervalSec: 6,
+        arrows: true,
+        dots: true,
+      },
+    },
   },
   {
     key: 'promo',

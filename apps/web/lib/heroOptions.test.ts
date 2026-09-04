@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { heroOptionsFromConfig, HERO_DEFAULTS } from './heroOptions';
+import { heroOptionsFromConfig, heroOptionsFromSectionConfig, HERO_DEFAULTS } from './heroOptions';
 
 describe('heroOptionsFromConfig', () => {
   it('returns the classic slideshow defaults for an empty/missing block', () => {
@@ -55,6 +55,28 @@ describe('heroOptionsFromConfig', () => {
     const o = heroOptionsFromConfig({ layout: 'single', autoPlay: true, arrows: true });
     expect(o).toMatchObject({ layout: 'single', autoPlay: false, showArrows: false, showDots: false });
     expect(o.autoPlayMs).toBe(6000);
+  });
+
+  it('reads the legacy seed shape (root autoplay / intervalMs / medium)', () => {
+    const o = heroOptionsFromSectionConfig({
+      autoplay: true,
+      intervalMs: 8000,
+      height: 'medium',
+    });
+    expect(o.height).toBe('standard');
+    expect(o.autoPlay).toBe(true);
+    expect(o.autoPlayMs).toBe(8000);
+  });
+
+  it('prefers nested config.hero over the section root', () => {
+    const o = heroOptionsFromSectionConfig({
+      autoplay: false,
+      height: 'medium',
+      hero: { layout: 'split', height: 'tall', intervalSec: 5 },
+    });
+    expect(o.layout).toBe('split');
+    expect(o.height).toBe('tall');
+    expect(o.autoPlayMs).toBe(5000);
   });
 
   it('treats the split layout like a single static band', () => {

@@ -86,6 +86,18 @@ const boolOf = (v: unknown, fallback: boolean): boolean =>
  * existing rows (which have no hero block at all) keep the classic
  * slideshow exactly as before.
  */
+/**
+ * Accept either `config.hero` (Home builder) or a legacy seed that put
+ * autoplay / intervalMs / height on the section config root.
+ */
+export function heroOptionsFromSectionConfig(
+  sectionConfig?: Record<string, unknown> | null,
+): HeroOptions {
+  const cfg = sectionConfig ?? {};
+  const nested = cfg.hero && typeof cfg.hero === 'object' ? (cfg.hero as Record<string, unknown>) : null;
+  return heroOptionsFromConfig(nested ?? cfg);
+}
+
 export function heroOptionsFromConfig(
   input?: HeroConfigInput | Record<string, unknown> | null
 ): HeroOptions {
@@ -93,12 +105,18 @@ export function heroOptionsFromConfig(
   const layout = HERO_LAYOUTS.includes(raw.layout as HeroLayout)
     ? (raw.layout as HeroLayout)
     : HERO_DEFAULTS.layout;
-  const height = HERO_HEIGHTS.includes(raw.height as HeroHeight)
-    ? (raw.height as HeroHeight)
+  const heightRaw = raw.height === 'medium' ? 'standard' : raw.height;
+  const height = HERO_HEIGHTS.includes(heightRaw as HeroHeight)
+    ? (heightRaw as HeroHeight)
     : HERO_DEFAULTS.height;
+  const autoPlayFlag = raw.autoPlay ?? raw.autoplay;
   const autoPlay =
-    layout === 'slideshow' ? boolOf(raw.autoPlay, HERO_DEFAULTS.autoPlay) : false;
-  const intervalSec = clampInt(raw.intervalSec, 3, 10, 6);
+    layout === 'slideshow' ? boolOf(autoPlayFlag, HERO_DEFAULTS.autoPlay) : false;
+  let intervalFallback = 6;
+  if (typeof raw.intervalMs === 'number' && Number.isFinite(raw.intervalMs)) {
+    intervalFallback = Math.round(raw.intervalMs / 1000);
+  }
+  const intervalSec = clampInt(raw.intervalSec, 3, 10, intervalFallback);
   return {
     layout,
     height,

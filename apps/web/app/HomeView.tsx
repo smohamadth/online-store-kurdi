@@ -48,7 +48,7 @@ import LookbookSection from '@/components/rich/LookbookSection';
 import ShowcaseRow from '@/components/rich/ShowcaseRow';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { pickStorefrontHomeSections } from '@/lib/layouts/homeMapping';
-import { heroOptionsFromConfig } from '@/lib/heroOptions';
+import { heroOptionsFromSectionConfig } from '@/lib/heroOptions';
 import { API_BASE } from '@/lib/http';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import RecentlyViewed from '@/components/RecentlyViewed';
@@ -217,7 +217,7 @@ export default function HomeView() {
         // block): layout / height / autoplay / arrows / dots. Themes with
         // their own hero component receive the same `config` and decide
         // what they honour; the platform hero honours all of them.
-        const heroOpts = heroOptionsFromConfig(cfg.hero);
+        const heroOpts = heroOptionsFromSectionConfig(cfg);
         const heroSlides =
           heroOpts.layout === 'slideshow' ? heroBanners : heroBanners.slice(0, 1);
         return (

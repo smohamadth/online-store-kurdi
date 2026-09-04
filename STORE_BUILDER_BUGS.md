@@ -42,9 +42,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`; quote/video/gallery keys are normalised. Live home still uses DB sections (P0.1); this map is for studio preview / future overlay.
 
 ### 5. Seeded hero config is a different shape from the editor
-**Where:** `home.defaults.ts` seeds `{ autoplay, intervalMs, height: 'medium' }` at **config root**. HomeBuilder writes `{ hero: { layout, height, intervalSec, autoPlay } }`. `heroOptionsFromConfig` only reads **`config.hero`**.  
-**Bug:** Fresh installs never apply seeded autoplay/height. `'medium'` is not even a valid `HeroHeight` (`compact|standard|tall`).  
-**Fix direction:** Seed `config.hero` in the new shape; optionally migrate old rows in `fromRow`.
+**Status:** fixed. Seed writes `config.hero`. `heroOptionsFromSectionConfig` still understands the old root `autoplay`/`intervalMs`/`medium` rows.
 
 ---
 
