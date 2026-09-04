@@ -32,6 +32,7 @@ import { LayoutRenderer } from '@/lib/layouts/render';
 import { addBlock, moveBlock, resizeBlock, removeBlock } from '@/lib/layouts/edit';
 import { CONFIG_FIELDS, LIST_BLOCK_TYPES, type ConfigField } from '@/lib/layouts/blockUtils';
 import { isPlatformBundledTheme } from '@/lib/themeBundled';
+import { studioLayoutData, studioTokenStyle } from '@/lib/layouts/studioPreview';
 
 interface ThemeStudioTheme {
   key: string;
@@ -385,7 +386,7 @@ export default function ThemeStudioPage() {
                 <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
                   Layout for “{PAGE_LABELS[page]}” — drag a block here, or reorder / resize blocks below.
                 </div>
-                <LayoutRenderer layout={layout} data={{}} />
+                <LayoutRenderer layout={layout} data={studioLayoutData()} />
               </div>
 
               {/* Block list with grid controls */}
@@ -490,8 +491,8 @@ export default function ThemeStudioPage() {
                 padding: 12,
               }}
             >
-              <div style={tokenCssVars(current?.tokens ?? {})}>
-                <LayoutRenderer layout={layout} data={{}} />
+              <div style={studioTokenStyle(current?.tokens ?? {})}>
+                <LayoutRenderer layout={layout} data={studioLayoutData()} />
               </div>
             </div>
           </div>
@@ -620,21 +621,6 @@ function TokenEditor({ tokens, onTokenChange }: { tokens: Record<string, string 
       </label>
     </div>
   );
-}
-
-/** Map the theme's design tokens to CSS custom props the preview renderer uses. */
-function tokenCssVars(tokens: Record<string, string | number | boolean>): React.CSSProperties {
-  const t = tokens;
-  const vars: Record<string, string> = {};
-  if (t.primaryColor) vars['--primary'] = String(t.primaryColor);
-  if (t.accentColor) vars['--accent'] = String(t.accentColor);
-  if (t.mutedText) vars['--muted'] = String(t.mutedText);
-  if (t.borderColor) vars['--border'] = String(t.borderColor);
-  if (t.cardBg) vars['--surface-2'] = String(t.cardBg);
-  if (t.bodyText) vars['--text'] = String(t.bodyText);
-  if (t.bodyBg) vars['--bg'] = String(t.bodyBg);
-  if (t.radius !== undefined) vars['--radius'] = `${t.radius}px`;
-  return vars as React.CSSProperties;
 }
 
 const card: React.CSSProperties = { border: '1px solid #e5e5e5', borderRadius: 12, padding: 18, background: '#fff' };

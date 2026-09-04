@@ -31,12 +31,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
 
 ### 3. Studio preview is not the storefront
-**Where:** `theme-studio/page.tsx` renders `<LayoutRenderer layout={layout} data={{}} />`; `layouts/render.tsx` BLOCK_RENDERERS.  
-**Bugs:**
-- Preview gets **empty `data`**, so product/category/hero blocks show placeholders or nothing.
-- `LayoutRenderer` is a **toy** (name-only cards, no `ProductCard`, no `HeroGallery`, no add-to-cart). HomeView uses a *different* renderer (`renderSection` + `ThemeSectionRenderer`).
-- CSS vars in the studio preview (`--primary`, `--bg`, `--text`) **do not match** storefront tokens (`--brand`, `--body-bg`, `--body-text`). Preview colours lie.
-**Fix direction:** One renderer path for home (reuse `HomeView.renderSection` / `blockToHomeSection` + live banners/products), and map tokens through `themeToCssVars`.
+**Status:** partial. Preview now gets `studioLayoutData()` (sample products/categories) and `studioTokenStyle` (`--brand`/`--body-bg` plus aliases). LayoutRenderer is still a lightweight stand-in, not ProductCard/HeroGallery.
 
 ### 4. Rich Studio blocks never appear on the live home page
 **Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`; quote/video/gallery keys are normalised. Live home still uses DB sections (P0.1); this map is for studio preview / future overlay.
