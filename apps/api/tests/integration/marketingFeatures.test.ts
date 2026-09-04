@@ -165,6 +165,14 @@ describe('GET /api/analytics/funnel', () => {
   // the body gives every event a distinct fallback id.
   async function track(eventType: string, sessionId: string) {
     process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    // purchase is server-only (public /track rejects it so conversion
+    // cannot be spoofed). Write it the same way order creation does.
+    if (eventType === 'purchase') {
+      await mockPrisma.userEvent.create({
+        data: { eventType: 'purchase', sessionId, metadata: '{}' },
+      });
+      return;
+    }
     await request(app)
       .post('/api/analytics/track')
       .set('x-session-id', sessionId)
