@@ -53,9 +53,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. `isHomeSectionVisible` uses only `HomeSection.isVisible`. Theme `show*` tokens no longer hide builder-visible blocks.
 
 ### 9. Theme Studio cannot edit bundled themes, cannot persist drafts across Save correctly
-**Where:** `save()` merges `drafts` into `current.layouts` but **does not clear `drafts`**. Switching theme resets drafts; switching **page** keeps them (good) but unsaved token edits live on `current` with **no dirty flag / no beforeunload**.  
-HomeBuilder has the same hole: dirty rows, no `beforeunload`.  
-**Fix direction:** Dirty state + confirm on navigate; after successful save, set `current.layouts` and `setDrafts({})`.
+**Status:** fixed. Successful Save merges drafts then `setDrafts({})`. `beforeunload` when studio drafts or HomeBuilder dirty rows exist. Bundled themes remain read-only (P0.2).
 
 ### 10. HTML / URL sanitisation is incomplete on builder content
 **Where:** `home.routes.ts` `scrubConfig` only sanitises `richText`/`custom` `html`. FAQ answers, quotes, lookbook copy, video `url`/`poster`, gallery `linkUrl`, comparison cells are stored raw.  

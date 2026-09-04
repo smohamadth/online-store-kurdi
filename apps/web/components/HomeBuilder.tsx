@@ -79,6 +79,17 @@ export default function HomeBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const unsaved = Object.values(dirty).some(Boolean);
+    if (!unsaved) return;
+    const onLeave = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, [dirty]);
+
   /** Local edit — marks the row dirty until it is saved. */
   const patchLocal = (id: string, patch: Partial<HomeSection>) => {
     setSections((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));

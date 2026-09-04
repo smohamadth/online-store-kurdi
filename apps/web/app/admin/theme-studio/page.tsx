@@ -33,6 +33,7 @@ import { addBlock, moveBlock, resizeBlock, removeBlock } from '@/lib/layouts/edi
 import { CONFIG_FIELDS, LIST_BLOCK_TYPES, type ConfigField } from '@/lib/layouts/blockUtils';
 import { isPlatformBundledTheme } from '@/lib/themeBundled';
 import { studioLayoutData, studioTokenStyle } from '@/lib/layouts/studioPreview';
+import { mergeStudioLayouts, studioHasUnsavedDrafts } from '@/lib/layouts/studioSave';
 
 interface ThemeStudioTheme {
   key: string;
@@ -198,7 +199,7 @@ export default function ThemeStudioPage() {
     setSaving(true);
     const updated: ThemeStudioTheme = {
       ...current,
-      layouts: { ...(current.layouts ?? {}), ...drafts },
+      layouts: mergeStudioLayouts(current.layouts, drafts),
     };
     const res = await fetch(`${API_BASE}/theme-studio/themes/${current.key}`, {
       method: 'PUT',
@@ -208,6 +209,7 @@ export default function ThemeStudioPage() {
     setSaving(false);
     if (!res.ok) return notify('error', (await res.json()).message || 'Save failed.');
     setCurrent(updated);
+    setDrafts({});
     notify('success', `Theme "${current.key}" saved.`);
   };
 

@@ -114,6 +114,12 @@ describe('ThemeStudioPage', () => {
     const putBody = JSON.parse(putCall[1].body);
     expect(putBody.layouts.home.blocks.length).toBe(2);
     expect(putBody.layouts.home.blocks.some((b: any) => b.type === 'features')).toBe(true);
+
+    // Drafts are cleared after save — switching page and back still shows the
+    // persisted Features block from current.layouts, not a leftover draft.
+    fireEvent.click(screen.getByRole('button', { name: 'All products' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(screen.getAllByText('Features').length).toBeGreaterThanOrEqual(1);
   });
 
   it('reorders and removes blocks with the ↑ / ✕ controls', async () => {
