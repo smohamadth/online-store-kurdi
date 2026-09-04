@@ -7,6 +7,13 @@
 // the listen-error handling are documented inline - they fix the
 // "my settings don't save" class of Windows/macOS problems.
 // ---------------------------------------------------------------------------
+// MUST be first: this resolves before any module that touches
+// @prisma/client. Without the generated client the import below throws a raw
+// module-resolution error at load time - no logging, no port bound - and
+// under `npm run dev` concurrently hides it, leaving only the web server's
+// ECONNREFUSED as a misleading symptom.
+import './config/preflight';
+
 import { createServer } from 'http';
 import { app, httpServer, io } from './app';
 import { env } from './config/environment';
