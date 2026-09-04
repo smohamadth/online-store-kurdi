@@ -520,6 +520,28 @@ async function seedCmsContent() {
   return pageCount + postCount;
 }
 
+async function seedHomeSections() {
+  const existing = await prisma.homeSection.count();
+  if (existing > 0) {
+    console.log(`   - Home sections: ${existing} already present, skipping`);
+    return existing;
+  }
+  for (const s of HOME_SECTION_SEED) {
+    await prisma.homeSection.create({
+      data: {
+        key: s.key,
+        type: s.type,
+        title: s.title ?? null,
+        subtitle: s.subtitle ?? null,
+        isVisible: s.isVisible,
+        sortOrder: s.sortOrder,
+        config: s.config ? JSON.stringify(s.config) : null,
+      },
+    });
+  }
+  return HOME_SECTION_SEED.length;
+}
+
 // Homepage gallery (hero slider + promo tiles).
 // Without these rows the storefront falls back to a pre-load placeholder and
 // /admin/banners has nothing to edit, which makes the gallery look broken and
