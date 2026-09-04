@@ -47,7 +47,7 @@ router.get('/:key/preview.:ext', async (req, res, next) => {
     if (!mime) {
       return res.status(404).json({ status: 'error', message: 'Preview not found', code: 'NOT_FOUND' });
     }
-    const file = await getThemePreviewPath(key);
+    const file = await getThemePreviewPath(key, ext);
     if (!file) {
       return res.status(404).json({ status: 'error', message: `Theme "${key}" has no preview image`, code: 'NOT_FOUND' });
     }

@@ -39,7 +39,7 @@ export interface ThemeStudioConfig {
   layouts?: Record<string, unknown>;
 }
 
-const KEY_RE = /^[a-z0-9][a-z0-9-_]*$/;
+const KEY_RE = /^[a-z0-9][a-z0-9-_]{0,39}$/;
 // Full semver (mirrors the web themeConfigSchema) so a theme saved here is
 // guaranteed to pass the web build-time registry gate.
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[a-z0-9.-]+)?(\+[a-z0-9.-]+)?$/;
@@ -120,8 +120,8 @@ export async function getThemeConfig(key: string): Promise<ThemeStudioConfig | n
   const file = themePath(key);
   if (!fs.existsSync(file)) return null;
   try {
-    const raw = await readFile(file, 'utf8');
-    return JSON.parse(raw) as ThemeStudioConfig;
+    const raw = JSON.parse(await readFile(file, 'utf8')) as unknown;
+    return validateConfig(raw, key);
   } catch {
     return null;
   }
@@ -171,11 +171,14 @@ export async function listThemeConfigs(): Promise<ThemeCatalog> {
 }
 
 /** Path of a theme's preview image (preview.png/jpg/webp/svg at the theme root), or null. */
-export async function getThemePreviewPath(key: string): Promise<string | null> {
+export async function getThemePreviewPath(key: string, ext?: string): Promise<string | null> {
   if (!KEY_RE.test(key)) return null;
   const dir = path.join(themesDir(), key);
   if (!fs.existsSync(path.join(dir, 'theme.json'))) return null;
-  for (const name of ['preview.png', 'preview.jpg', 'preview.jpeg', 'preview.webp', 'preview.svg']) {
+  const names = ext
+    ? [`preview.${ext.toLowerCase()}`]
+    : ['preview.png', 'preview.jpg', 'preview.jpeg', 'preview.webp', 'preview.svg'];
+  for (const name of names) {
     const p = path.join(dir, name);
     if (fs.existsSync(p)) return p;
   }
@@ -298,6 +301,9 @@ export async function installThemeFromZip(buffer: Buffer): Promise<ThemeStudioCo
  */
 export async function saveTheme(key: string, cfg: unknown): Promise<ThemeStudioConfig> {
   const clean = validateConfig(cfg, key);
+  if (isBundledTheme(key)) {
+    throw new Error(`Theme "${key}" is a bundled platform theme and cannot be overwritten`);
+  }
   const dir = path.join(themesDir(), key);
   await mkdir(dir, { recursive: true });
   const json = JSON.stringify(clean, null, 2);

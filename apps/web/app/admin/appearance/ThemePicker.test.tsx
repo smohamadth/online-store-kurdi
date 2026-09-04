@@ -125,6 +125,13 @@ describe('ThemePicker — theme metadata', () => {
     }
   });
 
+  it('uses the theme mutedText colour for description copy (readable on dark cards)', () => {
+    render(<ThemePicker activeTheme={null} onSelect={() => {}} />);
+    const card = screen.getByTestId(cardKey('bold'));
+    const desc = within(card).getByText(/Loud, image-first/);
+    expect(desc).toHaveStyle({ color: '#a1a1aa' });
+  });
+
   it('the Bold theme card shows the Bold name and is selectable', () => {
     // The Bold theme was added in this turn. Pinning its
     // presence in the picker so a future refactor that

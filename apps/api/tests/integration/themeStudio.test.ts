@@ -124,6 +124,21 @@ describe('PUT /api/theme-studio/themes/:key', () => {
     expect(res.body.code).toBe('INVALID_THEME');
   });
 
+  it('refuses to overwrite a bundled theme via PUT', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const dir = path.join(tempDir, 'default');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.bundled'), 'platform');
+    fs.writeFileSync(path.join(dir, 'theme.json'), JSON.stringify(cfg('default')));
+    const res = await request(app)
+      .put('/api/theme-studio/themes/default')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...cfg('default'), name: 'Hijacked' });
+    expect(res.status).toBe(400);
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'theme.json'), 'utf8'));
+    expect(onDisk.name).toBe('Theme default');
+  });
+
   it('rejects a missing author/description', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const res = await request(app)
@@ -164,6 +179,15 @@ describe('GET /api/theme-studio/themes/:key', () => {
     const res = await request(app).get('/api/theme-studio/themes/saved').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data.key).toBe('saved');
+  });
+
+  it('404s for a theme whose on-disk JSON is malformed', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const dir = path.join(tempDir, 'rotten');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'theme.json'), '{not json');
+    const res = await request(app).get('/api/theme-studio/themes/rotten').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
   });
 
   it('404s for an unknown theme', async () => {
@@ -455,6 +479,23 @@ describe('GET /api/themes (public catalog)', () => {
   it('404s for an unknown preview', async () => {
     const res = await request(app).get('/api/themes/ghost/preview.png');
     expect(res.status).toBe(404);
+  });
+
+  it('404s when the requested preview extension does not match the file on disk', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const zip = await makeZip({
+      'theme.json': JSON.stringify(cfg('jpgonly')),
+      'preview.jpg': Buffer.from('JPEGDATA'),
+    });
+    await request(app)
+      .post('/api/theme-studio/install')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', zip, 'jpgonly.zip');
+    const wrong = await request(app).get('/api/themes/jpgonly/preview.png');
+    expect(wrong.status).toBe(404);
+    const right = await request(app).get('/api/themes/jpgonly/preview.jpg');
+    expect(right.status).toBe(200);
+    expect(right.headers['content-type']).toContain('image/jpeg');
   });
 });
 

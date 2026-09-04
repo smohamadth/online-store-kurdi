@@ -413,9 +413,9 @@ describe('themeRegistry', () => {
     expect(t?.features.paid).toBe(false);
   });
 
-  it('the minimal theme is marked as paid', () => {
+  it('the minimal theme is free (bundled themes are selectable)', () => {
     const t = THEMES.find((th) => th.key === 'minimal');
-    expect(t?.features.paid).toBe(true);
+    expect(t?.features.paid).toBe(false);
   });
 
   it('the minimal theme uses a serif font and zero button radius', () => {
@@ -465,9 +465,9 @@ describe('themeRegistry — Bold theme', () => {
     expect(THEMES.map((t) => t.key)).toContain('bold');
   });
 
-  it('is marked as a paid theme', () => {
+  it('is free so merchants can activate it without a license', () => {
     const t = THEMES.find((th) => th.key === 'bold')!;
-    expect(t.features.paid).toBe(true);
+    expect(t.features.paid).toBe(false);
   });
 
   it('declares dark-mode support', () => {
@@ -606,6 +606,28 @@ describe('themeRegistry — universal properties', () => {
  * pins that behaviour so a future refactor can't
  * accidentally re-introduce the leak.
  */
+describe('scrubCustomCss', () => {
+  it('keeps ordinary CSS', async () => {
+    const { scrubCustomCss } = await import('./theme');
+    expect(scrubCustomCss('.hero{color:red}')).toBe('.hero{color:red}');
+  });
+
+  it('drops CSS that would break out of the style tag', async () => {
+    const { scrubCustomCss } = await import('./theme');
+    expect(scrubCustomCss('</style><script>alert(1)</script>')).toBeNull();
+    expect(scrubCustomCss('body{background:url(javascript:alert(1))}')) .toBeNull();
+    expect(scrubCustomCss('@import url(https://evil.example/x.css)')).toBeNull();
+  });
+
+  it('tokensToTheme never keeps dangerous customCss from customizations', async () => {
+    const { tokensToTheme } = await import('./theme');
+    const merged = tokensToTheme(getTheme('default'), {
+      customCss: '</style><script>alert(1)</script>',
+    });
+    expect(merged.customCss).toBeNull();
+  });
+});
+
 describe('tokensToTheme — activeTheme guard', () => {
   it('uses the config key when no customizations are passed', async () => {
     const { tokensToTheme } = await import('./theme');

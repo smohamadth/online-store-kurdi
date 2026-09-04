@@ -93,11 +93,13 @@ function ThemeCard({
       data-active={active ? 'true' : 'false'}
       style={{
         // Active cards get a thicker, dark border. Inactive
-        // cards use a neutral light grey.
+        // cards use a neutral light grey. Card fill follows
+        // the theme body so dark / cream palettes read at a glance.
         border: active ? '2px solid #111' : '1px solid #e5e5e5',
         borderRadius: '12px',
         padding: '16px',
-        backgroundColor: '#fff',
+        backgroundColor: (theme.tokens.bodyBg as string) || '#fff',
+        color: (theme.tokens.bodyText as string) || '#111',
         // Lift active cards slightly. Subtle but it's the
         // difference between "this is selected" and "these
         // are all the options".
@@ -125,7 +127,7 @@ function ThemeCard({
           <p
             style={{
               fontSize: '13px',
-              color: '#666',
+              color: (theme.tokens.mutedText as string) || '#666',
               margin: '4px 0 0',
               // Two-line clamp so a long description doesn't
               // unbalance the row of cards.
@@ -187,7 +189,7 @@ function ThemeCard({
           alignItems: 'center',
           justifyContent: 'space-between',
           fontSize: '12px',
-          color: '#888',
+          color: (theme.tokens.mutedText as string) || '#888',
         }}
       >
         <span>

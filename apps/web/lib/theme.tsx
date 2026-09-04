@@ -76,6 +76,15 @@ export interface Theme {
   activeTheme: string;
 }
 
+/** Same denylist as the API GET /theme scrub — cached or poisoned CSS must not inject scripts. */
+const DANGEROUS_CSS =
+  /<\/?script|javascript:|expression\s*\(|url\s*\(\s*['"]?\s*javascript:|@import|behavior\s*:|-moz-binding/i;
+
+export function scrubCustomCss(css: string | null | undefined): string | null {
+  if (css == null || css === '') return css ?? null;
+  return DANGEROUS_CSS.test(css) ? null : css;
+}
+
 /**
  * Default theme tokens, derived from the bundled default theme
  * config. This is what every store starts with before the admin
@@ -134,6 +143,9 @@ export function tokensToTheme(activeTheme: ThemeConfig, customizations: Partial<
     showAnnouncement: false,
     customCss: null,
     ...safeCustomizations,
+    customCss: scrubCustomCss(
+      (safeCustomizations as Partial<Theme>).customCss ?? null,
+    ),
     // activeTheme is always the config's key. The customizations
     // cannot override it (we strip it above). This is the
     // single source of truth for which theme is active.
@@ -372,7 +384,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           __html: `:root{${themeToCssVars(theme)}}
 body{background:var(--body-bg);color:var(--body-text);font-family:var(--font);font-size:var(--font-size);}
 h1,h2,h3{font-weight:var(--heading-weight);}
-${theme.customCss || ''}`,
+${scrubCustomCss(theme.customCss) || ''}`,
         }}
       />
       {children}
