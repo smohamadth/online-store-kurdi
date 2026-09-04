@@ -98,7 +98,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
   // Theme Studio override: when the active theme ships a `layouts.blog`,
   // render its grid (with the live post data) server-side in the initial HTML.
   const layout = await getServerPageLayout('blog');
-  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.blog)) {
+  if (layout && studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.blog)) {
     return <StaticLayoutRenderer layout={layout} data={{ posts, title: 'Blog' }} />;
   }
 

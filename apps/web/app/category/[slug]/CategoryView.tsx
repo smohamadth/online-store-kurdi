@@ -131,8 +131,8 @@ export default function CategoryView({ slug }: { slug: string }) {
 
   // Theme Studio override: replace chrome only with productList or categoryGrid.
   const layout = useActiveLayout('category');
-  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.category)) {
-    return <LayoutRenderer layout={layout!} data={{ products, title, categories: allCategories }} />;
+  if (layout && studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.category)) {
+    return <LayoutRenderer layout={layout} data={{ products, title, categories: allCategories }} />;
   }
 
   return (

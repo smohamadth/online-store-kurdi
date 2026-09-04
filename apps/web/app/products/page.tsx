@@ -169,8 +169,8 @@ function ProductsContent() {
   // includes a productList block. A hero-only products layout used to hide
   // filters and pagination.
   const layout = useActiveLayout('products');
-  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.products)) {
-    return <LayoutRenderer layout={layout!} data={{ products, title: 'Products', total }} />;
+  if (layout && studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.products)) {
+    return <LayoutRenderer layout={layout} data={{ products, title: 'Products', total }} />;
   }
 
   return (

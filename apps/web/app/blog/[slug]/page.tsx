@@ -241,7 +241,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   // Theme Studio override: render the active theme's `layouts.blogPost` grid
   // when it exists, with the live post data, in the initial HTML.
   const layout = await getServerPageLayout('blogPost');
-  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.blogPost)) {
+  if (layout && studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.blogPost)) {
     return (
       <StaticLayoutRenderer
         layout={layout}

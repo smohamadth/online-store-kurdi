@@ -362,10 +362,10 @@ export default function ProductView() {
   };
 
   // Theme Studio override: replace the PDP only when productDetail is present.
-  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.product) && product) {
+  if (layout && product && studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.product)) {
     return (
       <LayoutRenderer
-        layout={layout!}
+        layout={layout}
         data={{
           product: { name: product.name, price: product.price, description: product.description },
           title: product.name,

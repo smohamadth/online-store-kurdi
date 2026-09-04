@@ -31,6 +31,6 @@ export default function PageLayoutView({
   children: ReactNode;
 }) {
   const layout = useActiveLayout(page);
-  if (!studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS[page])) return <>{children}</>;
+  if (!layout || !studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS[page])) return <>{children}</>;
   return <LayoutRenderer layout={layout} data={data} />;
 }
