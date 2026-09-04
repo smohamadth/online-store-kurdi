@@ -44,6 +44,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     'nav.register': 'Sign Up',
     'nav.logout': 'Logout',
     'nav.search': 'Search products...',
+    'nav.blog': 'Blog',
+    'nav.admin': 'Admin Panel',
     
     // Common
     'common.loading': 'Loading...',
@@ -117,6 +119,17 @@ const dictionaries: Record<string, Record<string, string>> = {
     'footer.account': 'Account',
     'footer.connect': 'Connect',
     'footer.allRights': 'All rights reserved',
+    'footer.support': 'Support',
+    'footer.legal': 'Legal',
+    'footer.info': 'Info',
+    'footer.contact': 'Contact Us',
+    'footer.faq': 'FAQ',
+    'footer.returns': 'Returns',
+    'footer.privacy': 'Privacy Policy',
+    'footer.terms': 'Terms of Service',
+    'footer.trackOrder': 'Track Order',
+    'footer.allProducts': 'All Products',
+    'footer.orderHistory': 'Order History',
     
     // Messages
     'msg.addedToCart': 'Added to cart!',
@@ -139,6 +152,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     'nav.register': 'تۆمارکردن',
     'nav.logout': 'دەرچوون',
     'nav.search': 'گەڕان لە بەرهەمەکان...',
+    'nav.blog': 'بلۆگ',
+    'nav.admin': 'پانێڵی بەڕێوەبەر',
     
     // Common
     'common.loading': 'چاوەڕوانی...',
@@ -212,6 +227,17 @@ const dictionaries: Record<string, Record<string, string>> = {
     'footer.account': 'هەژمار',
     'footer.connect': 'پەیوەندی',
     'footer.allRights': 'هەموو مافەکان پارێزراون',
+    'footer.support': 'پشتیوانی',
+    'footer.legal': 'یاسایی',
+    'footer.info': 'زانیاری',
+    'footer.contact': 'پەیوەندیمان پێوە بکە',
+    'footer.faq': 'پرسیارە باوەکان',
+    'footer.returns': 'گەڕاندنەوە',
+    'footer.privacy': 'سیاسەتی تایبەتمەندی',
+    'footer.terms': 'مەرجەکانی بەکارهێنان',
+    'footer.trackOrder': 'بەدواداچوونی داواکاری',
+    'footer.allProducts': 'هەموو بەرهەمەکان',
+    'footer.orderHistory': 'مێژووی داواکاریەکان',
     
     // Messages
     'msg.addedToCart': 'زیادکرا بۆ سەبەتە!',
@@ -234,6 +260,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     'nav.register': 'إنشاء حساب',
     'nav.logout': 'تسجيل الخروج',
     'nav.search': 'البحث عن المنتجات...',
+    'nav.blog': 'المدونة',
+    'nav.admin': 'لوحة التحكم',
     
     // Common
     'common.loading': 'جاري التحميل...',
@@ -307,6 +335,17 @@ const dictionaries: Record<string, Record<string, string>> = {
     'footer.account': 'الحساب',
     'footer.connect': 'تواصل معنا',
     'footer.allRights': 'جميع الحقوق محفوظة',
+    'footer.support': 'الدعم',
+    'footer.legal': 'قانوني',
+    'footer.info': 'معلومات',
+    'footer.contact': 'اتصل بنا',
+    'footer.faq': 'الأسئلة الشائعة',
+    'footer.returns': 'الإرجاع',
+    'footer.privacy': 'سياسة الخصوصية',
+    'footer.terms': 'شروط الخدمة',
+    'footer.trackOrder': 'تتبع الطلب',
+    'footer.allProducts': 'كل المنتجات',
+    'footer.orderHistory': 'سجل الطلبات',
     
     // Messages
     'msg.addedToCart': 'تمت الإضافة إلى السلة!',
@@ -329,6 +368,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     'nav.register': 'ثبت‌نام',
     'nav.logout': 'خروج',
     'nav.search': 'جستجوی محصولات...',
+    'nav.blog': 'وبلاگ',
+    'nav.admin': 'پنل مدیریت',
 
     // Common
     'common.loading': 'در حال بارگذاری...',
@@ -402,6 +443,17 @@ const dictionaries: Record<string, Record<string, string>> = {
     'footer.account': 'حساب',
     'footer.connect': 'ارتباط',
     'footer.allRights': 'تمام حقوق محفوظ است',
+    'footer.support': 'پشتیبانی',
+    'footer.legal': 'قوانین',
+    'footer.info': 'اطلاعات',
+    'footer.contact': 'تماس با ما',
+    'footer.faq': 'پرسش‌های متداول',
+    'footer.returns': 'مرجوعی',
+    'footer.privacy': 'حریم خصوصی',
+    'footer.terms': 'شرایط استفاده',
+    'footer.trackOrder': 'پیگیری سفارش',
+    'footer.allProducts': 'همه محصولات',
+    'footer.orderHistory': 'تاریخچه سفارش‌ها',
 
     // Messages
     'msg.addedToCart': 'به سبد خرید اضافه شد!',
@@ -424,6 +476,8 @@ const dictionaries: Record<string, Record<string, string>> = {
     'nav.register': 'Kayıt Ol',
     'nav.logout': 'Çıkış',
     'nav.search': 'Ürünlerde ara...',
+    'nav.blog': 'Blog',
+    'nav.admin': 'Yönetim Paneli',
 
     // Common
     'common.loading': 'Yükleniyor...',
@@ -497,6 +551,17 @@ const dictionaries: Record<string, Record<string, string>> = {
     'footer.account': 'Hesap',
     'footer.connect': 'İletişim',
     'footer.allRights': 'Tüm hakları saklıdır',
+    'footer.support': 'Destek',
+    'footer.legal': 'Yasal',
+    'footer.info': 'Bilgi',
+    'footer.contact': 'Bize Ulaşın',
+    'footer.faq': 'SSS',
+    'footer.returns': 'İadeler',
+    'footer.privacy': 'Gizlilik Politikası',
+    'footer.terms': 'Hizmet Şartları',
+    'footer.trackOrder': 'Sipariş Takibi',
+    'footer.allProducts': 'Tüm Ürünler',
+    'footer.orderHistory': 'Sipariş Geçmişi',
 
     // Messages
     'msg.addedToCart': 'Sepete eklendi!',
@@ -535,6 +600,19 @@ function lookup(lang: string, key: string): string | undefined {
   return storefrontOverlay[lang]?.[key] || dictionaries[lang]?.[key];
 }
 
+function dirFor(code: string): 'ltr' | 'rtl' {
+  return (
+    languages.find((l) => l.code === code)?.dir ||
+    extraLanguages.find((l) => l.code === code)?.dir ||
+    'ltr'
+  );
+}
+
+function persistLangCookie(code: string) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `cms.lang=${encodeURIComponent(code)}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
 /** Every translation key in the English (source) dictionary, sorted. */
 export const allTranslationKeys = Object.keys(translations.en).sort();
 
@@ -543,12 +621,18 @@ function getBrowserLanguage(): string {
   if (typeof window === 'undefined') return 'en';
   
   const saved = localStorage.getItem('language');
-  if (saved && translations[saved]) return saved;
+  if (saved && (translations[saved] || extraLanguages.some((l) => l.code === saved))) return saved;
   
   const browserLang = navigator.language.split('-')[0];
   if (translations[browserLang]) return browserLang;
   
   return 'en';
+}
+
+function applyDocumentLocale(code: string) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = code;
+  document.documentElement.dir = dirFor(code);
 }
 
 // Translation hook
@@ -557,54 +641,54 @@ export function useTranslation() {
   // (passed in by AppShell). Before the i18n hook reads from localStorage
   // and the browser, the first render matches the server-rendered
   // <html lang dir>, so there is no flash of LTR/English on hydration.
-  // The context is read inside this hook (not in a module-scope helper)
-  // because useContext is only legal inside a component or another hook.
   const seed = useContext(I18nSeedContext);
   const [language, setLanguage] = useState<string>(seed?.lang ?? 'en');
   const [direction, setDirection] = useState<'ltr' | 'rtl'>(seed?.dir ?? 'ltr');
+  const [, setCatalogTick] = useState(0);
 
   useEffect(() => {
     fetch('/api/i18n/storefront')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.data) applyStorefrontI18nCatalog(j.data); })
+      .then((j) => {
+        if (j?.data) {
+          applyStorefrontI18nCatalog(j.data);
+          setCatalogTick((n) => n + 1);
+        }
+      })
       .catch(() => { /* built-in dictionaries remain */ });
   }, []);
 
   useEffect(() => {
-    // When the server has already resolved a locale for us, trust it.
-    // Local visitors' last-chosen language currently lives in
-    // localStorage (not a cookie), so the server can't see it. If we
-    // rehydrated from localStorage on every mount we'd undo the SSR
-    // seed for a returning user who happened to land on a different
-    // device or a fresh browser profile. The cookie migration is a
-    // separate task; until then, the seed wins.
+    const apply = (code: string) => {
+      setLanguage(code);
+      setDirection(dirFor(code));
+      applyDocumentLocale(code);
+    };
+
+    // Every useTranslation() instance used to keep its own useState. The
+    // switcher updated only itself (and document.dir), so the rest of the
+    // storefront stayed English while the layout flipped to RTL.
+    const onChange = () => {
+      const code = localStorage.getItem('language');
+      if (code) apply(code);
+    };
+    window.addEventListener('languageChange', onChange);
+
     if (seed) {
-      document.documentElement.dir = seed.dir;
-      document.documentElement.lang = seed.lang;
-      return;
+      applyDocumentLocale(seed.lang);
+    } else {
+      apply(getBrowserLanguage());
     }
-    const lang = getBrowserLanguage();
-    setLanguage(lang);
 
-    const langConfig = languages.find(l => l.code === lang);
-    setDirection((langConfig?.dir as 'ltr' | 'rtl') || 'ltr');
-
-    // Set document direction
-    document.documentElement.dir = langConfig?.dir || 'ltr';
-    document.documentElement.lang = lang;
+    return () => window.removeEventListener('languageChange', onChange);
   }, [seed]);
 
   const changeLanguage = (langCode: string) => {
     setLanguage(langCode);
+    setDirection(dirFor(langCode));
     localStorage.setItem('language', langCode);
-
-    const langConfig = languages.find(l => l.code === langCode);
-    setDirection((langConfig?.dir as 'ltr' | 'rtl') || 'ltr');
-
-    document.documentElement.dir = langConfig?.dir || 'ltr';
-    document.documentElement.lang = langCode;
-
-    // Force re-render by dispatching event
+    persistLangCookie(langCode);
+    applyDocumentLocale(langCode);
     window.dispatchEvent(new Event('languageChange'));
   };
 

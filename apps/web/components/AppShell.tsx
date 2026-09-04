@@ -36,6 +36,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import CurrencyPicker from '@/components/CurrencyPicker';
 import { API_BASE, contentUrl } from '@/lib/http';
 import { I18nSeedProvider } from '@/lib/I18nSeedProvider';
+import { useTranslation } from '@/lib/i18n';
 
 // Types
 interface MenuItemData {
@@ -161,16 +162,16 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
   user: any;
   onLogout: () => void;
 }) {
+  const { t } = useTranslation();
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
   const headerMenu = useMenu('header');
 
   // Default menu items if API doesn't return a menu
   const defaultItems: MenuItemData[] = [
-    { id: '1', label: 'Products', url: '/products', icon: '📦' },
-    { id: '2', label: 'Electronics', url: '/category/electronics', icon: '💻' },
-    { id: '3', label: 'Clothing', url: '/category/clothing', icon: '👕' },
-    { id: '4', label: 'Blog', url: '/blog', icon: '✍️' },
-    { id: '5', label: 'Cart', url: '/cart', icon: '🛒' },
+    { id: '1', label: t('nav.products'), url: '/products', icon: '📦' },
+    { id: '2', label: t('products.category'), url: '/category/electronics', icon: '💻' },
+    { id: '3', label: t('nav.blog'), url: '/blog', icon: '✍️' },
+    { id: '4', label: t('nav.cart'), url: '/cart', icon: '🛒' },
   ];
 
   const menuItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
@@ -318,7 +319,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                       marginBottom: '16px',
                     }}
                   >
-                    ⚙️ Admin Panel
+                    ⚙️ {t('nav.admin')}
                   </Link>
                   <button
                     onClick={() => { onLogout(); onClose(); }}
@@ -333,7 +334,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                       cursor: 'pointer',
                     }}
                   >
-                    Logout
+                    {t('nav.logout')}
                   </button>
                 </>
               ) : (
@@ -350,7 +351,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                       marginBottom: '8px',
                     }}
                   >
-                    👤 My Account
+                    👤 {t('nav.account')}
                   </Link>
                   <Link 
                     href="/account/orders" 
@@ -363,7 +364,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                       marginBottom: '8px',
                     }}
                   >
-                    📦 My Orders
+                    📦 {t('account.orders')}
                   </Link>
                   <Link 
                     href="/account/wishlist" 
@@ -376,7 +377,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                       marginBottom: '16px',
                     }}
                   >
-                    ❤️ Wishlist
+                    ❤️ {t('account.wishlist')}
                   </Link>
                   <button
                     onClick={() => { onLogout(); onClose(); }}
@@ -391,7 +392,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                       cursor: 'pointer',
                     }}
                   >
-                    Logout
+                    {t('nav.logout')}
                   </button>
                 </>
               )}
@@ -413,7 +414,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                   marginBottom: '12px',
                 }}
               >
-                Sign In
+                {t('nav.login')}
               </Link>
               <Link 
                 href="/register" 
@@ -428,7 +429,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
                   textAlign: 'center',
                 }}
               >
-                Create Account
+                {t('nav.register')}
               </Link>
             </>
           )}
@@ -439,6 +440,7 @@ function MobileMenu({ isOpen, onClose, user, onLogout }: {
 }
 
 function Header() {
+  const { t } = useTranslation();
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -451,10 +453,8 @@ function Header() {
 
   // Default menu items if API doesn't return a menu
   const defaultItems: MenuItemData[] = [
-    { id: '1', label: 'Products', url: '/products' },
-    { id: '2', label: 'Electronics', url: '/category/electronics' },
-    { id: '3', label: 'Clothing', url: '/category/clothing' },
-    { id: '4', label: 'Blog', url: '/blog' },
+    { id: '1', label: t('nav.products'), url: '/products' },
+    { id: '2', label: t('nav.blog'), url: '/blog' },
   ];
 
   const navItems = headerMenu?.items?.length ? headerMenu.items : defaultItems;
@@ -656,7 +656,7 @@ function Header() {
                         padding: '6px 12px',
                         borderRadius: '4px',
                       }}>
-                        ⚙️ Admin Panel
+                        ⚙️ {t('nav.admin')}
                       </Link>
                       <button
                         onClick={handleLogout}
@@ -668,16 +668,16 @@ function Header() {
                           fontSize: '14px',
                         }}
                       >
-                        Logout
+                        {t('nav.logout')}
                       </button>
                     </>
                   ) : (
                     <>
                       <Link href="/account" style={{ textDecoration: 'none', color: 'var(--header-text, #333)', fontSize: '14px' }}>
-                        👤 My Account
+                        👤 {t('nav.account')}
                       </Link>
                       <Link href="/account/orders" style={{ textDecoration: 'none', color: 'var(--header-text, #333)', fontSize: '14px' }}>
-                        Orders
+                        {t('account.orders')}
                       </Link>
                       <button
                         onClick={handleLogout}
@@ -689,7 +689,7 @@ function Header() {
                           fontSize: '14px',
                         }}
                       >
-                        Logout
+                        {t('nav.logout')}
                       </button>
                     </>
                   )}
@@ -697,7 +697,7 @@ function Header() {
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Link href="/login" style={{ textDecoration: 'none', color: 'var(--header-text, #333)', fontSize: '14px' }}>
-                    Sign In
+                    {t('nav.login')}
                   </Link>
                   <Link href="/register" style={{
                     textDecoration: 'none',
@@ -708,7 +708,7 @@ function Header() {
                     fontSize: '14px',
                     fontWeight: 500,
                   }}>
-                    Sign Up
+                    {t('nav.register')}
                   </Link>
                 </div>
               )
@@ -729,6 +729,7 @@ function Header() {
 }
 
 function DynamicFooter() {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const { settings } = useStoreSettings();
   const footerMenu = useMenu('footer');
@@ -783,11 +784,8 @@ function DynamicFooter() {
 
   // Default footer items
   const defaultFooterItems: MenuItemData[] = [
-    { id: 'f1', label: 'All Products', url: '/products' },
-    { id: 'f2', label: 'Electronics', url: '/category/electronics' },
-    { id: 'f3', label: 'Clothing', url: '/category/clothing' },
-    { id: 'f4', label: 'Books', url: '/category/books' },
-    { id: 'f5', label: 'Blog', url: '/blog' },
+    { id: 'f1', label: t('footer.allProducts'), url: '/products' },
+    { id: 'f5', label: t('nav.blog'), url: '/blog' },
   ];
 
   const footerItems = footerMenu?.items?.length ? footerMenu.items : defaultFooterItems;
@@ -829,7 +827,7 @@ function DynamicFooter() {
           )}
         </div>
         <div>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Shop</h4>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{t('footer.shop')}</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {footerItems.map((item) => (
               <div key={item.id}>
@@ -846,21 +844,21 @@ function DynamicFooter() {
           </div>
         </div>
         <div>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Account</h4>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{t('footer.account')}</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/account" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>My Account</Link>
-            <Link href="/account/orders" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Order History</Link>
-            <Link href="/account/addresses" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Addresses</Link>
-            <Link href="/cart" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Cart</Link>
+            <Link href="/account" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('nav.account')}</Link>
+            <Link href="/account/orders" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.orderHistory')}</Link>
+            <Link href="/account/addresses" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('account.addresses')}</Link>
+            <Link href="/cart" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('nav.cart')}</Link>
           </div>
         </div>
         <div>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Support</h4>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{t('footer.support')}</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/contact" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Contact Us</Link>
-            <Link href="/track-order" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Track Order</Link>
-            <Link href="/faq" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>FAQ</Link>
-            <Link href="/returns" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Returns</Link>
+            <Link href="/contact" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.contact')}</Link>
+            <Link href="/track-order" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.trackOrder')}</Link>
+            <Link href="/faq" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.faq')}</Link>
+            <Link href="/returns" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.returns')}</Link>
             {/* Custom help pages the admin flagged for the footer. */}
             {footerPages
               .filter((p) => p.pageType === 'help')
@@ -876,10 +874,10 @@ function DynamicFooter() {
           </div>
         </div>
         <div>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Legal</h4>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{t('footer.legal')}</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/privacy" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Privacy Policy</Link>
-            <Link href="/terms" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Terms of Service</Link>
+            <Link href="/privacy" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.privacy')}</Link>
+            <Link href="/terms" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('footer.terms')}</Link>
             {/* Custom legal pages the admin flagged for the footer. */}
             {footerPages
               .filter((p) => p.pageType === 'legal')
@@ -895,9 +893,9 @@ function DynamicFooter() {
           </div>
         </div>
         <div>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Info</h4>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{t('footer.info')}</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link href="/blog" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>Blog</Link>
+            <Link href="/blog" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>{t('nav.blog')}</Link>
             {/* Custom info pages the admin flagged for the footer. */}
             {footerPages
               .filter((p) => p.pageType === 'info')
@@ -913,7 +911,7 @@ function DynamicFooter() {
           </div>
         </div>
         <div>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>Connect</h4>
+          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{t('footer.connect')}</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {settings.facebookUrl && (
               <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>

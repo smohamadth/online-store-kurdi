@@ -132,6 +132,26 @@ describe('useTranslation', () => {
     });
   });
 
+  it('changeLanguage in one component translates every other useTranslation() instance', async () => {
+    function OtherCopy() {
+      const { t } = useTranslation();
+      return <span data-testid="other">{t('nav.products')}</span>;
+    }
+    await act(async () => {
+      render(
+        <>
+          <TranslationProbe />
+          <OtherCopy />
+        </>,
+      );
+    });
+    expect(screen.getByTestId('other').textContent).toBe('Products');
+    act(() => screen.getByText('ku').click());
+    await waitFor(() => {
+      expect(screen.getByTestId('other').textContent).toBe('بەرهەمەکان');
+    });
+  });
+
   it('switching back to English restores LTR', async () => {
     await act(async () => {
       render(<TranslationProbe />);
