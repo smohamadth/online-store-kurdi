@@ -109,6 +109,18 @@ npm run db:seed
 npm run dev
 ```
 
+> **If `npm run dev` starts the storefront but the API never appears**
+> (you see repeated `ECONNREFUSED 127.0.0.1:3001` and no `[api]` output),
+> run the two halves in separate terminals instead:
+>
+> ```bash
+> cd apps/api && npm run dev     # terminal 1
+> cd apps/web && npm run dev     # terminal 2
+> ```
+>
+> This is a process-nesting problem on some Windows setups, not a fault in
+> either service - both start correctly on their own.
+
 > **Fresh-DB note:** `npm run db:deploy` applies the committed migrations.
 > If a local DB misbehaves after a schema change, `npm run db:reset`
 > (drop + recreate + seed) is the reliable path. See
