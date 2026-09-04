@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { AnalyticsController } from './analytics.controller';
-import { authenticate, authorize } from '../../middleware/auth';
+import { authenticate, authorize, optionalAuth } from '../../middleware/auth';
 
 const router = Router();
 const analyticsController = new AnalyticsController();
@@ -28,11 +28,14 @@ const trackingGate = (req: any, res: any, next: any) => {
   next();
 };
 
-// POST /api/analytics/track - Track single event (only when enabled)
-router.post('/track', trackingGate, analyticsController.trackEvent);
+// POST /api/analytics/track - Track single event (only when enabled).
+// optionalAuth so a signed-in storefront can attach userId (the client
+// already sends Authorization; without this middleware req.user is always
+// undefined and logged-in events never link to an account).
+router.post('/track', trackingGate, optionalAuth, analyticsController.trackEvent);
 
 // POST /api/analytics/track/batch - Track multiple events (only when enabled)
-router.post('/track/batch', trackingGate, analyticsController.trackEvents);
+router.post('/track/batch', trackingGate, optionalAuth, analyticsController.trackEvents);
 
 // GET /api/analytics/trending - Get trending products
 router.get('/trending', analyticsController.getTrendingProducts);

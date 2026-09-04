@@ -21,21 +21,29 @@ import { parsePagination, parseDays } from '../../utils/pagination';
  * storefront client (slug, section, ...), so a flat record schema with
  * capped values and a 50-key limit is compatible.
  */
+/** Client-ingestible types. `search` and `purchase` are written only by
+ *  server modules (product search, order creation) so a public POST cannot
+ *  inflate conversion or search analytics. */
+const PUBLIC_EVENT_TYPES = ['view', 'add_to_cart', 'wishlist', 'begin_checkout'] as const;
+
 const TRACK_EVENT_SCHEMA = z.object({
-  eventType: z.string().min(1).max(50),
+  eventType: z.enum(PUBLIC_EVENT_TYPES),
   productId: z.string().min(1).max(100).optional(),
   categoryId: z.string().min(1).max(100).optional(),
   searchQuery: z.string().max(300).optional(),
+  sessionId: z.string().min(1).max(200).optional(),
   metadata: z
     .record(z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]))
     .refine((m) => Object.keys(m).length <= 50, { message: 'metadata may have at most 50 keys' })
     .optional(),
 });
 
-function sessionIdHeader(req: Request): string {
+function sessionIdFrom(req: Request, bodySessionId?: string): string {
   const raw = req.headers['x-session-id'];
-  const s = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : '';
-  return s.slice(0, 200) || `session-${Date.now()}`;
+  const header = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : '';
+  const fromHeader = header.slice(0, 200);
+  const fromBody = (bodySessionId || '').slice(0, 200);
+  return fromHeader || fromBody || `session-${Date.now()}`;
 }
 
 export class AnalyticsController {
@@ -48,10 +56,10 @@ export class AnalyticsController {
   // Track event
   trackEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { eventType, productId, categoryId, searchQuery, metadata } =
+      const { eventType, productId, categoryId, searchQuery, metadata, sessionId: bodySessionId } =
         TRACK_EVENT_SCHEMA.parse(req.body);
 
-      const sessionId = sessionIdHeader(req);
+      const sessionId = sessionIdFrom(req, bodySessionId);
 
       await this.analyticsService.trackEvent({
         userId: req.user?.id,
@@ -88,12 +96,12 @@ export class AnalyticsController {
       const { events } = z
         .object({ events: z.array(TRACK_EVENT_SCHEMA).min(1).max(50) })
         .parse(req.body);
-      const sessionId = sessionIdHeader(req);
+      const sessionId = sessionIdFrom(req, events[0]?.sessionId);
 
       const enrichedEvents = events.map((event: any) => ({
         ...event,
         userId: req.user?.id,
-        sessionId,
+        sessionId: sessionIdFrom(req, event.sessionId) || sessionId,
         userAgent: req.get('User-Agent'),
         // Truncated: a full IP is personal data under GDPR, and these rows
         // are retained indefinitely. The last octet is dropped, which keeps
@@ -209,7 +217,7 @@ export class AnalyticsController {
    */
   getFunnel = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const days = Math.min(Math.max(parseInt(String(req.query.days ?? '30'), 10) || 30, 1), 365);
+      const days = parseDays(req.query.days, 30);
       const since = new Date(Date.now() - days * 86400_000);
 
       const events = await prisma.userEvent.findMany({

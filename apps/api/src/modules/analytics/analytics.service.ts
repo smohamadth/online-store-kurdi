@@ -104,6 +104,12 @@ export class AnalyticsService {
         })),
       });
 
+      for (const event of events) {
+        const cacheKey = `${this.cachePrefix}events:${event.sessionId}`;
+        await cache.pushCapped(cacheKey, event, 100, 86400);
+        await this.updateRealTimeCounters(event);
+      }
+
       logger.debug(`Tracked ${events.length} analytics events`);
     } catch (error) {
       logger.error('Error tracking analytics events:', error);

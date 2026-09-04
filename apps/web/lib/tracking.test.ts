@@ -21,6 +21,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -37,6 +38,15 @@ describe('getSessionId', () => {
     sessionStorage.clear();
     const b = getSessionId();
     expect(b).not.toBe(a);
+  });
+
+  it('falls back to an ephemeral id when sessionStorage throws', () => {
+    const spy = vi.spyOn(window.sessionStorage, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const id = getSessionId();
+    expect(id).toMatch(/^s-ephemeral-/);
+    spy.mockRestore();
   });
 });
 
@@ -68,7 +78,7 @@ describe('trackEvent', () => {
   });
 
   it('uses keepalive so the event survives the next navigation', async () => {
-    trackEvent({ eventType: 'wishlist', productId: 'p-3' });
+    trackEvent({ eventType: 'begin_checkout', metadata: { itemCount: 2 } });
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);
   });

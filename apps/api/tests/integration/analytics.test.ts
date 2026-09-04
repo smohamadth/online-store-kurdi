@@ -26,7 +26,7 @@ describe('POST /api/analytics/track (disabled by default)', () => {
     delete process.env.ANALYTICS_TRACKING_ENABLED;
     const res = await request(app)
       .post('/api/analytics/track')
-      .send({ eventType: 'page_view' });
+      .send({ eventType: 'view' });
     expect(res.status).toBe(404);
     expect(peekMockStore('userEvent')).toHaveLength(0);
   });
@@ -45,19 +45,54 @@ describe('POST /api/analytics/track (opt-in enabled)', () => {
     process.env.ANALYTICS_TRACKING_ENABLED = 'true';
     const res = await request(app)
       .post('/api/analytics/track')
-      .send({ eventType: 'page_view', productId: 'p-1' });
+      .send({ eventType: 'view', productId: 'p-1' });
     expect(res.status).toBe(200);
     const events = peekMockStore('userEvent');
     expect(events).toHaveLength(1);
-    expect(events[0].eventType).toBe('page_view');
+    expect(events[0].eventType).toBe('view');
   });
 
   it('accepts a batch', async () => {
     process.env.ANALYTICS_TRACKING_ENABLED = 'true';
     const res = await request(app)
       .post('/api/analytics/track/batch')
-      .send({ events: [{ eventType: 'view' }, { eventType: 'click' }] });
+      .send({ events: [{ eventType: 'view' }, { eventType: 'add_to_cart' }] });
     expect(res.status).toBe(200);
+  });
+
+  it('links a signed-in visitor via optionalAuth (Bearer)', async () => {
+    process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    const { token, user } = await authHeader({ role: 'customer' });
+    const res = await request(app)
+      .post('/api/analytics/track')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-session-id', 'sess-linked')
+      .send({ eventType: 'view', productId: 'p-1' });
+    expect(res.status).toBe(200);
+    const events = peekMockStore('userEvent');
+    expect(events).toHaveLength(1);
+    expect(events[0].userId).toBe(user.id);
+    expect(events[0].sessionId).toBe('sess-linked');
+  });
+
+  it('honours sessionId in the JSON body when the header is absent', async () => {
+    process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    const res = await request(app)
+      .post('/api/analytics/track')
+      .send({ eventType: 'begin_checkout', sessionId: 'body-sess' });
+    expect(res.status).toBe(200);
+    expect(peekMockStore('userEvent')[0].sessionId).toBe('body-sess');
+  });
+
+  it('rejects spoofed purchase and search events on the public ingest', async () => {
+    process.env.ANALYTICS_TRACKING_ENABLED = 'true';
+    for (const eventType of ['purchase', 'search', 'click', 'page_view']) {
+      const res = await request(app)
+        .post('/api/analytics/track')
+        .send({ eventType, productId: 'p-1' });
+      expect(res.status, eventType).toBe(400);
+    }
+    expect(peekMockStore('userEvent')).toHaveLength(0);
   });
 
   it('rejects unbounded payloads and oversized batches (regression)', async () => {
@@ -263,12 +298,15 @@ describe('product analytics (admin)', () => {
       { eventType: 'view', productId: p.id },
       { eventType: 'add_to_cart', productId: p.id },
       { eventType: 'add_to_cart', productId: p.id },
-      { eventType: 'purchase', productId: p.id },
     ];
     for (const e of events) {
       const res = await request(app).post('/api/analytics/track').send(e);
       expect(res.status).toBe(200);
     }
+    // purchase is server-only; public /track rejects it
+    await mockPrisma.userEvent.create({
+      data: { eventType: 'purchase', productId: p.id, sessionId: 's-purchase', metadata: '{}' },
+    });
     const res = await request(app)
       .get(`/api/analytics/products/${p.id}`)
       .set('Authorization', `Bearer ${token}`);

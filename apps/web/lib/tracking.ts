@@ -50,7 +50,7 @@ export function getSessionId(): string {
 }
 
 export interface TrackEventInput {
-  eventType: 'view' | 'add_to_cart' | 'wishlist';
+  eventType: 'view' | 'add_to_cart' | 'wishlist' | 'begin_checkout';
   productId?: string;
   categoryId?: string;
   metadata?: Record<string, unknown>;
