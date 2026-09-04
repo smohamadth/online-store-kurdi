@@ -31,6 +31,7 @@ import { API_BASE } from '@/lib/apiBase';
 import { contentUrl } from '@/lib/http';
 import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
 import { LayoutRenderer } from '@/lib/layouts/render';
+import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 import { SITE } from '@/lib/seo';
 import { getImageUrl } from '@/lib/api';
@@ -164,12 +165,12 @@ function ProductsContent() {
     return JSON.stringify(asGraph([list, breadcrumb]));
   }, [products]);
 
-  // Theme Studio override: when the active theme ships a `layouts.products`,
-  // render its grid (fed with the live product data) instead of the built-in
-  // listing UI. Otherwise the full built-in page renders unchanged.
+  // Theme Studio override: replace listing chrome only when the layout
+  // includes a productList block. A hero-only products layout used to hide
+  // filters and pagination.
   const layout = useActiveLayout('products');
-  if (layout) {
-    return <LayoutRenderer layout={layout} data={{ products, title: 'Products', total }} />;
+  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.products)) {
+    return <LayoutRenderer layout={layout!} data={{ products, title: 'Products', total }} />;
   }
 
   return (

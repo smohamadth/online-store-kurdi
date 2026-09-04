@@ -68,8 +68,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. `normalizeStudioConfig` fills both aliases (`name`/`author`, `quote`/`text`, `image`/`src`) and `LayoutRenderer` runs it before draw, so Home-builder JSON previews in Studio.
 
 ### 14. Featured/new/trending Studio blocks on non-home pages replace real chrome
-**Where:** `KNOWN_GAPS` §13.3 — a products-page layout with only a hero **hides the filter sidebar and pagination**. `productDetail` renderer’s “Add to cart” is a **div**, not a button (dead). `categoryGrid` reads `d.products` not categories.  
-**Fix direction:** Page-native blocks must call the real page widgets, or refuse to replace chrome unless `productList`/`pageContent` is present.
+**Status:** fixed. `studioLayoutReplacesChrome` keeps native listing/PDP/blog UI unless the layout includes `productList` / `categoryGrid` / `productDetail` / `blogList` / `blogPostBody`|`pageContent`. `categoryGrid` reads `d.categories`. PDP “Add to cart” is a `<button>` wired to `data.onAddToCart`.
 
 ### 15. `fetchThemeCatalog` uses `NEXT_PUBLIC_API_URL` / localhost, not `CLIENT_API_BASE`
 **Status:** fixed. Catalog fetch uses `CLIENT_API_BASE` (same-origin `/api` on loopback).

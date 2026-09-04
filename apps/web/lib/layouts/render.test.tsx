@@ -9,8 +9,8 @@
  *   - unknown block types are skipped without crashing the page
  *   - config payloads reach the rendered output (headline, custom html, counts)
  */
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { LayoutRenderer, LayoutData, responsiveGrid } from './render';
 import { PageLayout, BLOCK_TYPES, BlockType } from './types';
 
@@ -99,6 +99,38 @@ describe('LayoutRenderer page-native blocks', () => {
     render(<LayoutRenderer layout={layout} data={{ product: { name: 'Widget', price: '19.99', description: 'A widget' } }} />);
     expect(screen.getByText('Widget')).toBeTruthy();
     expect(screen.getByText('19.99')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add to cart' })).toBeTruthy();
+  });
+
+  it('calls data.onAddToCart from the productDetail Add to cart button', () => {
+    const layout: PageLayout = {
+      columns: 12, gap: 24,
+      blocks: [{ id: 'pd', type: 'productDetail', colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1, config: {} }],
+    };
+    const onAddToCart = vi.fn();
+    render(
+      <LayoutRenderer
+        layout={layout}
+        data={{ product: { name: 'Widget', price: '1', description: '' }, onAddToCart }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
+    expect(onAddToCart).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders categoryGrid from categories, not products', () => {
+    const layout: PageLayout = {
+      columns: 12, gap: 24,
+      blocks: [{ id: 'cg', type: 'categoryGrid', colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1, config: {} }],
+    };
+    render(
+      <LayoutRenderer
+        layout={layout}
+        data={{ products: [{ id: 'p', name: 'Not a category' }], categories: [{ slug: 'hats', name: 'Hats' }] }}
+      />,
+    );
+    expect(screen.getByText('Hats')).toBeTruthy();
+    expect(screen.queryByText('Not a category')).toBeNull();
   });
 
   it('renders a blogList block from page posts', () => {
@@ -407,7 +439,7 @@ describe('LayoutRenderer responsive grids', () => {
       ['steps', { items: [{ title: 'A' }, { title: 'B' }, { title: 'C' }, { title: 'D' }] }, {}, responsiveGrid(4)],
       ['iconsGrid', { items: [{ icon: 'x', title: 'A' }, { icon: 'y', title: 'B' }, { icon: 'z', title: 'C' }, { icon: 'w', title: 'D' }] }, {}, responsiveGrid(4)],
       ['productList', { title: 'Shop' }, { products }, responsiveGrid(4)],
-      ['categoryGrid', {}, { products }, responsiveGrid(3)],
+      ['categoryGrid', {}, { categories: [{ slug: 'a', name: 'A' }] }, responsiveGrid(3)],
       ['newArrivals', {}, { products }, responsiveGrid(4)],
       ['trending', {}, { products }, responsiveGrid(4)],
       ['productDetail', {}, { product: { name: 'W', price: '1' } }, responsiveGrid(2, 24, 768)],

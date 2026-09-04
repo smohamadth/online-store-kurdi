@@ -26,6 +26,7 @@ import { API_BASE, contentUrl } from '@/lib/http';
 import { encodeRouteParam } from '@/lib/routeParam';
 import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
 import { LayoutRenderer } from '@/lib/layouts/render';
+import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 
 // These values must match the API's sort enum exactly
 // (price_asc | price_desc | name_asc | name_desc | newest | popular),
@@ -128,11 +129,10 @@ export default function CategoryView({ slug }: { slug: string }) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const title = category?.name || slug.replace(/-/g, ' ');
 
-  // Theme Studio override: render the active theme's `layouts.category` grid
-  // with the live category products when it exists.
+  // Theme Studio override: replace chrome only with productList or categoryGrid.
   const layout = useActiveLayout('category');
-  if (layout) {
-    return <LayoutRenderer layout={layout} data={{ products, title, categories: allCategories }} />;
+  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.category)) {
+    return <LayoutRenderer layout={layout!} data={{ products, title, categories: allCategories }} />;
   }
 
   return (

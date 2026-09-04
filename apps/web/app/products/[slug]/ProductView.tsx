@@ -19,6 +19,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
 import { LayoutRenderer } from '@/lib/layouts/render';
+import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 import Link from 'next/link';
 import { useCart } from '@/lib/store';
 import { readStoredUser } from '@/lib/storedUser';
@@ -360,13 +361,16 @@ export default function ProductView() {
     }
   };
 
-  // Theme Studio override: when the active theme ships a `layouts.product`,
-  // render its grid (with the live product data) instead of the built-in PDP.
-  if (layout && product) {
+  // Theme Studio override: replace the PDP only when productDetail is present.
+  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.product) && product) {
     return (
       <LayoutRenderer
-        layout={layout}
-        data={{ product: { name: product.name, price: product.price, description: product.description }, title: product.name }}
+        layout={layout!}
+        data={{
+          product: { name: product.name, price: product.price, description: product.description },
+          title: product.name,
+          onAddToCart: handleAddToCart,
+        }}
       />
     );
   }

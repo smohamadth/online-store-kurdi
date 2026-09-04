@@ -7,6 +7,7 @@ import { getStoreInfo, buildMetadata } from '@/lib/seo';
 import { BlogPost, BlogPagination, formatPostDate } from '@/lib/blog';
 import BlogSearch from '@/components/BlogSearch';
 import { getServerPageLayout } from '@/lib/layouts/serverLayout';
+import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 import StaticLayoutRenderer from '@/components/StaticLayoutRenderer';
 import PostCard from '@/components/PostCard';
 import FeaturedPostHero from '@/components/FeaturedPostHero';
@@ -97,7 +98,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Search
   // Theme Studio override: when the active theme ships a `layouts.blog`,
   // render its grid (with the live post data) server-side in the initial HTML.
   const layout = await getServerPageLayout('blog');
-  if (layout) {
+  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.blog)) {
     return <StaticLayoutRenderer layout={layout} data={{ posts, title: 'Blog' }} />;
   }
 

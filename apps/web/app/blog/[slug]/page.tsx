@@ -15,6 +15,7 @@ import ShareButtons from '@/components/ShareButtons';
 import { DirectionArrow } from '@/components/DirectionArrow';
 import { PageBlocks } from '@/components/PageBlocks';
 import { getServerPageLayout } from '@/lib/layouts/serverLayout';
+import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 import StaticLayoutRenderer from '@/components/StaticLayoutRenderer';
 import { encodeRouteParam } from '@/lib/routeParam';
 import { buildBlogPostingJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
@@ -240,7 +241,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   // Theme Studio override: render the active theme's `layouts.blogPost` grid
   // when it exists, with the live post data, in the initial HTML.
   const layout = await getServerPageLayout('blogPost');
-  if (layout) {
+  if (studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS.blogPost)) {
     return (
       <StaticLayoutRenderer
         layout={layout}

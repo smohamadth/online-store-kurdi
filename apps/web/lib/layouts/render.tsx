@@ -25,6 +25,7 @@ export interface LayoutData {
   categories?: any[];
   title?: string | null;
   subtitle?: string | null;
+  onAddToCart?: () => void;
   [key: string]: unknown;
 }
 
@@ -421,14 +422,14 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     );
   },
   categoryGrid: (b, d) => {
-    const items = (d.products ?? []) as any[];
+    const items = (d.categories ?? []) as any[];
     return (
       <div>
         {(b.config.title || d.title) && <h2 style={{ margin: '0 0 16px' }}>{String(b.config.title ?? d.title)}</h2>}
         <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Number(b.config.perRow ?? 3) || 3), gap: 16 }}>
-          {items.map((p) => (
-            <div key={p.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontWeight: 600 }}>{p.name}</div>
+          {items.map((c) => (
+            <div key={c.slug ?? c.id} style={{ padding: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+              <div style={{ fontWeight: 600 }}>{c.name}</div>
             </div>
           ))}
         </div>
@@ -447,9 +448,16 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
           <h1 style={{ margin: 0, fontSize: 26 }}>{p.name}</h1>
           {p.description && <p style={{ color: 'var(--muted)', marginTop: 8 }}>{p.description}</p>}
           {p.price && <div style={{ fontSize: 24, fontWeight: 800, marginTop: 12 }}>{String(p.price)}</div>}
-          <div style={{ marginTop: 16, padding: '12px 20px', background: 'var(--primary, #111)', color: '#fff', borderRadius: 'var(--radius)', display: 'inline-block', fontWeight: 700 }}>
+          <button
+            type="button"
+            onClick={() => {
+              const fn = d.onAddToCart;
+              if (typeof fn === 'function') fn();
+            }}
+            style={{ marginTop: 16, padding: '12px 20px', background: 'var(--primary, #111)', color: '#fff', borderRadius: 'var(--radius)', border: 'none', display: 'inline-block', fontWeight: 700, cursor: 'pointer' }}
+          >
             Add to cart
-          </div>
+          </button>
         </div>
       </div>
     );

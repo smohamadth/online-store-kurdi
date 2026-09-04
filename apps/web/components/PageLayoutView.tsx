@@ -18,6 +18,7 @@
 import { ReactNode } from 'react';
 import { LayoutRenderer, LayoutData } from '@/lib/layouts/render';
 import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
+import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 import type { PageKey } from '@/lib/layouts/types';
 
 export default function PageLayoutView({
@@ -30,6 +31,6 @@ export default function PageLayoutView({
   children: ReactNode;
 }) {
   const layout = useActiveLayout(page);
-  if (!layout) return <>{children}</>;
+  if (!studioLayoutReplacesChrome(layout, PAGE_CHROME_BLOCKS[page])) return <>{children}</>;
   return <LayoutRenderer layout={layout} data={data} />;
 }
