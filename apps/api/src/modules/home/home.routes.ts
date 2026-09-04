@@ -4,7 +4,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { HOME_SECTION_SEED, ALL_TYPES } from './home.defaults';
-import { sanitizeRichText } from '../../utils/sanitizeRichText';
+import { scrubBuilderConfig } from '../../utils/scrubBuilderConfig';
 
 const router = Router();
 
@@ -68,18 +68,9 @@ export function fromRow(row: any) {
 
 const configSchema = z.record(z.any()).optional().nullable();
 
-/**
- * A rich-text block's `config.html` is rendered with dangerouslySetInnerHTML on
- * the storefront, so it must be sanitised before it is ever stored. Everything
- * else in `config` is read as data, never as markup.
- */
-function scrubConfig(type: string, config: Record<string, any>): Record<string, any> {
-  // richText and the admin-designed `custom` section both carry config.html
-  // rendered with dangerouslySetInnerHTML - both are sanitised on write.
-  if ((type === 'richText' || type === 'custom') && typeof config.html === 'string') {
-    return { ...config, html: sanitizeRichText(config.html) };
-  }
-  return config;
+/** HTML + URL fields in any home-section config (P1.10). */
+function scrubConfig(_type: string, config: Record<string, any>): Record<string, any> {
+  return scrubBuilderConfig(config);
 }
 
 const updateSchema = z.object({

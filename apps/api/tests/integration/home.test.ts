@@ -108,6 +108,24 @@ describe('POST /api/home-sections (admin)', () => {
     expect(band.config.background).toBe('brand');
   });
 
+  it('scrubs javascript: gallery links and faq HTML on write', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const created = await request(app)
+      .post('/api/home-sections')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        key: 'faq-xss',
+        type: 'faq',
+        config: {
+          items: [{ q: 'Q', a: '<b>A</b><script>x()</script>' }],
+          linkUrl: 'javascript:alert(1)',
+        },
+      });
+    expect(created.status).toBe(201);
+    expect(created.body.data.config.items[0].a).not.toContain('<script>');
+    expect(created.body.data.config.linkUrl).toBe('');
+  });
+
   it('still rejects unknown types', async () => {
     const { token } = await authHeader({ role: 'admin' });
     const res = await request(app)

@@ -167,6 +167,38 @@ describe('PUT /api/theme-studio/themes/:key', () => {
     expect(onDisk.junkField).toBeUndefined();
     expect(onDisk.key).toBe('clean');
   });
+
+  it('sanitises layout block html and javascript: hrefs on save', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .put('/api/theme-studio/themes/scrubme')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        ...cfg('scrubme'),
+        layouts: {
+          home: {
+            columns: 12,
+            gap: 24,
+            blocks: [
+              {
+                id: 'cta-1',
+                type: 'cta',
+                colStart: 1,
+                colSpan: 12,
+                rowStart: 1,
+                rowSpan: 1,
+                config: { html: '<p>hi<script>x()</script></p>', buttonHref: 'javascript:alert(1)' },
+              },
+            ],
+          },
+        },
+      });
+    expect(res.status).toBe(200);
+    const html = res.body.data.layouts.home.blocks[0].config.html;
+    const href = res.body.data.layouts.home.blocks[0].config.buttonHref;
+    expect(html).not.toContain('<script>');
+    expect(href).toBe('');
+  });
 });
 
 describe('GET /api/theme-studio/themes/:key', () => {

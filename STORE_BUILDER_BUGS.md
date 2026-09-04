@@ -56,10 +56,14 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. Successful Save merges drafts then `setDrafts({})`. `beforeunload` when studio drafts or HomeBuilder dirty rows exist. Bundled themes remain read-only (P0.2).
 
 ### 10. HTML / URL sanitisation is incomplete on builder content
+<<<<<<< HEAD
 **Where:** `home.routes.ts` `scrubConfig` only sanitises `richText`/`custom` `html`. FAQ answers, quotes, lookbook copy, video `url`/`poster`, gallery `linkUrl`, comparison cells are stored raw.  
 Studio `saveTheme` does **not** run `sanitizeRichText` at all (`KNOWN_GAPS` §13.5). `LayoutRenderer` then `dangerouslySetInnerHTML`.  
 CTA `buttonHref` and image `src` are not scheme-checked (javascript:).  
 **Fix direction:** Sanitize every HTML field on write; allowlist http(s)/relative URLs for href/src (same as banners/menus).
+=======
+**Status:** fixed. `scrubBuilderConfig` sanitises html/quote/description/faq answers/testimonials and blanks unsafe href/src on Home writes and Theme Studio `saveTheme`.
+>>>>>>> eac4d9a (fix(builder): sanitise HTML and allowlist URLs on home and studio writes)
 
 ### 11. `GET /api/home-sections` writes on read
 **Where:** public `GET /` calls `ensureSeeded()` which **inserts** missing keys. First anonymous homepage hit mutates the DB. Comment in `home.defaults.ts` says deleting a block does not come back — **true for delete**, but **hiding ≠ delete**; a new seed key added in a platform upgrade **reappears** on the next GET.  

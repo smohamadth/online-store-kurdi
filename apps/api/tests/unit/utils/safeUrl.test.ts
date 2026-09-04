@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeLinkUrl } from '../../../src/utils/safeUrl';
+import { isSafeLinkUrl, isSafeMediaUrl } from '../../../src/utils/safeUrl';
 
 describe('isSafeLinkUrl', () => {
   it('accepts http/https/mailto/tel', () => {
@@ -39,5 +39,15 @@ describe('isSafeLinkUrl', () => {
     // parsing, so 'javascript&#58;...' is not a javascript: URL — it is
     // a (harmless) relative path. Only a literal colon forms a scheme.
     expect(isSafeLinkUrl('javascript&#58;alert(1)')).toBe(true);
+  });
+});
+
+describe('isSafeMediaUrl', () => {
+  it('accepts http(s) and relative, rejects mailto and javascript', () => {
+    expect(isSafeMediaUrl('/uploads/a.jpg')).toBe(true);
+    expect(isSafeMediaUrl('https://cdn.example.com/a.jpg')).toBe(true);
+    expect(isSafeMediaUrl('mailto:x@y.com')).toBe(false);
+    expect(isSafeMediaUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeMediaUrl('data:image/png,aaa')).toBe(false);
   });
 });

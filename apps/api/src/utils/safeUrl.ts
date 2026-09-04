@@ -29,3 +29,14 @@ export function isSafeLinkUrl(value: string | null | undefined): boolean {
   if (!HAS_SCHEME.test(trimmed)) return true;
   return SAFE_SCHEMES.has(trimmed.slice(0, trimmed.indexOf(':')).toLowerCase() + ':');
 }
+
+/** href/src for images, video posters, and video URLs — http(s) or relative only. */
+export function isSafeMediaUrl(value: string | null | undefined): boolean {
+  if (value === null || value === undefined) return true;
+  const trimmed = value.trim();
+  if (trimmed === '') return true;
+  if (!isSafeLinkUrl(trimmed)) return false;
+  const scheme = trimmed.slice(0, trimmed.indexOf(':') + 1).toLowerCase();
+  if (scheme === 'mailto:' || scheme === 'tel:') return false;
+  return true;
+}

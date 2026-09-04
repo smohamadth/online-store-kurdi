@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 import { extractZipToMap, normalizeEntryPaths } from '../../utils/zipPackage';
+import { scrubStudioLayouts } from '../../utils/scrubBuilderConfig';
 
 const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
@@ -301,6 +302,7 @@ export async function installThemeFromZip(buffer: Buffer): Promise<ThemeStudioCo
  */
 export async function saveTheme(key: string, cfg: unknown): Promise<ThemeStudioConfig> {
   const clean = validateConfig(cfg, key);
+  if (clean.layouts) clean.layouts = scrubStudioLayouts(clean.layouts);
   if (isBundledTheme(key)) {
     throw new Error(`Theme "${key}" is a bundled platform theme and cannot be overwritten`);
   }
