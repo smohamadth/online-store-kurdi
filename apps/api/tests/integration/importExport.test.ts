@@ -171,6 +171,7 @@ describe('GET /api/import-export/export/:entity', () => {
       price: 12.5,
     });
     await addProductImage(product.id, { url: '/img/a.jpg', alt: 'A' });
+    await createVariant(product.id, { sku: 'W-1-L', name: 'Large', price: 15, quantity: 3, attributes: { size: 'L' } });
 
     const res = await request(app).get('/api/import-export/export/products').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
@@ -185,6 +186,9 @@ describe('GET /api/import-export/export/:entity', () => {
     // description contains a comma/quote/newline -> must be quoted
     expect(text).toContain('"Comma, ""quotes"" and');
     expect(text).toContain('"/img/a.jpg"');
+    expect(text).toContain('W-1-L');
+    expect(text).toContain('Large');
+    expect(text).toContain('variantSkus');
   });
 
   it('exports products as JSON with nested images/variants', async () => {

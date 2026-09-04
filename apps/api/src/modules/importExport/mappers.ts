@@ -210,7 +210,8 @@ export const PRODUCT_CSV_HEADERS = [
   'lowStockThreshold', 'allowBackorder', 'backorderLimit', 'expectedRestockAt',
   'downloadUrl', 'downloadLimit', 'downloadExpiry', 'weight', 'weightUnit',
   'dimensions', 'category', 'metaTitle', 'metaDescription', 'metaKeywords',
-  'images', 'variants',
+  'images', 'options', 'variants',
+  'variantSkus', 'variantNames', 'variantPrices', 'variantQuantities', 'variantOptions',
 ];
 
 /**

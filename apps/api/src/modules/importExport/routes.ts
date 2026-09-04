@@ -89,16 +89,65 @@ const nullIfEmpty = (v: unknown) => (v === null || v === undefined || v === '' ?
 // images, and shape each into a flat export row. Nested collections
 // (variants, images) become native arrays in JSON exports and JSON-encoded
 // strings in CSV (the importer accepts both).
+function parseJsonSafe(raw: unknown, fallback: any) {
+  if (raw == null || raw === '') return fallback;
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    return fallback;
+  }
+}
+
+function serializeVariant(v: any) {
+  const optionValues = (v.optionValues ?? []).map((ov: any) => ({
+    option: ov.optionValue?.option?.name ?? '',
+    value: ov.optionValue?.value ?? '',
+    swatch: ov.optionValue?.swatch ?? null,
+  })).filter((ov: any) => ov.option || ov.value);
+  const images = (v.images ?? []).map((im: any) => ({
+    url: im.url,
+    alt: im.alt ?? '',
+    isPrimary: im.isPrimary,
+  }));
+  return {
+    name: v.name,
+    sku: v.sku,
+    slug: v.slug ?? '',
+    price: v.price,
+    compareAtPrice: v.compareAtPrice ?? '',
+    quantity: v.quantity,
+    attributes: parseJsonSafe(v.attributes, {}),
+    isActive: v.isActive,
+    sortOrder: v.sortOrder,
+    optionValues,
+    images,
+  };
+}
+
 async function exportProductsRows(): Promise<Record<string, any>[]> {
   const products = await prisma.product.findMany({
     orderBy: [{ createdAt: 'asc' }],
     include: {
       category: { select: { name: true } },
-      variants: { orderBy: [{ sortOrder: 'asc' }] },
+      options: { orderBy: [{ sortOrder: 'asc' }], include: { values: { orderBy: [{ sortOrder: 'asc' }] } } },
+      variants: {
+        orderBy: [{ sortOrder: 'asc' }],
+        include: {
+          images: { orderBy: [{ sortOrder: 'asc' }] },
+          optionValues: { include: { optionValue: { include: { option: true } } } },
+        },
+      },
       images: { orderBy: [{ sortOrder: 'asc' }] },
     },
   });
-  return products.map((p) => ({
+  return products.map((p) => {
+    const variants = (p.variants ?? []).map(serializeVariant);
+    const options = (p.options ?? []).map((o) => ({
+      name: o.name,
+      values: (o.values ?? []).map((val) => val.value),
+    }));
+    return {
     name: p.name,
     sku: p.sku,
     slug: p.slug,
@@ -132,18 +181,20 @@ async function exportProductsRows(): Promise<Record<string, any>[]> {
       alt: im.alt ?? '',
       isPrimary: im.isPrimary,
     })),
-    variants: (p.variants ?? []).map((v) => ({
-      name: v.name,
-      sku: v.sku,
-      slug: v.slug ?? '',
-      price: v.price,
-      compareAtPrice: v.compareAtPrice ?? '',
-      quantity: v.quantity,
-      attributes: v.attributes && v.attributes !== '{}' ? JSON.parse(v.attributes) : {},
-      isActive: v.isActive,
-      sortOrder: v.sortOrder,
-    })),
-  }));
+    options,
+    variants,
+    // Spreadsheet-friendly flatten so Excel users see SKUs without opening JSON.
+    variantSkus: variants.map((v) => v.sku).join(' | '),
+    variantNames: variants.map((v) => v.name).join(' | '),
+    variantPrices: variants.map((v) => String(v.price)).join(' | '),
+    variantQuantities: variants.map((v) => String(v.quantity ?? 0)).join(' | '),
+    variantOptions: variants.map((v) =>
+      (v.optionValues.length
+        ? v.optionValues.map((ov: any) => `${ov.option}:${ov.value}`).join(', ')
+        : Object.entries(v.attributes || {}).map(([k, val]) => `${k}:${val}`).join(', ')),
+    ).join(' | '),
+  };
+  });
 }
 
 // Fetch every category (by sort order, then name) with its parent's name,
@@ -262,7 +313,13 @@ const SAMPLE_PRODUCT: Record<string, any> = {
   metaDescription: '',
   metaKeywords: 'sample, example',
   images: [{ url: '/images/products/sample.jpg', alt: 'Sample product', isPrimary: true }],
-  variants: [{ name: 'Large', sku: 'SKU-0001-L', price: 34.99, quantity: 20, attributes: { size: 'L' } }],
+  options: [{ name: 'Size', values: ['L'] }],
+  variants: [{ name: 'Large', sku: 'SKU-0001-L', price: 34.99, quantity: 20, attributes: { size: 'L' }, optionValues: [{ option: 'Size', value: 'L' }], images: [] }],
+  variantSkus: 'SKU-0001-L',
+  variantNames: 'Large',
+  variantPrices: '34.99',
+  variantQuantities: '20',
+  variantOptions: 'Size:L',
 };
 
 const SAMPLE_CATEGORY: Record<string, any> = {
