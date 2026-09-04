@@ -457,36 +457,6 @@ export default function HomeView() {
             title={s.title}
             subtitle={s.subtitle}
             description={cfg.description}
-            im  return (
-          <ComparisonTable
-            key={s.id}
-            title={s.title}
-            subtitle={s.subtitle}
-            columns={cfg.columns}
-            rows={cfg.rows}
-            highlight={typeof cfg.highlight === 'number' ? cfg.highlight : null}
-          />
-        );
-
-      case 'quote':
-        return (
-          <PullQuote
-            key={s.id}
-            quote={cfg.quote}
-            author={cfg.author}
-            role={cfg.role}
-            avatar={cfg.avatar}
-            background={cfg.background}
-          />
-        );
-
-      case 'lookbook':
-        return (
-          <LookbookSection
-            key={s.id}
-            title={s.title}
-            subtitle={s.subtitle}
-            description={cfg.description}
             image={cfg.image}
             imagePosition={cfg.imagePosition === 'end' ? 'end' : 'start'}
             buttonText={cfg.buttonText}
