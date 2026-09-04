@@ -226,6 +226,8 @@ export default function HeroGallery({
         const img = isMobile && slide.mobileImage ? slide.mobileImage : slide.image;
         const align = slide.align || 'left';
         const overlay = slide.overlayColor || 'rgba(0,0,0,0.4)';
+        const fill = resolveSlideBackground(overlay);
+        const copyFirst = align !== 'right';
         return (
           <div
             key={slide.id}
@@ -236,97 +238,90 @@ export default function HeroGallery({
               position: 'absolute',
               inset: 0,
               opacity: active ? 1 : 0,
-              transform: reducedMotion ? 'none' : active ? 'scale(1)' : 'scale(1.06)',
-              transition: reducedMotion
-                ? 'opacity 200ms linear'
-                : 'opacity 700ms ease, transform 7000ms linear',
               pointerEvents: active ? 'auto' : 'none',
               visibility: active ? 'visible' : 'hidden',
+              transition: reducedMotion ? 'opacity 200ms linear' : 'opacity 500ms ease',
             }}
           >
-            {/* Background */}
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: img
-                  ? `url(${getImageUrl(img)}) center/cover no-repeat`
-                  : resolveSlideBackground(overlay),
+                background: fill,
               }}
             />
-            {/* Overlay for readability when there is a photo */}
-            {img && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background:
-                    align === 'center'
-                      ? 'linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.6))'
-                      : align === 'right'
-                      ? 'linear-gradient(270deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)'
-                      : 'linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.25) 55%, transparent 100%)',
-                }}
-              />
-            )}
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  'radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.18), transparent 42%), radial-gradient(ellipse at 10% 90%, rgba(0,0,0,0.28), transparent 50%)',
+                pointerEvents: 'none',
+              }}
+            />
 
-            {/* Content */}
             <div
               style={{
                 position: 'relative',
                 height: '100%',
-                maxWidth: '1200px',
+                maxWidth: '1240px',
                 margin: '0 auto',
-                padding: isMobile ? '0 20px' : '0 32px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
-                // align is stored physically ("left"/"right") from the
-                // admin form. Render it as a LOGICAL alignment so the
-                // same banner mirrors correctly in RTL documents
-                // (left = reading start). In LTR this is visually
-                // identical to the old physical values.
-                textAlign: align === 'center' ? 'center' : align === 'right' ? 'end' : 'start',
+                padding: isMobile ? '28px 20px 56px' : '40px 56px 64px',
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : copyFirst ? 'minmax(0, 1.05fr) minmax(280px, 1fr)' : 'minmax(280px, 1fr) minmax(0, 1.05fr)',
+                gap: isMobile ? 20 : 40,
+                alignItems: 'center',
                 color: slide.textColor || '#ffffff',
               }}
             >
               <div
                 style={{
-                  maxWidth: '620px',
-                  transform: reducedMotion ? 'none' : active ? 'translateY(0)' : 'translateY(24px)',
+                  order: isMobile ? 0 : copyFirst ? 0 : 1,
+                  maxWidth: '36rem',
+                  transform: reducedMotion ? 'none' : active ? 'translateY(0)' : 'translateY(18px)',
                   opacity: active ? 1 : 0,
-                  transition: reducedMotion ? 'opacity 200ms linear' : 'all 700ms ease 120ms',
+                  transition: reducedMotion ? 'opacity 200ms linear' : 'all 600ms ease 80ms',
                 }}
               >
-                {slide.badge && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
                   <span
                     style={{
-                      display: 'inline-block',
-                      padding: '6px 14px',
-                      borderRadius: '999px',
-                      backgroundColor: 'rgba(255,255,255,0.18)',
-                      backdropFilter: 'blur(6px)',
-                      border: '1px solid rgba(255,255,255,0.28)',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      letterSpacing: '0.08em',
-                      textTransform: 'uppercase',
-                      marginBottom: '16px',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 12,
+                      letterSpacing: '0.18em',
+                      opacity: 0.7,
                     }}
                   >
-                    {slide.badge}
+                    {String(i + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}
                   </span>
-                )}
+                  {slide.badge && (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        padding: '5px 12px',
+                        borderRadius: 999,
+                        backgroundColor: 'var(--brand, #fff)',
+                        color: 'var(--brand-text, #111)',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {slide.badge}
+                    </span>
+                  )}
+                </div>
                 {slide.subtitle && (
                   <p
                     style={{
-                      fontSize: isMobile ? '13px' : '15px',
-                      fontWeight: 600,
-                      letterSpacing: '0.14em',
+                      fontSize: isMobile ? 12 : 13,
+                      fontWeight: 700,
+                      letterSpacing: '0.22em',
                       textTransform: 'uppercase',
-                      opacity: 0.85,
-                      marginBottom: '10px',
+                      opacity: 0.8,
+                      margin: '0 0 10px',
                     }}
                   >
                     {slide.subtitle}
@@ -335,11 +330,12 @@ export default function HeroGallery({
                 <Heading
                   level={i === 0 ? 1 : 2}
                   style={{
-                    fontSize: isMobile ? '30px' : '54px',
-                    lineHeight: 1.05,
+                    fontSize: isMobile ? 32 : 56,
+                    lineHeight: 0.98,
                     fontWeight: 800,
-                    letterSpacing: '-0.02em',
+                    letterSpacing: '-0.04em',
                     margin: 0,
+                    maxWidth: '14ch',
                   }}
                 >
                   {slide.title}
@@ -347,10 +343,11 @@ export default function HeroGallery({
                 {slide.description && (
                   <p
                     style={{
-                      marginTop: '18px',
-                      fontSize: isMobile ? '15px' : '18px',
-                      lineHeight: 1.6,
-                      opacity: 0.9,
+                      marginTop: 16,
+                      fontSize: isMobile ? 15 : 17,
+                      lineHeight: 1.55,
+                      opacity: 0.88,
+                      maxWidth: '42ch',
                     }}
                   >
                     {slide.description}
@@ -358,47 +355,123 @@ export default function HeroGallery({
                 )}
                 <div
                   style={{
-                    marginTop: '28px',
+                    marginTop: 28,
                     display: 'flex',
-                    gap: '12px',
+                    gap: 12,
                     flexWrap: 'wrap',
-                    justifyContent: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
                   }}
                 >
                   {slide.linkUrl && (
                     <Link
                       href={slide.linkUrl}
                       style={{
-                        padding: '14px 28px',
-                        backgroundColor: 'var(--card-bg, #fff)',
-                        color: 'var(--body-text, #111)',
-                        borderRadius: '8px',
-                        fontSize: '15px',
-                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '14px 26px',
+                        backgroundColor: 'var(--brand, #fff)',
+                        color: 'var(--brand-text, #111)',
+                        borderRadius: 999,
+                        fontSize: 14,
+                        fontWeight: 800,
+                        letterSpacing: '0.04em',
                         textDecoration: 'none',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+                        boxShadow: '0 16px 40px rgba(0,0,0,0.28)',
                       }}
                     >
                       {slide.buttonText || 'Shop Now'}
+                      <DirectionArrow kind="forward" />
                     </Link>
                   )}
                   {slide.secondaryText && slide.secondaryUrl && (
                     <Link
                       href={slide.secondaryUrl}
                       style={{
-                        padding: '14px 24px',
-                        border: '1px solid rgba(255,255,255,0.6)',
-                        borderRadius: '8px',
-                        fontSize: '15px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '14px 22px',
+                        border: '1px solid rgba(255,255,255,0.45)',
+                        borderRadius: 999,
+                        fontSize: 14,
                         fontWeight: 600,
                         color: slide.textColor || '#fff',
                         textDecoration: 'none',
+                        background: 'rgba(255,255,255,0.08)',
+                        backdropFilter: 'blur(10px)',
                       }}
                     >
-                      {slide.secondaryText} <DirectionArrow kind="forward" />
+                      {slide.secondaryText}
                     </Link>
                   )}
                 </div>
+              </div>
+
+              <div
+                style={{
+                  order: isMobile ? 1 : copyFirst ? 1 : 0,
+                  position: 'relative',
+                  height: isMobile ? 200 : '100%',
+                  minHeight: isMobile ? 180 : 320,
+                  borderRadius: 28,
+                  overflow: 'hidden',
+                  boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
+                  border: '1px solid rgba(255,255,255,0.16)',
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: img
+                      ? `url(${getImageUrl(img)}) center/cover no-repeat`
+                      : fill,
+                    transform: reducedMotion ? 'none' : active ? 'scale(1)' : 'scale(1.08)',
+                    transition: reducedMotion ? undefined : 'transform 6s linear',
+                  }}
+                />
+                {!img && (
+                  <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        width: '55%',
+                        height: '55%',
+                        borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.14)',
+                        top: '-12%',
+                        insetInlineEnd: '-8%',
+                        filter: 'blur(2px)',
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        width: '40%',
+                        height: '40%',
+                        borderRadius: 24,
+                        border: '1px solid rgba(255,255,255,0.28)',
+                        bottom: '12%',
+                        insetInlineStart: '10%',
+                        transform: 'rotate(-12deg)',
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        insetInlineEnd: 20,
+                        bottom: 20,
+                        fontSize: isMobile ? 48 : 72,
+                        fontWeight: 900,
+                        letterSpacing: '-0.06em',
+                        color: 'rgba(255,255,255,0.22)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
