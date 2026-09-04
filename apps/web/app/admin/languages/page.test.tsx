@@ -66,11 +66,11 @@ describe('AdminLanguagesPage', () => {
 
   it('refuses to disable the last enabled language', async () => {
     render(<AdminLanguagesPage />);
-    await screen.findByText(/Storefront languages/);
-    const boxes = screen.getAllByRole('checkbox');
-    fireEvent.click(boxes[0]);
-    fireEvent.click(boxes[1]);
+    const en = await screen.findByLabelText('Enable English');
+    const ku = screen.getByLabelText('Enable کوردی');
+    fireEvent.click(en);
+    fireEvent.click(ku);
     expect(await screen.findByText(/At least one language must stay enabled/)).toBeTruthy();
-    expect((boxes[1] as HTMLInputElement).checked).toBe(true);
+    expect((ku as HTMLInputElement).checked).toBe(true);
   });
 });

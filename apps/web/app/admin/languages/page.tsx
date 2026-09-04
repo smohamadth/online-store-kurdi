@@ -88,6 +88,7 @@ export default function AdminLanguagesPage() {
             <label key={l.code} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <input
                 type="checkbox"
+                aria-label={`Enable ${l.name}`}
                 checked={l.enabled}
                 onChange={(e) => {
                   const enabled = e.target.checked;
