@@ -44,8 +44,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 ## P1 — real functional bugs
 
 ### 6. Featured section ignores its own limit and is not “featured”
-**Where:** `HomeView` featured case; `GET /api/products/featured` (latest active products, not a featured flag). Builder `config.limit` is unused. Grid **drops remainder products** so the last row is full (`Math.floor(n/cols)*cols`) — a 5-product shop with 4 columns shows **4**.  
-**Fix direction:** Honour `config.limit`; stop dropping leftovers; if “featured” is a real flag, filter on it (or rename the section).
+**Status:** partial. `featuredProductsToShow` honours `config.limit` and no longer drops leftover cards. `GET /products/featured` is still “latest”, not a featured flag.
 
 ### 7. Deal countdown / gallery / banners link to `/deals` (no route)
 **Where:** seed + `HomeBuilder` defaults `buttonHref: '/deals'`; gallery “On sale” → `/deals`. There is `apps/web/app/deals`? (check) — if missing, those CTAs 404.  

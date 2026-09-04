@@ -49,6 +49,7 @@ import ShowcaseRow from '@/components/rich/ShowcaseRow';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { pickStorefrontHomeSections } from '@/lib/layouts/homeMapping';
 import { heroOptionsFromSectionConfig } from '@/lib/heroOptions';
+import { featuredProductsToShow } from '@/lib/featuredGrid';
 import { API_BASE } from '@/lib/http';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import RecentlyViewed from '@/components/RecentlyViewed';
