@@ -104,7 +104,11 @@ export function tokensToTheme(activeTheme: ThemeConfig, customizations: Partial<
   // let callers override the active theme should use a
   // separate parameter (e.g. `forceActiveTheme`) so the
   // contract is explicit.
-  const { activeTheme: _ignoredActiveTheme, ...safeCustomizations } = customizations;
+  const {
+    activeTheme: _ignoredActiveTheme,
+    customCss: rawCustomCss,
+    ...safeCustomizations
+  } = customizations;
   return {
     primaryColor: (t.primaryColor as string) ?? '#111111',
     primaryTextColor: (t.primaryTextColor as string) ?? '#ffffff',

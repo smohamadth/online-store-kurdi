@@ -14,7 +14,7 @@ export default function AdminLanguagesPage() {
   const [strings, setStrings] = useState<Record<string, Record<string, string>>>({});
   const [editCode, setEditCode] = useState('en');
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [status, setStatus] = useState('');
+  const [message, setMessage] = useState('');
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newDir, setNewDir] = useState<'ltr' | 'rtl'>('ltr');
@@ -30,7 +30,7 @@ export default function AdminLanguagesPage() {
     setDraft({ ...(translations[code] || translations.en), ...(data.strings?.[code] || {}) });
   }
 
-  useEffect(() => { load().catch(() => setStatus('Could not load languages')); }, []);
+  useEffect(() => { load().catch(() => setMessage('Could not load languages')); }, []);
 
   function selectLang(code: string) {
     const merged = { ...strings, [editCode]: draft };
@@ -40,26 +40,30 @@ export default function AdminLanguagesPage() {
   }
 
   async function save(nextLangs = languages, nextStrings = { ...strings, [editCode]: draft }) {
-    setStatus('Saving…');
-    const res = await fetch(`${API_BASE}/i18n/storefront`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
-      body: JSON.stringify({ languages: nextLangs, strings: nextStrings }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setStatus(json.message || 'Save failed');
-      return;
+    setMessage('Saving…');
+    try {
+      const res = await fetch(`${API_BASE}/i18n/storefront`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
+        body: JSON.stringify({ languages: nextLangs, strings: nextStrings }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setMessage(json.message || 'Save failed');
+        return;
+      }
+      setLanguages(json.data.languages);
+      setStrings(json.data.strings || {});
+      setMessage('Saved.');
+    } catch {
+      setMessage('Could not reach the server — save failed.');
     }
-    setLanguages(json.data.languages);
-    setStrings(json.data.strings || {});
-    setStatus('Saved.');
   }
 
   function addLanguage() {
     const code = newCode.trim().toLowerCase();
     if (!/^[a-z][a-z0-9-]{1,7}$/.test(code) || languages.some((l) => l.code === code)) {
-      setStatus('Enter a unique language code (e.g. de, ckb).');
+      setMessage('Enter a unique language code (e.g. de, ckb).');
       return;
     }
     const next = [...languages, { code, name: newName || code, dir: newDir, flag: '🏳️', enabled: true }];
@@ -88,7 +92,7 @@ export default function AdminLanguagesPage() {
                 onChange={(e) => {
                   const enabled = e.target.checked;
                   if (!enabled && languages.filter((x) => x.enabled).length <= 1) {
-                    setStatus('At least one language must stay enabled.');
+                    setMessage('At least one language must stay enabled.');
                     return;
                   }
                   const next = languages.map((x) => x.code === l.code ? { ...x, enabled } : x);
