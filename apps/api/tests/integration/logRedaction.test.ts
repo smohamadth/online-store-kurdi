@@ -114,7 +114,7 @@ describe('analytics stores a truncated IP', () => {
       .post('/api/analytics/track')
       .set('x-session-id', 'sess-ip2')
       .set('X-Forwarded-For', '198.51.100.77')
-      .send({ eventType: 'search', searchQuery: 'shoes' });
+      .send({ eventType: 'view', metadata: { q: 'shoes' } });
 
     const events = await mockPrisma.userEvent.findMany({});
     for (const e of events) {
