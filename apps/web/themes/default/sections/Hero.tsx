@@ -32,15 +32,10 @@ export default function DefaultHero(props: SectionProps) {
   // renders it in the copy+media band (HeroSplit), single uses the
   // full-bleed band without carousel chrome.
   if (opts.layout === 'split') {
-    return (
-      <section data-section="hero" data-niche="General retail">
-        <HeroSplit banner={banners[0] ?? null} height={opts.height} />
-      </section>
-    );
+    return <HeroSplit banner={banners[0] ?? null} height={opts.height} />;
   }
   const slides = opts.layout === 'single' ? banners.slice(0, 1) : banners;
   return (
-    <section data-section="hero" data-niche="General retail">
     <HeroGallery
       banners={slides}
       loaded={true}
@@ -50,6 +45,5 @@ export default function DefaultHero(props: SectionProps) {
       showDots={opts.showDots}
       height={opts.height}
     />
-    </section>
   );
 }

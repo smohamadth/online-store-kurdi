@@ -8,9 +8,6 @@ import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { THEMES } from '@/lib/themeRegistry';
 
-import DefaultHero from '@/themes/default/sections/Hero';
-import DefaultFeatured from '@/themes/default/sections/Featured';
-import DefaultCategories from '@/themes/default/sections/Categories';
 import MinimalHero from '@/themes/minimal/sections/Hero';
 import MinimalFeatured from '@/themes/minimal/sections/Featured';
 import MinimalCategories from '@/themes/minimal/sections/Categories';
@@ -25,7 +22,6 @@ import PulseFeatured from '@/themes/pulse/sections/Featured';
 import PulseCategories from '@/themes/pulse/sections/Categories';
 
 const SECTIONS: Record<string, { hero: any; featured: any; categories: any }> = {
-  default: { hero: DefaultHero, featured: DefaultFeatured, categories: DefaultCategories },
   minimal: { hero: MinimalHero, featured: MinimalFeatured, categories: MinimalCategories },
   bold: { hero: BoldHero, featured: BoldFeatured, categories: BoldCategories },
   dawnlight: { hero: DawnlightHero, featured: DawnlightFeatured, categories: DawnlightCategories },

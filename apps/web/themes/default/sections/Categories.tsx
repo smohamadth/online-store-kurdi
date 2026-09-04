@@ -22,7 +22,6 @@ export default function DefaultCategories({ title, subtitle, categories, config 
   return (
     <section
       data-section="categories"
-      data-niche="General retail"
       data-theme={theme.activeTheme}
       style={{
         maxWidth: 'var(--container, 1200px)',
