@@ -130,6 +130,7 @@ export default function DefaultFeatured({ title, subtitle, products, config }: S
                       insetInlineStart: '10px',
                       insetBlockStart: '10px',
                       backgroundColor: 'var(--sale)',
+                      // token-ratchet-ok: on the --sale badge fill.
                       color: '#fff',
                       fontSize: '11px',
                       fontWeight: 800,
