@@ -96,10 +96,11 @@ describe('ThemeStudioPage', () => {
     const beforeBlocks = screen.getAllByText('Hero').length;
     expect(beforeBlocks).toBeGreaterThanOrEqual(1);
 
-    // Simulate dragging a "Features" block onto the drop zone.
-    const dropZone = screen.getByText(/Layout for/).closest('div[style]')!;
-    const dataTransfer = { getData: () => 'features', setData: () => {} } as any;
-    fireEvent.dragStart(screen.getByText('Features'), { dataTransfer });
+    // Drag a "Features" block onto the canvas (ref + dataTransfer).
+    const dropZone = screen.getByTestId('studio-drop-zone');
+    const dataTransfer = { getData: () => 'features', setData: () => {}, effectAllowed: 'copy', dropEffect: 'copy' } as any;
+    fireEvent.dragStart(screen.getByTestId('palette-features'), { dataTransfer });
+    fireEvent.dragOver(dropZone, { dataTransfer });
     fireEvent.drop(dropZone, { dataTransfer });
 
     // The Features block now appears in the block list.

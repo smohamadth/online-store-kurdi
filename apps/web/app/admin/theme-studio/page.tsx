@@ -14,7 +14,7 @@
  * "files" model). Bundled themes are the read-only base; an admin creates a
  * new theme by duplicating one, then edits + saves it to its own directory.
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { API_BASE } from '@/lib/http';
 import { useIsMobile } from '@/lib/hooks';
 import {
@@ -103,7 +103,9 @@ export default function ThemeStudioPage() {
     { columns: DEFAULT_COLUMNS, gap: 24, blocks: [] };
   const setLayout = (next: PageLayout) => setDrafts((d) => ({ ...d, [page]: next }));
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [draggingType, setDraggingType] = useState<BlockType | null>(null);
+  // Ref (not state): setting state on dragStart re-renders the palette item
+  // and Chrome cancels the HTML5 drag. Drop reads this or dataTransfer.
+  const draggingTypeRef = useRef<BlockType | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: string; text: string }>({ type: '', text: '' });
   const [newName, setNewName] = useState('');
@@ -234,15 +236,24 @@ export default function ThemeStudioPage() {
 
   const paletteBlocks = BLOCK_TYPES;
 
+  const appendBlock = (type: BlockType) => {
+    if (!current) {
+      notify('error', 'Select a theme first, then add blocks.');
+      return;
+    }
+    const next = addBlock(layout, type);
+    setLayout(next);
+    setSelectedBlockId(next.blocks[next.blocks.length - 1].id);
+  };
+
   // ---- grid editing -------------------------------------------------------
   const handleDropBlock = (e: React.DragEvent) => {
     e.preventDefault();
-    const type = draggingType ?? e.dataTransfer.getData('text/plain');
-    if (!type) return;
-    const next = addBlock(layout, type as BlockType);
-    setLayout(next);
-    setSelectedBlockId(next.blocks[next.blocks.length - 1].id);
-    setDraggingType(null);
+    e.stopPropagation();
+    const raw = (e.dataTransfer.getData('text/plain') || draggingTypeRef.current || '').trim();
+    draggingTypeRef.current = null;
+    if (!(BLOCK_TYPES as readonly string[]).includes(raw)) return;
+    appendBlock(raw as BlockType);
   };
 
   return (
@@ -381,7 +392,11 @@ export default function ThemeStudioPage() {
 
               {/* Drop zone for palette blocks */}
               <div
-                onDragOver={(e) => e.preventDefault()}
+                data-testid="studio-drop-zone"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'copy';
+                }}
                 onDrop={handleDropBlock}
                 style={{ minHeight: 300, border: '2px dashed #d4d4d4', borderRadius: 12, padding: 12 }}
               >
@@ -450,15 +465,22 @@ export default function ThemeStudioPage() {
           <h3 style={{ fontSize: 15, marginBottom: 10 }}>Blocks palette</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {paletteBlocks.map((t) => (
-              <div
+              <button
                 key={t}
+                type="button"
                 draggable
-                onDragStart={(e) => { e.dataTransfer.setData('text/plain', t); setDraggingType(t); }}
-                onDragEnd={() => setDraggingType(null)}
+                data-testid={`palette-${t}`}
+                onClick={() => appendBlock(t)}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', t);
+                  e.dataTransfer.effectAllowed = 'copy';
+                  draggingTypeRef.current = t;
+                }}
+                onDragEnd={() => { draggingTypeRef.current = null; }}
                 style={{ padding: '8px 10px', border: '1px solid #e5e5e5', borderRadius: 8, fontSize: 13, background: '#fff', cursor: 'grab', textAlign: 'center' }}
               >
                 {BLOCK_LABELS[t]}
-              </div>
+              </button>
             ))}
           </div>
 
