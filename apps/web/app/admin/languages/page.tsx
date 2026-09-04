@@ -138,7 +138,7 @@ export default function AdminLanguagesPage() {
           </button>
         </div>
       </div>
-      {status && <p role="status" style={{ marginTop: 12 }}>{status}</p>}
+      {message && <p role="status" style={{ marginTop: 12 }}>{message}</p>}
     </div>
   );
 }

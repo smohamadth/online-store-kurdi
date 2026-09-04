@@ -138,10 +138,10 @@ describe('SearchBar', () => {
     // Wait past the 300ms debounce.
     await waitFor(
       () => {
-        expect(globalThis.fetch).toHaveBeenCalled();
-        const url = (globalThis.fetch as any).mock.calls[0][0];
-        expect(String(url)).toContain('/products/search');
-        expect(String(url)).toContain('q=mouse');
+        const urls = (globalThis.fetch as any).mock.calls.map((c: any[]) => String(c[0]));
+        const searchUrl = urls.find((u: string) => u.includes('/products/search'));
+        expect(searchUrl).toBeTruthy();
+        expect(searchUrl).toContain('q=mouse');
       },
       { timeout: 1000 },
     );
