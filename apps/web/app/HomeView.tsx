@@ -13,15 +13,12 @@
  * save succeeded, and the admin builder surfaces real errors.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, Product, getImageUrl } from '@/lib/api';
 import { useStoreSettings } from '@/lib/settings';
 import { useTheme } from '@/lib/theme';
 import { useIsMobile } from '@/lib/hooks';
-import { resolveThemeConfig } from '@/lib/themeRuntime';
-import { blockToHomeSection } from '@/lib/layouts/homeMapping';
-import type { PageLayout } from '@/lib/layouts/types';
 import { ProductGridSkeleton } from '@/components/SkeletonLoader';
 import StoreImage from '@/components/StoreImage';
 import HeroGallery, { Banner } from '@/components/HeroGallery';
@@ -50,6 +47,7 @@ import PullQuote from '@/components/rich/PullQuote';
 import LookbookSection from '@/components/rich/LookbookSection';
 import ShowcaseRow from '@/components/rich/ShowcaseRow';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
+import { pickStorefrontHomeSections } from '@/lib/layouts/homeMapping';
 import { heroOptionsFromConfig } from '@/lib/heroOptions';
 import { API_BASE } from '@/lib/http';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
@@ -209,17 +207,6 @@ export default function HomeView() {
   };
 
   const perRow = Math.max(2, Math.min(6, theme.productsPerRow || 4));
-
-  /**
-   * Theme Studio override: if the ACTIVE theme ships a `layouts.home`, render
-   * that grid instead of the HomeSection rows. Bundled themes have no
-   * `layouts` field, so this is inert for them and only activates once an
-   * admin creates a theme with a saved home layout.
-   */
-  const homeLayout: PageLayout | undefined = useMemo(() => {
-    const cfg = resolveThemeConfig(theme.activeTheme);
-    return cfg?.layouts?.home as PageLayout | undefined;
-  }, [theme.activeTheme]);
 
   const renderSection = (s: HomeSection) => {
     const cfg = s.config || {};
@@ -557,7 +544,7 @@ export default function HomeView() {
     }
   };
 
-  const visible = sections
+  const visible = pickStorefrontHomeSections(sections)
     .filter((s) => s.isVisible && !legacyHidden(s.key))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -568,39 +555,6 @@ export default function HomeView() {
       {!sectionsLoaded ? (
         <div style={{ maxWidth: CONTAINER, margin: '0 auto', padding: '40px 20px' }}>
           <ProductGridSkeleton count={perRow * 2} />
-        </div>
-      ) : homeLayout && Array.isArray(homeLayout.blocks) && homeLayout.blocks.length > 0 ? (
-        /* Theme Studio home layout: render each block in its grid cell using
-            the same rich section renderers as the default layout. */
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${homeLayout.columns || 12}, 1fr)`,
-            gap: homeLayout.gap ?? 24,
-            gridAutoFlow: 'dense',
-          }}
-        >
-          {[...homeLayout.blocks]
-            .sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart)
-            .map((b) => {
-              const sec = blockToHomeSection(b);
-              // Master toggles (Appearance -> Sections) still win: a section
-              // switched off there stays hidden even in a studio layout.
-              if (legacyHidden(sec.key)) return null;
-              return (
-                <div
-                  key={b.id}
-                  data-block-type={b.type}
-                  style={{
-                    gridColumn: `${b.colStart} / span ${b.colSpan}`,
-                    gridRow: `${b.rowStart} / span ${b.rowSpan}`,
-                    minWidth: 0,
-                  }}
-                >
-                  {renderSection(sec)}
-                </div>
-              );
-            })}
         </div>
       ) : (
         visible.map(renderSection)
@@ -660,6 +614,30 @@ function CategoryTile({
         {showImage ? (
           <StoreImage
             src={getImageUrl(category.image!)}
+            alt={category.name}
+            onError={() => setImgFailed(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transition: 'transform 500ms ease',
+              transform: hovered ? 'scale(1.07)' : 'scale(1)',
+            }}
+          />
+        ) : (
+          <PlaceholderTile label="Category" emoji={category.emoji} seed={category.name} />
+        )}
+      </div>
+      <div style={{ padding: '14px 16px' }}>
+        <h3 style={{ fontWeight: 700, fontSize: '15px' }}>{category.name}</h3>
+        <p style={{ fontSize: '13px', color: 'var(--muted, #777)', marginTop: '3px' }}>
+          {category.count} {category.count === 1 ? 'product' : 'products'}
+        </p>
+      </div>
+    </Link>
+  );
+}
+          src={getImageUrl(category.image!)}
             alt={category.name}
             onError={() => setImgFailed(true)}
             style={{

@@ -9,8 +9,9 @@
  *   - grid coordinates produce a sensible sortOrder (row-major, then column)
  */
 import { describe, it, expect } from 'vitest';
-import { BLOCK_TO_SECTION, blockToHomeSection } from './homeMapping';
+import { BLOCK_TO_SECTION, blockToHomeSection, pickStorefrontHomeSections } from './homeMapping';
 import type { BlockType, LayoutBlock } from './types';
+import type { HomeSection } from '@/lib/homeSections';
 
 function block(overrides: Partial<LayoutBlock>): LayoutBlock {
   return {

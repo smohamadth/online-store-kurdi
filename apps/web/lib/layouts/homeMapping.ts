@@ -9,8 +9,20 @@
  *
  * Pure and side-effect free so it is trivially unit-testable.
  */
-import type { LayoutBlock, BlockType } from './types';
+import type { LayoutBlock, BlockType, PageLayout } from './types';
 import type { HomeSection } from '@/lib/homeSections';
+
+/**
+ * Live storefront home is always Appearance → Home (`HomeSection` rows).
+ * Theme Studio `layouts.home` is a canvas for custom themes and must not
+ * hide those rows (that made the Home builder look saved but never render).
+ */
+export function pickStorefrontHomeSections(
+  dbSections: HomeSection[],
+  _studioHome?: PageLayout | null,
+): HomeSection[] {
+  return dbSections;
+}
 
 /** Map a layout block type to the HomeSection `type` its renderer expects. */
 export const BLOCK_TO_SECTION: Partial<Record<BlockType, HomeSection['type']>> = {
