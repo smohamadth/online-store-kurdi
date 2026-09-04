@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useTheme as useStoreTheme } from '@/lib/theme';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import { PreviewThemeProvider } from '@/lib/previewTheme';
+import { activateStoreTheme } from '@/lib/activateStoreTheme';
 import type { ThemeConfig } from '@/lib/themeRegistry';
 import {
   PREVIEW_PRODUCTS,
