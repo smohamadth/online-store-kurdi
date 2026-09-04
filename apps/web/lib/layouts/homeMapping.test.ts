@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { BLOCK_TO_SECTION, blockToHomeSection, pickStorefrontHomeSections } from './homeMapping';
-import type { BlockType, LayoutBlock } from './types';
+import { BLOCK_TYPES, type BlockType, type LayoutBlock } from './types';
 import type { HomeSection } from '@/lib/homeSections';
 
 function block(overrides: Partial<LayoutBlock>): LayoutBlock {
@@ -28,12 +28,15 @@ function block(overrides: Partial<LayoutBlock>): LayoutBlock {
 
 describe('BLOCK_TO_SECTION', () => {
   it('covers every layout block type', () => {
-    const types: BlockType[] = [
-      'hero', 'promo', 'bannerStrip', 'trustBar', 'features', 'categories',
-      'featured', 'newArrivals', 'trending', 'dealCountdown', 'testimonials',
-      'stats', 'gallery', 'richText', 'custom', 'newsletter',
-    ];
-    for (const t of types) expect(BLOCK_TO_SECTION[t]).toBeTruthy();
+    for (const t of BLOCK_TYPES) expect(BLOCK_TO_SECTION[t]).toBeTruthy();
+  });
+
+  it('maps rich studio blocks onto real HomeView section types', () => {
+    expect(BLOCK_TO_SECTION.faq).toBe('faq');
+    expect(BLOCK_TO_SECTION.video).toBe('video');
+    expect(BLOCK_TO_SECTION.quote).toBe('quote');
+    expect(BLOCK_TO_SECTION.logoStrip).toBe('logos');
+    expect(BLOCK_TO_SECTION.textImage).toBe('lookbook');
   });
 
   it('maps arrivals/trending to their carousel renderers', () => {
@@ -61,6 +64,14 @@ describe('blockToHomeSection', () => {
 
   it('always marks the block visible', () => {
     expect(blockToHomeSection(block({})).isVisible).toBe(true);
+  });
+
+  it('normalises quote.text and video.src for HomeView', () => {
+    const q = blockToHomeSection(block({ type: 'quote', config: { text: 'Hello', author: 'Ada' } }));
+    expect(q.type).toBe('quote');
+    expect(q.config.quote).toBe('Hello');
+    const v = blockToHomeSection(block({ type: 'video', config: { src: 'https://youtu.be/x' } }));
+    expect(v.config.url).toBe('https://youtu.be/x');
   });
 
   it('derives sortOrder from grid position (row-major, then column)', () => {

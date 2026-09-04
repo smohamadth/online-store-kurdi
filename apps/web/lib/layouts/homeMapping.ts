@@ -42,11 +42,55 @@ export const BLOCK_TO_SECTION: Partial<Record<BlockType, HomeSection['type']>> =
   richText: 'richText',
   custom: 'custom',
   newsletter: 'newsletter',
+  cta: 'custom',
+  video: 'video',
+  image: 'lookbook',
+  textImage: 'lookbook',
+  divider: 'custom',
+  faq: 'faq',
+  steps: 'features',
+  logoStrip: 'logos',
+  pricing: 'custom',
+  quote: 'quote',
+  iconsGrid: 'features',
+  productDetail: 'custom',
+  productList: 'featured',
+  categoryGrid: 'categories',
+  blogList: 'custom',
+  blogPostBody: 'richText',
+  pageContent: 'custom',
 };
+
+function asRecord(v: unknown): Record<string, unknown> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+/** Align studio config keys with HomeView renderers (quote.text, video.src, …). */
+export function normalizeStudioConfig(type: BlockType, cfg: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...cfg };
+  if (type === 'quote' && next.quote == null && next.text != null) next.quote = next.text;
+  if (type === 'video' && next.url == null && next.src != null) next.url = next.src;
+  if ((type === 'image' || type === 'textImage') && next.image == null) {
+    next.image = next.src ?? next.url;
+  }
+  if (type === 'testimonials' && Array.isArray(next.items)) {
+    next.items = next.items.map((it) => {
+      const row = asRecord(it);
+      return { ...row, name: row.name ?? row.author };
+    });
+  }
+  if (type === 'gallery' && Array.isArray(next.items)) {
+    next.items = next.items.map((it) => {
+      const row = asRecord(it);
+      return { ...row, image: row.image ?? row.src ?? row.url };
+    });
+  }
+  return next;
+}
 
 /** Convert a layout block into the HomeSection shape `renderSection` expects. */
 export function blockToHomeSection(b: LayoutBlock): HomeSection {
-  const cfg = b.config || {};
+  const cfg = normalizeStudioConfig(b.type, b.config || {});
   return {
     id: b.id,
     key: b.type,

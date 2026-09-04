@@ -41,9 +41,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Fix direction:** One renderer path for home (reuse `HomeView.renderSection` / `blockToHomeSection` + live banners/products), and map tokens through `themeToCssVars`.
 
 ### 4. Rich Studio blocks never appear on the live home page
-**Where:** `homeMapping.ts` `BLOCK_TO_SECTION` — missing `cta`, `video`, `faq`, `quote`, `logoStrip`, `pricing`, `steps`, `iconsGrid`, `image`, `textImage`, `divider`, `lookbook`/`showcaseRow` equivalents. Unknown types become `'custom'` with no HTML.  
-Documented in `KNOWN_GAPS.md` §13.2; still a hole.  
-**Fix direction:** Extend the map (and HomeView `switch`) so every `BlockType` has a real storefront renderer.
+**Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`; quote/video/gallery keys are normalised. Live home still uses DB sections (P0.1); this map is for studio preview / future overlay.
 
 ### 5. Seeded hero config is a different shape from the editor
 **Where:** `home.defaults.ts` seeds `{ autoplay, intervalMs, height: 'medium' }` at **config root**. HomeBuilder writes `{ hero: { layout, height, intervalSec, autoPlay } }`. `heroOptionsFromConfig` only reads **`config.hero`**.  
