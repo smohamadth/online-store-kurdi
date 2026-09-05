@@ -120,6 +120,8 @@ export const CREATABLE_TYPES = [
   'quote',
   'lookbook',
   'showcaseRow',
+  'newsletter',
+  'dealCountdown',
 ];
 
 /**

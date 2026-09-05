@@ -12,13 +12,19 @@ const HTML_KEYS = new Set(['html', 'quote', 'description', 'a', 'text', 'content
 const LINK_KEYS = new Set(['linkUrl', 'buttonHref', 'linkHref', 'href']);
 const MEDIA_KEYS = new Set(['image', 'src', 'poster', 'url']);
 
+/** Cap list fields so a gallery/FAQ cannot bloat the JSON column. */
+export const MAX_CONFIG_LIST = 40;
+/** Cap HTML-bearing strings (characters). */
+export const MAX_HTML_CHARS = 20_000;
+
 export function scrubBuilderConfig(config: Record<string, unknown>): Record<string, unknown> {
   return scrubNode(config) as Record<string, unknown>;
 }
 
 function scrubNode(value: unknown, parentKey?: string): unknown {
   if (Array.isArray(value)) {
-    return value.map((item) => scrubNode(item, parentKey));
+    const capped = value.slice(0, MAX_CONFIG_LIST);
+    return capped.map((item) => scrubNode(item, parentKey));
   }
   if (!value || typeof value !== 'object') {
     if (typeof value === 'string' && parentKey === 'values') {
@@ -29,7 +35,7 @@ function scrubNode(value: unknown, parentKey?: string): unknown {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     if (typeof v === 'string') {
-      if (HTML_KEYS.has(k)) out[k] = sanitizeRichText(v);
+      if (HTML_KEYS.has(k)) out[k] = sanitizeRichText(v.slice(0, MAX_HTML_CHARS));
       else if (LINK_KEYS.has(k)) out[k] = isSafeLinkUrl(v) ? v : '';
       else if (MEDIA_KEYS.has(k)) out[k] = isSafeMediaUrl(v) ? v : '';
       else out[k] = v;

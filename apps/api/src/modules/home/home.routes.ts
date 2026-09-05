@@ -3,9 +3,23 @@ import { z } from 'zod';
 import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { AppError } from '../../middleware/errorHandler';
 import { ALL_TYPES } from './home.defaults';
 import { seedMissingHomeSections } from './home.seed';
 import { scrubBuilderConfig } from '../../utils/scrubBuilderConfig';
+
+/** Serialized config may not exceed this (DB bloat / DoS). */
+const MAX_CONFIG_BYTES = 64 * 1024;
+
+function boundConfig(type: string, config: Record<string, any> | null | undefined) {
+  if (config == null) return config;
+  const cleaned = scrubBuilderConfig(config);
+  const json = JSON.stringify(cleaned);
+  if (json.length > MAX_CONFIG_BYTES) {
+    throw new AppError(`Section config exceeds ${MAX_CONFIG_BYTES} bytes`, 400);
+  }
+  return cleaned;
+}
 
 const router = Router();
 
@@ -41,11 +55,6 @@ export function fromRow(row: any) {
 }
 
 const configSchema = z.record(z.any()).optional().nullable();
-
-/** HTML + URL fields in any home-section config (P1.10). */
-function scrubConfig(_type: string, config: Record<string, any>): Record<string, any> {
-  return scrubBuilderConfig(config);
-}
 
 const updateSchema = z.object({
   title: z.string().max(200).optional().nullable(),
@@ -144,7 +153,7 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
     if (data.sortOrder !== undefined) patch.sortOrder = data.sortOrder;
     if (data.config !== undefined) {
       patch.config =
-        data.config === null ? null : JSON.stringify(scrubConfig(existing.type, data.config));
+        data.config === null ? null : JSON.stringify(boundConfig(existing.type, data.config));
     }
 
     const row = await prisma.homeSection.update({ where: { id: req.params.id }, data: patch });

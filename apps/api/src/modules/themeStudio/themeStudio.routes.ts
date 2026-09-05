@@ -18,7 +18,7 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import {
-  listThemeKeys,
+  listThemeConfigs,
   getThemeConfig,
   saveTheme,
   deleteTheme,
@@ -39,8 +39,9 @@ const zipUpload = multer({
 
 router.get('/themes', authenticate, authorize('admin', 'manager'), async (_req, res, next) => {
   try {
-    const keys = await listThemeKeys();
-    res.json({ status: 'success', data: keys });
+    // Full configs in one round-trip so Theme Studio does not N+1 GET each key.
+    const catalog = await listThemeConfigs();
+    res.json({ status: 'success', data: catalog.themes, invalid: catalog.invalid });
   } catch (err) {
     next(err);
   }

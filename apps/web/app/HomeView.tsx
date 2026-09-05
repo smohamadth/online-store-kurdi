@@ -419,7 +419,7 @@ export default function HomeView() {
             subtitle={s.subtitle}
             url={cfg.url}
             autoplay={Boolean(cfg.autoplay)}
-            muted={Boolean(cfg.muted)}
+            muted={Boolean(cfg.muted) || Boolean(cfg.autoplay)}
             loop={Boolean(cfg.loop)}
             aspect={cfg.aspect}
             poster={cfg.poster}

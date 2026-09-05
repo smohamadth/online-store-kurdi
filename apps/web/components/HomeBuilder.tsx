@@ -868,7 +868,7 @@ function TypeEditor({
                 >
                   <ImageUpload
                     label=""
-                    folder="banners"
+                    folder="categories"
                     currentImage={it.image || undefined}
                     onUpload={(url) => {
                       const next = [...items];
@@ -981,10 +981,10 @@ function TypeEditor({
             <label style={labelStyle}>Alignment</label>
             <select
               style={inputStyle}
-              value={cfg.align || 'left'}
+              value={cfg.align === 'center' ? 'center' : 'start'}
               onChange={(e) => patchConfig(row.id, { align: e.target.value })}
             >
-              <option value="left">Left</option>
+              <option value="start">Start (reading order)</option>
               <option value="center">Centered</option>
             </select>
           </div>
@@ -1049,9 +1049,10 @@ function TypeEditor({
                 { value: 'large', text: 'Large' },
               ], 'large')}
               {select('align', 'Alignment', [
-                { value: 'left', text: 'Left' },
+                { value: 'start', text: 'Start (reading order)' },
                 { value: 'center', text: 'Centered' },
-              ], 'left')}
+                { value: 'end', text: 'End (reading order)' },
+              ], 'start')}
             </>
           )}
         </div>
@@ -1522,19 +1523,22 @@ function VideoEditor({
       </div>
       <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(cfg.autoplay)}
-            onChange={(e) => patch({ autoplay: e.target.checked })}
-          />
-          Autoplay
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(cfg.muted)}
-            onChange={(e) => patch({ muted: e.target.checked })}
-          />
+            <input
+              type="checkbox"
+              checked={Boolean(cfg.autoplay)}
+              onChange={(e) =>
+                patch(e.target.checked ? { autoplay: true, muted: true } : { autoplay: false })
+              }
+            />
+            Autoplay
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+            <input
+              type="checkbox"
+              checked={Boolean(cfg.muted) || Boolean(cfg.autoplay)}
+              disabled={Boolean(cfg.autoplay)}
+              onChange={(e) => patch({ muted: e.target.checked })}
+            />
           Muted
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
@@ -1943,12 +1947,12 @@ function ShowcaseEditor({
 function defaultConfigFor(type: string): Record<string, any> {
   switch (type) {
     case 'richText':
-      return { html: '<p>Write something about your store here.</p>', align: 'left' };
+      return { html: '<p>Write something about your store here.</p>', align: 'start' };
     case 'custom':
       return {
         html: '<p>Design this section - content, background, spacing and width are all yours.</p>',
         background: 'soft',
-        align: 'left',
+        align: 'start',
         padding: 'large',
         width: 'centered',
       };

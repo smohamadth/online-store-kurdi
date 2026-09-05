@@ -36,6 +36,12 @@ describe('scrubBuilderConfig', () => {
     expect(items[0].image).toBe('/uploads/a.jpg');
   });
 
+  it('caps list length', () => {
+    const items = Array.from({ length: 50 }, (_, i) => ({ title: String(i) }));
+    const out = scrubBuilderConfig({ items });
+    expect((out.items as unknown[]).length).toBe(40);
+  });
+
   it('sanitises comparison cell values', () => {
     const out = scrubBuilderConfig({
       values: ['true', '<img src=x onerror=alert(1)>'],

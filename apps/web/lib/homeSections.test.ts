@@ -18,6 +18,8 @@ describe('homeSections constants', () => {
   it('lists a sane set of creatable block types', () => {
     expect(CREATABLE_TYPES).toContain('richText');
     expect(CREATABLE_TYPES).toContain('gallery');
+    expect(CREATABLE_TYPES).toContain('newsletter');
+    expect(CREATABLE_TYPES).toContain('dealCountdown');
     // Singletons must NOT be creatable - they are edited in place.
     expect(CREATABLE_TYPES).not.toContain('hero');
     expect(CREATABLE_TYPES).not.toContain('categories');

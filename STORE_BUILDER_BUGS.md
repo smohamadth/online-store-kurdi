@@ -78,7 +78,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 ## P2 — holes / incomplete product
 
 ### 16. Two “add block” palettes that don’t match
-Home builder `CREATABLE_TYPES` ≠ Studio `BLOCK_TYPES`. Cannot add a second **hero** from Home builder (intentional singleton) but Studio can add many heroes. Cannot add **newsletter** / **dealCountdown** from Home “Add block” (only seeded). Cannot add **cta/pricing/steps** from Home builder at all.
+**Status:** partial. Home builder can add `newsletter` and `dealCountdown` (HomeView renders them). Still no `cta`/`pricing`/`steps` on Home (those are Studio-only; HomeView has no cases). Hero/categories remain singletons.
 
 ### 17. Niche theme heroes ignore most hero options
 HomeBuilder copy admits Bold/Dawnlight/Minimal/Pulse only honour single/split. Slideshow autoplay/arrows/dots are dead for those themes. No UI that disables the dead controls when a niche theme is active.
@@ -93,13 +93,13 @@ Reset wipes **all** home sections (`deleteMany` + seed). No per-block revert, no
 **Status:** fixed. Omitted ids are appended after the payload (previous relative order), so leftover `sortOrder` values cannot interleave.
 
 ### 21. `config` is `z.record(z.any())` — unbounded
-A huge gallery / FAQ JSON is free DB bloat (analytics already learned this lesson). No max items, no max HTML length.
+**Status:** fixed. Writes cap serialized config at 64KB; `scrubBuilderConfig` slices list fields to 40 items and HTML strings to 20k chars.
 
 ### 22. Image uploads in builder use mixed folders
-Gallery → `folder="banners"`; logos/lookbook → `folder="categories"`. Confusing in MinIO and easy to hit allowlist bugs.
+**Status:** fixed. Gallery, logos, and lookbook all upload to the allowlisted `categories` bucket (`banners` was not a valid folder).
 
 ### 23. RTL / physical CSS in builder UI
-HomeBuilder `text-align` left in richText align select is **content** (storefront should use `start`). Studio preview-mode active button now uses `--brand` (partial).
+**Status:** partial. Rich-text / custom alignment uses `start`/`center`/`end` (storefront maps start→logical start, end→end). Studio preview-mode active button uses `--brand`.
 
 ### 24. `getFeaturedProducts` in `lib/api.ts` uses a second API client (`localhost` fallback)
 **Status:** fixed. `ApiClient` uses `CLIENT_API_BASE` (same-origin `/api` on loopback).
@@ -108,7 +108,7 @@ HomeBuilder `text-align` left in richText align select is **content** (storefron
 Only some colours + font/size/radius. Missing `productsPerRow`, `cardShadow`, `show*` toggles, `containerWidth`, `headingWeight` — so Studio themes never match bundled density.
 
 ### 26. Installing a theme zip cannot add React sections
-Data-only by design (`KNOWN_GAPS` §13.1). Hole: merchants cannot get a custom Hero without a platform rebuild. Document in the Studio UI, not only in docs.
+**Status:** documented in Theme Studio header (zip = tokens + layout JSON only). Data-only by design (`KNOWN_GAPS` §13.1).
 
 ### 27. Home builder “Restore default” vs “deleted keys”
 Reset restores seed. `ensureSeeded` on GET re-inserts **new** platform keys after an upgrade, which can surprise a carefully emptied page.
@@ -117,30 +117,20 @@ Reset restores seed. `ensureSeeded` on GET re-inserts **new** platform keys afte
 
 ## P3 — polish / tests to add when fixing
 
-- No `beforeunload` when Home builder `dirty` is set.
+- No `beforeunload` when Home builder `dirty` is set. **Fixed** (P1.9).
 - Drag handle is mouse-only (arrows exist — OK); drop hint can miss last card.
-- Studio `loadThemes` N+1 fetches (list keys then GET each).
-<<<<<<< HEAD
-- Studio `LayoutRenderer` product cards are not links (`/products/:slug`).
-=======
+- Studio `loadThemes` N+1 fetches (list keys then GET each). **Fixed** — `GET /theme-studio/themes` returns full configs; UI still accepts the old keys array.
 - Studio `LayoutRenderer` product cards are not links (`/products/:slug`). **Fixed** (also category `/category/:slug`, blog `/blog/:slug`).
->>>>>>> 0f728bd (fix(builder): keep partial reorder, merch links, and browser-safe API)
-- Comparison editor `true`/`false` strings vs booleans.
-- Video autoplay without muted (Home builder notes this; still a checkbox combo).
+- Comparison editor `true`/`false` strings vs booleans. (Renderer already treats those strings as ✓/✕.)
+- Video autoplay without muted. **Fixed** — checking Autoplay also sets muted and disables the mute checkbox; `VideoSection` already forces mute on autoplay.
 - Tests to add: hero seed shape vs `heroOptionsFromConfig`; `blockToHomeSection` coverage for every `BlockType`; HomeView does not drop featured remainder; bundled theme PUT returns 403 and UI shows it; `layouts.home` vs DB sections switch.
 
 ---
 
 ## Suggested order for the next turns
 
-1. **P0.1 + P0.4** — one home rendering path (DB sections always, or explicit switch); map all block types.
-2. **P0.2 + P1.9** — bundled themes read-only; dirty/save UX.
-3. **P0.3 + P1.15** — preview = storefront renderer + correct API base/tokens.
-4. **P1.5** — hero config migration.
-5. **P1.6 + P1.7** — featured limit / leftover cards; `/deals` links.
-6. **P1.8** — kill or sync legacy `show*` flags.
-7. **P1.10** — sanitize HTML/URLs on all builder writes.
-8. Remaining P2.
+1. Remaining P2 (preview, undo, niche hero controls, token editor).
+2. Tests listed under P3.
 
 ---
 

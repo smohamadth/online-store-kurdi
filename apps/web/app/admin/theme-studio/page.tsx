@@ -129,7 +129,12 @@ export default function ThemeStudioPage() {
       headers: { Authorization: `Bearer ${token()}` },
     });
     if (!res.ok) return;
-    const keys = (await res.json()).data as string[];
+    const payload = (await res.json()).data as ThemeStudioTheme[] | string[];
+    if (Array.isArray(payload) && payload.length && typeof payload[0] === 'object') {
+      setThemes(payload as ThemeStudioTheme[]);
+      return;
+    }
+    const keys = (payload as string[]) || [];
     const list: ThemeStudioTheme[] = [];
     for (const k of keys) {
       const r = await fetch(`${API_BASE}/theme-studio/themes/${k}`, {
@@ -263,6 +268,8 @@ export default function ThemeStudioPage() {
           <h1 style={{ fontSize: 26, fontWeight: 700 }}>Theme Studio</h1>
           <p style={{ color: '#666', marginTop: 4, fontSize: 14 }}>
             Design your own theme — pick colours, typography, and build the grid layout of every page by dragging blocks.
+            Installing a <strong>.zip</strong> package can only add tokens and layout JSON; it cannot ship new React sections
+            (a custom Hero still needs a platform release).
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>

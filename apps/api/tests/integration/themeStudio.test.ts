@@ -67,6 +67,18 @@ describe('GET /api/theme-studio/themes', () => {
     const res = await request(app).get('/api/theme-studio/themes').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
   });
+
+  it('returns full configs (not only keys) so the studio can skip N+1 GETs', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    await request(app)
+      .put('/api/theme-studio/themes/listed')
+      .set('Authorization', `Bearer ${token}`)
+      .send(cfg('listed'));
+    const res = await request(app).get('/api/theme-studio/themes').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].key).toBe('listed');
+    expect(res.body.data[0].tokens.primaryColor).toBe('#123456');
+  });
 });
 
 describe('PUT /api/theme-studio/themes/:key', () => {
