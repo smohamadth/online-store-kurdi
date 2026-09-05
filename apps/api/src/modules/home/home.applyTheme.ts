@@ -63,32 +63,32 @@ export function layoutHomeToSeeds(layoutsHome: unknown): HomeSectionSeed[] {
   const layout = asRecord(layoutsHome);
   const blocks = Array.isArray(layout.blocks) ? layout.blocks : [];
   const used = new Set<string>();
-  return [...blocks]
-    .sort((a, b) => {
-      const aa = asRecord(a);
-      const bb = asRecord(b);
-      return (Number(aa.rowStart) || 0) - (Number(bb.rowStart) || 0) || (Number(aa.colStart) || 0) - (Number(bb.colStart) || 0);
-    })
-    .map((raw, i) => {
-      const b = asRecord(raw);
-      const blockType = String(b.type || '');
-      const type = BLOCK_TO_SECTION[blockType] || 'custom';
-      if (!ALLOWED.has(type)) return null;
-      const cfg = asRecord(b.config);
-      const rowStart = Number(b.rowStart) || i + 1;
-      const colStart = Number(b.colStart) || 1;
-      const id = typeof b.id === 'string' && b.id ? b.id : blockType || `block-${i}`;
-      return {
-        key: slugKey(id, used),
-        type,
-        title: typeof cfg.title === 'string' ? cfg.title : null,
-        subtitle: typeof cfg.subtitle === 'string' ? cfg.subtitle : null,
-        isVisible: true,
-        sortOrder: rowStart * 100 + colStart,
-        config: cfg,
-      } satisfies HomeSectionSeed;
-    })
-    .filter((s): s is HomeSectionSeed => s != null);
+  const sorted = [...blocks].sort((a, b) => {
+    const aa = asRecord(a);
+    const bb = asRecord(b);
+    return (Number(aa.rowStart) || 0) - (Number(bb.rowStart) || 0) || (Number(aa.colStart) || 0) - (Number(bb.colStart) || 0);
+  });
+  const seeds: HomeSectionSeed[] = [];
+  sorted.forEach((raw, i) => {
+    const b = asRecord(raw);
+    const blockType = String(b.type || '');
+    const type = BLOCK_TO_SECTION[blockType] || 'custom';
+    if (!ALLOWED.has(type)) return;
+    const cfg = asRecord(b.config);
+    const rowStart = Number(b.rowStart) || i + 1;
+    const colStart = Number(b.colStart) || 1;
+    const id = typeof b.id === 'string' && b.id ? b.id : blockType || `block-${i}`;
+    seeds.push({
+      key: slugKey(id, used),
+      type,
+      title: typeof cfg.title === 'string' ? cfg.title : null,
+      subtitle: typeof cfg.subtitle === 'string' ? cfg.subtitle : null,
+      isVisible: true,
+      sortOrder: rowStart * 100 + colStart,
+      config: cfg,
+    });
+  });
+  return seeds;
 }
 
 export async function applyThemeHomeLayout(themeKey: string): Promise<{

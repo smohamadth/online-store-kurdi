@@ -190,7 +190,7 @@ router.post('/', authenticate, authorize('admin', 'manager'), async (req, res, n
         subtitle: data.subtitle ?? null,
         isVisible: data.isVisible ?? true,
         sortOrder: data.sortOrder ?? (last ? last.sortOrder + 10 : 10),
-        config: data.config ? JSON.stringify(scrubConfig(data.type, data.config)) : null,
+        config: data.config ? JSON.stringify(boundConfig(data.type, data.config)) : null,
       },
     });
 

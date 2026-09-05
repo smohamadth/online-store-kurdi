@@ -71,7 +71,6 @@ import developersRoutes from './modules/developers/developers.routes';
 import pageRoutes from './modules/pages/page.routes';
 import blogRoutes from './modules/blog/blog.routes';
 import currencyRoutes from './modules/currency/currency.routes';
-import storefrontI18nRoutes from './modules/i18n/storefrontI18n.routes';
 import {
   publicDownloadsRouter,
   accountDownloadsRouter,
