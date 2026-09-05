@@ -392,6 +392,39 @@ export default function HomeBuilder() {
             >
               Open live home
             </a>
+            {versions.length > 0 && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>
+                Saved versions
+                <select
+                  aria-label="Saved versions"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    e.target.value = '';
+                    const v = versions.find((x) => x.id === id);
+                    if (!v) return;
+                    setSections(v.sections.map(cloneSection));
+                    setDirty(Object.fromEntries(v.sections.map((s) => [s.id, true])));
+                    say('success', 'Restored this version locally. Save each block to publish.');
+                  }}
+                  style={{
+                    padding: '8px 10px',
+                    border: '1px solid #d4d4d4',
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    fontSize: '13px',
+                    maxWidth: 220,
+                  }}
+                >
+                  <option value="">Restore a version…</option>
+                  {versions.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {new Date(v.at).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button
               onClick={resetAll}
               title="Replaces every block with the shipped layout. Deleted blocks come back."
@@ -894,53 +927,6 @@ function TypeEditor({
                   background: idx === items.length - 1 ? '#f5f5f5' : '#fff',
                   color: idx === items.length - 1 ? '#bbb' : '#444',
                   cursor: idx === items.length - 1 ? 'default' : 'pointer',
-                }}
-              >
-                ↓
-              </button>
-              <button
-                aria-label="Remove item"
-                onClick={() => setItems(items.filter((_, i) => i !== idx))}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #fca5a5',
-                  color: '#b91c1c',
-                  background: '#fff',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={() => setItems([...items, { ...blank }])}
-          style={{
-            marginTop: '8px',
-            padding: '7px 14px',
-            border: '1px dashed #bbb',
-            borderRadius: '6px',
-            background: '#fff',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: 600,
-          }}
-        >
-          + Add item
-        </button>
-      </div>
-    );
-  };
-
-  const textField = (key: string, label: string, placeholder = '') => (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <input
-        style={inputStyle}
-        value={cfg[key] ?? ''}
-        placeor: idx === items.length - 1 ? 'default' : 'pointer',
                 }}
               >
                 ↓

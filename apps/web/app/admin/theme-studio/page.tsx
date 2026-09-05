@@ -117,6 +117,7 @@ export default function ThemeStudioPage() {
   // Preview viewport for checking the builder output at different displays.
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'phone'>('desktop');
   const [livePreviewKey, setLivePreviewKey] = useState(0);
+  const [metaDirty, setMetaDirty] = useState(false);
   const PREVIEW_WIDTHS: Record<'desktop' | 'tablet' | 'phone', number> = {
     desktop: 1280,
     tablet: 768,
@@ -154,6 +155,17 @@ export default function ThemeStudioPage() {
     loadThemes();
   }, [loadThemes]);
 
+  const studioDirty = studioHasUnsavedDrafts(drafts) || metaDirty;
+  useEffect(() => {
+    if (!studioDirty) return;
+    const onLeave = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, [studioDirty]);
+
   const selectTheme = async (key: string) => {
     setCurrentKey(key);
     const r = await fetch(`${API_BASE}/theme-studio/themes/${key}`, {
@@ -165,6 +177,7 @@ export default function ThemeStudioPage() {
     // Reset in-memory drafts; `layout` re-derives from the theme's saved
     // layouts so the newly-selected theme's pages show immediately.
     setDrafts({});
+    setMetaDirty(false);
     setSelectedBlockId(null);
   };
 
@@ -222,6 +235,7 @@ export default function ThemeStudioPage() {
     if (!res.ok) return notify('error', (await res.json()).message || 'Save failed.');
     setCurrent(updated);
     setDrafts({});
+    setMetaDirty(false);
     notify('success', `Theme "${current.key}" saved.`);
   };
 
@@ -242,6 +256,7 @@ export default function ThemeStudioPage() {
   const setToken = (k: string, v: string | number | boolean) => {
     if (!current) return;
     setCurrent({ ...current, tokens: { ...current.tokens, [k]: v } });
+    setMetaDirty(true);
   };
 
   const paletteBlocks = paletteForPage(page);
@@ -343,7 +358,10 @@ export default function ThemeStudioPage() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                 <input
                   value={current.name}
-                  onChange={(e) => setCurrent({ ...current, name: e.target.value })}
+                  onChange={(e) => {
+                    setCurrent({ ...current, name: e.target.value });
+                    setMetaDirty(true);
+                  }}
                   style={{ ...inputField, fontWeight: 600, flex: 1 }}
                 />
                 <button
@@ -505,6 +523,7 @@ export default function ThemeStudioPage() {
             onFeatureChange={(k, v) => {
               if (!current) return;
               setCurrent({ ...current, features: { ...current.features, [k]: v } });
+              setMetaDirty(true);
             }}
           />
 
