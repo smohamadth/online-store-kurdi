@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { layoutHomeToSeeds } from '../../../src/modules/home/home.applyTheme';
+import { layoutHomeToSeeds } from '../../../src/modules/home/home.layoutMap';
 
 describe('layoutHomeToSeeds', () => {
   it('maps studio block types onto HomeSection types in row order', () => {
