@@ -30,9 +30,10 @@ describe('DEFAULT_HOME_LAYOUT', () => {
     expect(cta.rowStart).toBeLessThan(news.rowStart);
   });
 
-  it('ships the same home block ids on default/theme.json', () => {
-    const home = (defaultTheme as { layouts?: { home?: { blocks: { id: string }[] } } }).layouts?.home;
-    expect(home?.blocks.map((b) => b.id)).toEqual(SEED_KEYS);
+  it('ships the same home block ids on default/theme.json and does not replace listing chrome', () => {
+    const layouts = (defaultTheme as { layouts?: { home?: { blocks: { id: string }[] }; products?: unknown } }).layouts;
+    expect(layouts?.home?.blocks.map((b) => b.id)).toEqual(SEED_KEYS);
+    expect(layouts?.products).toBeUndefined();
   });
 
   it('api seed includes cta before newsletter', () => {
