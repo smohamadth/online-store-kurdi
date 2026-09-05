@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { studioLayoutData, studioTokenStyle } from './studioPreview';
+import { studioLayoutData, studioTokenStyle, studioHomeMerch, studioLivePreviewPath } from './studioPreview';
 import { PREVIEW_PRODUCTS, PREVIEW_CATEGORIES } from '@/lib/previewSampleData';
 
 describe('studioLayoutData', () => {
@@ -46,5 +46,39 @@ describe('studioTokenStyle', () => {
     expect(s['--shadow']).toContain('0 10px 30px');
     expect(s['--btn-radius']).toBe('4px');
     expect(s['--font-size']).toBe('15px');
+  });
+
+  it('emits price/sale/header and a font stack', () => {
+    const s = studioTokenStyle({
+      priceColor: '#111',
+      saleColor: '#dc2626',
+      headerBg: '#fff',
+      fontFamily: 'vazirmatn',
+      primaryTextColor: '#eee',
+    });
+    expect(s['--price']).toBe('#111');
+    expect(s['--sale']).toBe('#dc2626');
+    expect(s['--header-bg']).toBe('#fff');
+    expect(s['--brand-text']).toBe('#eee');
+    expect(s['--font']).toMatch(/vazirmatn/i);
+  });
+});
+
+describe('studioHomeMerch', () => {
+  it('returns Product-shaped samples for HomeSectionStack', () => {
+    const m = studioHomeMerch();
+    expect(m.products[0].images.length).toBeGreaterThan(0);
+    expect(m.products[0].slug).toBe(PREVIEW_PRODUCTS[0].slug);
+    expect(m.banners[0].title).toBeTruthy();
+    expect(m.categories).toHaveLength(PREVIEW_CATEGORIES.length);
+  });
+});
+
+describe('studioLivePreviewPath', () => {
+  it('maps home/products/blog and skips pages without a public URL', () => {
+    expect(studioLivePreviewPath('home', 3)).toBe('/?homePreview=3');
+    expect(studioLivePreviewPath('products', 1)).toBe('/products?studioPreview=1');
+    expect(studioLivePreviewPath('blog', 1)).toBe('/blog?studioPreview=1');
+    expect(studioLivePreviewPath('product', 1)).toBeNull();
   });
 });

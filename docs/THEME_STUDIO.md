@@ -214,11 +214,11 @@ guard: add a type without a renderer and the suite goes red.
   Runtime-installed themes are data-only: tokens + layouts render with the
   platform's built-in sections — see `docs/THEME_DEVELOPMENT.md` §2. Token
   and layout edits themselves need no rebuild (see §4).
-- **Home page rich blocks**: the home page renders a themed layout through its
-  home-specific section renderers, so a rich block (`cta`, `faq`, …) placed on
-  the *home* page falls back to a custom/title section. Rich blocks render fully
-  on products, category, product detail, blog, blog post, and custom pages,
-  which use `LayoutRenderer`.
+- **Live home ignores Studio `layouts.home`.** Home builder DB rows drive `/`.
+  Studio Preview maps the canvas through `HomeSectionStack` so rich blocks
+  (`cta`, `faq`, …) look like the storefront; the drop-zone stays
+  `LayoutRenderer` for grid coordinates. Listing/PDP pages use `LayoutRenderer`
+  when a native chrome block is present.
 - **Full-layout override replaces rich page chrome**: when an admin defines a
   layout for a page such as `/products`, that layout (not the built-in filter
   sidebar / pagination) is what renders — the admin's explicit composition wins.

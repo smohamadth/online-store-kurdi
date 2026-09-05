@@ -449,12 +449,11 @@ deliberate design choices or niche gaps.
    design (uploaded code is never executed); a theme that needs custom
    sections must ship bundled with the platform. See
    `docs/THEME_DEVELOPMENT.md` §2.
-2. **Home-page rich blocks render as custom/title sections.** The home page
-   renders a themed layout through its home-specific section renderers, so a
-   rich pre-built block (`cta`, `faq`, `steps`, `pricing`, …) placed on the
-   *home* page falls back to the generic custom/title section. Rich blocks
-   render fully on products, category, product detail, blog, blog post, and
-   custom pages, which use `LayoutRenderer`.
+2. **Live home is HomeSection rows, not Studio `layouts.home`.** The storefront
+   home always paints `HomeSection` via `HomeSectionStack` (`cta`, `faq`,
+   `steps`, `pricing`, … included). Theme Studio `layouts.home` is a canvas +
+   Preview only; listing/PDP pages still use `LayoutRenderer` when a native
+   chrome block is present.
 3. **A themed page layout replaces the page's built-in chrome.** When an admin
    defines a layout for a page such as `/products`, that grid (not the built-in
    filter sidebar / pagination) is what renders — the admin's explicit

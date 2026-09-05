@@ -29,7 +29,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 **Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
 
 ### 3. Studio preview is not the storefront
-**Status:** fixed. Home preview column paints `HomeSectionStack` (same HeroGallery / ProductCard / rich blocks as live home) from `layoutToHomeSections`. Canvas drop-zone stays LayoutRenderer for grid coordinates. Listing pages still use LayoutRenderer. Live iframe remains as a second check.
+**Status:** fixed. Home preview column paints `HomeSectionStack` from `layoutToHomeSections` + `studioHomeMerch`. Preview `dir` follows `features.rtl`. Live iframe for home, products, and blog. Canvas drop-zone stays LayoutRenderer for grid coordinates. Listing/PDP Preview uses LayoutRenderer.
 
 ### 4. Rich Studio blocks never appear on the live home page
 **Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`. Live home still uses DB sections (P0.1).
@@ -103,7 +103,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 **Status:** fixed. `CLIENT_API_BASE`.
 
 ### 25. Theme Studio token editor is a subset
-**Status:** fixed enough. Colours, type, radius, container, products per row, shadow, announcement, custom CSS. `show*` home toggles stay out (P1.8).
+**Status:** fixed enough. Colours, font stack select, type, radius, container, products per row, shadow, announcement, custom CSS, RTL / dark-mode-ready flags. `show*` home toggles stay out (P1.8).
 
 ### 26. Installing a theme zip cannot add React sections
 **Status:** by design (`KNOWN_GAPS` §13.1). Documented in Studio header.

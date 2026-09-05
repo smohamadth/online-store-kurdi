@@ -33,7 +33,8 @@ import { LayoutRenderer } from '@/lib/layouts/render';
 import { addBlock, moveBlock, resizeBlock, removeBlock } from '@/lib/layouts/edit';
 import { CONFIG_FIELDS, LIST_BLOCK_TYPES, type ConfigField } from '@/lib/layouts/blockUtils';
 import { isPlatformBundledTheme } from '@/lib/themeBundled';
-import { studioLayoutData, studioTokenStyle, studioHomeMerch } from '@/lib/layouts/studioPreview';
+import { studioLayoutData, studioTokenStyle, studioHomeMerch, studioLivePreviewPath } from '@/lib/layouts/studioPreview';
+import { FONT_LABELS, FONT_STACKS } from '@/lib/theme';
 import { mergeStudioLayouts, studioHasUnsavedDrafts } from '@/lib/layouts/studioSave';
 import { layoutToHomeSections } from '@/lib/layouts/homeMapping';
 import { HomeSectionStack } from '@/components/HomeSectionStack';
@@ -438,8 +439,8 @@ export default function ThemeStudioPage() {
                       <button onClick={(e) => { e.stopPropagation(); setLayout(removeBlock(layout, b.id)); setSelectedBlockId(null); }} style={btnGhost}>✕</button>
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
-                      <button onClick={() => setLayout(moveBlock(layout, b.id, -1))} style={btnGhost}>↑</button>
-                      <button onClick={() => setLayout(moveBlock(layout, b.id, 1))} style={btnGhost}>↓</button>
+                      <button type="button" aria-label={`Move ${BLOCK_LABELS[b.type]} up`} onClick={() => setLayout(moveBlock(layout, b.id, -1))} style={btnGhost}>↑</button>
+                      <button type="button" aria-label={`Move ${BLOCK_LABELS[b.type]} down`} onClick={() => setLayout(moveBlock(layout, b.id, 1))} style={btnGhost}>↓</button>
                       <label>
                         Col{' '}
                         <input type="number" min={1} max={layout.columns} value={b.colStart} onChange={(e) => setLayout(resizeBlock(layout, b.id, 'colStart', parseInt(e.target.value) || 1))} style={{ ...inputField, width: 46 }} />
@@ -497,7 +498,15 @@ export default function ThemeStudioPage() {
           </div>
 
           <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Design tokens</h3>
-          <TokenEditor tokens={current?.tokens ?? {}} onTokenChange={setToken} />
+          <TokenEditor
+            tokens={current?.tokens ?? {}}
+            onTokenChange={setToken}
+            features={current?.features}
+            onFeatureChange={(k, v) => {
+              if (!current) return;
+              setCurrent({ ...current, features: { ...current.features, [k]: v } });
+            }}
+          />
 
           <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Preview</h3>
           <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -527,7 +536,11 @@ export default function ThemeStudioPage() {
                 padding: 12,
               }}
             >
-              <div style={studioTokenStyle(current?.tokens ?? {})}>
+              <div
+                dir={current?.features.rtl ? 'rtl' : 'ltr'}
+                data-testid="studio-preview-dir"
+                style={studioTokenStyle(current?.tokens ?? {})}
+              >
                 {page === 'home' ? (
                   <HomeSectionStack
                     sections={layoutToHomeSections(layout)}
@@ -549,15 +562,17 @@ export default function ThemeStudioPage() {
               </div>
             </div>
           </div>
-          {page === 'home' && (
+          {studioLivePreviewPath(page, livePreviewKey) && (
             <div style={{ marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: '#666' }}>Live storefront home (saved Home builder)</span>
+                <span style={{ fontSize: 12, color: '#666' }}>
+                  {page === 'home' ? 'Live storefront home (saved Home builder)' : `Live storefront ${PAGE_LABELS[page]}`}
+                </span>
                 <button type="button" onClick={() => setLivePreviewKey((k) => k + 1)} style={btnGhost}>Refresh</button>
               </div>
               <iframe
-                title="Live home preview"
-                src={`/?homePreview=${livePreviewKey}`}
+                title="Live page preview"
+                src={studioLivePreviewPath(page, livePreviewKey)!}
                 style={{ width: '100%', height: 280, border: '1px solid #e5e5e5', borderRadius: 8, background: '#fff' }}
               />
             </div>
@@ -663,8 +678,20 @@ function configFieldsFor(type: BlockType): ConfigField[] {
   }
 }
 
-function TokenEditor({ tokens, onTokenChange }: { tokens: Record<string, string | number | boolean>; onTokenChange: (k: string, v: any) => void }) {
+function TokenEditor({
+  tokens,
+  onTokenChange,
+  features,
+  onFeatureChange,
+}: {
+  tokens: Record<string, string | number | boolean>;
+  onTokenChange: (k: string, v: any) => void;
+  features?: { rtl: boolean; darkMode: boolean; paid: boolean };
+  onFeatureChange?: (k: 'rtl' | 'darkMode', v: boolean) => void;
+}) {
   const colorKeys = ['primaryColor', 'primaryTextColor', 'accentColor', 'bodyBg', 'cardBg', 'bodyText', 'mutedText', 'borderColor', 'headerBg', 'headerText', 'footerBg', 'footerText', 'priceColor', 'saleColor', 'announcementBg', 'announcementText2'];
+  const fontKeys = Object.keys(FONT_STACKS);
+  const fontValue = String(tokens.fontFamily ?? 'vazirmatn');
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       {colorKeys.map((k) => (
@@ -673,9 +700,25 @@ function TokenEditor({ tokens, onTokenChange }: { tokens: Record<string, string 
           <input type="color" value={String(tokens[k] ?? '#000000')} onChange={(e) => onTokenChange(k, e.target.value)} style={{ width: 40, height: 26, border: 'none', background: 'none', cursor: 'pointer' }} />
         </label>
       ))}
+      {onFeatureChange && features && (
+        <>
+          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>RTL storefront</span>
+            <input type="checkbox" checked={features.rtl} onChange={(e) => onFeatureChange('rtl', e.target.checked)} />
+          </label>
+          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Dark mode ready</span>
+            <input type="checkbox" checked={features.darkMode} onChange={(e) => onFeatureChange('darkMode', e.target.checked)} />
+          </label>
+        </>
+      )}
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Font</span>
-        <input type="text" value={String(tokens.fontFamily ?? 'system')} onChange={(e) => onTokenChange('fontFamily', e.target.value)} style={{ ...inputField, width: 150 }} />
+        <select value={fontKeys.includes(fontValue) ? fontValue : 'system'} onChange={(e) => onTokenChange('fontFamily', e.target.value)} style={{ ...inputField, width: 150 }}>
+          {fontKeys.map((k) => (
+            <option key={k} value={k}>{FONT_LABELS[k] ? FONT_LABELS[k].split('—')[0].trim() : k}</option>
+          ))}
+        </select>
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Font size</span>
