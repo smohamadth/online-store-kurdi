@@ -234,6 +234,9 @@ export const CREATABLE_TYPES = [
   'showcaseRow',
   'newsletter',
   'dealCountdown',
+  'cta',
+  'steps',
+  'pricing',
 ];
 
 export const ALL_TYPES = Array.from(

@@ -353,7 +353,19 @@ export default function HomeBuilder() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gap: '10px', marginTop: '16px' }}>
+        <div
+          style={{ display: 'grid', gap: '10px', marginTop: '16px' }}
+          onDragOver={(e) => {
+            if (dragIndex === null) return;
+            const last = sections.length - 1;
+            if (last < 0 || dragIndex === last) return;
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            if (e.clientY > rect.bottom - 28) {
+              e.preventDefault();
+              setDropHint({ index: last, after: true });
+            }
+          }}
+        >
           {sections.map((row, i) => {
             const open = openId === row.id;
             const isDirty = dirty[row.id];
@@ -1287,6 +1299,32 @@ function TypeEditor({
         </p>
       );
 
+    case 'cta':
+      return (
+        <>
+          {twoCol(
+            <>
+              {textField('buttonText', 'Button text', 'Shop now')}
+              {textField('buttonHref', 'Button URL', '/products')}
+            </>
+          )}
+          {textField('background', 'Background (optional CSS colour)', 'var(--brand)')}
+        </>
+      );
+
+    case 'steps':
+      return listEditor(
+        'items',
+        [
+          { key: 'title', label: 'Step title' },
+          { key: 'text', label: 'Description', width: '1.6fr' },
+        ],
+        { title: '', text: '' }
+      );
+
+    case 'pricing':
+      return <PricingEditor cfg={cfg} patch={(patch) => patchConfig(row.id, patch)} isMobile={isMobile} />;
+
     default:
       return null;
   }
@@ -1770,7 +1808,8 @@ function ComparisonEditor({
                     style={inputStyle}
                     placeholder={ci === 0 ? 'value' : ''}
                     aria-label={`Row ${ri + 1} column ${ci + 1}`}
-                    value={rows[ri]?.values?.[ci] ?? ''}
+                    value={String(rows[ri]?.values?.[ci] ?? '')}
+                    list={`cmp-tf-${ri}-${ci}`}
                     onChange={(e) => {
                       const next = [...rows];
                       const values = Array.isArray(next[ri]?.values) ? [...next[ri].values] : [];
@@ -1779,6 +1818,10 @@ function ComparisonEditor({
                       setRows(next);
                     }}
                   />
+                  <datalist id={`cmp-tf-${ri}-${ci}`}>
+                    <option value="true" />
+                    <option value="false" />
+                  </datalist>
                 ))}
               </div>
             </ItemListCard>
@@ -1949,6 +1992,137 @@ function LookbookEditor({
 }
 
 /** Showcase — pick a category; the row renders that range's products. */
+function PricingEditor({
+  cfg,
+  patch,
+  isMobile,
+}: {
+  cfg: Record<string, any>;
+  patch: (patch: Record<string, any>) => void;
+  isMobile: boolean;
+}) {
+  const items: any[] = Array.isArray(cfg.items) ? cfg.items : [];
+  const setItems = (next: any[]) => patch({ items: next });
+  return (
+    <div style={{ display: 'grid', gap: '12px' }}>
+      {items.map((_, idx) => (
+        <ItemListCard
+          key={idx}
+          idx={idx}
+          upDisabled={idx === 0}
+          downDisabled={idx === items.length - 1}
+          onUp={() => {
+            const next = [...items];
+            [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+            setItems(next);
+          }}
+          onDown={() => {
+            const next = [...items];
+            [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+            setItems(next);
+          }}
+          onRemove={() => setItems(items.filter((_, i) => i !== idx))}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '8px' }}>
+            <input
+              style={inputStyle}
+              placeholder="Plan name"
+              aria-label={`Plan name ${idx + 1}`}
+              value={items[idx]?.name ?? ''}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...next[idx], name: e.target.value };
+                setItems(next);
+              }}
+            />
+            <input
+              style={inputStyle}
+              placeholder="Price"
+              aria-label={`Price ${idx + 1}`}
+              value={items[idx]?.price ?? ''}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...next[idx], price: e.target.value };
+                setItems(next);
+              }}
+            />
+            <input
+              style={inputStyle}
+              placeholder="Period (e.g. month)"
+              aria-label={`Period ${idx + 1}`}
+              value={items[idx]?.period ?? ''}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...next[idx], period: e.target.value };
+                setItems(next);
+              }}
+            />
+          </div>
+          <input
+            style={inputStyle}
+            placeholder="Features, comma-separated"
+            aria-label={`Features ${idx + 1}`}
+            value={Array.isArray(items[idx]?.features) ? items[idx].features.join(', ') : ''}
+            onChange={(e) => {
+              const next = [...items];
+              next[idx] = {
+                ...next[idx],
+                features: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+              };
+              setItems(next);
+            }}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+            <input
+              style={inputStyle}
+              placeholder="Button text"
+              aria-label={`Button text ${idx + 1}`}
+              value={items[idx]?.buttonText ?? ''}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...next[idx], buttonText: e.target.value };
+                setItems(next);
+              }}
+            />
+            <input
+              style={inputStyle}
+              placeholder="Button URL"
+              aria-label={`Button URL ${idx + 1}`}
+              value={items[idx]?.buttonHref ?? ''}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...next[idx], buttonHref: e.target.value };
+                setItems(next);
+              }}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(items[idx]?.highlighted)}
+                onChange={(e) => {
+                  const next = [...items];
+                  next[idx] = { ...next[idx], highlighted: e.target.checked };
+                  setItems(next);
+                }}
+              />
+              Highlight
+            </label>
+          </div>
+        </ItemListCard>
+      ))}
+      <AddItemButton
+        label="+ Add plan"
+        onClick={() =>
+          setItems([
+            ...items,
+            { name: '', price: '', period: '', features: [], buttonText: 'Choose', buttonHref: '/products', highlighted: false },
+          ])
+        }
+      />
+    </div>
+  );
+}
+
 function ShowcaseEditor({
   cfg,
   patch,
@@ -2131,6 +2305,23 @@ function defaultConfigFor(type: string): Record<string, any> {
         buttonHref: '/deals',
         gradientFrom: '#111827',
         gradientTo: '#374151',
+      };
+    case 'cta':
+      return { buttonText: 'Shop now', buttonHref: '/products', background: '' };
+    case 'steps':
+      return {
+        items: [
+          { title: 'Browse', text: 'Pick what you need.' },
+          { title: 'Checkout', text: 'Pay securely.' },
+          { title: 'Receive', text: 'We deliver to your door.' },
+        ],
+      };
+    case 'pricing':
+      return {
+        items: [
+          { name: 'Starter', price: '0', period: 'mo', features: ['Catalogue'], buttonText: 'Start', buttonHref: '/products', highlighted: false },
+          { name: 'Pro', price: '29', period: 'mo', features: ['Catalogue', 'Priority support'], buttonText: 'Choose Pro', buttonHref: '/products', highlighted: true },
+        ],
       };
     default:
       return {};

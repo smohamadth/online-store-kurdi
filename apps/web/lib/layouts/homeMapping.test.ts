@@ -37,6 +37,9 @@ describe('BLOCK_TO_SECTION', () => {
     expect(BLOCK_TO_SECTION.quote).toBe('quote');
     expect(BLOCK_TO_SECTION.logoStrip).toBe('logos');
     expect(BLOCK_TO_SECTION.textImage).toBe('lookbook');
+    expect(BLOCK_TO_SECTION.cta).toBe('cta');
+    expect(BLOCK_TO_SECTION.steps).toBe('steps');
+    expect(BLOCK_TO_SECTION.pricing).toBe('pricing');
   });
 
   it('maps arrivals/trending to their carousel renderers', () => {

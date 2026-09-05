@@ -46,6 +46,7 @@ import ComparisonTable from '@/components/rich/ComparisonTable';
 import PullQuote from '@/components/rich/PullQuote';
 import LookbookSection from '@/components/rich/LookbookSection';
 import ShowcaseRow from '@/components/rich/ShowcaseRow';
+import { CtaBand, StepsBand, PricingBand } from '@/components/HomeRichBlocks';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
 import { pickStorefrontHomeSections } from '@/lib/layouts/homeMapping';
 import { heroOptionsFromSectionConfig } from '@/lib/heroOptions';
@@ -517,6 +518,24 @@ export default function HomeView() {
             message={newsletterMessage}
           />
         );
+
+      case 'cta':
+        return (
+          <CtaBand
+            key={s.id}
+            title={s.title}
+            subtitle={s.subtitle}
+            buttonText={cfg.buttonText}
+            buttonHref={cfg.buttonHref}
+            background={cfg.background}
+          />
+        );
+
+      case 'steps':
+        return <StepsBand key={s.id} title={s.title} subtitle={s.subtitle} items={cfg.items} />;
+
+      case 'pricing':
+        return <PricingBand key={s.id} title={s.title} subtitle={s.subtitle} items={cfg.items} />;
 
       default:
         // Unknown type (e.g. a newer version wrote a block this build doesn't

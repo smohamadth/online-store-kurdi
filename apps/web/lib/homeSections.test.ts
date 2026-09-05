@@ -20,6 +20,9 @@ describe('homeSections constants', () => {
     expect(CREATABLE_TYPES).toContain('gallery');
     expect(CREATABLE_TYPES).toContain('newsletter');
     expect(CREATABLE_TYPES).toContain('dealCountdown');
+    expect(CREATABLE_TYPES).toContain('cta');
+    expect(CREATABLE_TYPES).toContain('steps');
+    expect(CREATABLE_TYPES).toContain('pricing');
     // Singletons must NOT be creatable - they are edited in place.
     expect(CREATABLE_TYPES).not.toContain('hero');
     expect(CREATABLE_TYPES).not.toContain('categories');

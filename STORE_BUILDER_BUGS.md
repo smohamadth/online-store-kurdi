@@ -78,7 +78,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 ## P2 — holes / incomplete product
 
 ### 16. Two “add block” palettes that don’t match
-**Status:** partial. Home builder can add `newsletter` and `dealCountdown` (HomeView renders them). Still no `cta`/`pricing`/`steps` on Home (those are Studio-only; HomeView has no cases). Hero/categories remain singletons.
+**Status:** partial. Home builder can add newsletter, dealCountdown, **cta, steps, pricing** (HomeView renders them). Hero/categories remain singletons. Studio still has extra chrome-only types (productDetail, blogList, …).
 
 ### 17. Niche theme heroes ignore most hero options
 **Status:** fixed. Home builder disables autoplay/arrows/dots when the active theme is Bold/Dawnlight/Minimal/Pulse, or when layout is not slideshow. Copy explains the limit.
@@ -105,7 +105,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. `ApiClient` uses `CLIENT_API_BASE` (same-origin `/api` on loopback).
 
 ### 25. Theme Studio token editor is a subset
-Only some colours + font/size/radius. Missing `productsPerRow`, `cardShadow`, `show*` toggles, `containerWidth`, `headingWeight` — so Studio themes never match bundled density.
+**Status:** partial. Editor includes heading weight, container width, products per row, card shadow, button radius. `show*` toggles stay out (they no longer hide Home blocks — P1.8).
 
 ### 26. Installing a theme zip cannot add React sections
 **Status:** documented in Theme Studio header (zip = tokens + layout JSON only). Data-only by design (`KNOWN_GAPS` §13.1).
@@ -118,7 +118,7 @@ Only some colours + font/size/radius. Missing `productsPerRow`, `cardShadow`, `s
 ## P3 — polish / tests to add when fixing
 
 - No `beforeunload` when Home builder `dirty` is set. **Fixed** (P1.9).
-- Drag handle is mouse-only (arrows exist — OK); drop hint can miss last card.
+- Drag handle is mouse-only (arrows exist — OK); drop hint on the list footer can target the last card.
 - Studio `loadThemes` N+1 fetches (list keys then GET each). **Fixed** — `GET /theme-studio/themes` returns full configs; UI still accepts the old keys array.
 - Studio `LayoutRenderer` product cards are not links (`/products/:slug`). **Fixed** (also category `/category/:slug`, blog `/blog/:slug`).
 - Comparison editor `true`/`false` strings vs booleans. (Renderer already treats those strings as ✓/✕.)

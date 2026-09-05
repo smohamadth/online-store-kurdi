@@ -76,6 +76,9 @@ export const TYPE_LABELS: Record<string, string> = {
   quote: 'Pull quote',
   lookbook: 'Lookbook (image + copy)',
   showcaseRow: 'Category showcase',
+  cta: 'Call to action',
+  steps: 'Steps',
+  pricing: 'Pricing table',
 };
 
 export const TYPE_ICONS: Record<string, string> = {
@@ -102,6 +105,9 @@ export const TYPE_ICONS: Record<string, string> = {
   quote: '💭',
   lookbook: '📖',
   showcaseRow: '🛍️',
+  cta: '📣',
+  steps: '①',
+  pricing: '💲',
 };
 
 /** Types an admin can add from scratch (the rest are singletons already seeded). */
@@ -122,6 +128,9 @@ export const CREATABLE_TYPES = [
   'showcaseRow',
   'newsletter',
   'dealCountdown',
+  'cta',
+  'steps',
+  'pricing',
 ];
 
 /**
