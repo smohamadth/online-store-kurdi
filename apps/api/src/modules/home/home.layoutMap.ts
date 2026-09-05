@@ -42,6 +42,47 @@ export const BLOCK_TO_SECTION: Record<string, string> = {
 
 const ALLOWED = new Set(ALL_TYPES);
 
+function firstString(...vals: unknown[]): string | undefined {
+  for (const v of vals) {
+    if (typeof v === 'string' && v.length) return v;
+  }
+  return undefined;
+}
+
+/** Keep Theme Studio aliases (author/src) in sync with Home builder fields. */
+export function normalizeStudioConfig(type: string, cfg: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...cfg };
+  if (type === 'quote') {
+    const body = firstString(next.quote, next.text);
+    if (body != null) {
+      next.quote = next.quote ?? body;
+      next.text = next.text ?? body;
+    }
+  }
+  if (type === 'video') {
+    const src = firstString(next.url, next.src);
+    if (src != null) {
+      next.url = next.url ?? src;
+      next.src = next.src ?? src;
+    }
+  }
+  if (type === 'image' || type === 'textImage') {
+    const img = firstString(next.image, next.src, next.url);
+    if (img != null) {
+      next.image = next.image ?? img;
+      next.src = next.src ?? img;
+    }
+  }
+  if (type === 'testimonials' && Array.isArray(next.items)) {
+    next.items = next.items.map((it) => {
+      const row = asRecord(it);
+      const who = firstString(row.name, row.author);
+      return { ...row, name: row.name ?? who, author: row.author ?? who };
+    });
+  }
+  return next;
+}
+
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
@@ -72,7 +113,7 @@ export function layoutHomeToSeeds(layoutsHome: unknown): HomeSectionSeed[] {
     const blockType = String(b.type || '');
     const type = BLOCK_TO_SECTION[blockType] || 'custom';
     if (!ALLOWED.has(type)) return;
-    const cfg = asRecord(b.config);
+    const cfg = normalizeStudioConfig(blockType, asRecord(b.config));
     const rowStart = Number(b.rowStart) || i + 1;
     const colStart = Number(b.colStart) || 1;
     const id = typeof b.id === 'string' && b.id ? b.id : blockType || `block-${i}`;

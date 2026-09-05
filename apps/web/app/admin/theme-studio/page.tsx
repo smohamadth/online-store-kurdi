@@ -49,6 +49,7 @@ interface ThemeStudioTheme {
   features: { rtl: boolean; darkMode: boolean; paid: boolean };
   tokens: Record<string, string | number | boolean>;
   layouts?: Record<string, unknown>;
+  sections?: Record<string, string>;
 }
 
 const BLOCK_LABELS: Record<BlockType, string> = {

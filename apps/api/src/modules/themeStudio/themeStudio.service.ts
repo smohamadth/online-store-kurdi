@@ -38,6 +38,8 @@ export interface ThemeStudioConfig {
   features: { rtl: boolean; darkMode: boolean; paid: boolean };
   tokens: Record<string, string | number | boolean>;
   layouts?: Record<string, unknown>;
+  /** Logical section keys → platform component paths (copied when duplicating a niche theme). */
+  sections?: Record<string, string>;
 }
 
 const KEY_RE = /^[a-z0-9][a-z0-9-_]{0,39}$/;
@@ -76,6 +78,24 @@ function validateConfig(cfg: unknown, forKey: string): ThemeStudioConfig {
 
   if (typeof c.tokens !== 'object' || c.tokens === null) throw new Error('Theme tokens must be an object');
 
+  let sections: Record<string, string> | undefined;
+  if (c.sections != null) {
+    if (typeof c.sections !== 'object' || Array.isArray(c.sections)) {
+      throw new Error('Theme sections must be an object of string paths');
+    }
+    sections = {};
+    for (const [k, v] of Object.entries(c.sections as Record<string, unknown>)) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(k)) {
+        throw new Error(`Invalid section key \"${k}\"`);
+      }
+      if (typeof v !== 'string' || !v.trim() || v.length > 200) {
+        throw new Error(`Section \"${k}\" must be a component path`);
+      }
+      sections[k] = v.trim();
+    }
+    if (!Object.keys(sections).length) sections = undefined;
+  }
+
   return {
     key: forKey,
     name: c.name as string,
@@ -86,6 +106,7 @@ function validateConfig(cfg: unknown, forKey: string): ThemeStudioConfig {
     features: { rtl: feat.rtl as boolean, darkMode: feat.darkMode as boolean, paid: feat.paid as boolean },
     tokens: c.tokens as Record<string, string | number | boolean>,
     ...(typeof c.layouts === 'object' && c.layouts !== null ? { layouts: c.layouts as Record<string, unknown> } : {}),
+    ...(sections ? { sections } : {}),
   };
 }
 

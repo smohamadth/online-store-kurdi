@@ -19,6 +19,17 @@ describe('layoutHomeToSeeds', () => {
     expect(seeds[1].config?.buttonHref).toBe('/products');
   });
 
+  it('fills Home-builder aliases from studio quote/video fields', () => {
+    const seeds = layoutHomeToSeeds({
+      blocks: [
+        { id: 'q', type: 'quote', rowStart: 1, colStart: 1, config: { text: 'Keep going' } },
+        { id: 'v', type: 'video', rowStart: 2, colStart: 1, config: { src: 'https://youtu.be/x' } },
+      ],
+    });
+    expect(seeds[0].config?.quote).toBe('Keep going');
+    expect(seeds[1].config?.url).toBe('https://youtu.be/x');
+  });
+
   it('dedupes keys and skips empty layouts', () => {
     expect(layoutHomeToSeeds(null)).toEqual([]);
     const seeds = layoutHomeToSeeds({

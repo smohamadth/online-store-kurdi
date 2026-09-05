@@ -170,6 +170,24 @@ describe('PUT /api/theme-studio/themes/:key', () => {
     expect(res.status).toBe(400);
   });
 
+  it('keeps a sections map so duplicating a niche theme still uses its Hero', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .put('/api/theme-studio/themes/boldcopy')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        ...cfg('boldcopy'),
+        sections: {
+          hero: '@/themes/bold/sections/Hero',
+          featured: '@/themes/bold/sections/Featured',
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.data.sections.hero).toBe('@/themes/bold/sections/Hero');
+    const onDisk = JSON.parse(fs.readFileSync(path.join(tempDir, 'boldcopy', 'theme.json'), 'utf8'));
+    expect(onDisk.sections.featured).toBe('@/themes/bold/sections/Featured');
+  });
+
   it('normalises the stored config and never writes unknown fields', async () => {
     const { token } = await authHeader({ role: 'admin' });
     await request(app)
