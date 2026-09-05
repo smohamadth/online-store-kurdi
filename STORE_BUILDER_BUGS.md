@@ -44,7 +44,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 ## P1 — real functional bugs
 
 ### 6. Featured section ignores its own limit and is not “featured”
-**Status:** partial. `featuredProductsToShow` honours `config.limit` and no longer drops leftover cards. `GET /products/featured` is still “latest”, not a featured flag.
+**Status:** partial. `featuredProductsToShow` honours `config.limit` and HomeView no longer drops leftover cards. `GET /products/featured` ranks by review count then recency (no Product.featured flag yet).
 
 ### 7. Deal countdown / gallery / banners link to `/deals` (no route)
 **Status:** not a bug. `apps/web/app/deals` exists (`DealsView.tsx`).
@@ -121,7 +121,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 - Drag handle is mouse-only (arrows exist — OK); drop hint on the list footer can target the last card.
 - Studio `loadThemes` N+1 fetches (list keys then GET each). **Fixed** — `GET /theme-studio/themes` returns full configs; UI still accepts the old keys array.
 - Studio `LayoutRenderer` product cards are not links (`/products/:slug`). **Fixed** (also category `/category/:slug`, blog `/blog/:slug`).
-- Comparison editor `true`/`false` strings vs booleans. (Renderer already treats those strings as ✓/✕.)
+- Comparison editor `true`/`false` strings vs booleans. **Fixed** — renderer also treats real booleans as ✓/✕.
 - Video autoplay without muted. **Fixed** — checking Autoplay also sets muted and disables the mute checkbox; `VideoSection` already forces mute on autoplay.
 - Tests to add: hero seed shape vs `heroOptionsFromConfig`; `blockToHomeSection` coverage for every `BlockType`; HomeView does not drop featured remainder; bundled theme PUT returns 403 and UI shows it; `layouts.home` vs DB sections switch.
 

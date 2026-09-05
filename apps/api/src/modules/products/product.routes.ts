@@ -301,6 +301,8 @@ router.get('/featured', optionalAuth, async (req, res, next) => {
   try {
     const { limit } = parsePagination(req.query, { limit: 10 });
 
+    // No featured flag on Product yet: rank by review volume (popularity),
+    // then recency. Newest-only hid well-reviewed catalogue items.
     const products = await prisma.product.findMany({
       where: { status: 'active' },
       include: {
@@ -309,7 +311,7 @@ router.get('/featured', optionalAuth, async (req, res, next) => {
         variants: true,
         reviews: { select: { rating: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ reviews: { _count: 'desc' } }, { createdAt: 'desc' }],
       take: limit,
     });
 

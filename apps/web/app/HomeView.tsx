@@ -86,11 +86,16 @@ export default function HomeView() {
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const [trending, setTrending] = useState<Product[]>([]);
 
+  const [homePreview, setHomePreview] = useState(false);
   const [newsletterStatus, setNewsletterStatus] =
     useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
 
   /* --------------------------------------------------------------- load */
+
+  useEffect(() => {
+    setHomePreview(new URLSearchParams(window.location.search).has('homePreview'));
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -279,12 +284,8 @@ export default function HomeView() {
         );
 
       case 'featured': {
-        // Only render full rows so the grid never ends with an orphan card.
         const cols = isMobile ? 2 : perRow;
-        const shown = featuredProducts.slice(
-          0,
-          Math.max(cols, Math.floor(featuredProducts.length / cols) * cols)
-        );
+        const shown = featuredProductsToShow(featuredProducts, cfg.limit);
         return (
           <ThemeSectionRenderer
             key={s.id}
@@ -564,7 +565,7 @@ export default function HomeView() {
           for a fresh visitor (empty list), so it never shows as an
           empty section. Kept below the curated sections on purpose:
           it's a recall aid, not merchandising. */}
-      <RecentlyViewed />
+      {homePreview ? null : <RecentlyViewed />}
     </div>
   );
 }

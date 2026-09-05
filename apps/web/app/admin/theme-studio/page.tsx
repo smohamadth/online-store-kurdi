@@ -26,6 +26,7 @@ import {
   PAGE_KEYS,
   PAGE_LABELS,
   DEFAULT_COLUMNS,
+  paletteForPage,
 } from '@/lib/layouts/types';
 import { defaultLayoutFor } from '@/lib/layouts/defaults';
 import { LayoutRenderer } from '@/lib/layouts/render';
@@ -239,7 +240,7 @@ export default function ThemeStudioPage() {
     setCurrent({ ...current, tokens: { ...current.tokens, [k]: v } });
   };
 
-  const paletteBlocks = BLOCK_TYPES;
+  const paletteBlocks = paletteForPage(page);
 
   const appendBlock = (type: BlockType) => {
     if (!current) {

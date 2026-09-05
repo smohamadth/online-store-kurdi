@@ -48,7 +48,7 @@ export const BLOCK_TO_SECTION: Partial<Record<BlockType, HomeSection['type']>> =
   textImage: 'lookbook',
   divider: 'custom',
   faq: 'faq',
-  steps: 'features',
+  steps: 'steps',
   logoStrip: 'logos',
   pricing: 'pricing',
   quote: 'quote',

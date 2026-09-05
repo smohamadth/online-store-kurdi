@@ -19,8 +19,10 @@ interface Props {
   highlight?: number | null;
 }
 
-function CellValue({ value }: { value: string | null | undefined }) {
-  const v = (value ?? '').trim();
+function CellValue({ value }: { value: string | boolean | null | undefined }) {
+  if (value === true) return <span style={{ color: '#16a34a', fontWeight: 800 }}>✓</span>;
+  if (value === false) return <span style={{ color: 'var(--sale-color, #dc2626)', fontWeight: 800 }}>✕</span>;
+  const v = String(value ?? '').trim();
   if (v === 'true' || v === '✓' || v === '✔') {
     return <span style={{ color: '#16a34a', fontWeight: 800 }}>✓</span>;
   }

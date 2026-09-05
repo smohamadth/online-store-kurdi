@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { BLOCK_TO_SECTION, blockToHomeSection, pickStorefrontHomeSections } from './homeMapping';
-import { BLOCK_TYPES, type BlockType, type LayoutBlock } from './types';
+import { BLOCK_TYPES, paletteForPage, type BlockType, type LayoutBlock } from './types';
 import type { HomeSection } from '@/lib/homeSections';
 
 function block(overrides: Partial<LayoutBlock>): LayoutBlock {
@@ -98,5 +98,39 @@ describe('blockToHomeSection', () => {
     const c = blockToHomeSection(block({ id: 'c', rowStart: 2, colStart: 1 }));
     expect(a.sortOrder).toBeLessThan(b.sortOrder);
     expect(b.sortOrder).toBeLessThan(c.sortOrder);
+  });
+});
+
+describe('pickStorefrontHomeSections', () => {
+  it('always returns DB HomeSection rows, even when a studio home layout exists', () => {
+    const db: HomeSection[] = [
+      {
+        id: 'h1',
+        key: 'hero',
+        type: 'hero',
+        title: null,
+        subtitle: null,
+        isVisible: true,
+        sortOrder: 10,
+        config: {},
+      },
+    ];
+    const studio = {
+      columns: 12,
+      gap: 24,
+      blocks: [block({ id: 'studio-hero', type: 'hero' as BlockType })],
+    };
+    expect(pickStorefrontHomeSections(db, studio)).toEqual(db);
+    expect(pickStorefrontHomeSections(db, null)).toEqual(db);
+  });
+});
+
+describe('paletteForPage', () => {
+  it('hides chrome-only types on the home canvas', async () => {
+    const { paletteForPage } = await import('./types');
+    expect(paletteForPage('home')).not.toContain('productDetail');
+    expect(paletteForPage('home')).not.toContain('blogList');
+    expect(paletteForPage('product')).toContain('productDetail');
+    expect(paletteForPage('products')).toContain('productList');
   });
 });

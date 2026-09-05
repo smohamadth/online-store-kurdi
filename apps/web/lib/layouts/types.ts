@@ -157,3 +157,34 @@ export const PAGE_LABELS: Record<PageKey, string> = {
 
 export const DEFAULT_COLUMNS = 12;
 export const DEFAULT_GAP = 24;
+
+/** Chrome-only types that belong on listing/PDP/blog pages, not the home canvas. */
+export const PAGE_CHROME_BLOCKS: readonly BlockType[] = [
+  'productDetail',
+  'productList',
+  'categoryGrid',
+  'blogList',
+  'blogPostBody',
+  'pageContent',
+];
+
+export function paletteForPage(page: PageKey): readonly BlockType[] {
+  const marketing = BLOCK_TYPES.filter((t) => !PAGE_CHROME_BLOCKS.includes(t));
+  switch (page) {
+    case 'home':
+      return marketing;
+    case 'products':
+    case 'category':
+      return [...marketing, 'productList', 'categoryGrid'];
+    case 'product':
+      return [...marketing, 'productDetail'];
+    case 'blog':
+      return [...marketing, 'blogList'];
+    case 'blogPost':
+      return [...marketing, 'blogPostBody'];
+    case 'page':
+      return [...marketing, 'pageContent'];
+    default:
+      return BLOCK_TYPES;
+  }
+}
