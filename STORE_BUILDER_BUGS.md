@@ -31,7 +31,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
 
 ### 3. Studio preview is not the storefront
-**Status:** partial. Preview now gets `studioLayoutData()` (sample products/categories) and `studioTokenStyle` (`--brand`/`--body-bg` plus aliases). LayoutRenderer is still a lightweight stand-in, not ProductCard/HeroGallery.
+**Status:** partial. LayoutRenderer still stands in for ProductCard/HeroGallery, but product tiles can show an image, video uses `url`/`src`, quotes/testimonials honour Home-builder field names.
 
 ### 4. Rich Studio blocks never appear on the live home page
 **Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`; quote/video/gallery keys are normalised. Live home still uses DB sections (P0.1); this map is for studio preview / future overlay.
@@ -44,7 +44,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 ## P1 — real functional bugs
 
 ### 6. Featured section ignores its own limit and is not “featured”
-**Status:** partial. `featuredProductsToShow` honours `config.limit` and HomeView no longer drops leftover cards. `GET /products/featured` ranks by review count then recency (no Product.featured flag yet).
+**Status:** partial. Home builder has a limit slider; HomeView uses `featuredProductsToShow`. `GET /products/featured` ranks by review count then recency (Product has no `isFeatured` column).
 
 ### 7. Deal countdown / gallery / banners link to `/deals` (no route)
 **Status:** not a bug. `apps/web/app/deals` exists (`DealsView.tsx`).

@@ -75,7 +75,12 @@ export default function HomeBuilder() {
   const [newKey, setNewKey] = useState('');
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'phone'>('desktop');
   const [previewKey, setPreviewKey] = useState(0);
+  const [undoStack, setUndoStack] = useState<HomeSection[][]>([]);
   const PREVIEW_WIDTHS = { desktop: 1280, tablet: 768, phone: 375 } as const;
+
+  const pushUndo = (rows: HomeSection[]) => {
+    setUndoStack((stack) => [...stack.slice(-19), rows.map(cloneSection)]);
+  };
 
   const bumpPreview = () => setPreviewKey((k) => k + 1);
 
@@ -113,15 +118,28 @@ export default function HomeBuilder() {
 
   /** Local edit — marks the row dirty until it is saved. */
   const patchLocal = (id: string, patch: Partial<HomeSection>) => {
-    setSections((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setSections((rows) => {
+      pushUndo(rows);
+      return rows.map((r) => (r.id === id ? { ...r, ...patch } : r));
+    });
     setDirty((d) => ({ ...d, [id]: true }));
   };
 
   const patchConfig = (id: string, patch: Record<string, any>) => {
-    setSections((rows) =>
-      rows.map((r) => (r.id === id ? { ...r, config: { ...r.config, ...patch } } : r))
-    );
+    setSections((rows) => {
+      pushUndo(rows);
+      return rows.map((r) => (r.id === id ? { ...r, config: { ...r.config, ...patch } } : r));
+    });
     setDirty((d) => ({ ...d, [id]: true }));
+  };
+
+  const undo = () => {
+    setUndoStack((stack) => {
+      if (!stack.length) return stack;
+      const prev = stack[stack.length - 1];
+      setSections(prev.map(cloneSection));
+      return stack.slice(0, -1);
+    });
   };
 
   const saveRow = async (row: HomeSection) => {
@@ -165,6 +183,7 @@ export default function HomeBuilder() {
   // optimistic update, roll back so the UI matches the database on failure.
   const applyReorder = async (next: HomeSection[]) => {
     const previous = sections;
+    pushUndo(previous);
     setSections(next); // optimistic
     try {
       const saved = await reorderHomeSections(next.map((s) => s.id));
@@ -314,6 +333,24 @@ export default function HomeBuilder() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!undoStack.length}
+              title="Undo the last local edit or reorder (this session)"
+              style={{
+                padding: '8px 14px',
+                border: '1px solid #d4d4d4',
+                borderRadius: '6px',
+                background: '#fff',
+                cursor: undoStack.length ? 'pointer' : 'not-allowed',
+                fontWeight: 600,
+                fontSize: '13px',
+                opacity: undoStack.length ? 1 : 0.5,
+              }}
+            >
+              Undo
+            </button>
             <a
               href="/"
               target="_blank"
@@ -935,10 +972,28 @@ function TypeEditor({
 
     case 'categories':
     case 'featured':
-      return twoCol(
+      return (
         <>
-          {textField('linkText', 'Link text', 'View all →')}
-          {textField('linkHref', 'Link URL', '/products')}
+          {twoCol(
+            <>
+              {textField('linkText', 'Link text', 'View all →')}
+              {textField('linkHref', 'Link URL', '/products')}
+            </>
+          )}
+          {row.type === 'featured' && (
+            <div>
+              <label style={labelStyle}>Products to show — {cfg.limit || 8}</label>
+              <input
+                type="range"
+                min={2}
+                max={12}
+                step={1}
+                value={cfg.limit || 8}
+                onChange={(e) => patchConfig(row.id, { limit: parseInt(e.target.value, 10) })}
+                style={{ width: '100%' }}
+              />
+            </div>
+          )}
         </>
       );
 
@@ -1895,25 +1950,26 @@ function ComparisonEditor({
                   }}
                 />
                 {Array.from({ length: colCount }).map((_, ci) => (
-                  <input
-                    key={ci}
-                    style={inputStyle}
-                    placeholder={ci === 0 ? 'value' : ''}
-                    aria-label={`Row ${ri + 1} column ${ci + 1}`}
-                    value={String(rows[ri]?.values?.[ci] ?? '')}
-                    list={`cmp-tf-${ri}-${ci}`}
-                    onChange={(e) => {
-                      const next = [...rows];
-                      const values = Array.isArray(next[ri]?.values) ? [...next[ri].values] : [];
-                      values[ci] = e.target.value;
-                      next[ri] = { ...next[ri], values };
-                      setRows(next);
-                    }}
-                  />
-                  <datalist id={`cmp-tf-${ri}-${ci}`}>
-                    <option value="true" />
-                    <option value="false" />
-                  </datalist>
+                  <span key={ci}>
+                    <input
+                      style={inputStyle}
+                      placeholder={ci === 0 ? 'value' : ''}
+                      aria-label={`Row ${ri + 1} column ${ci + 1}`}
+                      value={String(rows[ri]?.values?.[ci] ?? '')}
+                      list={`cmp-tf-${ri}-${ci}`}
+                      onChange={(e) => {
+                        const next = [...rows];
+                        const values = Array.isArray(next[ri]?.values) ? [...next[ri].values] : [];
+                        values[ci] = e.target.value;
+                        next[ri] = { ...next[ri], values };
+                        setRows(next);
+                      }}
+                    />
+                    <datalist id={`cmp-tf-${ri}-${ci}`}>
+                      <option value="true" />
+                      <option value="false" />
+                    </datalist>
+                  </span>
                 ))}
               </div>
             </ItemListCard>

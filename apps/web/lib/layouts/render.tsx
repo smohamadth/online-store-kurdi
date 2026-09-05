@@ -59,8 +59,12 @@ const tileStyle: CSSProperties = {
 };
 
 function productTile(p: any) {
+  const img = p.image || p.images?.[0]?.url;
   const inner = (
     <>
+      {img ? (
+        <img src={String(img)} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 'var(--radius)', marginBottom: 8 }} />
+      ) : null}
       <div style={{ fontWeight: 600 }}>{p.name}</div>
       {p.price ? <div style={{ color: 'var(--muted)' }}>{String(p.price)}</div> : null}
     </>
@@ -247,8 +251,8 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
       <div style={{ display: 'grid', gridTemplateColumns: responsiveGrid(Math.min(items.length, 3)), gap: 16 }}>
         {items.map((t, i) => (
           <div key={i} style={{ padding: 20, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface-2, #fafafa)' }}>
-            <div>“{String(t.text ?? '')}”</div>
-            {String(t.author ?? '') && <div style={{ fontWeight: 700, marginTop: 8 }}>{String(t.author)}</div>}
+            <div>“{String(t.text ?? t.quote ?? '')}”</div>
+            {String(t.author ?? t.name ?? '') && <div style={{ fontWeight: 700, marginTop: 8 }}>{String(t.author ?? t.name)}</div>}
           </div>
         ))}
       </div>
@@ -297,7 +301,7 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     );
   },
   video: (b) => {
-    const src = String(b.config.src ?? '');
+    const src = String(b.config.src ?? b.config.url ?? '');
     if (!src) return <div style={{ color: 'var(--muted)' }}>Add a video URL (YouTube / Vimeo / .mp4).</div>;
     const embed = toEmbedUrl(src);
     if (embed) {
@@ -426,10 +430,11 @@ const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
     );
   },
   quote: (b) => {
-    if (!String(b.config.text ?? '')) return <div style={{ color: 'var(--muted)' }}>Add a quote.</div>;
+    const quote = String(b.config.text ?? b.config.quote ?? '');
+    if (!quote) return <div style={{ color: 'var(--muted)' }}>Add a quote.</div>;
     return (
       <figure style={{ margin: 0, padding: '28px 32px', textAlign: 'center' }}>
-        <blockquote style={{ margin: 0, fontSize: 22, fontStyle: 'italic', lineHeight: 1.5, color: 'var(--text, #111)' }}>“{String(b.config.text)}”</blockquote>
+        <blockquote style={{ margin: 0, fontSize: 22, fontStyle: 'italic', lineHeight: 1.5, color: 'var(--text, #111)' }}>“{quote}”</blockquote>
         {String(b.config.author ?? '') && (
           <figcaption style={{ marginTop: 14, fontWeight: 700 }}>
             {String(b.config.author)}
