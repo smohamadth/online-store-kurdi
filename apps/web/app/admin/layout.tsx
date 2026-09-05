@@ -181,6 +181,8 @@ export default function AdminLayout({
       items: [
         { path: '/admin/users', labelKey: 'nav.users', icon: '👥' },
         { path: '/admin/reviews', labelKey: 'nav.reviews', icon: '⭐' },
+        { path: '/admin/newsletter', labelKey: 'nav.newsletter', icon: '✉️' },
+        { path: '/admin/contact', labelKey: 'nav.contact', icon: '📥' },
       ],
     },
     {
@@ -200,6 +202,7 @@ export default function AdminLayout({
       items: [
         { path: '/admin/analytics', labelKey: 'nav.analytics', icon: '📈' },
         { path: '/admin/languages', labelKey: 'nav.languages', icon: '🌐' },
+        { path: '/admin/currencies', labelKey: 'nav.currencies', icon: '💱' },
         { path: '/admin/settings', labelKey: 'nav.settings', icon: '⚙️' },
         { path: '/admin/profile', labelKey: 'nav.profile', icon: '👤' },
       ],

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
@@ -56,6 +56,20 @@ describe('GET/PUT /api/i18n/storefront', () => {
     expect(second.status).toBe(200);
     expect(second.body.data.languages.find((l: any) => l.code === 'en').enabled).toBe(false);
     expect(second.body.data.strings.en['nav.home']).toBe('Start');
+  });
+
+  it('returns 500 when the overlay file cannot be written', async () => {
+    const fs = await import('fs');
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+      throw new Error('EACCES');
+    });
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .put('/api/i18n/storefront')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ languages: [{ code: 'en', name: 'English', dir: 'ltr', enabled: true }] });
+    spy.mockRestore();
+    expect(res.status).toBe(500);
   });
 
   it('rejects disabling every language', async () => {

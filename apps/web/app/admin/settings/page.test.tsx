@@ -31,6 +31,7 @@ describe('AdminSettingsPage', () => {
 
   it('loads settings and saves them back via PUT', async () => {
     const fetchMock = vi.fn(async (url: string, opts?: any) => {
+      if (String(url).includes('email-templates')) return okJson([]);
       if (String(url).includes('/settings') && (!opts?.method || opts.method === 'GET')) return okJson(serverSettings);
       if (String(url).includes('/settings') && opts?.method === 'PUT') return okJson(serverSettings);
       return okJson(null);
@@ -55,5 +56,26 @@ describe('AdminSettingsPage', () => {
     const putCall = (global.fetch as any).mock.calls.find((c: any) => c[1]?.method === 'PUT');
     expect(JSON.parse(putCall[1].body).storeName).toBe('Kurdi Store 2');
     await waitFor(() => expect(screen.getByText('Settings saved to the database.')).toBeTruthy());
+  });
+
+  it('exposes Google Analytics and store description on the form and PUT', async () => {
+    const fetchMock = vi.fn(async (url: string, opts?: any) => {
+      if (String(url).includes('email-templates')) return okJson([]);
+      if (String(url).includes('/settings') && (!opts?.method || opts.method === 'GET')) {
+        return okJson({ ...serverSettings, googleAnalyticsId: '', storeDescription: 'Best goods' });
+      }
+      if (String(url).includes('/settings') && opts?.method === 'PUT') return okJson(serverSettings);
+      return okJson(null);
+    });
+    (global.fetch as any) = fetchMock;
+    render(<AdminSettingsPage />);
+    await waitFor(() => expect(screen.getByDisplayValue('Best goods')).toBeTruthy());
+    fireEvent.change(screen.getByPlaceholderText('G-XXXXXXXX'), { target: { value: 'G-ABC' } });
+    screen.getByText('Save All Settings').click();
+    await waitFor(() => {
+      const putCall = (global.fetch as any).mock.calls.find((c: any) => c[1]?.method === 'PUT' && String(c[0]).includes('/settings') && !String(c[0]).includes('email'));
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(putCall[1].body).googleAnalyticsId).toBe('G-ABC');
+    });
   });
 });

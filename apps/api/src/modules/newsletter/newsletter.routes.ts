@@ -4,8 +4,7 @@
 // Subscribers are DB rows (NewsletterSubscriber, unique on email) - the
 // list used to live in an in-memory Set, so a restart or a second API
 // instance silently wiped the mailing list. Mounted at /api/newsletter
-// with NO auth: the "admin only" note on GET /subscribers is the intent,
-// not the current enforcement - treat that endpoint as internal-only.
+// Public subscribe/unsubscribe; GET /subscribers is admin/manager only.
 // ---------------------------------------------------------------------------
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middleware/auth';

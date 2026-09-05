@@ -25,8 +25,9 @@ PUBLIC = ["/", "/products", "/products/classic-t-shirt", "/category/clothing",
 
 ADMIN = ["/admin", "/admin/products", "/admin/categories", "/admin/orders",
          "/admin/users", "/admin/coupons", "/admin/inventory", "/admin/reviews",
-         "/admin/menus", "/admin/banners", "/admin/appearance", "/admin/shipping",
-         "/admin/tax", "/admin/analytics", "/admin/settings", "/admin/profile"]
+         "/admin/newsletter", "/admin/contact", "/admin/menus", "/admin/banners",
+         "/admin/appearance", "/admin/shipping",
+         "/admin/tax", "/admin/analytics", "/admin/currencies", "/admin/settings", "/admin/profile"]
 
 ACCOUNT = ["/account", "/account/orders", "/account/wishlist",
            "/account/addresses", "/account/profile", "/account/reviews"]

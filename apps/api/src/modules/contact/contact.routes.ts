@@ -50,9 +50,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// GET /api/contact - Get all messages (newest first). Admin/manager
-// only: messages carry customer names, emails and phone numbers, and
-// this endpoint used to be public (leaking every message).
+// GET /api/contact - Get all messages (newest first). Admin/manager only.
 router.get('/', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
     const messages = await prisma.contactMessage.findMany({

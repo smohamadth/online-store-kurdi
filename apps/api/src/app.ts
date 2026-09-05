@@ -71,6 +71,7 @@ import developersRoutes from './modules/developers/developers.routes';
 import pageRoutes from './modules/pages/page.routes';
 import blogRoutes from './modules/blog/blog.routes';
 import currencyRoutes from './modules/currency/currency.routes';
+import storefrontI18nRoutes from './modules/i18n/storefrontI18n.routes';
 import {
   publicDownloadsRouter,
   accountDownloadsRouter,
@@ -273,6 +274,7 @@ app.use('/api/developers', developersRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/currencies', currencyRoutes);
+app.use('/api/i18n', storefrontI18nRoutes);
 app.use('/api/content-translations', contentTranslationsRoutes);
 app.use('/api/i18n', storefrontI18nRoutes);
 // Bulk import/export (admin). Export is a file download; import is a

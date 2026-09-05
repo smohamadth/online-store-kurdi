@@ -52,10 +52,8 @@ function loadFromDisk() {
 }
 
 function saveToDisk() {
-  try {
-    fs.mkdirSync(path.dirname(FILE), { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(state, null, 2), 'utf8');
-  } catch { /* best-effort persist */ }
+  fs.mkdirSync(path.dirname(FILE), { recursive: true });
+  fs.writeFileSync(FILE, JSON.stringify(state, null, 2), 'utf8');
 }
 
 loadFromDisk();

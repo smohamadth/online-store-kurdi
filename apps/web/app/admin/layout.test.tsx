@@ -40,6 +40,8 @@ describe('AdminLayout', () => {
     expect(screen.getByText('Dashboard content')).toBeTruthy();
     expect(screen.getAllByText('Orders').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Languages').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Newsletter').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Currencies').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('☰')).toBeNull();
     expect(screen.getByDisplayValue('English')).toBeTruthy();
   });

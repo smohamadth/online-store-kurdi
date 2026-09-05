@@ -44,9 +44,18 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  const [templates, setTemplates] = useState<{ name: string; subject: string; htmlContent: string; textContent?: string | null; isActive: boolean }[]>([]);
+  const [tplName, setTplName] = useState('');
+  const [tplSubject, setTplSubject] = useState('');
+  const [tplHtml, setTplHtml] = useState('');
+  const [testEmail, setTestEmail] = useState('');
   const [storeSettings, setStoreSettings] = useState({
     storeName: 'Online Store',
     storeDescription: '',
+    googleAnalyticsId: '',
+    timezone: 'UTC',
+    weightUnit: 'kg',
+    dimensionUnit: 'cm',
     storeEmail: 'info@store.com',
     storePhone: '',
     storeAddress: '',
@@ -77,8 +86,23 @@ export default function AdminSettingsPage() {
         const data = await response.json();
         if (data.data) {
           setStoreSettings(prev => ({ ...prev, ...data.data }));
-          // Also save to localStorage for offline access
           localStorage.setItem('storeSettings', JSON.stringify({ ...storeSettings, ...data.data }));
+          const token = localStorage.getItem('token');
+          if (token) {
+            const tr = await fetch(`${API_BASE}/settings/email-templates`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (tr.ok) {
+              const tj = await tr.json();
+              const list = tj.data || [];
+              setTemplates(list);
+              if (list[0]) {
+                setTplName(list[0].name);
+                setTplSubject(list[0].subject || '');
+                setTplHtml(list[0].htmlContent || '');
+              }
+            }
+          }
           setLoading(false);
           return;
         }
@@ -158,6 +182,10 @@ export default function AdminSettingsPage() {
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Store Name *</label>
             <input type="text" value={storeSettings.storeName} onChange={(e) => setStoreSettings({ ...storeSettings, storeName: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }} />
           </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Store description</label>
+            <textarea value={storeSettings.storeDescription} onChange={(e) => setStoreSettings({ ...storeSettings, storeDescription: e.target.value })} rows={2} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }} />
+          </div>
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Store Email *</label>
             <input type="email" value={storeSettings.storeEmail} onChange={(e) => setStoreSettings({ ...storeSettings, storeEmail: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }} />
@@ -227,6 +255,35 @@ export default function AdminSettingsPage() {
             <p style={{ fontSize: '12px', color: '#777', marginTop: '4px' }}>
               Shown next to every price. Overrides the symbol from the currency above.
             </p>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Timezone</label>
+            <input type="text" value={storeSettings.timezone} onChange={(e) => setStoreSettings({ ...storeSettings, timezone: e.target.value })} placeholder="UTC" style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Weight unit</label>
+            <select value={storeSettings.weightUnit} onChange={(e) => setStoreSettings({ ...storeSettings, weightUnit: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}>
+              <option value="kg">kg</option>
+              <option value="lb">lb</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Dimension unit</label>
+            <select value={storeSettings.dimensionUnit} onChange={(e) => setStoreSettings({ ...storeSettings, dimensionUnit: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}>
+              <option value="cm">cm</option>
+              <option value="in">in</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Google Analytics ID</label>
+            <input
+              type="text"
+              value={storeSettings.googleAnalyticsId}
+              onChange={(e) => setStoreSettings({ ...storeSettings, googleAnalyticsId: e.target.value })}
+              placeholder="G-XXXXXXXX"
+              style={{ width: '100%', padding: '10px', border: '1px solid #e5e5e5', borderRadius: '4px' }}
+            />
+            <p style={{ fontSize: '12px', color: '#777', marginTop: '4px' }}>Saved to the database and injected on the storefront when set.</p>
           </div>
         </div>
       </div>
