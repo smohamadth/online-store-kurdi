@@ -226,6 +226,11 @@ async function main() {
               isPrimary: true,
               sortOrder: 1,
             },
+            {
+              url: '/images/products/macbook-pro-14-2.jpg',
+              alt: 'MacBook Pro 14 inch closed',
+              sortOrder: 2,
+            },
           ],
         },
       },
@@ -281,6 +286,11 @@ async function main() {
               alt: 'Classic T-Shirt',
               isPrimary: true,
               sortOrder: 1,
+            },
+            {
+              url: '/images/products/t-shirt-2.jpg',
+              alt: 'Classic T-Shirt on hanger',
+              sortOrder: 2,
             },
           ],
         },
@@ -524,7 +534,36 @@ async function seedCmsContent() {
 async function seedHomeSections() {
   const existing = await prisma.homeSection.count();
   if (existing > 0) {
-    console.log(`   - Home sections: ${existing} already present, skipping`);
+    const gallery = await prisma.homeSection.findUnique({ where: { key: 'gallery' } });
+    if (gallery) {
+      let config: Record<string, any> = {};
+      try {
+        config = gallery.config ? JSON.parse(gallery.config) : {};
+      } catch {
+        config = {};
+      }
+      const seedItems =
+        (HOME_SECTION_SEED.find((s) => s.key === 'gallery')?.config as { items?: any[] } | undefined)
+          ?.items ?? [];
+      const items = Array.isArray(config.items) ? config.items : [];
+      let changed = false;
+      const next = items.map((item: any) => {
+        if (item?.image) return item;
+        const match = seedItems.find((s) => s.caption === item?.caption);
+        if (match?.image) {
+          changed = true;
+          return { ...item, image: match.image };
+        }
+        return item;
+      });
+      if (changed) {
+        await prisma.homeSection.update({
+          where: { id: gallery.id },
+          data: { config: JSON.stringify({ ...config, items: next }) },
+        });
+      }
+    }
+    console.log(`   - Home sections: ${existing} already present`);
     return existing;
   }
   for (const s of HOME_SECTION_SEED) {
@@ -548,12 +587,6 @@ async function seedHomeSections() {
 // /admin/banners has nothing to edit, which makes the gallery look broken and
 // uneditable on a fresh install.
 async function seedBanners() {
-  const existing = await prisma.banner.count();
-  if (existing > 0) {
-    console.log(`   - Banners: ${existing} already present, skipping`);
-    return existing;
-  }
-
   const banners = [
     {
       title: 'Discover Amazing Products',
@@ -634,7 +667,7 @@ async function seedBanners() {
       description:
         'Fast local delivery, genuine products and support in your language. Create an account to track every order.',
       badge: 'New',
-      image: '/images/banners/hero-season.jpg',
+      image: '/images/banners/strip-community.jpg',
       linkUrl: '/register',
       buttonText: 'Create account',
       secondaryText: 'Browse products',

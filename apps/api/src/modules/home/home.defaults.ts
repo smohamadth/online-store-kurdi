@@ -164,7 +164,7 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
       // placeholder tile is drawn, so a fresh install has a complete-looking
       // gallery before the owner uploads anything.
       items: [
-        { image: '/images/banners/promo-arrivals.jpg', caption: 'New season arrivals', linkUrl: '/products?sort=newest', tone: '#2563eb' },
+        { image: '/images/gallery/arrivals.jpg', caption: 'New season arrivals', linkUrl: '/products?sort=newest', tone: '#2563eb' },
         { image: '/images/categories/electronics.jpg', caption: 'Everyday electronics', linkUrl: '/category/electronics', tone: '#0ea5e9' },
         { image: '/images/categories/clothing.jpg', caption: 'Wardrobe staples', linkUrl: '/category/clothing', tone: '#8b5cf6' },
         { image: '/images/categories/books.jpg', caption: 'Books worth your time', linkUrl: '/category/books', tone: '#f97316' },
