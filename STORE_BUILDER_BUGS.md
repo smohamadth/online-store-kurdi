@@ -29,7 +29,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 **Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
 
 ### 3. Studio preview is not the storefront
-**Status:** partial. Canvas still uses LayoutRenderer (sample merch + token CSS + hero banner copy). Home tab also embeds the live `/?homePreview=` iframe. Not ProductCard/HeroGallery.
+**Status:** fixed. Home preview column paints `HomeSectionStack` (same HeroGallery / ProductCard / rich blocks as live home) from `layoutToHomeSections`. Canvas drop-zone stays LayoutRenderer for grid coordinates. Listing pages still use LayoutRenderer. Live iframe remains as a second check.
 
 ### 4. Rich Studio blocks never appear on the live home page
 **Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`. Live home still uses DB sections (P0.1).
@@ -97,7 +97,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 **Status:** fixed. Allowlisted `categories` bucket.
 
 ### 23. RTL / physical CSS in builder UI
-**Status:** partial. Storefront alignment uses start/end. Admin chrome stays LTR (by design for the English admin shell).
+**Status:** fixed enough. Storefront CustomSection maps left/right to start/end. Admin chrome stays LTR.
 
 ### 24. `getFeaturedProducts` in `lib/api.ts` uses a second API client
 **Status:** fixed. `CLIENT_API_BASE`.

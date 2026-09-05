@@ -11,6 +11,9 @@ import {
   PREVIEW_STORE,
 } from '@/lib/previewSampleData';
 import type { LayoutData } from './render';
+import type { Product } from '@/lib/api';
+import type { HomeCategoryTile } from '@/components/HomeSectionStack';
+import type { Banner } from '@/components/HeroGallery';
 
 export function studioLayoutData(): LayoutData {
   return {

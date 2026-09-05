@@ -9,7 +9,7 @@
  *   - grid coordinates produce a sensible sortOrder (row-major, then column)
  */
 import { describe, it, expect } from 'vitest';
-import { BLOCK_TO_SECTION, blockToHomeSection, pickStorefrontHomeSections } from './homeMapping';
+import { BLOCK_TO_SECTION, blockToHomeSection, layoutToHomeSections, pickStorefrontHomeSections } from './homeMapping';
 import { BLOCK_TYPES, paletteForPage, type BlockType, type LayoutBlock } from './types';
 import type { HomeSection } from '@/lib/homeSections';
 
@@ -98,6 +98,22 @@ describe('blockToHomeSection', () => {
     const c = blockToHomeSection(block({ id: 'c', rowStart: 2, colStart: 1 }));
     expect(a.sortOrder).toBeLessThan(b.sortOrder);
     expect(b.sortOrder).toBeLessThan(c.sortOrder);
+  });
+});
+
+describe('layoutToHomeSections', () => {
+  it('sorts blocks row-major and maps types', () => {
+    const rows = layoutToHomeSections({
+      columns: 12,
+      gap: 24,
+      blocks: [
+        block({ id: 'b', type: 'cta', rowStart: 2, colStart: 1 }),
+        block({ id: 'a', type: 'hero', rowStart: 1, colStart: 1 }),
+      ],
+    });
+    expect(rows.map((r) => r.id)).toEqual(['a', 'b']);
+    expect(rows[0].type).toBe('hero');
+    expect(rows[1].type).toBe('cta');
   });
 });
 

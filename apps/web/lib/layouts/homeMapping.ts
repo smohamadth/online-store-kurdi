@@ -125,6 +125,14 @@ export function normalizeStudioConfig(type: BlockType, cfg: Record<string, unkno
 }
 
 /** Convert a layout block into the HomeSection shape `renderSection` expects. */
+export function layoutToHomeSections(layout: PageLayout | null | undefined): HomeSection[] {
+  const blocks = layout?.blocks;
+  if (!Array.isArray(blocks) || !blocks.length) return [];
+  return [...blocks]
+    .sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart)
+    .map(blockToHomeSection);
+}
+
 export function blockToHomeSection(b: LayoutBlock): HomeSection {
   const cfg = normalizeStudioConfig(b.type, b.config || {});
   return {

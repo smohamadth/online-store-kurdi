@@ -33,8 +33,10 @@ import { LayoutRenderer } from '@/lib/layouts/render';
 import { addBlock, moveBlock, resizeBlock, removeBlock } from '@/lib/layouts/edit';
 import { CONFIG_FIELDS, LIST_BLOCK_TYPES, type ConfigField } from '@/lib/layouts/blockUtils';
 import { isPlatformBundledTheme } from '@/lib/themeBundled';
-import { studioLayoutData, studioTokenStyle } from '@/lib/layouts/studioPreview';
+import { studioLayoutData, studioTokenStyle, studioHomeMerch } from '@/lib/layouts/studioPreview';
 import { mergeStudioLayouts, studioHasUnsavedDrafts } from '@/lib/layouts/studioSave';
+import { layoutToHomeSections } from '@/lib/layouts/homeMapping';
+import { HomeSectionStack } from '@/components/HomeSectionStack';
 
 interface ThemeStudioTheme {
   key: string;
@@ -242,6 +244,7 @@ export default function ThemeStudioPage() {
   };
 
   const paletteBlocks = paletteForPage(page);
+  const merch = studioHomeMerch();
 
   const appendBlock = (type: BlockType) => {
     if (!current) {
@@ -525,7 +528,24 @@ export default function ThemeStudioPage() {
               }}
             >
               <div style={studioTokenStyle(current?.tokens ?? {})}>
-                <LayoutRenderer layout={layout} data={studioLayoutData()} />
+                {page === 'home' ? (
+                  <HomeSectionStack
+                    sections={layoutToHomeSections(layout)}
+                    isMobile={previewMode === 'phone'}
+                    perRow={Math.max(2, Math.min(6, Number(current?.tokens.productsPerRow ?? 4) || 4))}
+                    currencySymbol="$"
+                    featuredProducts={merch.products}
+                    categories={merch.categories}
+                    heroBanners={merch.banners}
+                    promoBanners={[]}
+                    stripBanners={[]}
+                    bannersLoaded
+                    newArrivals={merch.products}
+                    trending={merch.products}
+                  />
+                ) : (
+                  <LayoutRenderer layout={layout} data={studioLayoutData()} />
+                )}
               </div>
             </div>
           </div>
