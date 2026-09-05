@@ -111,6 +111,7 @@ CREATE TABLE "Product" (
     "sku" TEXT NOT NULL,
     "type" TEXT NOT NULL DEFAULT 'physical',
     "status" TEXT NOT NULL DEFAULT 'draft',
+    "isFeatured" BOOLEAN NOT NULL DEFAULT false,
     "price" DOUBLE PRECISION NOT NULL,
     "compareAtPrice" DOUBLE PRECISION,
     "costPrice" DOUBLE PRECISION,
@@ -144,6 +145,7 @@ CREATE INDEX "Product_categoryId_idx" ON "Product"("categoryId");
 CREATE INDEX "Product_status_idx" ON "Product"("status");
 CREATE INDEX "Product_type_idx" ON "Product"("type");
 CREATE INDEX "Product_price_idx" ON "Product"("price");
+CREATE INDEX "Product_isFeatured_idx" ON "Product"("isFeatured");
 
 -- ProductImage
 CREATE TABLE "ProductImage" (
