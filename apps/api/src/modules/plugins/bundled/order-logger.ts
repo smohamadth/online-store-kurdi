@@ -13,9 +13,18 @@ export const orderLogger: PluginHandlers = {
   id: 'order-logger',
 
   async onOrderCreated(payload, ctx) {
-    const p = payload as { orderNumber?: string; total?: number; paymentMethod?: string };
+    const p = payload as {
+      orderNumber?: string;
+      total?: number;
+      totalAmount?: number;
+      paymentMethod?: string;
+    };
+    // Live emit() sends `totalAmount` (the Order column). Older sample
+    // payloads used `total`; accept both so the log is not "total 0"
+    // on every real checkout.
+    const total = p.totalAmount ?? p.total ?? 0;
     logger.info(
-      `[plugin:order-logger] order.created ${p.orderNumber ?? '?'} — total ${p.total ?? 0}, payment ${p.paymentMethod ?? 'unknown'} (event ${ctx.eventId})`
+      `[plugin:order-logger] order.created ${p.orderNumber ?? '?'} — total ${total}, payment ${p.paymentMethod ?? 'unknown'} (event ${ctx.eventId})`
     );
   },
 

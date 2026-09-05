@@ -164,8 +164,20 @@ function sanitizeSubject(subject: string): string {
 // Order confirmation email
 export async function sendOrderConfirmation(order: any, user: any): Promise<void> {
   const template = await getTemplate('order_confirmation');
-  
-  const subject = template?.subject || `Order Confirmation #${order.orderNumber}`;
+  // Same contract as payment/refund: a merchant template with
+  // {{orderNumber}} / {{customerName}} in the subject must render, not
+  // go out as the literal "{{orderNumber}}" (which is what the log-only
+  // path was sending after the email-template seed).
+  const variables = {
+    customerName: user.firstName,
+    orderNumber: order.orderNumber,
+    orderTotal: Number(order.totalAmount || 0).toFixed(2),
+    orderDate: new Date(order.createdAt).toLocaleDateString(),
+    storeName: 'Online Store',
+  };
+  const subject = template
+    ? renderSubject(template.subject, variables)
+    : `Order Confirmation #${order.orderNumber}`;
 
   // The downloads array is set by the orders route when the order
   // contains a digital line item. The route passes a stamp of
@@ -272,14 +284,8 @@ export async function sendOrderConfirmation(order: any, user: any): Promise<void
     </html>
   `;
 
-  const html = template 
-    ? renderTemplate(template.htmlContent, {
-        customerName: user.firstName,
-        orderNumber: order.orderNumber,
-        orderTotal: order.totalAmount,
-        orderDate: new Date(order.createdAt).toLocaleDateString(),
-        storeName: 'Online Store',
-      })
+  const html = template
+    ? renderTemplate(template.htmlContent, variables)
     : defaultHtml;
 
   await sendEmail(user.email, subject, html);

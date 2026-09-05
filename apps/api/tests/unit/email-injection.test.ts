@@ -134,6 +134,38 @@ describe('wire-level hardening (mocked transporter)', () => {
     expect(mail.html).not.toContain('Hi <img');
   });
 
+  it('renders {{orderNumber}} in a custom order-confirmation subject', async () => {
+    (prisma.emailTemplate.findUnique as any).mockResolvedValue({
+      name: 'order_confirmation',
+      isActive: true,
+      subject: 'Order Confirmation #{{orderNumber}}',
+      htmlContent: '<p>Hi {{customerName}}, #{{orderNumber}} total {{orderTotal}}</p>',
+    });
+    const { sendOrderConfirmation } = await import('../../src/services/email.service');
+    await sendOrderConfirmation(
+      {
+        id: 'o1',
+        orderNumber: 'ORD-99',
+        status: 'pending',
+        createdAt: new Date('2026-01-02'),
+        subtotal: 10,
+        discountAmount: 0,
+        shippingAmount: 0,
+        taxAmount: 0,
+        totalAmount: 10,
+        items: [],
+        downloads: [],
+      },
+      { firstName: 'Ada', email: 'ada@test.dev' }
+    );
+    const mail = await lastMail();
+    expect(mail.subject).toBe('Order Confirmation #ORD-99');
+    expect(mail.subject).not.toContain('{{');
+    expect(mail.html).toContain('Ada');
+    expect(mail.html).toContain('#ORD-99');
+    expect(mail.html).toContain('10.00');
+  });
+
   it('escapes hostile product names in the order-confirmation body', async () => {
     (prisma.emailTemplate.findUnique as any).mockResolvedValue(null);
     const { sendOrderConfirmation } = await import('../../src/services/email.service');
