@@ -171,6 +171,22 @@ describe('POST /api/orders', () => {
     expect(variant?.quantity).toBe(7);
   });
 
+  it('accepts couponCode/couponId JSON null (checkout sends null when unused)', async () => {
+    const { token } = await authHeader();
+    const p = await createProduct({ quantity: 5 });
+    const res = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        items: [{ productId: p.id, quantity: 1 }],
+        couponCode: null,
+        couponId: null,
+        paymentMethod: 'cod',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.paymentMethod).toBe('cod');
+  });
+
   it('creates a shipping address from the inline object', async () => {
     const { token } = await authHeader();
     const p = await createProduct({ quantity: 5 });

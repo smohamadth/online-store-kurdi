@@ -71,18 +71,19 @@ const createOrderSchema = z.object({
       phone: z.string().max(40).optional(),
     })
     .optional(),
-  paymentMethod: z.string().max(50).optional(),
-  notes: z.string().max(2000).optional(),
-  couponCode: z.string().max(100).optional(),
-  couponId: z.string().optional(),
-  shippingMethodId: z.string().optional(),
+  paymentMethod: z.string().max(50).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  // CheckoutView sends `null` (not omitted) when no coupon is applied.
+  couponCode: z.string().max(100).optional().nullable(),
+  couponId: z.string().optional().nullable(),
+  shippingMethodId: z.string().optional().nullable(),
   // Wallet credit at checkout. `applyStoreCredit` debits the caller's
   // store-credit balance; `giftCardCode` debits the card. Both apply
   // AFTER the coupon, never below zero, and are ledgered against the
   // order. The server re-validates everything (code, redeemability,
   // currency, balance) — these fields are only a request to use credit.
   applyStoreCredit: z.boolean().optional(),
-  giftCardCode: z.string().min(1).max(64).optional(),
+  giftCardCode: z.string().min(1).max(64).optional().nullable(),
 });
 
 // ---------------------------------------------------------------------------
