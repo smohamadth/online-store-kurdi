@@ -934,7 +934,7 @@ function DynamicFooter() {
               </a>
             )}
             {!settings.facebookUrl && !settings.instagramUrl && !settings.twitterUrl && !settings.youtubeUrl && (
-              <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>Coming soon</p>
+              <p style={{ fontSize: '14px', color: 'var(--muted, #6b7280)' }}>{t('footer.comingSoon')}</p>
             )}
           </div>
         </div>

@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import CouponInput from '@/components/CouponInput';
 import { Coupon } from '@/lib/coupons';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
+import { useTranslation } from '@/lib/i18n';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -88,9 +89,9 @@ export default function CartView() {
         textAlign: 'center',
       }}>
         <div style={{ fontSize: '64px', marginBottom: '24px' }}>🛒</div>
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '16px' }}>Your Cart is Empty</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '16px' }}>{t('cart.empty')}</h1>
         <p style={{ fontSize: '16px', color: 'var(--muted, #666)', marginBottom: '32px' }}>
-          Looks like you haven't added any items to your cart yet.
+          {t('cart.emptyHint')}
         </p>
         <Link href="/products" style={{
           display: 'inline-block',
@@ -102,7 +103,7 @@ export default function CartView() {
           fontSize: '16px',
           fontWeight: 600,
         }}>
-          Continue Shopping
+          {t('cart.continueShopping')}
         </Link>
       </div>
     );
@@ -112,13 +113,13 @@ export default function CartView() {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '16px' : '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>{t('nav.home')}</Link>
         <span>/</span>
-        <span style={{ color: '#000' }}>Cart</span>
+        <span style={{ color: '#000' }}>{t('nav.cart')}</span>
       </nav>
 
       <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: 'bold', marginBottom: '24px' }}>
-        Shopping Cart ({getItemCount()} items)
+        {t('cart.title')} ({getItemCount()} {t('cart.items')})
       </h1>
 
       {/* Responsive layout */}
@@ -190,7 +191,7 @@ export default function CartView() {
                       flexShrink: 0,
                     }}
                   >
-                    Remove
+                    {t('cart.remove')}
                   </button>
                 </div>
 
@@ -231,7 +232,7 @@ export default function CartView() {
                         textDecoration: 'underline',
                       }}
                     >
-                      Save for Later
+                      {t('cart.saveForLater')}
                     </button>
 
                     {/* Price */}
@@ -255,7 +256,7 @@ export default function CartView() {
                 alignItems: 'center',
                 gap: '8px',
               }}>
-                <DirectionArrow kind="back" /> Continue Shopping
+                <DirectionArrow kind="back" /> {t('cart.continueShopping')}
               </Link>
               <button
                 onClick={clearCart}
@@ -276,7 +277,7 @@ export default function CartView() {
           {savedItems.length > 0 && (
             <div style={{ marginTop: '32px' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
-                Saved for Later ({savedItems.length} items)
+                {t('cart.saveForLater')} ({savedItems.length} {t('cart.items')})
               </h2>
               {savedItems.map((item) => (
                 <div
@@ -327,7 +328,7 @@ export default function CartView() {
                           cursor: 'pointer',
                         }}
                       >
-                        Move to Cart
+                        {t('cart.moveToCart')}
                       </button>
                       <button
                         onClick={() => removeSavedItem(item.id)}
@@ -341,7 +342,7 @@ export default function CartView() {
                           cursor: 'pointer',
                         }}
                       >
-                        Remove
+                        {t('cart.remove')}
                       </button>
                     </div>
                   </div>
@@ -400,7 +401,7 @@ export default function CartView() {
               position: isMobile ? 'static' : 'sticky',
               top: isMobile ? 'auto' : '80px',
             }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>Order Summary</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>{t('checkout.orderSummary')}</h2>
 
               {/* Coupon Input */}
               <div style={{ marginBottom: '20px' }}>
@@ -414,32 +415,32 @@ export default function CartView() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted, #666)' }}>Subtotal</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>{t('cart.subtotal')}</span>
                   <span style={{ fontWeight: 600 }}>{formatPrice(subtotal, settings.currencySymbol)}</span>
                 </div>
 
                 {discount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
-                    <span>Discount ({appliedCoupon?.code})</span>
+                    <span>{t('checkout.discount')} ({appliedCoupon?.code})</span>
                     <span style={{ fontWeight: 600 }}>-{formatPrice(discount, settings.currencySymbol)}</span>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted, #666)' }}>Shipping</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>{t('checkout.shipping')}</span>
                   <span style={{ fontWeight: 600 }}>
-                    {shipping === 0 ? <span style={{ color: '#22c55e' }}>Free</span> : formatPrice(shipping, settings.currencySymbol)}
+                    {shipping === 0 ? <span style={{ color: '#22c55e' }}>{t('checkout.free')}</span> : formatPrice(shipping, settings.currencySymbol)}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted, #666)' }}>Tax</span>
+                  <span style={{ color: 'var(--muted, #666)' }}>{t('checkout.tax')}</span>
                   <span style={{ fontWeight: 600 }}>{formatPrice(tax, settings.currencySymbol)}</span>
                 </div>
 
                 <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Total</span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{t('cart.total')}</span>
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatPrice(total, settings.currencySymbol)}</span>
                   </div>
                 </div>
@@ -489,7 +490,7 @@ export default function CartView() {
                   cursor: 'pointer',
                 }}
               >
-                Proceed to Checkout
+                {t('cart.checkout')}
               </button>
 
               <div style={{ marginTop: '16px', textAlign: 'center' }}>

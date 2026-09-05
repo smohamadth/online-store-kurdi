@@ -30,6 +30,7 @@ import ShippingSelector from '@/components/ShippingSelector';
 import TaxCalculator from '@/components/TaxCalculator';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { readStoredUser } from '@/lib/storedUser';
+import { useTranslation } from '@/lib/i18n';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -47,6 +48,7 @@ export default function CheckoutPage() {
   const isMobile = useIsMobile();
   const { items, getTotal, clearCart } = useCart();
   const { settings } = useStoreSettings();
+  const { t } = useTranslation();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
@@ -115,7 +117,7 @@ export default function CheckoutPage() {
   const amountDue = Math.max(0, Math.round((total - walletApplied) * 100) / 100);
   // Online gateways can't be mixed with a PARTIAL wallet payment (the
   // API refuses it); the UI blocks it too so the customer finds out
-  // before clicking Place Order.
+  // before clicking {t('checkout.placeOrder')}.
   const gatewayMethod = paymentMethod !== 'cod' && paymentMethod !== 'bank_transfer';
   const walletMixBlocked = gatewayMethod && walletApplied > 0.005 && amountDue > 0.005;
 
@@ -334,9 +336,9 @@ export default function CheckoutPage() {
         <div style={{ padding: '48px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '8px', backgroundColor: 'white' }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>✅</div>
           <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '16px' }}>
-            Order Placed Successfully!
+            {t('checkout.success')}
           </h1>
-          <p style={{ color: 'var(--muted, #666)', marginBottom: '8px' }}>Thank you for your purchase</p>
+          <p style={{ color: 'var(--muted, #666)', marginBottom: '8px' }}>{t('checkout.thankYou')}</p>
           <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px' }}>
             Order #{orderNumber}
           </p>
@@ -382,12 +384,12 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {/* Order Summary */}
+          {/* {t('checkout.orderSummary')} */}
           <div style={{ padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginBottom: '24px', textAlign: 'start' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Order Summary</h3>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{t('checkout.orderSummary')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--muted, #666)' }}>Subtotal</span>
+                <span style={{ color: 'var(--muted, #666)' }}>{t('cart.subtotal')}</span>
                 <span>{formatPrice(subtotal, settings.currencySymbol)}</span>
               </div>
               {discount > 0 && (
@@ -421,10 +423,10 @@ export default function CheckoutPage() {
 
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
             <Link href="/account/orders" style={{ padding: '12px 24px', backgroundColor: 'var(--brand, #000)', color: 'var(--brand-text, #fff)', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
-              View Orders
+              {t('checkout.viewOrders')}
             </Link>
             <Link href="/products" style={{ padding: '12px 24px', backgroundColor: 'var(--card-bg, white)', color: '#000', border: '1px solid #000', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
-              Continue Shopping
+              {t('cart.continueShopping')}
             </Link>
           </div>
         </div>
@@ -440,14 +442,14 @@ export default function CheckoutPage() {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
       {/* Breadcrumb */}
       <nav style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>{t('nav.home')}</Link>
         <span>/</span>
-        <Link href="/cart" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Cart</Link>
+        <Link href="/cart" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>{t('nav.cart')}</Link>
         <span>/</span>
-        <span style={{ color: '#000' }}>Checkout</span>
+        <span style={{ color: '#000' }}>{t('checkout.title')}</span>
       </nav>
 
-      <h1 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 'bold', marginBottom: '32px' }}>Checkout</h1>
+      <h1 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 'bold', marginBottom: '32px' }}>{t('checkout.title')}</h1>
 
       {returnState === 'paid' && (
         <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', marginBottom: '24px', fontSize: '14px' }}>
@@ -497,16 +499,16 @@ export default function CheckoutPage() {
           <div>
             {/* Shipping Information */}
             <div style={{ marginBottom: '40px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Shipping Information</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>{t('checkout.shippingInfo')}</h2>
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>First Name *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.firstName')} *</label>
                   <input type="text" name="firstName" value={shippingInfo.firstName} onChange={handleChange} required
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Last Name *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.lastName')} *</label>
                   <input type="text" name="lastName" value={shippingInfo.lastName} onChange={handleChange} required
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
@@ -514,45 +516,45 @@ export default function CheckoutPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Email *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.email')} *</label>
                   <input type="email" name="email" value={shippingInfo.email} onChange={handleChange} required
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Phone</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.phone')}</label>
                   <input type="tel" name="phone" value={shippingInfo.phone} onChange={handleChange}
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Address *</label>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.address')} *</label>
                 <input type="text" name="address" value={shippingInfo.address} onChange={handleChange} placeholder="123 Main St" required
                   style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>City *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.city')} *</label>
                   <input type="text" name="city" value={shippingInfo.city} onChange={handleChange} required
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>State *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.state')} *</label>
                   <input type="text" name="state" value={shippingInfo.state} onChange={handleChange} required
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>ZIP Code *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>{t('checkout.zipCode')} *</label>
                   <input type="text" name="zipCode" value={shippingInfo.zipCode} onChange={handleChange} required
                     style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '6px', fontSize: '16px', outline: 'none' }} />
                 </div>
               </div>
             </div>
 
-            {/* Shipping Method */}
+            {/* {t('checkout.shippingMethod')} */}
             <div style={{ marginBottom: '40px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Shipping Method</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>{t('checkout.shippingMethod')}</h2>
               <ShippingSelector
                 country={shippingInfo.country}
                 state={shippingInfo.state}
@@ -565,13 +567,13 @@ export default function CheckoutPage() {
               />
             </div>
 
-            {/* Payment Method */}
+            {/* {t('checkout.paymentMethod')} */}
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Payment Method</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>{t('checkout.paymentMethod')}</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {[
-                  { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
-                  { id: 'bank_transfer', label: 'Bank Transfer', icon: '🏦' },
+                  { id: 'cod', label: t('checkout.cod'), icon: '💵' },
+                  { id: 'bank_transfer', label: t('checkout.bankTransfer'), icon: '🏦' },
                   // Hosted gateways the admin enabled (from /api/settings'
                   // secret-free paymentGateways list). A gateway only shows
                   // when its credentials are filled in - a store without keys
@@ -602,13 +604,13 @@ export default function CheckoutPage() {
 
             {/* Wallet credit (store credit + gift card) */}
             <div style={{ marginTop: '40px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Wallet Credit</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>{t('checkout.wallet')}</h2>
 
               {walletMixBlocked && (
                 <div style={{ padding: '12px 16px', borderRadius: '6px', backgroundColor: '#fef3c7', border: '1px solid #f59e0b', color: '#92400e', fontSize: '14px', marginBottom: '16px' }}>
                   Online card payment can't be combined with a partial wallet credit.
-                  Cover the whole order with credit, or choose Cash on Delivery /
-                  Bank Transfer for the remaining balance.
+                  Cover the whole order with credit, or choose {t('checkout.cod')} /
+                  {t('checkout.bankTransfer')} for the remaining balance.
                 </div>
               )}
 
@@ -620,7 +622,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setUseStoreCredit(e.target.checked)}
                   />
                   <span style={{ fontWeight: 500 }}>
-                    Use my store credit
+                    {t('checkout.storeCredit')}
                     {storeCreditBalance !== null && (
                       <span style={{ color: 'var(--muted, #666)', fontWeight: 400 }}>
                         {' '}— balance {formatPrice(storeCreditBalance, settings.currencySymbol)}
@@ -633,7 +635,7 @@ export default function CheckoutPage() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       type="text"
-                      placeholder="Gift card code"
+                      placeholder={t('checkout.giftCard')}
                       value={giftCardCode}
                       onChange={(e) => {
                         setGiftCardCode(e.target.value);
@@ -648,7 +650,7 @@ export default function CheckoutPage() {
                       onClick={checkGiftCard}
                       style={{ padding: '12px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#000', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '14px' }}
                     >
-                      Check
+                      {t('checkout.check')}
                     </button>
                   </div>
                   {giftCardError && (
@@ -669,12 +671,12 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Right Column - Order Summary */}
+          {/* Right Column - {t('checkout.orderSummary')} */}
           <div>
             <div style={{ padding: '32px', border: '1px solid var(--border, #e5e5e5)', borderRadius: '8px', backgroundColor: '#f9f9f9', // On mobile a sticky summary in a 1fr grid would overlap
               // the form fields above it on scroll. Static below 768px.
               position: isMobile ? 'static' : 'sticky', top: isMobile ? 'auto' : '100px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>Order Summary</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '24px' }}>{t('checkout.orderSummary')}</h2>
 
               {/* Items */}
               <div style={{ marginBottom: '24px' }}>
@@ -758,11 +760,11 @@ export default function CheckoutPage() {
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
                     <ButtonSpinner /> Placing Order…
                   </span>
-                ) : walletMixBlocked ? 'Choose another payment method' : 'Place Order'}
+                ) : walletMixBlocked ? 'Choose another payment method' : t('checkout.placeOrder')}
               </button>
 
               <p style={{ marginTop: '16px', fontSize: '12px', color: 'var(--muted, #666)', textAlign: 'center' }}>
-                🔒 Secure checkout
+                🔒 {t('checkout.secure')}
               </p>
             </div>
           </div>

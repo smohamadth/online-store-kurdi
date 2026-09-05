@@ -196,7 +196,7 @@ export default function SearchBar() {
           {/* Loading */}
           {loading && (
             <div style={{ padding: '16px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>
-              Searching...
+              {t('search.searching')}
             </div>
           )}
 
@@ -205,7 +205,7 @@ export default function SearchBar() {
             <div>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase' }}>
-                  Products
+                  {t('search.products')}
                 </span>
               </div>
               {results.slice(0, 5).map((product) => (
@@ -265,7 +265,7 @@ export default function SearchBar() {
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                 >
-                  View all {results.length} results {moreArrow}
+                  {t('search.viewAll')} ({results.length}) {moreArrow}
                 </div>
               )}
             </div>
@@ -274,8 +274,8 @@ export default function SearchBar() {
           {/* No Results */}
           {!loading && query.length >= 2 && results.length === 0 && (
             <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--muted, #6b7280)' }}>
-              <p style={{ marginBottom: '8px' }}>No products found for "{query}"</p>
-              <p style={{ fontSize: '14px' }}>Try a different search term</p>
+              <p style={{ marginBottom: '8px' }}>{t('search.noResults')} “{query}”</p>
+              <p style={{ fontSize: '14px' }}>{t('search.tryDifferent')}</p>
             </div>
           )}
 
@@ -284,7 +284,7 @@ export default function SearchBar() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase' }}>
-                  Recent Searches
+                  {t('search.recent')}
                 </span>
                 <button
                   onClick={clearRecentSearches}
@@ -296,7 +296,7 @@ export default function SearchBar() {
                     cursor: 'pointer',
                   }}
                 >
-                  Clear
+                  {t('search.clear')}
                 </button>
               </div>
               {recentSearches.map((search, index) => (
@@ -329,7 +329,7 @@ export default function SearchBar() {
           {!loading && query.length < 2 && recentSearches.length === 0 && (
             <div style={{ padding: '16px' }}>
               <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted, #6b7280)', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
-                Popular Searches
+                {t('search.popular')}
               </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {['iPhone', 'MacBook', 'T-Shirt', 'JavaScript', 'Course'].map((term) => (

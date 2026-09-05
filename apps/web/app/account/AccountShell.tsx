@@ -36,7 +36,7 @@ export default function AccountShell({
   // sees the down-chevron when the menu is closed and the up-chevron
   // when it's open - the "open" state should point AWAY from the
   // hidden content in both writing systems.
-  const { direction } = useTranslation();
+  const { t, direction } = useTranslation();
   const isRtl = direction === 'rtl';
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,7 @@ export default function AccountShell({
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <LoadingState message="Loading…" minHeight={240} />
+        <LoadingState message={t('common.loading')} minHeight={240} />
       </div>
     );
   }
@@ -82,14 +82,14 @@ export default function AccountShell({
   }
 
   const menuItems = [
-    { path: '/account', label: 'Dashboard', icon: '📊' },
-    { path: '/account/orders', label: 'Orders', icon: '📦' },
-    { path: '/account/downloads', label: 'Downloads', icon: '⬇️' },
-    { path: '/account/wishlist', label: 'Wishlist', icon: '❤️' },
-    { path: '/account/reviews', label: 'Reviews', icon: '⭐' },
-    { path: '/account/affiliate', label: 'Affiliate', icon: '🤝' },
-    { path: '/account/addresses', label: 'Addresses', icon: '📍' },
-    { path: '/account/profile', label: 'Edit Profile', icon: '✏️' },
+    { path: '/account', label: t('account.dashboard'), icon: '📊' },
+    { path: '/account/orders', label: t('account.orders'), icon: '📦' },
+    { path: '/account/downloads', label: t('account.downloads'), icon: '⬇️' },
+    { path: '/account/wishlist', label: t('account.wishlist'), icon: '❤️' },
+    { path: '/account/reviews', label: t('account.reviews'), icon: '⭐' },
+    { path: '/account/affiliate', label: t('account.affiliate'), icon: '🤝' },
+    { path: '/account/addresses', label: t('account.addresses'), icon: '📍' },
+    { path: '/account/profile', label: t('account.profile'), icon: '✏️' },
   ];
 
   const SidebarContent = () => (
@@ -187,7 +187,7 @@ export default function AccountShell({
           }}
         >
           <span style={{ fontSize: '16px' }}>🚪</span>
-          <span>Logout</span>
+          <span>{t('nav.logout')}</span>
         </button>
       </nav>
     </div>
@@ -197,9 +197,9 @@ export default function AccountShell({
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '16px 12px' : '24px 16px' }}>
       {/* Breadcrumb */}
       <nav style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--muted, #666)' }}>
-        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>{t('nav.home')}</Link>
         <span>/</span>
-        <span style={{ color: '#000' }}>Account</span>
+        <span style={{ color: '#000' }}>{t('nav.account')}</span>
       </nav>
 
       {/* Mobile menu button - only show on mobile */}
@@ -223,7 +223,7 @@ export default function AccountShell({
           }}
         >
           <span>☰</span>
-          <span>Account Menu</span>
+          <span>{t('account.menu')}</span>
           <span style={{ marginInlineStart: 'auto' }}>
             {sidebarOpen
               ? (isRtl ? '▼' : '▲')
