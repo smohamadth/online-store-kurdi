@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'fs';
+import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { layoutHomeToSeeds } from '../../../src/modules/home/home.layoutMap';
 
@@ -26,5 +28,24 @@ describe('layoutHomeToSeeds', () => {
       ],
     });
     expect(seeds.map((s) => s.key)).toEqual(['hero', 'hero-2']);
+  });
+
+  it('every bundled theme.json ships a home layout that maps to sections', () => {
+    const dir = path.resolve(__dirname, '../../../../web/themes');
+    const keys = readdirSync(dir).filter((k) => {
+      try {
+        return readFileSync(path.join(dir, k, 'theme.json'), 'utf8').length > 0;
+      } catch {
+        return false;
+      }
+    });
+    const mapped: Record<string, number> = {};
+    for (const key of keys) {
+      const raw = JSON.parse(readFileSync(path.join(dir, key, 'theme.json'), 'utf8'));
+      const seeds = layoutHomeToSeeds(raw.layouts?.home);
+      mapped[key] = seeds.length;
+      expect(seeds.length, `${key} missing layouts.home`).toBeGreaterThan(0);
+    }
+    expect(Object.keys(mapped).sort()).toEqual(['bold', 'dawnlight', 'default', 'minimal', 'pulse']);
   });
 });

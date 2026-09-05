@@ -3,7 +3,7 @@
   "name": "Dawnlight",
   "niche": "Home & lifestyle",
   "description": "Quiet paper storefront for home goods and lifestyle: cream canvas, olive accent, square corners, hairline borders. Catalogue-led, not promo-led.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": "Store Builder Platform",
   "preview": "/themes/dawnlight/preview.png",
   "features": {
@@ -49,5 +49,93 @@
     "hero": "@/themes/dawnlight/sections/Hero",
     "featured": "@/themes/dawnlight/sections/Featured",
     "categories": "@/themes/dawnlight/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 28,
+      "blocks": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 1,
+          "rowSpan": 1,
+          "config": {
+            "hero": {
+              "layout": "slideshow",
+              "height": "standard",
+              "autoPlay": true,
+              "intervalSec": 8,
+              "arrows": false,
+              "dots": true
+            }
+          }
+        },
+        {
+          "id": "categories",
+          "type": "categories",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 2,
+          "rowSpan": 1,
+          "config": {
+            "title": "Rooms",
+            "subtitle": "Kitchen, table, linen.",
+            "limit": 6
+          }
+        },
+        {
+          "id": "featured",
+          "type": "featured",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 3,
+          "rowSpan": 1,
+          "config": {
+            "title": "From the atelier",
+            "subtitle": "Objects made to last a decade.",
+            "limit": 8
+          }
+        },
+        {
+          "id": "testimonials",
+          "type": "testimonials",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 4,
+          "rowSpan": 1,
+          "config": {
+            "title": "From our tables",
+            "items": [
+              {
+                "name": "Leila H.",
+                "role": "Verified buyer",
+                "rating": 5,
+                "text": "The linen arrived smelling of nothing but cotton."
+              },
+              {
+                "name": "Omar S.",
+                "role": "Verified buyer",
+                "rating": 5,
+                "text": "Packaging was paper, not plastic. The bowl is heavier than it looks."
+              }
+            ]
+          }
+        },
+        {
+          "id": "newsletter",
+          "type": "newsletter",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 5,
+          "rowSpan": 1,
+          "config": {
+            "title": "Seasonal notes"
+          }
+        }
+      ]
+    }
   }
 }

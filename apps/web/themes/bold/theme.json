@@ -3,7 +3,7 @@
   "name": "Bold",
   "niche": "Fashion drop",
   "description": "Loud, image-first fashion and lifestyle: full-bleed poster hero, two-column editorial grid, dark canvas, yellow prices. Built for drops.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": "Platform Team",
   "preview": "/themes/bold/preview.png",
   "features": {
@@ -49,5 +49,84 @@
     "hero": "@/themes/bold/sections/Hero",
     "featured": "@/themes/bold/sections/Featured",
     "categories": "@/themes/bold/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 16,
+      "blocks": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 1,
+          "rowSpan": 1,
+          "config": {
+            "hero": {
+              "layout": "slideshow",
+              "height": "tall",
+              "autoPlay": true,
+              "intervalSec": 5,
+              "arrows": true,
+              "dots": false
+            }
+          }
+        },
+        {
+          "id": "featured",
+          "type": "featured",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 2,
+          "rowSpan": 1,
+          "config": {
+            "title": "This drop",
+            "subtitle": "Two-up editorial grid. Limited sizes.",
+            "limit": 6
+          }
+        },
+        {
+          "id": "categories",
+          "type": "categories",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 3,
+          "rowSpan": 1,
+          "config": {
+            "title": "Departments",
+            "subtitle": "Street, evening, archive.",
+            "limit": 6
+          }
+        },
+        {
+          "id": "gallery",
+          "type": "gallery",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 4,
+          "rowSpan": 1,
+          "config": {
+            "title": "Lookbook",
+            "layout": "masonry",
+            "columns": 3
+          }
+        },
+        {
+          "id": "cta",
+          "type": "cta",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 5,
+          "rowSpan": 1,
+          "config": {
+            "title": "The drop is live.",
+            "subtitle": "Once it's gone, it's gone.",
+            "buttonText": "Shop the drop",
+            "buttonHref": "/products"
+          }
+        }
+      ]
+    }
   }
 }

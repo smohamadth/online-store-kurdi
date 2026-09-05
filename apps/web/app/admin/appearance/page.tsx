@@ -19,8 +19,9 @@ import { API_BASE } from '@/lib/http';
 import HomeBuilder from '@/components/HomeBuilder';
 import { applyThemeHomeLayout } from '@/lib/homeSections';
 import { ThemePicker } from './ThemePicker';
-import { getTheme, THEMES, type ThemeConfig } from '@/lib/themeRegistry';
+import { THEMES, type ThemeConfig } from '@/lib/themeRegistry';
 import { fetchThemeCatalog, resolveThemeConfig } from '@/lib/themeRuntime';
+import { mergePickedTheme } from '@/lib/mergePickedTheme';
 
 const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
   { key: 'primaryColor', label: 'Primary / buttons', hint: 'Buttons, active states, brand accents' },
@@ -352,24 +353,8 @@ export default function AdminAppearancePage() {
               activeTheme={(theme as any).activeTheme as string | null}
               installedThemes={installedThemes}
               onPick={(key) => {
-                // Picking a theme is a state change: the
-                // store's tokens become the new theme's
-                // defaults, but the merchant's overrides
-                // (e.g. custom announcement text) are
-                // preserved. The activeTheme field is
-                // separate from the tokens. resolveThemeConfig
-                // covers installed themes too (runtime catalog
-                // first, static registry fallback).
                 const picked = resolveThemeConfig(key);
-                // We merge: picked tokens overwrite theme
-                // tokens, but other fields (announcement
-                // text, custom CSS) are preserved. The
-                // `activeTheme` is set to the picked key.
-                setTheme((t) => ({
-                  ...pickedTokensToTheme(picked),
-                  ...(t as any),
-                  activeTheme: key,
-                }));
+                setTheme((t) => mergePickedTheme(t, picked));
                 notify('success', `Theme "${picked.name}" selected. Click Save to apply.`);
               }}
               onInstall={installTheme}
@@ -878,27 +863,4 @@ function ThemeTab({
   );
 }
 
-/**
- * Convert a ThemeConfig's tokens to a Theme.
- *
- * The Theme interface (in lib/theme.tsx) is the runtime shape
- * the storefront reads. The ThemeConfig (in
- * lib/themeRegistry.ts) is the on-disk shape from theme.json.
- * This function flattens the config's tokens into the
- * runtime Theme, filling in any missing fields from the
- * shipped default. Used by the theme picker so picking a
- * theme in the admin updates the page's token state without
- * losing per-store overrides on non-token fields.
- */
-function pickedTokensToTheme(picked: ReturnType<typeof getTheme>): Theme {
-  const t = picked.tokens as Record<string, string | number | boolean>;
-  return {
-    ...DEFAULT_THEME,
-    ...t,
-    // activeTheme is a separate field, set by the caller.
-    // (Spread last so it wins over any token named
-    // "activeTheme" — there isn't one today, but the
-    // precedence is explicit.)
-    activeTheme: picked.key,
-  } as Theme;
-}
+

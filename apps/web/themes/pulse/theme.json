@@ -3,7 +3,7 @@
   "name": "Pulse",
   "niche": "DTC & apps",
   "description": "Rounded, current storefront for new brands and digital-native shops: indigo accent, pill CTAs, card canvas, dark footer.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": "Store Builder Platform",
   "preview": "/themes/pulse/preview.png",
   "features": {
@@ -49,5 +49,111 @@
     "hero": "@/themes/pulse/sections/Hero",
     "featured": "@/themes/pulse/sections/Featured",
     "categories": "@/themes/pulse/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 20,
+      "blocks": [
+        {
+          "id": "hero",
+          "type": "hero",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 1,
+          "rowSpan": 1,
+          "config": {
+            "hero": {
+              "layout": "slideshow",
+              "height": "tall",
+              "autoPlay": true,
+              "intervalSec": 4,
+              "arrows": true,
+              "dots": true
+            }
+          }
+        },
+        {
+          "id": "dealCountdown",
+          "type": "dealCountdown",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 2,
+          "rowSpan": 1,
+          "config": {
+            "title": "Today only",
+            "subtitle": "Timer hits zero, price goes back.",
+            "badge": "Flash",
+            "buttonText": "Grab it",
+            "buttonHref": "/deals"
+          }
+        },
+        {
+          "id": "featured",
+          "type": "featured",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 3,
+          "rowSpan": 1,
+          "config": {
+            "title": "Best sellers",
+            "subtitle": "What just sold out last week.",
+            "limit": 8
+          }
+        },
+        {
+          "id": "stats",
+          "type": "stats",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 4,
+          "rowSpan": 1,
+          "config": {
+            "items": [
+              {
+                "value": "2",
+                "suffix": "h",
+                "label": "Average delivery"
+              },
+              {
+                "value": "50",
+                "suffix": "k+",
+                "label": "Subscribers"
+              },
+              {
+                "value": "4.8",
+                "suffix": "/5",
+                "label": "Rating"
+              }
+            ]
+          }
+        },
+        {
+          "id": "cta",
+          "type": "cta",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 5,
+          "rowSpan": 1,
+          "config": {
+            "title": "Join the list",
+            "subtitle": "Drops go to email first.",
+            "buttonText": "Shop now",
+            "buttonHref": "/products"
+          }
+        },
+        {
+          "id": "newsletter",
+          "type": "newsletter",
+          "colStart": 1,
+          "colSpan": 12,
+          "rowStart": 6,
+          "rowSpan": 1,
+          "config": {
+            "title": "Get the next drop"
+          }
+        }
+      ]
+    }
   }
 }
