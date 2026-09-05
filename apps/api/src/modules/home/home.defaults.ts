@@ -164,12 +164,12 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
       // placeholder tile is drawn, so a fresh install has a complete-looking
       // gallery before the owner uploads anything.
       items: [
-        { image: '', caption: 'New season arrivals', linkUrl: '/products?sort=newest', tone: '#2563eb' },
-        { image: '', caption: 'Everyday electronics', linkUrl: '/category/electronics', tone: '#0ea5e9' },
-        { image: '', caption: 'Wardrobe staples', linkUrl: '/category/clothing', tone: '#8b5cf6' },
-        { image: '', caption: 'Books worth your time', linkUrl: '/category/books', tone: '#f97316' },
-        { image: '', caption: 'Packed with care', linkUrl: '/products', tone: '#16a34a' },
-        { image: '', caption: 'Fast local delivery', linkUrl: '/track-order', tone: '#dc2626' },
+        { image: '/images/banners/promo-arrivals.jpg', caption: 'New season arrivals', linkUrl: '/products?sort=newest', tone: '#2563eb' },
+        { image: '/images/categories/electronics.jpg', caption: 'Everyday electronics', linkUrl: '/category/electronics', tone: '#0ea5e9' },
+        { image: '/images/categories/clothing.jpg', caption: 'Wardrobe staples', linkUrl: '/category/clothing', tone: '#8b5cf6' },
+        { image: '/images/categories/books.jpg', caption: 'Books worth your time', linkUrl: '/category/books', tone: '#f97316' },
+        { image: '/images/gallery/packaging.jpg', caption: 'Packed with care', linkUrl: '/products', tone: '#16a34a' },
+        { image: '/images/gallery/delivery.jpg', caption: 'Fast local delivery', linkUrl: '/track-order', tone: '#dc2626' },
       ],
     },
   },

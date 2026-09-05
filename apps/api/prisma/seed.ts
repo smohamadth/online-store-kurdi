@@ -104,6 +104,7 @@ async function main() {
         name: 'General',
         slug: 'general',
         description: 'Uncategorised products and import default',
+        image: '/images/categories/general.jpg',
         sortOrder: 0,
       },
     }),
@@ -162,7 +163,7 @@ async function main() {
         price: 999.99,
         compareAtPrice: 1099.99,
         quantity: 100,
-        categoryId: categories[0].id,
+        categoryId: categories[1].id,
         metaTitle: 'iPhone 15 Pro - Buy Now | Your Store',
         metaDescription: 'Get the latest iPhone 15 Pro with A17 Pro chip and titanium design.',
         metaKeywords: JSON.stringify(['iphone', 'apple', 'smartphone', 'mobile']),
@@ -213,7 +214,7 @@ async function main() {
         status: 'active',
         price: 1599.99,
         quantity: 50,
-        categoryId: categories[0].id,
+        categoryId: categories[1].id,
         metaTitle: 'MacBook Pro 14" - Professional Laptop | Your Store',
         metaDescription: 'Buy MacBook Pro 14" with M3 chip. Perfect for professionals.',
         metaKeywords: JSON.stringify(['macbook', 'apple', 'laptop', 'professional']),
@@ -242,7 +243,7 @@ async function main() {
         status: 'active',
         price: 49.99,
         compareAtPrice: 99.99,
-        categoryId: categories[3].id,
+        categoryId: categories[4].id,
         downloadLimit: 5,
         downloadExpiry: 365,
         metaTitle: 'Web Development Course - Learn to Code | Your Store',
@@ -272,7 +273,7 @@ async function main() {
         status: 'active',
         price: 29.99,
         quantity: 200,
-        categoryId: categories[1].id,
+        categoryId: categories[2].id,
         images: {
           create: [
             {
@@ -315,7 +316,7 @@ async function main() {
         status: 'active',
         price: 24.99,
         quantity: 150,
-        categoryId: categories[2].id,
+        categoryId: categories[3].id,
         images: {
           create: [
             {
@@ -559,7 +560,7 @@ async function seedBanners() {
       subtitle: 'New Season',
       description:
         'Shop the latest electronics, clothing, books and digital products with fast shipping and great support.',
-      image: '',
+      image: '/images/banners/hero-season.jpg',
       linkUrl: '/products',
       buttonText: 'Shop Now',
       secondaryText: 'View Deals',
@@ -573,7 +574,7 @@ async function seedBanners() {
       title: 'Up to 50% Off Selected Items',
       subtitle: 'Limited Time',
       description: 'Grab the best deals of the season before they are gone.',
-      image: '',
+      image: '/images/banners/hero-sale.jpg',
       linkUrl: '/deals',
       buttonText: 'Browse Deals',
       overlayColor: 'linear-gradient(120deg,#7f1d1d 0%,#b91c1c 55%,#f97316 100%)',
@@ -584,7 +585,7 @@ async function seedBanners() {
       title: 'Free Shipping On Orders Over 50',
       subtitle: 'Every Day',
       description: 'Fast, tracked delivery straight to your door.',
-      image: '',
+      image: '/images/banners/hero-shipping.jpg',
       linkUrl: '/products',
       buttonText: 'Start Shopping',
       overlayColor: 'linear-gradient(120deg,#064e3b 0%,#047857 60%,#10b981 100%)',
@@ -594,7 +595,7 @@ async function seedBanners() {
     {
       title: 'New Arrivals',
       subtitle: 'Just In',
-      image: '',
+      image: '/images/banners/promo-arrivals.jpg',
       linkUrl: '/products?sort=newest',
       buttonText: 'Explore',
       overlayColor: 'linear-gradient(120deg,#312e81,#6366f1)',
@@ -604,7 +605,7 @@ async function seedBanners() {
     {
       title: 'Best Sellers',
       subtitle: 'Top Rated',
-      image: '',
+      image: '/images/banners/promo-bestsellers.jpg',
       linkUrl: '/products?sort=popular',
       buttonText: 'See All',
       overlayColor: 'linear-gradient(120deg,#7c2d12,#ea580c)',
@@ -614,7 +615,7 @@ async function seedBanners() {
     {
       title: 'Clearance',
       subtitle: 'Final Sale',
-      image: '',
+      image: '/images/banners/promo-clearance.jpg',
       linkUrl: '/deals',
       buttonText: 'Save Now',
       overlayColor: 'linear-gradient(120deg,#0c4a6e,#0ea5e9)',
@@ -633,7 +634,7 @@ async function seedBanners() {
       description:
         'Fast local delivery, genuine products and support in your language. Create an account to track every order.',
       badge: 'New',
-      image: '',
+      image: '/images/banners/hero-season.jpg',
       linkUrl: '/register',
       buttonText: 'Create account',
       secondaryText: 'Browse products',
