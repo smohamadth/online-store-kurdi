@@ -35,16 +35,28 @@ function fullRow(
   };
 }
 
+/** Mirrors HOME_SECTION_SEED so Studio canvas matches Restore default / live home. */
 export const DEFAULT_HOME_LAYOUT: PageLayout = {
   columns: DEFAULT_COLUMNS,
   gap: DEFAULT_GAP,
   blocks: [
-    fullRow('hero', 'hero', 1, { title: 'Welcome', subtitle: 'Discover something new' }),
-    fullRow('promo', 'promo', 2, { title: 'Promotions' }),
-    fullRow('categories', 'categories', 3, { title: 'Shop by Category', subtitle: 'Browse' }),
-    fullRow('featured', 'featured', 4, { title: 'Featured Products', subtitle: 'Popular' }),
-    fullRow('newArrivals', 'newArrivals', 5, { title: 'New Arrivals' }),
-    fullRow('newsletter', 'newsletter', 6, {}),
+    fullRow('hero', 'hero', 1, {
+      hero: { layout: 'slideshow', height: 'standard', autoPlay: true, intervalSec: 6, arrows: true, dots: true },
+    }),
+    fullRow('promo', 'promo', 2, {}),
+    fullRow('trustBar', 'trustBar', 3, {}),
+    fullRow('categories', 'categories', 4, { title: 'Shop by Category', subtitle: 'Browse our wide selection of products' }),
+    fullRow('featured', 'featured', 5, { title: 'Featured Products', subtitle: 'Our most popular items', limit: 8 }),
+    fullRow('newArrivals', 'newArrivals', 6, { title: 'New Arrivals' }),
+    fullRow('dealCountdown', 'dealCountdown', 7, { title: 'Save big before midnight' }),
+    fullRow('bannerStrip', 'bannerStrip', 8, {}),
+    fullRow('trending', 'trending', 9, { title: 'Trending Now' }),
+    fullRow('testimonials', 'testimonials', 10, { title: 'Loved by our customers' }),
+    fullRow('gallery', 'gallery', 11, { title: 'From our shop' }),
+    fullRow('stats', 'stats', 12, {}),
+    fullRow('features', 'features', 13, {}),
+    fullRow('cta', 'cta', 14, { title: 'Ready to shop?', subtitle: 'The full catalogue — new drops every week.', buttonText: 'Shop now', buttonHref: '/products' }),
+    fullRow('newsletter', 'newsletter', 15, { title: 'Subscribe to Our Newsletter' }),
   ],
 };
 
@@ -53,9 +65,7 @@ export const DEFAULT_LISTING_LAYOUT: PageLayout = {
   columns: DEFAULT_COLUMNS,
   gap: DEFAULT_GAP,
   blocks: [
-    fullRow('breadcrumb', 'richText', 1, { text: '<!-- breadcrumbs -->' }),
-    fullRow('toolbar', 'richText', 2, { text: '<!-- filters / sort -->' }),
-    fullRow('grid', 'productList', 3, { title: 'Products' }),
+    fullRow('grid', 'productList', 1, { title: 'Products' }),
   ],
 };
 

@@ -206,6 +206,15 @@ export const HOME_SECTION_SEED: HomeSectionSeed[] = [
     },
   },
   {
+    key: 'cta',
+    type: 'cta',
+    title: 'Ready to shop?',
+    subtitle: 'The full catalogue — new drops every week.',
+    isVisible: true,
+    sortOrder: 115,
+    config: { buttonText: 'Shop now', buttonHref: '/products', background: '' },
+  },
+  {
     key: 'newsletter',
     type: 'newsletter',
     title: 'Subscribe to Our Newsletter',

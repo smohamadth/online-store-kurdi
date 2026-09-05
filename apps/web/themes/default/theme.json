@@ -3,7 +3,7 @@
   "name": "Default",
   "niche": "General retail",
   "description": "Conversion-first general storefront: four-column grid, trust bar, deals, and stats. Best for mixed catalogues and everyday shops.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "Platform Team",
   "preview": "/themes/default/preview.png",
   "features": {
@@ -49,5 +49,35 @@
     "hero": "@/themes/default/sections/Hero",
     "featured": "@/themes/default/sections/Featured",
     "categories": "@/themes/default/sections/Categories"
+  },
+  "layouts": {
+    "home": {
+      "columns": 12,
+      "gap": 24,
+      "blocks": [
+        { "id": "hero", "type": "hero", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": { "hero": { "layout": "slideshow", "height": "standard", "autoPlay": true, "intervalSec": 6, "arrows": true, "dots": true } } },
+        { "id": "promo", "type": "promo", "colStart": 1, "colSpan": 12, "rowStart": 2, "rowSpan": 1, "config": {} },
+        { "id": "trustBar", "type": "trustBar", "colStart": 1, "colSpan": 12, "rowStart": 3, "rowSpan": 1, "config": {} },
+        { "id": "categories", "type": "categories", "colStart": 1, "colSpan": 12, "rowStart": 4, "rowSpan": 1, "config": { "title": "Shop by Category", "subtitle": "Browse our wide selection of products" } },
+        { "id": "featured", "type": "featured", "colStart": 1, "colSpan": 12, "rowStart": 5, "rowSpan": 1, "config": { "title": "Featured Products", "subtitle": "Our most popular items", "limit": 8 } },
+        { "id": "newArrivals", "type": "newArrivals", "colStart": 1, "colSpan": 12, "rowStart": 6, "rowSpan": 1, "config": { "title": "New Arrivals" } },
+        { "id": "dealCountdown", "type": "dealCountdown", "colStart": 1, "colSpan": 12, "rowStart": 7, "rowSpan": 1, "config": { "title": "Save big before midnight" } },
+        { "id": "bannerStrip", "type": "bannerStrip", "colStart": 1, "colSpan": 12, "rowStart": 8, "rowSpan": 1, "config": {} },
+        { "id": "trending", "type": "trending", "colStart": 1, "colSpan": 12, "rowStart": 9, "rowSpan": 1, "config": { "title": "Trending Now" } },
+        { "id": "testimonials", "type": "testimonials", "colStart": 1, "colSpan": 12, "rowStart": 10, "rowSpan": 1, "config": { "title": "Loved by our customers" } },
+        { "id": "gallery", "type": "gallery", "colStart": 1, "colSpan": 12, "rowStart": 11, "rowSpan": 1, "config": { "title": "From our shop" } },
+        { "id": "stats", "type": "stats", "colStart": 1, "colSpan": 12, "rowStart": 12, "rowSpan": 1, "config": {} },
+        { "id": "features", "type": "features", "colStart": 1, "colSpan": 12, "rowStart": 13, "rowSpan": 1, "config": {} },
+        { "id": "cta", "type": "cta", "colStart": 1, "colSpan": 12, "rowStart": 14, "rowSpan": 1, "config": { "title": "Ready to shop?", "subtitle": "The full catalogue — new drops every week.", "buttonText": "Shop now", "buttonHref": "/products" } },
+        { "id": "newsletter", "type": "newsletter", "colStart": 1, "colSpan": 12, "rowStart": 15, "rowSpan": 1, "config": { "title": "Subscribe to Our Newsletter" } }
+      ]
+    },
+    "products": {
+      "columns": 12,
+      "gap": 24,
+      "blocks": [
+        { "id": "grid", "type": "productList", "colStart": 1, "colSpan": 12, "rowStart": 1, "rowSpan": 1, "config": { "title": "Products" } }
+      ]
+    }
   }
 }
