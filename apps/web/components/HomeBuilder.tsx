@@ -452,6 +452,23 @@ export default function HomeBuilder() {
               </label>
             )}
             <button
+              type="button"
+              onClick={applyThemeHome}
+              title="Copy the active theme home layout onto the live homepage"
+              style={{
+                padding: '8px 14px',
+                border: '1px solid #111',
+                borderRadius: '6px',
+                background: '#111',
+                color: '#fff',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '13px',
+              }}
+            >
+              Apply theme home
+            </button>
+            <button
               onClick={resetAll}
               title="Replaces every block with the shipped layout. Deleted blocks come back."
               style={{
