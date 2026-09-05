@@ -220,6 +220,11 @@ describe('LayoutRenderer rich blocks', () => {
     expect(container.querySelector('video')).toBeTruthy();
   });
 
+  it('accepts Home-builder video.url as well as src', () => {
+    const { container } = renderBlock('video', { url: 'https://youtu.be/dQw4w9WgXcQ' });
+    expect(container.querySelector('iframe')).toBeTruthy();
+  });
+
   it('renders an image with src and alt', () => {
     const { container } = renderBlock('image', { src: '/a.jpg', alt: 'A photo' });
     const img = container.querySelector('img') as HTMLImageElement;

@@ -145,6 +145,9 @@ model Product {
   sku           String    @unique
   type          String    @default("physical") // physical, digital
   status        String    @default("draft") // draft, active, inactive, archived
+  // Home “Featured products” merchandising. GET /products/featured prefers
+  // these; if none are flagged it falls back to review-count then recency.
+  isFeatured    Boolean   @default(false)
   
   // Pricing
   price         Float
@@ -223,6 +226,7 @@ model Product {
   @@index([status])
   @@index([type])
   @@index([price])
+  @@index([isFeatured])
 }
 
 // Product image model

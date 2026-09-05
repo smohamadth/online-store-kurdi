@@ -28,6 +28,7 @@ import {
   deleteHomeSection,
   resetHomeSections,
 } from '@/lib/homeSections';
+import { loadHomeVersions, recordHomeVersion, type HomeVersion } from '@/lib/homeHistory';
 
 type Notice = { type: 'success' | 'error'; text: string } | null;
 
@@ -76,6 +77,7 @@ export default function HomeBuilder() {
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'phone'>('desktop');
   const [previewKey, setPreviewKey] = useState(0);
   const [undoStack, setUndoStack] = useState<HomeSection[][]>([]);
+  const [versions, setVersions] = useState<HomeVersion[]>([]);
   const PREVIEW_WIDTHS = { desktop: 1280, tablet: 768, phone: 375 } as const;
 
   const pushUndo = (rows: HomeSection[]) => {
@@ -102,8 +104,13 @@ export default function HomeBuilder() {
 
   useEffect(() => {
     load();
+    setVersions(loadHomeVersions());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const rememberVersion = (rows: HomeSection[]) => {
+    setVersions(recordHomeVersion(rows));
+  };
 
   useEffect(() => {
     const unsaved = Object.values(dirty).some(Boolean);
@@ -155,6 +162,7 @@ export default function HomeBuilder() {
       setSnapshots((s) => ({ ...s, [saved.id]: cloneSection(saved) }));
       setDirty((d) => ({ ...d, [row.id]: false }));
       bumpPreview();
+      rememberVersion(sections.map((r) => (r.id === saved.id ? saved : r)));
       say('success', `“${row.title || TYPE_LABELS[row.type] || row.key}” saved.`);
     } catch (e) {
       // Never clear the dirty flag here: the change was NOT stored.
@@ -188,6 +196,7 @@ export default function HomeBuilder() {
     try {
       const saved = await reorderHomeSections(next.map((s) => s.id));
       setSections(saved);
+      rememberVersion(saved);
       bumpPreview();
     } catch (e) {
       setSections(previous); // roll back so the UI matches the database
@@ -255,6 +264,7 @@ export default function HomeBuilder() {
       setOpenId(created.id);
       setNewKey('');
       bumpPreview();
+      rememberVersion([...sections, created]);
       say('success', 'Section added. It is live on the home page.');
     } catch (e) {
       say('error', errorMessage(e, 'Could not add the section.'));
@@ -276,6 +286,7 @@ export default function HomeBuilder() {
         return next;
       });
       bumpPreview();
+      rememberVersion(sections.filter((r) => r.id !== row.id));
       say('success', 'Section deleted.');
     } catch (e) {
       say('error', errorMessage(e, 'Could not delete the section.'));
@@ -295,6 +306,7 @@ export default function HomeBuilder() {
       setSnapshots(next);
       setDirty({});
       bumpPreview();
+      rememberVersion(rows);
       say('success', 'Home page restored to the shipped layout.');
     } catch (e) {
       say('error', errorMessage(e, 'Reset failed.'));
@@ -870,6 +882,53 @@ function TypeEditor({
                   background: idx === items.length - 1 ? '#f5f5f5' : '#fff',
                   color: idx === items.length - 1 ? '#bbb' : '#444',
                   cursor: idx === items.length - 1 ? 'default' : 'pointer',
+                }}
+              >
+                ↓
+              </button>
+              <button
+                aria-label="Remove item"
+                onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #fca5a5',
+                  color: '#b91c1c',
+                  background: '#fff',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setItems([...items, { ...blank }])}
+          style={{
+            marginTop: '8px',
+            padding: '7px 14px',
+            border: '1px dashed #bbb',
+            borderRadius: '6px',
+            background: '#fff',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+          }}
+        >
+          + Add item
+        </button>
+      </div>
+    );
+  };
+
+  const textField = (key: string, label: string, placeholder = '') => (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      <input
+        style={inputStyle}
+        value={cfg[key] ?? ''}
+        placeor: idx === items.length - 1 ? 'default' : 'pointer',
                 }}
               >
                 ↓

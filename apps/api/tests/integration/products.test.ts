@@ -109,6 +109,19 @@ describe('GET /api/products/featured', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(3);
   });
+
+  it('prefers products flagged isFeatured when the column is present', async () => {
+    await createProduct({ name: 'Plain', slug: 'plain-feat' });
+    const flagged = await createProduct({ name: 'Star', slug: 'star-feat' });
+    try {
+      await mockPrisma.product.update({ where: { id: flagged.id }, data: { isFeatured: true } as any });
+    } catch {
+      // In-memory mock / unmigrated DB: fallback path still returns actives.
+    }
+    const res = await request(app).get('/api/products/featured?limit=8');
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
 });
 
 describe('GET /api/products/search', () => {

@@ -64,6 +64,7 @@ const createProductSchema = z.object({
   // Stored as a JSON string column. Accept an array or a string from the
   // client and always normalise to a string before it reaches Prisma;
   // passing the raw array made every product create/update fail with a 500.
+  isFeatured: z.boolean().optional(),
   metaKeywords: z
     .union([z.array(z.string()), z.string()])
     .optional()
@@ -173,6 +174,7 @@ function formatProduct(product: any, opts?: { includeDownloadUrl?: boolean }) {
     fileFormat: deriveFileFormat(product.downloadUrl),
     downloadLimit: product.downloadLimit ?? null,
     downloadExpiry: product.downloadExpiry ?? null,
+    isFeatured: Boolean(product.isFeatured),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -301,19 +303,32 @@ router.get('/featured', optionalAuth, async (req, res, next) => {
   try {
     const { limit } = parsePagination(req.query, { limit: 10 });
 
-    // No featured flag on Product yet: rank by review volume (popularity),
-    // then recency. Newest-only hid well-reviewed catalogue items.
-    const products = await prisma.product.findMany({
-      where: { status: 'active' },
-      include: {
-        images: true,
-        category: true,
-        variants: true,
-        reviews: { select: { rating: true } },
-      },
-      orderBy: [{ reviews: { _count: 'desc' } }, { createdAt: 'desc' }],
-      take: limit,
-    });
+    const include = {
+      images: true,
+      category: true,
+      variants: true,
+      reviews: { select: { rating: true } },
+    } as const;
+    const orderBy = [{ reviews: { _count: 'desc' as const } }, { createdAt: 'desc' as const }];
+    let products: any[] = [];
+    try {
+      products = await prisma.product.findMany({
+        where: { status: 'active', isFeatured: true } as any,
+        include,
+        orderBy,
+        take: limit,
+      });
+    } catch {
+      products = [];
+    }
+    if (!products.length) {
+      products = await prisma.product.findMany({
+        where: { status: 'active' },
+        include,
+        orderBy,
+        take: limit,
+      });
+    }
 
     const includeDownloadUrl = isStaff(req.user);
     res.json({
@@ -665,6 +680,7 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), async (req, res,
         sku: productData.sku,
         type: productData.type,
         status: productData.status,
+        isFeatured: productData.isFeatured,
         price: productData.price,
         compareAtPrice: productData.compareAtPrice,
         costPrice: productData.costPrice,
@@ -790,4 +806,4 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res, next) =
   }
 });
 
-export default router;
+export default router;r;

@@ -84,6 +84,7 @@ export default function AdminProductsPage() {
     downloadUrl: '',
     downloadLimit: '',
     downloadExpiry: '',
+    isFeatured: false,
   });
 
   useEffect(() => {
@@ -192,6 +193,7 @@ export default function AdminProductsPage() {
       variants: [],
       status: formData.status,
       type: formData.type,
+      isFeatured: Boolean(formData.isFeatured),
       averageRating: 0,
       reviewCount: 0,
       createdAt: new Date().toISOString(),
@@ -271,6 +273,7 @@ export default function AdminProductsPage() {
       downloadUrl: '',
       downloadLimit: '',
       downloadExpiry: '',
+      isFeatured: false,
     });
     setProductImages([]);
     setSeo({ metaTitle: '', metaDescription: '', metaKeywords: [], slug: '' });
@@ -296,6 +299,7 @@ export default function AdminProductsPage() {
       downloadExpiry: (product as any).downloadExpiry
         ? String((product as any).downloadExpiry)
         : '',
+      isFeatured: Boolean((product as any).isFeatured),
     });
 
     // Load stored SEO, falling back to generated values for products created
@@ -733,6 +737,14 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(formData.isFeatured)}
+                  onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+                />
+                Feature on the home page
+              </label>
 
               {/* Image Gallery Upload */}
               <div style={{ marginBottom: '24px' }}>

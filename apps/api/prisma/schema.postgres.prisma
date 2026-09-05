@@ -155,6 +155,7 @@ model Product {
   sku           String    @unique
   type          String    @default("physical") // physical, digital
   status        String    @default("draft") // draft, active, inactive, archived
+  isFeatured    Boolean   @default(false)
   
   // Pricing
   price         Float

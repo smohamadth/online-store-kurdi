@@ -45,6 +45,7 @@ export interface Product {
   downloadLimit: number | null;
   /** Number of days the per-order link is valid. */
   downloadExpiry: number | null;
+  isFeatured?: boolean;
   createdAt: string;
   updatedAt: string;
 }

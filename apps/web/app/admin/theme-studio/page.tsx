@@ -113,6 +113,7 @@ export default function ThemeStudioPage() {
   const [createOpen, setCreateOpen] = useState(false);
   // Preview viewport for checking the builder output at different displays.
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'phone'>('desktop');
+  const [livePreviewKey, setLivePreviewKey] = useState(0);
   const PREVIEW_WIDTHS: Record<'desktop' | 'tablet' | 'phone', number> = {
     desktop: 1280,
     tablet: 768,
@@ -528,6 +529,19 @@ export default function ThemeStudioPage() {
               </div>
             </div>
           </div>
+          {page === 'home' && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: '#666' }}>Live storefront home (saved Home builder)</span>
+                <button type="button" onClick={() => setLivePreviewKey((k) => k + 1)} style={btnGhost}>Refresh</button>
+              </div>
+              <iframe
+                title="Live home preview"
+                src={`/?homePreview=${livePreviewKey}`}
+                style={{ width: '100%', height: 280, border: '1px solid #e5e5e5', borderRadius: 8, background: '#fff' }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -674,6 +688,27 @@ function TokenEditor({ tokens, onTokenChange }: { tokens: Record<string, string 
           <option value="soft">Soft</option>
           <option value="strong">Strong</option>
         </select>
+      </label>
+      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Announcement</span>
+        <input type="checkbox" checked={Boolean(tokens.showAnnouncement)} onChange={(e) => onTokenChange('showAnnouncement', e.target.checked)} />
+      </label>
+      <label style={{ fontSize: 13 }}>
+        Announcement text
+        <input type="text" value={String(tokens.announcementText ?? '')} onChange={(e) => onTokenChange('announcementText', e.target.value)} style={{ ...inputField, width: '100%', marginTop: 4 }} />
+      </label>
+      <label style={{ fontSize: 13 }}>
+        Announcement link
+        <input type="text" value={String(tokens.announcementLink ?? '')} onChange={(e) => onTokenChange('announcementLink', e.target.value)} style={{ ...inputField, width: '100%', marginTop: 4 }} />
+      </label>
+      <label style={{ fontSize: 13 }}>
+        Custom CSS
+        <textarea
+          value={String(tokens.customCss ?? '')}
+          onChange={(e) => onTokenChange('customCss', e.target.value)}
+          spellCheck={false}
+          style={{ ...inputField, width: '100%', marginTop: 4, minHeight: 72, fontFamily: 'monospace', fontSize: 12 }}
+        />
       </label>
     </div>
   );
