@@ -65,7 +65,12 @@ router.put('/themes/:key', authenticate, authorize('admin', 'manager'), async (r
     logger.info(`Theme "${req.params.key}" saved to disk`);
     res.json({ status: 'success', data: cfg });
   } catch (err: any) {
-    res.status(400).json({ status: 'error', message: err?.message || 'Invalid theme config', code: 'INVALID_THEME' });
+    const bundled = /bundled platform theme/i.test(String(err?.message || ''));
+    res.status(bundled ? 403 : 400).json({
+      status: 'error',
+      message: err?.message || 'Invalid theme config',
+      code: bundled ? 'BUNDLED_THEME' : 'INVALID_THEME',
+    });
   }
 });
 

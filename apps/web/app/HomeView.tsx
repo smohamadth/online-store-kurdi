@@ -48,6 +48,7 @@ import LookbookSection from '@/components/rich/LookbookSection';
 import ShowcaseRow from '@/components/rich/ShowcaseRow';
 import { CtaBand, StepsBand, PricingBand } from '@/components/HomeRichBlocks';
 import { fetchHomeSections, HomeSection } from '@/lib/homeSections';
+import { readHomePreviewDraft } from '@/lib/homePreviewDraft';
 import { pickStorefrontHomeSections } from '@/lib/layouts/homeMapping';
 import { heroOptionsFromSectionConfig } from '@/lib/heroOptions';
 import { featuredProductsToShow } from '@/lib/featuredGrid';
@@ -103,7 +104,12 @@ export default function HomeView() {
     fetchHomeSections()
       .then((rows) => {
         if (!alive) return;
-        setSections(rows);
+        const draft =
+          typeof window !== 'undefined' &&
+          new URLSearchParams(window.location.search).has('homePreview')
+            ? readHomePreviewDraft()
+            : null;
+        setSections(draft ?? rows);
       })
       .catch(() => {
         if (!alive) return;

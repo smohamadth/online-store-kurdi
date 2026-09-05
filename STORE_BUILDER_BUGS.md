@@ -29,7 +29,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 **Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
 
 ### 3. Studio preview is not the storefront
-**Status:** partial. Canvas still uses LayoutRenderer. Home tab also embeds the live `/?homePreview=` iframe. Product tiles, video `url`, quote/testimonial aliases improved.
+**Status:** partial. Canvas still uses LayoutRenderer (sample merch + token CSS + hero banner copy). Home tab also embeds the live `/?homePreview=` iframe. Not ProductCard/HeroGallery.
 
 ### 4. Rich Studio blocks never appear on the live home page
 **Status:** fixed. `BLOCK_TO_SECTION` covers every `BlockType`. Live home still uses DB sections (P0.1).
@@ -82,7 +82,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 **Status:** fixed. Controls disabled for Bold/Dawnlight/Minimal/Pulse.
 
 ### 18. No live storefront preview from the Home builder
-**Status:** partial. Real `/` iframe at device widths. Unsaved drafts are not in the iframe (honest). Studio home also has a live iframe.
+**Status:** fixed enough. Real `/` iframe at device widths. Unsaved edits write a same-origin sessionStorage draft that `HomeView` only reads when `homePreview` is set; the iframe refreshes after a short pause. Save still publishes.
 
 ### 19. No undo / versioning
 **Status:** fixed enough. Discard + session Undo + **Saved versions** (localStorage, last 20 published snapshots). Restoring marks rows dirty until saved. Not a server-side audit log.

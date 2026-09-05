@@ -29,6 +29,7 @@ import {
   resetHomeSections,
 } from '@/lib/homeSections';
 import { loadHomeVersions, recordHomeVersion, type HomeVersion } from '@/lib/homeHistory';
+import { writeHomePreviewDraft } from '@/lib/homePreviewDraft';
 
 type Notice = { type: 'success' | 'error'; text: string } | null;
 
@@ -111,6 +112,17 @@ export default function HomeBuilder() {
   const rememberVersion = (rows: HomeSection[]) => {
     setVersions(recordHomeVersion(rows));
   };
+
+  useEffect(() => {
+    if (sections.length) writeHomePreviewDraft(sections);
+  }, [sections]);
+
+  useEffect(() => {
+    const unsaved = Object.values(dirty).some(Boolean);
+    if (!unsaved) return;
+    const t = window.setTimeout(() => bumpPreview(), 800);
+    return () => window.clearTimeout(t);
+  }, [sections, dirty]);
 
   useEffect(() => {
     const unsaved = Object.values(dirty).some(Boolean);
@@ -723,7 +735,7 @@ export default function HomeBuilder() {
           <div>
             <h3 style={{ fontWeight: 700, margin: 0 }}>Live preview</h3>
             <p style={{ fontSize: '13px', color: '#666', marginTop: 4, maxWidth: 560 }}>
-              The real storefront at this width. Unsaved block edits are not shown — save first, then Refresh.
+              The real storefront at this width. Unsaved edits appear after a short pause (same-tab draft); save to publish.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

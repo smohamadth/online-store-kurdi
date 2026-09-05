@@ -146,7 +146,8 @@ describe('PUT /api/theme-studio/themes/:key', () => {
       .put('/api/theme-studio/themes/default')
       .set('Authorization', `Bearer ${token}`)
       .send({ ...cfg('default'), name: 'Hijacked' });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('BUNDLED_THEME');
     const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'theme.json'), 'utf8'));
     expect(onDisk.name).toBe('Theme default');
   });

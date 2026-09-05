@@ -21,6 +21,9 @@ export function studioLayoutData(): LayoutData {
       name: p.name,
       slug: p.slug,
       price: p.price,
+      image: `data:image/svg+xml,${encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="${p.accent}" width="200" height="200"/></svg>`,
+      )}`,
     })),
     categories: PREVIEW_CATEGORIES.map((c) => ({
       name: c.name,

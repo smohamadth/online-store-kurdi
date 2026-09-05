@@ -143,12 +143,21 @@ function productGrid(b: LayoutBlock, d: LayoutData, fallbackTitle: string) {
 
 /** Map block type -> a small presentational renderer. */
 const BLOCK_RENDERERS: Record<string, BlockRenderer> = {
-  hero: (b, d) => (
-    <div>
-      <h2 style={{ margin: 0 }}>{String(b.config.title ?? d.title ?? '')}</h2>
-      {String(b.config.subtitle ?? '') && <p style={{ color: 'var(--muted)', marginTop: 6 }}>{String(b.config.subtitle)}</p>}
-    </div>
-  ),
+  hero: (b, d) => {
+    const banners = Array.isArray(d.banners) ? d.banners : [];
+    const first = banners[0] as { title?: string; subtitle?: string; image?: string } | undefined;
+    const title = String(b.config.title ?? first?.title ?? d.title ?? '');
+    const subtitle = String(b.config.subtitle ?? first?.subtitle ?? '');
+    return (
+      <div>
+        {first?.image ? (
+          <img src={String(first.image)} alt="" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 'var(--radius)', marginBottom: 12 }} />
+        ) : null}
+        {title ? <h2 style={{ margin: 0 }}>{title}</h2> : null}
+        {subtitle ? <p style={{ color: 'var(--muted)', marginTop: 6 }}>{subtitle}</p> : null}
+      </div>
+    );
+  },
   richText: (b) => {
     const html = b.config.html ?? b.config.text ?? '';
     if (!html) return null;
