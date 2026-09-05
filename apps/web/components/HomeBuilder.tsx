@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import ImageUpload from '@/components/ImageUpload';
 import { useIsMobile } from '@/lib/hooks';
+import { useTheme } from '@/lib/theme';
 import { ButtonSpinner, LoadingState } from '@/components/Spinner';
 import { errorMessage, http } from '@/lib/http';
 import {
@@ -45,9 +46,19 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '6px',
 };
 
+/** Bundled themes that ship their own hero and ignore slideshow chrome. */
+const NICHE_HERO_THEMES = new Set(['bold', 'dawnlight', 'minimal', 'pulse']);
+
+function cloneSection(row: HomeSection): HomeSection {
+  return { ...row, config: JSON.parse(JSON.stringify(row.config || {})) };
+}
+
 export default function HomeBuilder() {
   const isMobile = useIsMobile();
+  const { theme } = useTheme();
+  const nicheHero = NICHE_HERO_THEMES.has(theme.activeTheme || '');
   const [sections, setSections] = useState<HomeSection[]>([]);
+  const [snapshots, setSnapshots] = useState<Record<string, HomeSection>>({});
   const [loading, setLoading] = useState(true);
   // Drag-and-drop reordering (native HTML5 DnD, no dependency) - same
   // pattern as the page-block editor: the grip handle starts the drag,
@@ -70,7 +81,12 @@ export default function HomeBuilder() {
 
   const load = () =>
     fetchHomeSections()
-      .then(setSections)
+      .then((rows) => {
+        setSections(rows);
+        const next: Record<string, HomeSection> = {};
+        for (const r of rows) next[r.id] = cloneSection(r);
+        setSnapshots(next);
+      })
       .catch((e) => say('error', errorMessage(e, 'Could not load the home page layout.')))
       .finally(() => setLoading(false));
 
@@ -113,6 +129,7 @@ export default function HomeBuilder() {
         config: row.config,
       });
       setSections((rows) => rows.map((r) => (r.id === saved.id ? saved : r)));
+      setSnapshots((s) => ({ ...s, [saved.id]: cloneSection(saved) }));
       setDirty((d) => ({ ...d, [row.id]: false }));
       say('success', `“${row.title || TYPE_LABELS[row.type] || row.key}” saved.`);
     } catch (e) {
@@ -207,6 +224,7 @@ export default function HomeBuilder() {
         config: defaultConfigFor(newType),
       });
       setSections((rows) => [...rows, created]);
+      setSnapshots((s) => ({ ...s, [created.id]: cloneSection(created) }));
       setOpenId(created.id);
       setNewKey('');
       say('success', 'Section added. It is live on the home page.');
@@ -224,6 +242,11 @@ export default function HomeBuilder() {
     try {
       await deleteHomeSection(row.id);
       setSections((rows) => rows.filter((r) => r.id !== row.id));
+      setSnapshots((s) => {
+        const next = { ...s };
+        delete next[row.id];
+        return next;
+      });
       say('success', 'Section deleted.');
     } catch (e) {
       say('error', errorMessage(e, 'Could not delete the section.'));
@@ -238,6 +261,9 @@ export default function HomeBuilder() {
     try {
       const rows = await resetHomeSections();
       setSections(rows);
+      const next: Record<string, HomeSection> = {};
+      for (const r of rows) next[r.id] = cloneSection(r);
+      setSnapshots(next);
       setDirty({});
       say('success', 'Home page restored to the shipped layout.');
     } catch (e) {
@@ -276,20 +302,40 @@ export default function HomeBuilder() {
               immediately.
             </p>
           </div>
-          <button
-            onClick={resetAll}
-            style={{
-              padding: '8px 14px',
-              border: '1px solid #d4d4d4',
-              borderRadius: '6px',
-              background: '#fff',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '13px',
-            }}
-          >
-            Restore default layout
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '8px 14px',
+                border: '1px solid #d4d4d4',
+                borderRadius: '6px',
+                background: '#fff',
+                fontWeight: 600,
+                fontSize: '13px',
+                textDecoration: 'none',
+                color: '#111',
+              }}
+            >
+              Open live home
+            </a>
+            <button
+              onClick={resetAll}
+              title="Replaces every block with the shipped layout. Deleted blocks come back."
+              style={{
+                padding: '8px 14px',
+                border: '1px solid #d4d4d4',
+                borderRadius: '6px',
+                background: '#fff',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '13px',
+              }}
+            >
+              Restore default layout
+            </button>
+          </div>
         </div>
 
         {notice && (
@@ -453,7 +499,12 @@ export default function HomeBuilder() {
                       </div>
                     </div>
 
-                    <TypeEditor row={row} patchConfig={patchConfig} isMobile={isMobile} />
+                    <TypeEditor
+                      row={row}
+                      patchConfig={patchConfig}
+                      isMobile={isMobile}
+                      nicheHero={nicheHero}
+                    />
 
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                       <button
@@ -577,10 +628,12 @@ function TypeEditor({
   row,
   patchConfig,
   isMobile,
+  nicheHero,
 }: {
   row: HomeSection;
   patchConfig: (id: string, patch: Record<string, any>) => void;
   isMobile: boolean;
+  nicheHero?: boolean;
 }) {
   const cfg = row.config || {};
 
@@ -888,6 +941,25 @@ function TypeEditor({
                         setItems(next);
                       }}
                     />
+             ge={it.image || undefined}
+                    onUpload={(url) => {
+                      const next = [...items];
+                      next[idx] = { ...next[idx], image: url };
+                      setItems(next);
+                    }}
+                  />
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <input
+                      style={inputStyle}
+                      placeholder="Caption"
+                      aria-label={`Gallery caption ${idx + 1}`}
+                      value={it.caption ?? ''}
+                      onChange={(e) => {
+                        const next = [...items];
+                        next[idx] = { ...next[idx], caption: e.target.value };
+                        setItems(next);
+                      }}
+                    />
                     <input
                       style={inputStyle}
                       placeholder="Link URL (optional) e.g. /category/clothing"
@@ -1064,6 +1136,7 @@ function TypeEditor({
       // block reads as one unit (lib/heroOptions.ts normalises it on the
       // storefront; anything invalid falls back per key).
       const hero = (cfg.hero || {}) as Record<string, any>;
+      const slideshowChrome = !nicheHero && (hero.layout || 'slideshow') === 'slideshow';
       const patchHero = (patch: Record<string, any>) =>
         patchConfig(row.id, { hero: { ...hero, ...patch } });
       const heroSelect = (
@@ -1114,12 +1187,14 @@ function TypeEditor({
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
+              opacity: slideshowChrome ? 1 : 0.45,
             }}
           >
             <input
               type="checkbox"
               id="hero-autoplay"
               checked={hero.autoPlay !== false}
+              disabled={!slideshowChrome}
               onChange={(e) => patchHero({ autoPlay: e.target.checked })}
             />
             <label htmlFor="hero-autoplay" style={{ fontWeight: 600 }}>
@@ -1131,7 +1206,7 @@ function TypeEditor({
               max={10}
               value={hero.intervalSec || 6}
               aria-label="Autoplay interval (seconds)"
-              disabled={hero.autoPlay === false}
+              disabled={!slideshowChrome || hero.autoPlay === false}
               onChange={(e) => patchHero({ intervalSec: parseInt(e.target.value) })}
               style={{ flex: 1, marginInlineStart: '6px' }}
             />
@@ -1139,11 +1214,19 @@ function TypeEditor({
               {hero.intervalSec || 6}s
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: '18px',
+              flexWrap: 'wrap',
+              opacity: slideshowChrome ? 1 : 0.45,
+            }}
+          >
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
               <input
                 type="checkbox"
                 checked={hero.arrows !== false}
+                disabled={!slideshowChrome}
                 onChange={(e) => patchHero({ arrows: e.target.checked })}
               />
               Prev/next arrows
@@ -1152,17 +1235,16 @@ function TypeEditor({
               <input
                 type="checkbox"
                 checked={hero.dots !== false}
+                disabled={!slideshowChrome}
                 onChange={(e) => patchHero({ dots: e.target.checked })}
               />
               Slide dots
             </label>
           </div>
           <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
-            These options apply to the platform hero (the Default theme and
-            themes without their own hero). A theme that ships its own hero
-            design — Bold, Dawnlight, Minimal, Pulse — keeps its look and
-            only honours the “Single” and “Split” layout choices (both show
-            the first slide only).
+            {nicheHero
+              ? 'The active theme (Bold, Dawnlight, Minimal, or Pulse) draws its own hero. Slideshow autoplay, arrows and dots do not apply; layout still chooses single vs split where the theme honours it.'
+              : 'Slideshow autoplay, arrows and dots apply to the Default (platform) hero. Single and split layouts ignore them.'}
           </p>
         </div>
       );
@@ -2040,6 +2122,16 @@ function defaultConfigFor(type: string): Record<string, any> {
       };
     case 'showcaseRow':
       return { category: '', limit: 8, viewAllText: 'View all →' };
+    case 'newsletter':
+      return { buttonText: 'Subscribe', placeholder: 'Enter your email' };
+    case 'dealCountdown':
+      return {
+        badge: 'Deal of the day',
+        buttonText: 'Shop deals',
+        buttonHref: '/deals',
+        gradientFrom: '#111827',
+        gradientTo: '#374151',
+      };
     default:
       return {};
   }

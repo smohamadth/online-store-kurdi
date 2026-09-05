@@ -58,6 +58,25 @@ export function studioTokenStyle(
   if (t.radius !== undefined && t.radius !== null) {
     vars['--radius'] = `${t.radius}px`;
   }
+  if (t.buttonRadius !== undefined && t.buttonRadius !== null) {
+    vars['--btn-radius'] = `${t.buttonRadius}px`;
+  }
+  if (t.containerWidth !== undefined && t.containerWidth !== null) {
+    vars['--container'] = `${t.containerWidth}px`;
+  }
+  if (t.headingWeight !== undefined && t.headingWeight !== null) {
+    vars['--heading-weight'] = String(t.headingWeight);
+  }
+  if (t.baseFontSize !== undefined && t.baseFontSize !== null) {
+    vars['--font-size'] = `${t.baseFontSize}px`;
+  }
+  const shadows: Record<string, string> = {
+    none: 'none',
+    soft: '0 1px 3px rgba(0,0,0,0.06)',
+    strong: '0 10px 30px rgba(0,0,0,0.12)',
+  };
+  const shadow = shadows[String(t.cardShadow || 'soft')] || shadows.soft;
+  vars['--shadow'] = shadow;
   if (t.cardBg) vars['--surface-2'] = String(t.cardBg);
   return vars;
 }

@@ -81,13 +81,13 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** partial. Home builder can add `newsletter` and `dealCountdown` (HomeView renders them). Still no `cta`/`pricing`/`steps` on Home (those are Studio-only; HomeView has no cases). Hero/categories remain singletons.
 
 ### 17. Niche theme heroes ignore most hero options
-HomeBuilder copy admits Bold/Dawnlight/Minimal/Pulse only honour single/split. Slideshow autoplay/arrows/dots are dead for those themes. No UI that disables the dead controls when a niche theme is active.
+**Status:** fixed. Home builder disables autoplay/arrows/dots when the active theme is Bold/Dawnlight/Minimal/Pulse, or when layout is not slideshow. Copy explains the limit.
 
 ### 18. No live storefront preview from the Home builder
-Edits require opening `/` in another tab. No device frames. Theme Studio preview is the wrong renderer (P0.3).
+**Status:** partial. Home builder has “Open live home”. No in-admin device frames. Theme Studio preview is still LayoutRenderer (P0.3).
 
 ### 19. No undo / versioning
-Reset wipes **all** home sections (`deleteMany` + seed). No per-block revert, no history. Studio delete of a custom theme is permanent (OK) but bundled duplicate flow is missing (P0.2).
+**Status:** partial. Dirty blocks have **Discard changes** (last saved snapshot). Reset still wipes everything. No history / versions.
 
 ### 20. Reorder can drop sections not in the payload
 **Status:** fixed. Omitted ids are appended after the payload (previous relative order), so leftover `sortOrder` values cannot interleave.
@@ -111,7 +111,7 @@ Only some colours + font/size/radius. Missing `productsPerRow`, `cardShadow`, `s
 **Status:** documented in Theme Studio header (zip = tokens + layout JSON only). Data-only by design (`KNOWN_GAPS` §13.1).
 
 ### 27. Home builder “Restore default” vs “deleted keys”
-Reset restores seed. `ensureSeeded` on GET re-inserts **new** platform keys after an upgrade, which can surprise a carefully emptied page.
+**Status:** not a live bug on GET. Public GET does not re-seed. Reset still restores the full seed (including deleted keys) — that is the restore action. Tooltip on the button says so.
 
 ---
 

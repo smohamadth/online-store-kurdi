@@ -650,6 +650,30 @@ function TokenEditor({ tokens, onTokenChange }: { tokens: Record<string, string 
         <span>Radius</span>
         <input type="number" value={Number(tokens.radius ?? 8)} onChange={(e) => onTokenChange('radius', parseInt(e.target.value) || 0)} style={{ ...inputField, width: 70 }} />
       </label>
+      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Button radius</span>
+        <input type="number" value={Number(tokens.buttonRadius ?? tokens.radius ?? 8)} onChange={(e) => onTokenChange('buttonRadius', parseInt(e.target.value) || 0)} style={{ ...inputField, width: 70 }} />
+      </label>
+      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Heading weight</span>
+        <input type="number" min={400} max={900} step={100} value={Number(tokens.headingWeight ?? 800)} onChange={(e) => onTokenChange('headingWeight', parseInt(e.target.value) || 800)} style={{ ...inputField, width: 70 }} />
+      </label>
+      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Container width</span>
+        <input type="number" min={720} max={1600} value={Number(tokens.containerWidth ?? 1200)} onChange={(e) => onTokenChange('containerWidth', parseInt(e.target.value) || 1200)} style={{ ...inputField, width: 70 }} />
+      </label>
+      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Products per row</span>
+        <input type="number" min={2} max={6} value={Number(tokens.productsPerRow ?? 4)} onChange={(e) => onTokenChange('productsPerRow', Math.max(2, Math.min(6, parseInt(e.target.value) || 4)))} style={{ ...inputField, width: 70 }} />
+      </label>
+      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>Card shadow</span>
+        <select value={String(tokens.cardShadow ?? 'soft')} onChange={(e) => onTokenChange('cardShadow', e.target.value)} style={{ ...inputField, width: 90 }}>
+          <option value="none">None</option>
+          <option value="soft">Soft</option>
+          <option value="strong">Strong</option>
+        </select>
+      </label>
     </div>
   );
 }

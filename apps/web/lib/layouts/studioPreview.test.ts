@@ -32,4 +32,19 @@ describe('studioTokenStyle', () => {
     expect(s['--text']).toBe('#111111');
     expect(s['--radius']).toBe('12px');
   });
+
+  it('emits density tokens (container, heading weight, shadow)', () => {
+    const s = studioTokenStyle({
+      containerWidth: 1280,
+      headingWeight: 700,
+      cardShadow: 'strong',
+      buttonRadius: 4,
+      baseFontSize: 15,
+    });
+    expect(s['--container']).toBe('1280px');
+    expect(s['--heading-weight']).toBe('700');
+    expect(s['--shadow']).toContain('0 10px 30px');
+    expect(s['--btn-radius']).toBe('4px');
+    expect(s['--font-size']).toBe('15px');
+  });
 });
