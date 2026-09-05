@@ -276,7 +276,6 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/currencies', currencyRoutes);
 app.use('/api/i18n', storefrontI18nRoutes);
 app.use('/api/content-translations', contentTranslationsRoutes);
-app.use('/api/i18n', storefrontI18nRoutes);
 // Bulk import/export (admin). Export is a file download; import is a
 // preview (validate, no write) then an all-or-nothing commit.
 app.use('/api/import-export', importExportRoutes);
