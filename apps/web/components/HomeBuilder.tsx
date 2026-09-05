@@ -73,6 +73,11 @@ export default function HomeBuilder() {
   const [adding, setAdding] = useState(false);
   const [newType, setNewType] = useState('richText');
   const [newKey, setNewKey] = useState('');
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'phone'>('desktop');
+  const [previewKey, setPreviewKey] = useState(0);
+  const PREVIEW_WIDTHS = { desktop: 1280, tablet: 768, phone: 375 } as const;
+
+  const bumpPreview = () => setPreviewKey((k) => k + 1);
 
   const say = (type: 'success' | 'error', text: string) => {
     setNotice({ type, text });
@@ -131,6 +136,7 @@ export default function HomeBuilder() {
       setSections((rows) => rows.map((r) => (r.id === saved.id ? saved : r)));
       setSnapshots((s) => ({ ...s, [saved.id]: cloneSection(saved) }));
       setDirty((d) => ({ ...d, [row.id]: false }));
+      bumpPreview();
       say('success', `“${row.title || TYPE_LABELS[row.type] || row.key}” saved.`);
     } catch (e) {
       // Never clear the dirty flag here: the change was NOT stored.
@@ -147,6 +153,7 @@ export default function HomeBuilder() {
     try {
       const saved = await updateHomeSection(row.id, { isVisible: next });
       setSections((rows) => rows.map((r) => (r.id === saved.id ? { ...r, ...saved } : r)));
+      bumpPreview();
     } catch (e) {
       say('error', errorMessage(e, 'Could not change visibility.'));
     } finally {
@@ -162,6 +169,7 @@ export default function HomeBuilder() {
     try {
       const saved = await reorderHomeSections(next.map((s) => s.id));
       setSections(saved);
+      bumpPreview();
     } catch (e) {
       setSections(previous); // roll back so the UI matches the database
       say('error', errorMessage(e, 'Could not save the new order.'));
@@ -227,6 +235,7 @@ export default function HomeBuilder() {
       setSnapshots((s) => ({ ...s, [created.id]: cloneSection(created) }));
       setOpenId(created.id);
       setNewKey('');
+      bumpPreview();
       say('success', 'Section added. It is live on the home page.');
     } catch (e) {
       say('error', errorMessage(e, 'Could not add the section.'));
@@ -247,6 +256,7 @@ export default function HomeBuilder() {
         delete next[row.id];
         return next;
       });
+      bumpPreview();
       say('success', 'Section deleted.');
     } catch (e) {
       say('error', errorMessage(e, 'Could not delete the section.'));
@@ -265,6 +275,7 @@ export default function HomeBuilder() {
       for (const r of rows) next[r.id] = cloneSection(r);
       setSnapshots(next);
       setDirty({});
+      bumpPreview();
       say('success', 'Home page restored to the shipped layout.');
     } catch (e) {
       say('error', errorMessage(e, 'Reset failed.'));
@@ -543,6 +554,28 @@ export default function HomeBuilder() {
                           'Save this block'
                         )}
                       </button>
+                      {isDirty && snapshots[row.id] && (
+                        <button
+                          onClick={() => {
+                            const snap = snapshots[row.id];
+                            setSections((rows) =>
+                              rows.map((r) => (r.id === row.id ? cloneSection(snap) : r))
+                            );
+                            setDirty((d) => ({ ...d, [row.id]: false }));
+                          }}
+                          disabled={busyId === row.id}
+                          style={{
+                            padding: '9px 16px',
+                            border: '1px solid #d4d4d4',
+                            borderRadius: '6px',
+                            background: '#fff',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Discard changes
+                        </button>
+                      )}
                       <button
                         onClick={() => remove(row)}
                         disabled={busyId === row.id}
@@ -626,6 +659,84 @@ export default function HomeBuilder() {
           >
             {adding ? 'Adding…' : 'Add block'}
           </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          border: '1px solid #e5e5e5',
+          borderRadius: '10px',
+          padding: '20px',
+          backgroundColor: '#fff',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ fontWeight: 700, margin: 0 }}>Live preview</h3>
+            <p style={{ fontSize: '13px', color: '#666', marginTop: 4, maxWidth: 560 }}>
+              The real storefront at this width. Unsaved block edits are not shown — save first, then Refresh.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(['desktop', 'tablet', 'phone'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setPreviewMode(mode)}
+                style={{
+                  padding: '6px 12px',
+                  border: `1px solid ${previewMode === mode ? 'transparent' : '#d4d4d4'}`,
+                  borderRadius: 6,
+                  fontSize: 13,
+                  background: previewMode === mode ? 'var(--brand, #111)' : '#fff',
+                  color: previewMode === mode ? '#fff' : '#333',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                {mode === 'desktop' ? 'Desktop' : mode === 'tablet' ? 'Tablet' : 'Phone'}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={bumpPreview}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #d4d4d4',
+                borderRadius: 6,
+                fontSize: 13,
+                background: '#fff',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: 14,
+            border: '1px solid #e5e5e5',
+            borderRadius: 10,
+            overflow: 'auto',
+            background: '#f4f4f5',
+            maxHeight: 640,
+          }}
+        >
+          <iframe
+            key={previewKey}
+            title="Storefront home preview"
+            src={`/?homePreview=${previewKey}`}
+            style={{
+              display: 'block',
+              width: PREVIEW_WIDTHS[previewMode],
+              minWidth: '100%',
+              height: 600,
+              border: 0,
+              background: '#fff',
+            }}
+          />
         </div>
       </div>
     </div>
@@ -935,25 +1046,6 @@ function TypeEditor({
                     label=""
                     folder="categories"
                     currentImage={it.image || undefined}
-                    onUpload={(url) => {
-                      const next = [...items];
-                      next[idx] = { ...next[idx], image: url };
-                      setItems(next);
-                    }}
-                  />
-                  <div style={{ display: 'grid', gap: '8px' }}>
-                    <input
-                      style={inputStyle}
-                      placeholder="Caption"
-                      aria-label={`Gallery caption ${idx + 1}`}
-                      value={it.caption ?? ''}
-                      onChange={(e) => {
-                        const next = [...items];
-                        next[idx] = { ...next[idx], caption: e.target.value };
-                        setItems(next);
-                      }}
-                    />
-             ge={it.image || undefined}
                     onUpload={(url) => {
                       const next = [...items];
                       next[idx] = { ...next[idx], image: url };

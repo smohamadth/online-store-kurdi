@@ -84,7 +84,7 @@ Result: an admin can “save” a home page that never appears, or a Studio layo
 **Status:** fixed. Home builder disables autoplay/arrows/dots when the active theme is Bold/Dawnlight/Minimal/Pulse, or when layout is not slideshow. Copy explains the limit.
 
 ### 18. No live storefront preview from the Home builder
-**Status:** partial. Home builder has “Open live home”. No in-admin device frames. Theme Studio preview is still LayoutRenderer (P0.3).
+**Status:** partial. Home builder embeds the real `/` in Desktop/Tablet/Phone frames (refresh after save). Unsaved drafts are not in the iframe. Theme Studio preview is still LayoutRenderer (P0.3).
 
 ### 19. No undo / versioning
 **Status:** partial. Dirty blocks have **Discard changes** (last saved snapshot). Reset still wipes everything. No history / versions.
