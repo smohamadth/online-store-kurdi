@@ -164,6 +164,22 @@ describe('POST /api/home-sections (admin)', () => {
   });
 });
 
+describe('POST /api/home-sections/apply-theme (admin)', () => {
+  it('rejects an unknown theme key', async () => {
+    const { token } = await authHeader({ role: 'admin' });
+    const res = await request(app)
+      .post('/api/home-sections/apply-theme')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ themeKey: 'no-such-theme-xyz' });
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/api/home-sections/apply-theme').send({});
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('POST /api/home-sections/reset (admin)', () => {
   it('resets to the shipped defaults', async () => {
     const { token } = await authHeader({ role: 'admin' });

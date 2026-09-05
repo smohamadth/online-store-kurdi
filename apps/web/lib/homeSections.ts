@@ -196,3 +196,17 @@ export async function resetHomeSections(): Promise<HomeSection[]> {
   const res = await authHttp.post<HomeSection[]>('/home-sections/reset', {});
   return res.data || [];
 }
+
+export async function applyThemeHomeLayout(themeKey?: string): Promise<{
+  sections: HomeSection[];
+  message?: string;
+  usedFallback?: boolean;
+}> {
+  const res = await authHttp.post<HomeSection[]>('/home-sections/apply-theme', themeKey ? { themeKey } : {});
+  const extra = res as unknown as { message?: string; meta?: { usedFallback?: boolean } };
+  return {
+    sections: res.data || [],
+    message: extra.message,
+    usedFallback: extra.meta?.usedFallback,
+  };
+}

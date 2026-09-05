@@ -111,6 +111,9 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 ### 27. Home builder “Restore default” vs “deleted keys”
 **Status:** not a live bug. Reset is the restore action.
 
+### 28. Apply theme home to the live store
+**Status:** fixed. `POST /api/home-sections/apply-theme` replaces HomeSection rows from the theme’s `layouts.home` (platform seed if the theme has none). Buttons: Appearance → Theme, Home builder, Theme Studio.
+
 ---
 
 ## P3 — polish / tests

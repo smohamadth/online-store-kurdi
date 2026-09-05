@@ -239,6 +239,29 @@ export default function ThemeStudioPage() {
     notify('success', `Theme "${current.key}" saved.`);
   };
 
+  const applyHomeToStore = async () => {
+    if (!current) return;
+    if (studioHasUnsavedDrafts(drafts) && !bundled) {
+      notify('error', 'Save the theme first so the live home uses the latest layout.');
+      return;
+    }
+    if (
+      !confirm(
+        `Replace the live homepage with “${current.name}” home layout? Current Home builder blocks will be deleted.`,
+      )
+    )
+      return;
+    const res = await fetch(`${API_BASE}/home-sections/apply-theme`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ themeKey: current.key }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return notify('error', body.message || 'Could not apply home layout.');
+    setLivePreviewKey((k) => k + 1);
+    notify('success', body.message || 'Live home updated.');
+  };
+
   const deleteCurrent = async () => {
     if (!current) return;
     if (!confirm(`Delete theme "${current.key}"? This cannot be undone.`)) return;
@@ -299,6 +322,13 @@ export default function ThemeStudioPage() {
             style={btnPrimary}
           >
             + New theme
+          </button>
+          <button
+            onClick={applyHomeToStore}
+            disabled={!current}
+            style={{ ...btnPrimary, background: '#fff', color: '#111', border: '1px solid #111' }}
+          >
+            Apply home to store
           </button>
           <button
             onClick={save}

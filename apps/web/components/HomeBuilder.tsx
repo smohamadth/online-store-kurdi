@@ -27,6 +27,7 @@ import {
   createHomeSection,
   deleteHomeSection,
   resetHomeSections,
+  applyThemeHomeLayout,
 } from '@/lib/homeSections';
 import { loadHomeVersions, recordHomeVersion, type HomeVersion } from '@/lib/homeHistory';
 import { writeHomePreviewDraft } from '@/lib/homePreviewDraft';
@@ -304,6 +305,31 @@ export default function HomeBuilder() {
       say('error', errorMessage(e, 'Could not delete the section.'));
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const applyThemeHome = async () => {
+    if (
+      !confirm(
+        'Replace the live homepage with the active theme’s home layout? Current Home builder blocks will be deleted.',
+      )
+    )
+      return;
+    setLoading(true);
+    try {
+      const { sections: rows, message } = await applyThemeHomeLayout();
+      setSections(rows);
+      const next: Record<string, HomeSection> = {};
+      for (const r of rows) next[r.id] = cloneSection(r);
+      setSnapshots(next);
+      setDirty({});
+      bumpPreview();
+      rememberVersion(rows);
+      say('success', message || 'Live home now matches the active theme.');
+    } catch (e) {
+      say('error', errorMessage(e, 'Could not apply the theme home layout.'));
+    } finally {
+      setLoading(false);
     }
   };
 

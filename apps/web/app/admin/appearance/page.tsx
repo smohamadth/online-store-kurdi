@@ -17,6 +17,7 @@ import { LoadingState, ButtonSpinner } from '@/components/Spinner';
 import { DEFAULT_THEME, FONT_LABELS, FONT_STACKS, Theme } from '@/lib/theme';
 import { API_BASE } from '@/lib/http';
 import HomeBuilder from '@/components/HomeBuilder';
+import { applyThemeHomeLayout } from '@/lib/homeSections';
 import { ThemePicker } from './ThemePicker';
 import { getTheme, THEMES, type ThemeConfig } from '@/lib/themeRegistry';
 import { fetchThemeCatalog, resolveThemeConfig } from '@/lib/themeRuntime';
@@ -722,6 +723,44 @@ function ThemeTab({
         disabled={disabled}
         themes={[...THEMES, ...installedThemes]}
       />
+      {activeTheme && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  'Replace the live homepage with this theme’s home layout? Current Home page blocks will be deleted.',
+                )
+              )
+                return;
+              try {
+                const { message } = await applyThemeHomeLayout(activeTheme);
+                window.alert(message || 'Live home now matches this theme.');
+              } catch (e: any) {
+                window.alert(e?.message || 'Could not apply the theme home.');
+              }
+            }}
+            disabled={disabled}
+            style={{
+              padding: '10px 16px',
+              border: '1px solid #111',
+              borderRadius: 8,
+              background: '#111',
+              color: '#fff',
+              fontWeight: 700,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontSize: 14,
+            }}
+          >
+            Apply this theme’s homepage
+          </button>
+          <p style={{ fontSize: 12, color: '#666', marginTop: 8, maxWidth: 520 }}>
+            Tokens apply when you Save. The homepage is separate — this copies the theme’s
+            home layout into Appearance → Home in one step.
+          </p>
+        </div>
+      )}
 
       {/* Install / remove runtime-installed themes */}
       <div
