@@ -11,7 +11,12 @@
 // orderTotal, resetToken, ...).
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Prefer a PrismaClient passed in by seed.ts. A second `new PrismaClient()`
+// here opens another driver connection; with file SQLite / wasm adapters
+// that second handle can miss tables the first connection just used
+// ("no such table: main.EmailTemplate") and abort the rest of the seed
+// (banners, shipping, CMS).
+const standalone = new PrismaClient();
 
 const emailTemplates = [
   {
@@ -269,11 +274,11 @@ const emailTemplates = [
   },
 ];
 
-export async function seedEmailTemplates() {
+export async function seedEmailTemplates(client: PrismaClient = standalone) {
   console.log('📧 Seeding email templates...');
 
   for (const template of emailTemplates) {
-    await prisma.emailTemplate.upsert({
+    await client.emailTemplate.upsert({
       where: { name: template.name },
       update: template,
       create: template,
@@ -288,5 +293,5 @@ export async function seedEmailTemplates() {
 if (require.main === module) {
   seedEmailTemplates()
     .catch(console.error)
-    .finally(() => prisma.$disconnect());
+    .finally(() => standalone.$disconnect());
 }

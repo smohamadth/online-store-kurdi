@@ -29,6 +29,7 @@ import {
   clearGatewayConfig,
 } from '../payments/gatewayConfig';
 import { GATEWAYS, resolveGatewayId } from '../payments/gateways/registry';
+import { ensureDefaultSettings } from './ensureDefaultSettings';
 
 const router = Router();
 
@@ -82,16 +83,7 @@ const settingsSchema = z.object({
 // authz-ok: public store settings; payment credentials are scrubbed before send
 router.get('/', async (req, res, next) => {
   try {
-    let settings = await prisma.storeSettings.findUnique({
-      where: { id: 'default' },
-    });
-
-    // Create default settings if not exists
-    if (!settings) {
-      settings = await prisma.storeSettings.create({
-        data: { id: 'default' },
-      });
-    }
+    const settings = await ensureDefaultSettings(prisma);
 
     res.json({
       status: 'success',

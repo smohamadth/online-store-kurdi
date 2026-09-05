@@ -434,7 +434,7 @@ async function main() {
   console.log('📊 Created sample analytics events');
 
   // Seed email templates
-  await seedEmailTemplates();
+  await seedEmailTemplates(prisma);
   const homeSectionCount = await seedHomeSections();
   const bannerCount = await seedBanners();
   await seedShipping();
