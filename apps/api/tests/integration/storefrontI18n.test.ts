@@ -59,8 +59,7 @@ describe('GET/PUT /api/i18n/storefront', () => {
   });
 
   it('returns 500 when the overlay file cannot be written', async () => {
-    const fs = await import('fs');
-    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+    const spy = vi.spyOn(storefrontI18nIO, 'write').mockImplementation(() => {
       throw new Error('EACCES');
     });
     const { token } = await authHeader({ role: 'admin' });
