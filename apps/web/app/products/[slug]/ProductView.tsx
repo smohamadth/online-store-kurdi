@@ -45,6 +45,7 @@ import {
   asGraph,
 } from '@/lib/structured-data';
 import { SITE } from '@/lib/seo';
+import { useTranslation } from '@/lib/i18n';
 
 export default function ProductView() {
   const params = useParams();
@@ -53,6 +54,7 @@ export default function ProductView() {
   const { addItem, items } = useCart();
   const { isCompared, toggle: toggleCompare } = useCompare();
   const { settings } = useStoreSettings();
+  const { t } = useTranslation();
   
   const slug = params?.slug as string;
   // Resolved at the top so this hook runs on every render (the loading/error
@@ -216,7 +218,7 @@ export default function ProductView() {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-        <p style={{ fontSize: '18px', color: 'var(--muted, #666)' }}>Loading product...</p>
+        <p style={{ fontSize: '18px', color: 'var(--muted, #666)' }}>{t('pdp.loading')}</p>
       </div>
     );
   }
@@ -225,7 +227,7 @@ export default function ProductView() {
     return (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '64px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
-        <p style={{ fontSize: '18px', color: 'var(--muted, #666)', marginBottom: '32px' }}>{error || 'Product not found'}</p>
+        <p style={{ fontSize: '18px', color: 'var(--muted, #666)', marginBottom: '32px' }}>{error || t('pdp.notFound')}</p>
         <Link href="/products" style={{
           display: 'inline-block',
           padding: '12px 24px',
@@ -234,7 +236,7 @@ export default function ProductView() {
           borderRadius: '6px',
           textDecoration: 'none',
         }}>
-          Back to Products
+          {t('pdp.backToProducts')}
         </Link>
       </div>
     );
@@ -473,9 +475,9 @@ export default function ProductView() {
         overflowX: 'auto',
         whiteSpace: 'nowrap',
       }}>
-        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Home</Link>
+        <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>{t('nav.home')}</Link>
         <span>/</span>
-        <Link href="/products" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>Products</Link>
+        <Link href="/products" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>{t('nav.products')}</Link>
         <span>/</span>
         <span style={{ color: '#000' }}>{product.name}</span>
       </nav>
@@ -561,7 +563,7 @@ export default function ProductView() {
               ))}
             </div>
             <span style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
-              {product.averageRating || 0} ({product.reviewCount || 0} reviews)
+              {product.averageRating || 0} ({t('pdp.reviews', undefined, { n: product.reviewCount || 0 })})
             </span>
           </div>
 
@@ -587,7 +589,7 @@ export default function ProductView() {
                 }}
               >
                 <span>⚡</span>
-                <span>Instant download</span>
+                <span>{t('pdp.instantDownload')}</span>
               </div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -616,7 +618,7 @@ export default function ProductView() {
                       fontSize: '14px',
                       fontWeight: 600,
                     }}>
-                      Save {formatPrice(Number(compareAt) - currentPrice, settings.currencySymbol)}
+                      {t('pdp.save', undefined, { amount: formatPrice(Number(compareAt) - currentPrice, settings.currencySymbol) })}
                     </span>
                   </>
                 );
@@ -624,12 +626,12 @@ export default function ProductView() {
             </div>
             <p style={{ marginTop: '8px', fontSize: '14px', color: isDigital ? '#22c55e' : (product.quantity > 0 ? '#22c55e' : ((product as any).allowBackorder ? '#f59e0b' : '#ef4444')) }}>
               {isDigital
-                ? '✓ Available — download link delivered instantly after purchase'
+                ? t('pdp.availableDigital')
                 : product.quantity > 0
-                ? `✓ In stock (${product.quantity} available)`
+                ? t('pdp.inStockCount', undefined, { n: product.quantity })
                 : (product as any).allowBackorder
-                  ? '⏳ Preorder available (ships when restocked)'
-                  : '✗ Out of stock'}
+                  ? t('pdp.preorder')
+                  : t('pdp.outOfStock')}
             </p>
             {isDigital && (downloadLimit !== null || downloadExpiryDays !== null) && (
               <p
@@ -651,7 +653,7 @@ export default function ProductView() {
             )}
             {(product as any).expectedRestockAt && (product as any).allowBackorder && (
               <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
-                Expected restock: {new Date((product as any).expectedRestockAt).toLocaleDateString()}
+                {t('pdp.expectedRestock', undefined, { date: new Date((product as any).expectedRestockAt).toLocaleDateString() })}
               </p>
             )}
             
@@ -660,7 +662,7 @@ export default function ProductView() {
               <div style={{ marginTop: '12px' }}>
                 {stockAlertSet ? (
                   <p style={{ fontSize: '14px', color: '#22c55e' }}>
-                    ✓ You will be notified when this product is back in stock!
+                    {t('pdp.notifySuccess')}
                   </p>
                 ) : showStockAlertForm ? (
                   <div style={{ display: 'flex', gap: '8px' }}>
@@ -668,7 +670,7 @@ export default function ProductView() {
                       type="email"
                       value={stockAlertEmail}
                       onChange={(e) => setStockAlertEmail(e.target.value)}
-                      placeholder="Enter your email"
+                      placeholder={t('pdp.enterEmail')}
                       style={{
                         flex: 1,
                         padding: '8px 12px',
@@ -690,7 +692,7 @@ export default function ProductView() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      Notify Me
+                      {t('pdp.notifyMe')}
                     </button>
                   </div>
                 ) : (
@@ -708,7 +710,7 @@ export default function ProductView() {
                       gap: '6px',
                     }}
                   >
-                    🔔 Notify me when back in stock
+                    {t('pdp.notifyWhenBack')}
                   </button>
                 )}
               </div>
@@ -801,7 +803,7 @@ export default function ProductView() {
           {product.variants && product.variants.length > 0 && (
             <div style={{ marginTop: '20px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
-                Options: {currentVariantName && <span style={{ fontWeight: 400, color: 'var(--muted, #666)' }}>{getVariantDisplay(currentVariant)}</span>}
+                {t('pdp.options')}: {currentVariantName && <span style={{ fontWeight: 400, color: 'var(--muted, #666)' }}>{getVariantDisplay(currentVariant)}</span>}
               </h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {product.variants.map((variant) => {
@@ -814,7 +816,7 @@ export default function ProductView() {
                       data-testid={`variant-chip-${variant.id}`}
                       onClick={() => setSelectedVariant(variant.id)}
                       disabled={outOfStock}
-                      title={outOfStock ? 'Out of stock' : undefined}
+                      title={outOfStock ? t('products.outOfStock') : undefined}
                       style={{
                         padding: '8px 16px',
                         borderRadius: '6px',
@@ -853,7 +855,7 @@ export default function ProductView() {
 
           {/* Quantity */}
           <div style={{ marginTop: '20px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>Quantity:</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>{t('pdp.quantity')}</h3>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -896,10 +898,10 @@ export default function ProductView() {
                 }}
               >
                 {isDigital
-                  ? (addedToCart ? '✓ Added!' : 'Add to Cart')
+                  ? (addedToCart ? t('pdp.added') : t('products.addToCart'))
                   : (soldOut
-                    ? 'Out of Stock'
-                    : (addedToCart ? '✓ Added!' : (preorder ? '⏳ Preorder' : 'Add to Cart')))}
+                    ? t('products.outOfStock')
+                    : (addedToCart ? t('pdp.added') : (preorder ? t('pdp.preorderBtn') : t('products.addToCart'))))}
               </button>
               <button
                 onClick={handleWishlist}
@@ -932,7 +934,7 @@ export default function ProductView() {
                 cursor: buyNowDisabled ? 'not-allowed' : 'pointer',
               }}
             >
-              {isDigital ? '⬇ Download now' : 'Buy Now'}
+              {isDigital ? t('pdp.downloadNow') : t('products.buyNow')}
             </button>
             <button
               onClick={() =>
@@ -957,18 +959,18 @@ export default function ProductView() {
                 cursor: 'pointer',
               }}
             >
-              {isCompared(product.id) ? '✓ Added to compare' : '⚖️ Compare'}
+              {isCompared(product.id) ? t('pdp.addedCompare') : t('pdp.compare')}
             </button>
           </div>
 
           {/* SKU */}
           <p style={{ marginTop: '16px', fontSize: '12px', color: '#999' }}>
-            SKU: {product.sku}
+            {t('pdp.sku')}: {product.sku}
           </p>
 
           {/* Share */}
           <div style={{ marginTop: '16px' }}>
-            <ShareButtons url={`${SITE}/products/${slug}`} title={product.name} label="Share" />
+            <ShareButtons url={`${SITE}/products/${slug}`} title={product.name} label={t('pdp.share')} />
           </div>
         </div>
       </div>
@@ -992,10 +994,10 @@ export default function ProductView() {
           // 404 RSC payload and retry, which kept the page from ever reaching
           // networkidle and timed out the browser regression sweep. /faq is
           // the real shipping-info page.
-          { icon: '🚚', title: 'Free shipping', text: 'On orders over 50', href: '/faq' },
-          { icon: '↩️', title: '30-day returns', text: 'Hassle-free refunds', href: '/returns' },
-          { icon: '🔒', title: 'Secure checkout', text: 'Encrypted payments' },
-          { icon: '💬', title: '24/7 support', text: 'We reply within hours', href: '/contact' },
+          { icon: '🚚', title: t('pdp.freeShipping'), text: t('pdp.freeShippingText'), href: '/faq' },
+          { icon: '↩️', title: t('pdp.returns'), text: t('pdp.returnsText'), href: '/returns' },
+          { icon: '🔒', title: t('pdp.secureCheckout'), text: t('pdp.secureText') },
+          { icon: '💬', title: t('pdp.support'), text: t('pdp.supportText'), href: '/contact' },
         ].map((item) => {
           const inner = (
             <>
@@ -1034,7 +1036,7 @@ export default function ProductView() {
 
       {/* Product Description */}
       <div style={{ padding: '24px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginBottom: '48px' }}>
-        <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '16px' }}>Description</h2>
+        <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '16px' }}>{t('products.description')}</h2>
         {/* Descriptions are authored in the admin rich-text editor, so render
             the HTML. The editor sanitises on input and the API sanitises on
             save; this only ever displays tags from that allow-list. */}
@@ -1054,8 +1056,8 @@ export default function ProductView() {
       {/* Related products — "You may also like" */}
       {related.length > 0 && (
         <ProductCarousel
-          title="You may also like"
-          subtitle="Products customers often buy together"
+          title={t('pdp.youMayLike')}
+          subtitle={t('pdp.boughtTogether')}
           products={related}
           viewAllHref={
             product.category?.slug
@@ -1079,7 +1081,7 @@ export default function ProductView() {
     {isMobile && !loading && product && showStickyBar && (
       <div
         role="region"
-        aria-label="Quick purchase"
+        aria-label={t('pdp.quickPurchase')}
         style={{
           position: 'fixed',
           bottom: 0,
@@ -1107,7 +1109,7 @@ export default function ProductView() {
             {formatPrice(currentPrice, settings.currencySymbol)}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted, #666)' }}>
-            {soldOut ? 'Out of stock' : isDigital ? 'Instant download' : preorder ? 'Preorder' : 'In stock'}
+            {soldOut ? t('products.outOfStock') : isDigital ? t('pdp.instantDownload') : preorder ? t('pdp.preorderBtn') : t('products.inStock')}
           </div>
         </div>
         <button
@@ -1130,15 +1132,15 @@ export default function ProductView() {
         >
           {isDigital
             ? addedToCart
-              ? '✓ Added'
-              : 'Add to cart'
+              ? t('pdp.added')
+              : t('products.addToCart')
             : soldOut
-              ? 'Out of stock'
+              ? t('products.outOfStock')
               : addedToCart
-                ? '✓ Added'
+                ? t('pdp.added')
                 : preorder
-                  ? '⏳ Preorder'
-                  : 'Add to cart'}
+                  ? t('pdp.preorderBtn')
+                  : t('products.addToCart')}
         </button>
         <button
           type="button"
@@ -1157,7 +1159,7 @@ export default function ProductView() {
             whiteSpace: 'nowrap',
           }}
         >
-          {isDigital ? 'Download' : 'Buy now'}
+          {isDigital ? t('pdp.downloadNow') : t('products.buyNow')}
         </button>
       </div>
     )}

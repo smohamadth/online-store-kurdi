@@ -27,17 +27,18 @@ import { encodeRouteParam } from '@/lib/routeParam';
 import { useActiveLayout } from '@/lib/layouts/useActiveLayout';
 import { LayoutRenderer } from '@/lib/layouts/render';
 import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
+import { useTranslation } from '@/lib/i18n';
 
 // These values must match the API's sort enum exactly
 // (price_asc | price_desc | name_asc | name_desc | newest | popular),
 // otherwise the request fails Zod validation with a 400.
-const SORTS = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'popular', label: 'Most reviewed' },
-  { value: 'price_asc', label: 'Price: Low to High' },
-  { value: 'price_desc', label: 'Price: High to Low' },
-  { value: 'name_asc', label: 'Name A-Z' },
-  { value: 'name_desc', label: 'Name Z-A' },
+const SORT_KEYS = [
+  { value: 'newest', key: 'catalog.sortNewest' },
+  { value: 'popular', key: 'catalog.sortPopular' },
+  { value: 'price_asc', key: 'catalog.sortPriceAsc' },
+  { value: 'price_desc', key: 'catalog.sortPriceDesc' },
+  { value: 'name_asc', key: 'catalog.sortNameAsc' },
+  { value: 'name_desc', key: 'catalog.sortNameDesc' },
 ];
 
 const PAGE_SIZE = 12;
@@ -47,6 +48,7 @@ export default function CategoryView({ slug }: { slug: string }) {
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
   const { settings } = useStoreSettings();
+  const { t } = useTranslation();
 
   const [category, setCategory] = useState<any>(null);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
@@ -157,8 +159,8 @@ export default function CategoryView({ slug }: { slug: string }) {
                   `${SITE}/category/${slug}`,
                 ),
                 buildBreadcrumbJsonLd([
-                  { name: 'Home', url: `${SITE}/` },
-                  { name: 'Products', url: `${SITE}/products` },
+                  { name: t('nav.home'), url: `${SITE}/` },
+                  { name: t('nav.products'), url: `${SITE}/products` },
                   { name: title, url: `${SITE}/category/${slug}` },
                 ]),
               ]),
@@ -169,11 +171,11 @@ export default function CategoryView({ slug }: { slug: string }) {
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted, #666)' }}>
         <Link href="/" style={{ color: 'var(--muted, #666)', textDecoration: 'none' }}>
-          Home
+          {t('nav.home')}
         </Link>
         <span style={{ margin: '0 8px' }}>/</span>
         <Link href="/products" style={{ color: 'var(--muted, #666)', textDecoration: 'none' }}>
-          Products
+          {t('nav.products')}
         </Link>
         <span style={{ margin: '0 8px' }}>/</span>
         <span style={{ color: '#111', fontWeight: 500, textTransform: 'capitalize' }}>{title}</span>
@@ -203,7 +205,7 @@ export default function CategoryView({ slug }: { slug: string }) {
           </p>
         )}
         <p style={{ marginTop: '10px', fontSize: '14px', opacity: 0.85 }}>
-          {total} {total === 1 ? 'product' : 'products'}
+          {total} {total === 1 ? t('catalog.productOne') : t('catalog.productMany')}
         </p>
       </header>
 
@@ -211,7 +213,7 @@ export default function CategoryView({ slug }: { slug: string }) {
       {allCategories.length > 0 && (
         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '20px' }}>
           <Link href="/products" style={pill(false)}>
-            All
+            {t('catalog.all')}
           </Link>
           {allCategories.map((c) => (
             <Link key={c.slug} href={`/category/${c.slug}`} style={pill(c.slug === slug)}>
@@ -224,7 +226,7 @@ export default function CategoryView({ slug }: { slug: string }) {
       {/* Sort */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
         <label htmlFor="sort" style={{ fontSize: '14px', color: 'var(--muted, #666)' }}>
-          Sort by:
+          {t('catalog.sortBy')}
         </label>
         <select
           id="sort"
@@ -238,9 +240,9 @@ export default function CategoryView({ slug }: { slug: string }) {
             backgroundColor: 'var(--card-bg, #fff)',
           }}
         >
-          {SORTS.map((s) => (
+          {SORT_KEYS.map((s) => (
             <option key={s.value} value={s.value}>
-              {s.label}
+              {t(s.key)}
             </option>
           ))}
         </select>
@@ -252,9 +254,9 @@ export default function CategoryView({ slug }: { slug: string }) {
       ) : products.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px 20px', border: '1px dashed #e0e0e0', borderRadius: '12px' }}>
           <div style={{ fontSize: '40px' }}>🛍️</div>
-          <h2 style={{ marginTop: '12px', fontWeight: 700 }}>Nothing here yet</h2>
+          <h2 style={{ marginTop: '12px', fontWeight: 700 }}>{t('catalog.nothingHere')}</h2>
           <p style={{ color: 'var(--muted, #666)', marginTop: '6px', fontSize: '14px' }}>
-            This category has no products at the moment.
+            {t('catalog.nothingHint')}
           </p>
           <Link
             href="/products"
@@ -270,7 +272,7 @@ export default function CategoryView({ slug }: { slug: string }) {
               fontSize: '14px',
             }}
           >
-            Browse all products
+            {t('catalog.browseAll')}
           </Link>
         </div>
       ) : (
@@ -294,7 +296,7 @@ export default function CategoryView({ slug }: { slug: string }) {
           style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '40px', flexWrap: 'wrap' }}
         >
           <button onClick={() => setParam('page', String(page - 1))} disabled={page <= 1} style={pageBtn(page <= 1)}>
-            ‹ Prev
+            {t('catalog.prev')}
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
             <button
@@ -315,7 +317,7 @@ export default function CategoryView({ slug }: { slug: string }) {
             disabled={page >= totalPages}
             style={pageBtn(page >= totalPages)}
           >
-            Next ›
+            {t('catalog.next')}
           </button>
         </nav>
       )}

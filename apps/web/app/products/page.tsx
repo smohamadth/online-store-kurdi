@@ -34,6 +34,7 @@ import { LayoutRenderer } from '@/lib/layouts/render';
 import { PAGE_CHROME_BLOCKS, studioLayoutReplacesChrome } from '@/lib/layouts/pageChrome';
 import { buildItemListJsonLd, buildBreadcrumbJsonLd, asGraph } from '@/lib/structured-data';
 import { SITE } from '@/lib/seo';
+import { useTranslation } from '@/lib/i18n';
 import { getImageUrl } from '@/lib/api';
 
 function ProductsContent() {
@@ -45,6 +46,7 @@ function ProductsContent() {
   const [loading, setLoading] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const { settings } = useStoreSettings();
+  const { t } = useTranslation();
 
   // The filter is the single source of truth for the page. Every input
   // mutates it via setFilter; a useEffect below pushes the change to
@@ -149,7 +151,7 @@ function ProductsContent() {
     if (products.length === 0) return null;
     const listUrl = `${SITE}/products${typeof window !== 'undefined' && window.location.search ? window.location.search : ''}`;
     const list = buildItemListJsonLd(
-      'Products',
+      t('nav.products'),
       products.slice(0, 50).map((p, i) => ({
         url: `${SITE}/products/${p.slug}`,
         name: p.name,
@@ -159,8 +161,8 @@ function ProductsContent() {
       listUrl,
     );
     const breadcrumb = buildBreadcrumbJsonLd([
-      { name: 'Home', url: `${SITE}/` },
-      { name: 'Products', url: `${SITE}/products` },
+      { name: t('nav.home'), url: `${SITE}/` },
+      { name: t('nav.products'), url: `${SITE}/products` },
     ]);
     return JSON.stringify(asGraph([list, breadcrumb]));
   }, [products]);
@@ -199,10 +201,10 @@ function ProductsContent() {
         }}
       >
         <Link href="/" style={{ textDecoration: 'none', color: 'var(--muted, #666)' }}>
-          Home
+          {t('nav.home')}
         </Link>
         <span>/</span>
-        <span style={{ color: '#000' }}>Products</span>
+        <span style={{ color: '#000' }}>{t('nav.products')}</span>
       </nav>
 
       <div
@@ -215,9 +217,9 @@ function ProductsContent() {
           flexWrap: 'wrap',
         }}
       >
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>Products</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>{t('nav.products')}</h1>
         <span style={{ color: 'var(--muted, #666)', fontSize: '14px' }}>
-          {loading ? 'Loading…' : `${total} result${total === 1 ? '' : 's'}`}
+          {loading ? t('catalog.loading') : (total === 1 ? t('catalog.resultOne') : t('catalog.results', undefined, { n: total }))}
         </span>
       </div>
 
@@ -233,10 +235,10 @@ function ProductsContent() {
       >
         <input
           type="text"
-          placeholder="Search products..."
+          placeholder={t('catalog.search')}
           value={searchDraft}
           onChange={(e) => setSearchDraft(e.target.value)}
-          aria-label="Search products"
+          aria-label={t('catalog.search')}
           style={{
             flex: 1,
             minWidth: '180px',
@@ -250,7 +252,7 @@ function ProductsContent() {
         <select
           value={filter.sort}
           onChange={(e) => setFilter({ ...filter, sort: e.target.value as ProductFilter['sort'] })}
-          aria-label="Sort"
+          aria-label={t('products.sort')}
           style={{
             padding: '10px 12px',
             border: '1px solid var(--border, #e5e5e5)',
@@ -260,14 +262,14 @@ function ProductsContent() {
             cursor: 'pointer',
           }}
         >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="price_asc">Price: Low to High</option>
-          <option value="price_desc">Price: High to Low</option>
-          <option value="name_asc">Name: A-Z</option>
-          <option value="name_desc">Name: Z-A</option>
-          <option value="rating_desc">Highest Rated</option>
-          <option value="popular">Most Popular</option>
+          <option value="newest">{t('catalog.sortNewest')}</option>
+          <option value="oldest">{t('catalog.sortOldest')}</option>
+          <option value="price_asc">{t('catalog.sortPriceAsc')}</option>
+          <option value="price_desc">{t('catalog.sortPriceDesc')}</option>
+          <option value="name_asc">{t('catalog.sortNameAsc')}</option>
+          <option value="name_desc">{t('catalog.sortNameDesc')}</option>
+          <option value="rating_desc">{t('catalog.sortRating')}</option>
+          <option value="popular">{t('catalog.sortMostPopular')}</option>
         </select>
         <button
           type="button"
@@ -285,7 +287,7 @@ function ProductsContent() {
             whiteSpace: 'nowrap',
           }}
         >
-          {showAdvanced ? 'Hide filters' : 'Filters'}
+          {showAdvanced ? t('catalog.hideFilters') : t('catalog.filters')}
           {filterCount > 0 && (
             <span
               style={{
@@ -323,7 +325,7 @@ function ProductsContent() {
           {loading && (
             <div style={{ textAlign: 'center', padding: '64px' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-              <p style={{ fontSize: '18px', color: 'var(--muted, #666)' }}>Loading products…</p>
+              <p style={{ fontSize: '18px', color: 'var(--muted, #666)' }}>{t('catalog.loading')}</p>
             </div>
           )}
 
@@ -331,7 +333,7 @@ function ProductsContent() {
           {!loading && products.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--muted, #666)' }}>
               <p style={{ fontSize: '48px', marginBottom: '16px' }}>😕</p>
-              <p style={{ fontSize: '18px' }}>No products found</p>
+              <p style={{ fontSize: '18px' }}>{t('products.noProducts')}</p>
               {!isEmptyFilter(filter) && (
                 <button
                   onClick={onClear}
@@ -345,7 +347,7 @@ function ProductsContent() {
                     cursor: 'pointer',
                   }}
                 >
-                  Clear all filters
+                  {t('catalog.clearFilters')}
                 </button>
               )}
             </div>
@@ -398,12 +400,13 @@ function ActiveFilterChips({
   setFilter: (f: ProductFilter) => void;
   onClearSearch?: () => void;
 }) {
+  const { t } = useTranslation();
   const chips: { key: string; label: string; remove: () => void }[] = [];
 
   for (const c of filter.category) {
     chips.push({
       key: `cat-${c}`,
-      label: `Category: ${c}`,
+      label: `${t('products.category')}: ${c}`,
       remove: () => setFilter({ ...filter, category: filter.category.filter((x) => x !== c) }),
     });
   }
@@ -429,10 +432,10 @@ function ActiveFilterChips({
     }
   }
   if (filter.inStock) {
-    chips.push({ key: 'instock', label: 'In stock only', remove: () => setFilter({ ...filter, inStock: false }) });
+    chips.push({ key: 'instock', label: t('catalog.inStockOnly'), remove: () => setFilter({ ...filter, inStock: false }) });
   }
   if (filter.onSale) {
-    chips.push({ key: 'onsale', label: 'On sale', remove: () => setFilter({ ...filter, onSale: false }) });
+    chips.push({ key: 'onsale', label: t('catalog.onSale'), remove: () => setFilter({ ...filter, onSale: false }) });
   }
   if (filter.minRating !== undefined) {
     chips.push({
@@ -507,7 +510,7 @@ export default function ProductsPage() {
     <Suspense
       fallback={
         <div style={{ textAlign: 'center', padding: '64px' }}>
-          <p style={{ color: 'var(--muted, #666)' }}>Loading products…</p>
+          <p style={{ color: 'var(--muted, #666)' }}>{t('catalog.loading')}</p>
         </div>
       }
     >

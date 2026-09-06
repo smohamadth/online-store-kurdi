@@ -27,6 +27,7 @@ import ContentTranslationsEditor from '@/components/ContentTranslationsEditor';
 import { PRODUCT_TRANSLATION_FIELDS } from '@/lib/translationFields';
 import { API_BASE } from '@/lib/http';
 import { useIsMobile } from '@/lib/hooks';
+import { useAdminI18n } from '@/lib/adminI18n';
 
 interface GalleryImage {
   id: string;
@@ -44,6 +45,7 @@ interface GalleryImage {
 
 export default function AdminProductsPage() {
   const { settings } = useStoreSettings();
+  const { t } = useAdminI18n();
   // Used to:
   //   1) switch the products list to a horizontal-scroll container with
   //      tightened padding on phones (the seven-column table overflows at
@@ -136,7 +138,7 @@ export default function AdminProductsPage() {
   };
 
   const handleDelete = async (productId: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
+    if (!confirm(t('prod.confirmDelete'))) return;
     
     try {
       const token = localStorage.getItem('token');
@@ -342,7 +344,7 @@ export default function AdminProductsPage() {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '64px' }}>
-        <p style={{ color: '#666' }}>Loading products...</p>
+        <p style={{ color: '#666' }}>{t('prod.loading')}</p>
       </div>
     );
   }
@@ -368,8 +370,8 @@ export default function AdminProductsPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Products</h2>
-          <p style={{ color: '#666', fontSize: '14px' }}>{products.length} total products</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>{t('nav.products')}</h2>
+          <p style={{ color: '#666', fontSize: '14px' }}>{t('prod.total', { n: String(products.length) })}</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <Link
@@ -398,7 +400,7 @@ export default function AdminProductsPage() {
               cursor: 'pointer',
             }}
           >
-            + Add Product
+            {t('prod.add')}
           </button>
         </div>
       </div>
@@ -407,7 +409,7 @@ export default function AdminProductsPage() {
       <div style={{ marginBottom: '24px' }}>
         <input
           type="text"
-          placeholder="Search products by name or SKU..."
+          placeholder={t('prod.search')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
@@ -436,13 +438,13 @@ export default function AdminProductsPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid #e5e5e5' }}>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>Product</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>SKU</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#666' }}>Category</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#666' }}>Price</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#666' }}>Stock</th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#666' }}>Status</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#666' }}>Actions</th>
+              <th style={{ padding: '12px 16px', textAlign: 'start', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colProduct')}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'start', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colSku')}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'start', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colCategory')}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'end', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colPrice')}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'end', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colStock')}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colStatus')}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'end', fontSize: '12px', fontWeight: 600, color: '#666' }}>{t('prod.colActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -494,7 +496,7 @@ export default function AdminProductsPage() {
                 </td>
                 <td style={{ padding: '16px', fontSize: '14px', color: '#666' }}>{product.sku}</td>
                 <td style={{ padding: '16px', fontSize: '14px' }}>{product.category?.name}</td>
-                <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600 }}>
+                <td style={{ padding: '16px', textAlign: 'end', fontWeight: 600 }}>
                   {formatPrice(product.price, settings.currencySymbol)}
                   {product.compareAtPrice && (
                     <span style={{ fontSize: '12px', color: '#666', textDecoration: 'line-through', marginLeft: '8px' }}>
@@ -502,7 +504,7 @@ export default function AdminProductsPage() {
                     </span>
                   )}
                 </td>
-                <td style={{ padding: '16px', textAlign: 'right' }}>
+                <td style={{ padding: '16px', textAlign: 'end' }}>
                   <span style={{
                     color: product.quantity > 10 ? '#22c55e' : product.quantity > 0 ? '#f59e0b' : '#ef4444',
                     fontWeight: 500,
@@ -523,7 +525,7 @@ export default function AdminProductsPage() {
                     {product.status}
                   </span>
                 </td>
-                <td style={{ padding: '16px', textAlign: 'right' }}>
+                <td style={{ padding: '16px', textAlign: 'end' }}>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                     <button
                       onClick={() => startEdit(product)}
@@ -576,7 +578,7 @@ export default function AdminProductsPage() {
 
         {filteredProducts.length === 0 && (
           <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>
-            No products found
+            {t('prod.none')}
           </div>
         )}
       </div>

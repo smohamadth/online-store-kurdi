@@ -56,6 +56,16 @@ describe('AdminLayout', () => {
     expect(document.querySelector('[data-admin-shell]')?.getAttribute('dir')).toBe('rtl');
   });
 
+  it('switches chrome to Kurdish RTL from the language picker', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    render(<AdminLayout><div>Dashboard content</div></AdminLayout>);
+    await waitFor(() => expect(screen.getByText('Welcome, Ada')).toBeTruthy());
+    fireEvent.change(screen.getByDisplayValue('English'), { target: { value: 'ku' } });
+    expect(screen.getByText('بەخێربێیت، Ada')).toBeTruthy();
+    expect(screen.getAllByText('داواکارییەکان').length).toBeGreaterThanOrEqual(1);
+    expect(document.querySelector('[data-admin-shell]')?.getAttribute('dir')).toBe('rtl');
+  });
+
   it('shows a hamburger and slides the sidebar open on mobile', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
     render(<AdminLayout><div>Dashboard content</div></AdminLayout>);

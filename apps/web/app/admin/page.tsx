@@ -16,9 +16,11 @@ import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { API_BASE } from '@/lib/http';
 import { DirectionArrow } from '@/components/DirectionArrow';
+import { useAdminI18n } from '@/lib/adminI18n';
 
 export default function AdminDashboard() {
   const { settings } = useStoreSettings();
+  const { t } = useAdminI18n();
   const [stats, setStats] = useState({
     totalProducts: 0,
     totalOrders: 0,
@@ -93,42 +95,42 @@ export default function AdminDashboard() {
       {/* API Status */}
       {apiStatus === 'disconnected' && (
         <div style={{ padding: '16px', backgroundColor: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', marginBottom: '24px' }}>
-          <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ API Disconnected</p>
-          <p style={{ fontSize: '14px', color: '#92400e' }}>Start API for full functionality: <code>npm run dev:api</code></p>
+          <p style={{ fontWeight: 600, color: '#92400e' }}>⚠️ {t('dash.apiDisconnected')}</p>
+          <p style={{ fontSize: '14px', color: '#92400e' }}>{t('dash.apiHint')}</p>
         </div>
       )}
 
       {/* Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         <div style={{ padding: '24px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Products</p>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{t('dash.totalProducts')}</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{stats.totalProducts}</p>
           <Link href="/admin/products" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            <DirectionArrow kind="forward" /> Manage
+            <DirectionArrow kind="forward" /> {t('dash.manage')}
           </Link>
         </div>
 
         <div style={{ padding: '24px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Orders</p>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{t('dash.totalOrders')}</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{stats.totalOrders}</p>
           <Link href="/admin/orders" style={{ fontSize: '14px', color: '#f59e0b', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            <DirectionArrow kind="forward" /> Manage
+            <DirectionArrow kind="forward" /> {t('dash.manage')}
           </Link>
         </div>
 
         <div style={{ padding: '24px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Categories</p>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{t('dash.categories')}</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{stats.totalCategories}</p>
           <Link href="/admin/categories" style={{ fontSize: '14px', color: '#22c55e', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            <DirectionArrow kind="forward" /> Manage
+            <DirectionArrow kind="forward" /> {t('dash.manage')}
           </Link>
         </div>
 
         <div style={{ padding: '24px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5' }}>
-          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Revenue</p>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{t('dash.totalRevenue')}</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(stats.totalRevenue, settings.currencySymbol)}</p>
           <Link href="/admin/analytics" style={{ fontSize: '14px', color: '#8b5cf6', textDecoration: 'none', marginTop: '12px', display: 'block' }}>
-            <DirectionArrow kind="forward" /> View details
+            <DirectionArrow kind="forward" /> {t('dash.viewDetails')}
           </Link>
         </div>
       </div>
@@ -137,17 +139,17 @@ export default function AdminDashboard() {
         {/* Recent Orders */}
         <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', overflow: 'hidden' }}>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e5e5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Recent Orders</h3>
-            <Link href="/admin/orders" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none' }}>View all</Link>
+            <h3 style={{ fontSize: '16px', fontWeight: 600 }}>{t('dash.recentOrders')}</h3>
+            <Link href="/admin/orders" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none' }}>{t('dash.viewAll')}</Link>
           </div>
           <div>
             {stats.recentOrders.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>
-                <p style={{ fontWeight: 600, color: '#111' }}>No orders yet</p>
+                <p style={{ fontWeight: 600, color: '#111' }}>{t('dash.noOrders')}</p>
                 <p style={{ fontSize: '13px', marginTop: '6px' }}>
                   {stats.totalProducts === 0
-                    ? 'Add a product first — customers cannot order from an empty catalogue.'
-                    : 'Orders will appear here as soon as a customer checks out.'}
+                    ? t('dash.addProductFirst')
+                    : t('dash.noOrdersHint')}
                 </p>
                 {stats.totalProducts === 0 && (
                   <Link
@@ -158,7 +160,7 @@ export default function AdminDashboard() {
                       textDecoration: 'none', fontSize: '13px', fontWeight: 600,
                     }}
                   >
-                    Add your first product
+                    {t('dash.addFirstProduct')}
                   </Link>
                 )}
               </div>
@@ -186,24 +188,24 @@ export default function AdminDashboard() {
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e5e5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h3 style={{ fontSize: '16px', fontWeight: 600 }}>
-                {stats.topProductsBasis === 'sales' ? 'Best sellers' : 'Latest products'}
+                {stats.topProductsBasis === 'sales' ? t('dash.bestSellers') : t('dash.latestProducts')}
               </h3>
               {/* Say WHICH list this is. Showing newest products under a
                   "best sellers" heading with 0 sold would be misleading. */}
               <p style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
                 {stats.topProductsBasis === 'sales'
-                  ? 'Ranked by revenue'
-                  : 'No sales yet — showing your newest products'}
+                  ? t('dash.rankedByRevenue')
+                  : t('dash.noSalesYet')}
               </p>
             </div>
-            <Link href="/admin/products" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none' }}>View all</Link>
+            <Link href="/admin/products" style={{ fontSize: '14px', color: '#3b82f6', textDecoration: 'none' }}>{t('dash.viewAll')}</Link>
           </div>
           <div>
             {stats.topProducts.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center', color: '#666' }}>
-                <p style={{ fontWeight: 600, color: '#111' }}>No products yet</p>
+                <p style={{ fontWeight: 600, color: '#111' }}>{t('dash.noProducts')}</p>
                 <p style={{ fontSize: '13px', marginTop: '6px' }}>
-                  Your catalogue is empty. Add a product to start selling.
+                  {t('dash.emptyCatalogue')}
                 </p>
                 <Link
                   href="/admin/products"
@@ -213,7 +215,7 @@ export default function AdminDashboard() {
                     textDecoration: 'none', fontSize: '13px', fontWeight: 600,
                   }}
                 >
-                  Add your first product
+                  {t('dash.addFirstProduct')}
                 </Link>
               </div>
             ) : (
@@ -223,8 +225,8 @@ export default function AdminDashboard() {
                     <p style={{ fontWeight: 500 }}>{product.name}</p>
                     <p style={{ fontSize: '12px', color: '#666' }}>
                       {stats.topProductsBasis === 'sales'
-                        ? `${product.sold || 0} sold · Stock: ${product.stock ?? 0}`
-                        : `Stock: ${product.stock ?? 0}`}
+                        ? t('dash.soldStock', { n: String(product.sold || 0), stock: String(product.stock ?? 0) })
+                        : t('dash.stock', { stock: String(product.stock ?? 0) })}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -235,7 +237,7 @@ export default function AdminDashboard() {
                       )}
                     </p>
                     <p style={{ fontSize: '12px', color: '#666' }}>
-                      {stats.topProductsBasis === 'sales' ? 'revenue' : 'price'}
+                      {stats.topProductsBasis === 'sales' ? t('dash.revenue') : t('dash.price')}
                     </p>
                   </div>
                 </div>
@@ -247,15 +249,15 @@ export default function AdminDashboard() {
 
       {/* Quick Actions */}
       <div style={{ marginTop: '24px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Quick Actions</h3>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{t('dash.quickActions')}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
           {[
-            { href: '/admin/products', icon: '➕', label: 'Add Product' },
-            { href: '/admin/orders', icon: '📋', label: 'Manage Orders' },
-            { href: '/admin/categories', icon: '🏷️', label: 'Categories' },
-            { href: '/admin/coupons', icon: '🎟️', label: 'Coupons' },
-            { href: '/admin/users', icon: '👥', label: 'Manage Users' },
-            { href: '/admin/analytics', icon: '📊', label: 'Analytics' },
+            { href: '/admin/products', icon: '➕', label: t('dash.addProduct') },
+            { href: '/admin/orders', icon: '📋', label: t('dash.manageOrders') },
+            { href: '/admin/categories', icon: '🏷️', label: t('dash.categories') },
+            { href: '/admin/coupons', icon: '🎟️', label: t('nav.coupons') },
+            { href: '/admin/users', icon: '👥', label: t('dash.manageUsers') },
+            { href: '/admin/analytics', icon: '📊', label: t('nav.analytics') },
           ].map((action) => (
             <Link key={action.href} href={action.href} style={{ padding: '20px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e5e5', textDecoration: 'none', color: '#000', textAlign: 'center' }}>
               <div style={{ fontSize: '32px', marginBottom: '8px' }}>{action.icon}</div>
