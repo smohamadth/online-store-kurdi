@@ -42,6 +42,14 @@ let state: StorefrontI18nState = structuredClone(DEFAULT_STATE);
 
 const FILE = path.join(process.cwd(), 'data', 'storefront-i18n.json');
 
+/** Indirection so tests can stub disk writes (fs.writeFileSync is not spy-able). */
+export const storefrontI18nIO = {
+  write(file: string, data: string) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, data, 'utf8');
+  },
+};
+
 function loadFromDisk() {
   try {
     if (fs.existsSync(FILE)) {
@@ -52,8 +60,7 @@ function loadFromDisk() {
 }
 
 function saveToDisk() {
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(state, null, 2), 'utf8');
+  storefrontI18nIO.write(FILE, JSON.stringify(state, null, 2));
 }
 
 loadFromDisk();

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
-import { resetStorefrontI18n } from '../../src/modules/i18n/storefrontI18n.routes';
+import { resetStorefrontI18n, storefrontI18nIO } from '../../src/modules/i18n/storefrontI18n.routes';
 import type { Express } from 'express';
 
 let app: Express;
