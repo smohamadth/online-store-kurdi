@@ -53,6 +53,7 @@ export default function CartView() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const { settings } = useStoreSettings();
+  const { t } = useTranslation();
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [discount, setDiscount] = useState(0);
 
