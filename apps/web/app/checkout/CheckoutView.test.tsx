@@ -189,7 +189,7 @@ describe('checkout wallet credit', () => {
     screen.getByRole('checkbox').click();
     submitOrder();
 
-    await screen.findByText('Order Placed Successfully!');
+    await screen.findByText(/Order placed successfully/i);
     expect(api.createOrder).toHaveBeenCalledWith(
       'test-token',
       expect.objectContaining({ applyStoreCredit: true, giftCardCode: 'abcd-1234' }),

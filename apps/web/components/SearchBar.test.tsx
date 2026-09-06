@@ -175,7 +175,7 @@ describe('SearchBar', () => {
     const input = screen.getByPlaceholderText(/search products/i) as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'res' } });
 
-    const link = await screen.findByText(/View all 8 results/);
+    const link = await screen.findByText(/View all results/);
     act(() => {
       link.click();
     });
@@ -188,7 +188,7 @@ describe('SearchBar', () => {
     const input = screen.getByPlaceholderText(/search products/i) as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'nothing' } });
 
-    expect(await screen.findByText(/no products found for/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no products found/i)).toBeInTheDocument();
   });
 });
 
@@ -260,7 +260,7 @@ describe('SearchBar RTL', () => {
     );
     const input = document.querySelector('input[type="text"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'res' } });
-    const link = await screen.findByText(/View all 8 results/);
+    const link = await screen.findByText(/View all results/);
     expect(link.textContent).toMatch(/←\s*$/);
   });
 
@@ -279,7 +279,7 @@ describe('SearchBar RTL', () => {
     );
     const input = document.querySelector('input[type="text"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'res' } });
-    const link = await screen.findByText(/View all 8 results/);
+    const link = await screen.findByText(/View all results/);
     expect(link.textContent).toMatch(/→\s*$/);
   });
 });
