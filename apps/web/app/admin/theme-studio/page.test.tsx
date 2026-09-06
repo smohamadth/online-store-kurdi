@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ThemeStudioPage from './page';
 import { CartProvider } from '@/lib/store';
+import { CompareProvider } from '@/lib/compare';
 import { useIsMobile } from '@/lib/hooks';
 import { responsiveGrid } from '@/lib/layouts/render';
 
@@ -63,7 +64,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     // Theme list shows the theme.
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
@@ -89,7 +90,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
@@ -133,7 +134,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
@@ -153,7 +154,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
@@ -186,7 +187,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('Bold')).toBeTruthy());
     fireEvent.click(screen.getByText('Bold'));
     await waitFor(() => expect(screen.getByText(/platform theme/i)).toBeTruthy());
@@ -205,7 +206,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
@@ -229,7 +230,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
@@ -277,7 +278,7 @@ describe('ThemeStudioPage', () => {
     });
     (global.fetch as any) = fetchMock;
 
-    render(<CartProvider><ThemeStudioPage /></CartProvider>);
+    render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     await waitFor(() => expect(screen.getByText('Features')).toBeTruthy());

@@ -260,7 +260,7 @@ describe('SearchBar RTL', () => {
     );
     const input = document.querySelector('input[type="text"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'res' } });
-    const link = await screen.findByText(/View all results/);
+    const link = await screen.findByText(/عرض كل النتائج/);
     expect(link.textContent).toMatch(/←\s*$/);
   });
 
