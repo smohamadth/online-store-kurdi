@@ -1,19 +1,26 @@
 name: CI
 
-# Runs the test suites on every push and pull request to main.
+# Runs the test suites on every push and pull request.
 #
 # Four jobs:
-#   api-checks  - fast (~2 min). API regression sweep + static audit. No browser.
-#   ui-checks   - slower (~6 min). Builds the frontend and drives a real browser.
-#   api-tests   - fast (~3 min). Vitest unit + integration suites (mocked DB).
-#   web-tests   - fast (~2 min). Vitest lib + component suites (happy-dom).
+#   static-checks - fastest (~3 min). Lint + typecheck + the whole vitest
+#                   suite (API unit/integration, web lib/components). No
+#                   server, no browser. This is the job that catches most
+#                   regressions, so it runs first and cheapest.
+#   api-checks    - fast (~4 min). Live API regression sweep + static audits.
+#   es-search     - Elasticsearch live search against a real cluster.
+#   ui-checks     - slower (~15 min). Builds the frontend and drives a real
+#                   browser through the page suites.
 #
-# They run in parallel. If either goes red the commit is marked failed on
+# They run in parallel. If any goes red the commit is marked failed on
 # GitHub, so a regression is caught before it is pulled onto a dev machine.
 
 on:
   push:
-    branches: [main]
+    # `main` plus the agent/working branches, so a plain push to a feature
+    # branch gets the same signal a PR would. Without the second pattern a
+    # push to arena/** ran nothing at all.
+    branches: [main, 'arena/**']
   pull_request:
     branches: [main]
   # Lets you re-run the suites by hand from the Actions tab.
@@ -31,10 +38,13 @@ env:
   PRISMA_VERSION: 5.22.0
 
 jobs:
-  api-checks:
-    name: API regression + static audit
+  # ===================================================================
+  # 1. Lint, typecheck and the full vitest suite.
+  # ===================================================================
+  static-checks:
+    name: Lint, typecheck + vitest
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +58,66 @@ jobs:
         # postinstall runs `prisma generate`, so the generated client is always
         # in step with the schema. A stale client is the bug that made every
         # admin page 500 with "Cannot read properties of undefined".
+        run: npm ci
+
+      - name: Configure environment
+        run: cp apps/api/.env.ci apps/api/.env
+
+      - name: Lint (API)
+        run: npm run lint:api
+
+      - name: Lint (web)
+        run: npm run lint:web
+
+      - name: Typecheck (API)
+        # apps/web was typechecked here but apps/api was not, so an API type
+        # error could only be caught by a human - the vitest transform does
+        # not typecheck. Needs the generated Prisma client (npm ci's
+        # postinstall provides it); without one, prisma-typed callbacks
+        # degrade to implicit any and tsc reports ~100 spurious errors.
+        working-directory: apps/api
+        run: npx tsc --noEmit
+
+      # API vitest must run even when web tsc is red. Previously these steps
+      # sat after Typecheck (web), so a storefront type error skipped the
+      # entire API suite.
+      - name: API unit tests
+        run: npm run test:api:unit
+
+      - name: API integration tests
+        # In-memory mock Prisma: no database or network needed.
+        run: npm run test:api:integration
+
+      - name: Typecheck (web)
+        # `next build` fails on type errors, but that takes minutes in
+        # ui-checks. Failing here surfaces the same error in seconds.
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: Web tests (lib + components)
+        run: npm run test:web
+
+  # ===================================================================
+  # 2. Live API regression sweep + static audits.
+  # ===================================================================
+  api-checks:
+    name: API regression + static audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
         run: npm ci
 
       - name: Configure environment
@@ -86,18 +156,84 @@ jobs:
       - name: Audit for silent admin write failures
         run: python3 scripts/audit-silent-writes.py
 
+      # Static: every mutating/sensitive route must carry an auth guard or an
+      # explicit `// authz-ok: <reason>`. Catches an endpoint shipped with no
+      # authorization at all, which no functional test would notice.
+      - name: Audit route authorization
+        run: python3 scripts/audit-route-authz.py
+
       - name: Commerce rules (coupons, orders, stock)
         run: python3 scripts/verify-commerce.py
+
+      # Bulk product/category import + export against the live API. The
+      # script was in the repo but never invoked, so this destructive admin
+      # path had no automated coverage.
+      - name: Bulk import/export
+        run: python3 scripts/verify-import-export.py
 
       - name: API log
         # Runs even when a previous step failed, so a red build shows why.
         if: always()
         run: tail -100 /tmp/api.log || true
 
+  # ===================================================================
+  # 3. Elasticsearch live search.
+  # ===================================================================
+  es-search:
+    name: Elasticsearch live search
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Boot a real Elasticsearch 8.11.0 (the same image as docker-compose.yml)
+    # as a service container. The live test talks to it over localhost:9200.
+    services:
+      elasticsearch:
+        image: elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        # Mark the service ready only once the cluster is actually up, so the
+        # test step doesn't race a half-started node. ES 8.11's image ships
+        # curl, so a health probe is reliable here.
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow >/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Elasticsearch live search suite
+        working-directory: apps/api
+        env:
+          # localhost resolves to the service container via the mapped port.
+          ELASTICSEARCH_URL: http://localhost:9200
+          ELASTICSEARCH_INDEX: products-ci-live
+        # The suite seeds products via the in-memory mock prisma, indexes them
+        # into the real cluster, and verifies search + index maintenance. It is
+        # gated on a reachability probe, so it runs for real here (ES is up)
+        # and skips on machines without a cluster.
+        run: npx vitest run --config vitest.integration.config.ts tests/integration/elasticsearch.live.test.ts
+
+  # ===================================================================
+  # 4. Browser regression.
+  # ===================================================================
   ui-checks:
     name: Browser regression
     runs-on: ubuntu-latest
-    # Six browser suites plus a Next.js production build. 25 was too tight once
+    # Browser suites plus a Next.js production build. 25 was too tight once
     # a slow step ate into it.
     timeout-minutes: 35
 
@@ -212,68 +348,15 @@ jobs:
       # params made the page render "not found" behind an HTTP 200.
       - name: Unicode slugs for pages and blog posts
         run: python3 scripts/verify-page-slugs.py
+        
+      - name: Marketing UI (popup + bundles)
+        run: python3 scripts/verify-marketing-ui.py
 
+      - name: Theme presets reach the UI
+        run: python3 scripts/verify-theme.py
+        
       - name: Server logs
         if: always()
         run: |
           echo "----- API -----"; tail -100 /tmp/api.log || true
           echo "----- WEB -----"; tail -60 /tmp/web.log || true
-
-  api-tests:
-    name: API unit + integration (Vitest)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        # postinstall runs `prisma generate`, so the type-check below runs
-        # against a client that is in step with the schema.
-        run: npm ci
-
-      - name: Type-check API sources
-        working-directory: apps/api
-        run: npx tsc --noEmit
-
-      - name: Unit tests
-        working-directory: apps/api
-        run: npm run test:unit
-
-      - name: Integration tests (mocked Prisma)
-        working-directory: apps/api
-        # The single-fork integration suite accumulates in-memory stores;
-        # cap heap so a leak fails the job instead of OOM-killing the runner.
-        run: NODE_OPTIONS=--max-old-space-size=4096 npm run test:integration
-
-  web-tests:
-    name: Web lib + component tests (Vitest)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        # --ignore-scripts: the web tests need no lifecycle scripts (no
-        # postinstall in the web workspace, and the Prisma engine download
-        # is irrelevant to them).
-        run: npm ci --ignore-scripts
-
-      - name: Lib unit tests
-        working-directory: apps/web
-        run: npm run test
-
-      - name: Component tests
-        working-directory: apps/web
-        run: NODE_OPTIONS=--max-old-space-size=4096 npm run test:components
