@@ -203,6 +203,9 @@ def main():
             pg.press("input[type=password]", "Enter")
             pg.wait_for_timeout(5000)
             if "/login" in pg.url:
+                ci_annotate.annotate_failure(
+                    "verify-page-slugs", "admin login failed",
+                    f"still on {pg.url} after submitting")
                 print("FATAL: admin login failed")
                 sys.exit(1)
 

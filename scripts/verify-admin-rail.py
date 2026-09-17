@@ -101,6 +101,11 @@ def main():
         pg.press("input[type=password]", "Enter")
         pg.wait_for_timeout(5000)
         if "/login" in pg.url:
+            # Annotate: this bypasses check(), so without it the job
+            # reports only "exit code 1".
+            ci_annotate.annotate_failure(
+                "verify-admin-rail", "admin login failed",
+                f"still on {pg.url} after submitting; body={pg.inner_text('body')[:300]}")
             print("FATAL: admin login failed")
             b.close()
             sys.exit(1)
