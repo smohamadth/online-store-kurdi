@@ -54,15 +54,20 @@ vi.mock('@/components/ShippingSelector', () => ({
     </button>
   ),
 }));
-vi.mock('@/components/TaxCalculator', () => ({
-  default: ({ onTaxCalculated }: any) => {
+vi.mock('@/components/TaxCalculator', () => {
+  // Named with a capital so eslint's rules-of-hooks recognises it as a
+  // component (an inline `default:` arrow is reported as a plain function
+  // calling a hook). Reports the calculation once on mount, like the real
+  // component does after its fetch resolves.
+  function MockTaxCalculator({ onTaxCalculated }: any) {
     useEffect(() => {
       if (tax.value) onTaxCalculated(tax.value);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return null;
-  },
-}));
+  }
+  return { default: MockTaxCalculator };
+});
 
 function setup() {
   localStorage.clear();
