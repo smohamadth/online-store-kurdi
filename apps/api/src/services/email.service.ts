@@ -26,23 +26,40 @@ let transporter: nodemailer.Transporter;
 
 // Initialize email service
 export async function initializeEmail(): Promise<void> {
-  try {
-    transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: parseInt(env.SMTP_PORT),
-      secure: false,
-      auth: env.SMTP_USER ? {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-      } : undefined,
-    });
+  // Build the transport into a LOCAL first and only publish it once verify()
+  // succeeds. Assigning `transporter` before verifying left a broken
+  // transport installed when SMTP was unreachable: isEmailConfigured() then
+  // reported true (the admin test-email button said "sent successfully"),
+  // and sendEmail() took the real-send branch, where sendMail() threw and
+  // was swallowed — so the log-only fallback this module promises never ran
+  // and every order confirmation was silently dropped. Verify first.
+  const candidate = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: parseInt(env.SMTP_PORT),
+    secure: false,
+    auth: env.SMTP_USER ? {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    } : undefined,
+  });
 
-    // Verify connection
-    await transporter.verify();
+  try {
+    await transporterVerify(candidate);
+    transporter = candidate;
     logger.info('✅ Email service initialized');
   } catch (error) {
-    logger.warn('⚠️ Email service not available - emails will be logged only');
+    // Leave `transporter` undefined so sendEmail() logs instead of pretending.
+    transporter = undefined as unknown as nodemailer.Transporter;
+    logger.warn(
+      `⚠️ Email service not available (${(error as Error).message}) - emails will be logged only. ` +
+        'Set SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS to deliver them.',
+    );
   }
+}
+
+/** Seam so a test can drive the verify outcome without a real SMTP server. */
+async function transporterVerify(t: nodemailer.Transporter): Promise<void> {
+  await t.verify();
 }
 
 /**

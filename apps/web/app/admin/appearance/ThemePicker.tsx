@@ -1,31 +1,9 @@
 'use client';
 
 /**
- * ThemePicker.
- *
- * The merchant-facing "pick a theme" widget for the admin
- * appearance page. Lists every theme in the registry as a
- * card with a name, description, and a "use this theme"
- * button. The currently-active theme is highlighted.
- *
- * Why a separate component?
- *   - Testable in isolation. The parent page is 514 lines and
- *     runs the auth check, the GET /theme load, the save flow,
- *     and seven tabs. Mounting the picker standalone lets us
- *     pin its behaviour without all that scaffolding.
- *   - Reusable. If a future "switch theme" button ends up in
- *     the main admin dashboard, this component drops in.
- *
- * The picker's value is just the theme key. The parent is
- * responsible for:
- *   - Reading the active theme from the loaded theme record
- *   - POSTing the new activeTheme to /api/theme
- *   - Showing the user-visible success / failure message
- *
- * The picker does the click → onChange → "did the click land on
- * a valid theme?" check; it does not do network. That's a
- * separation-by-concerns choice: a component that's hard to
- * test (network) is harder to ship safely.
+ * Theme gallery. `activeTheme` is the persisted store setting; `selectedTheme`
+ * is only the Appearance draft. Selecting a card never claims it is live.
+ * The parent owns saving the selected key AND its tokens.
  */
 
 import { useState, useEffect } from 'react';
@@ -38,8 +16,10 @@ export interface ThemePickerProps {
    * card is highlighted.
    */
   activeTheme: string | null;
+  /** Pending choice; defaults to the active key for read-only galleries. */
+  selectedTheme?: string | null;
   /**
-   * Called when the merchant clicks "Use this theme". The
+   * Called when the merchant clicks "Select theme". The
    * parent's responsibility is to confirm + persist.
    */
   onSelect: (key: string) => void;
@@ -59,7 +39,7 @@ export interface ThemePickerProps {
 
 /**
  * The Picker card. Renders a single theme's metadata and a
- * "Use this theme" button. Active state is the parent's
+ * "Select theme" button. Active state is the parent's
  * `activeTheme` prop.
  *
  * Pulled out of the parent so the visual state and the
@@ -69,11 +49,13 @@ export interface ThemePickerProps {
 function ThemeCard({
   theme,
   active,
+  selected,
   disabled,
   onSelect,
 }: {
   theme: ThemeConfig;
   active: boolean;
+  selected: boolean;
   disabled: boolean;
   onSelect: (key: string) => void;
 }) {
@@ -91,11 +73,12 @@ function ThemeCard({
     <div
       data-testid={`theme-card-${theme.key}`}
       data-active={active ? 'true' : 'false'}
+      data-selected={selected ? 'true' : 'false'}
       style={{
         // Active cards get a thicker, dark border. Inactive
         // cards use a neutral light grey. Card fill follows
         // the theme body so dark / cream palettes read at a glance.
-        border: active ? '2px solid #111' : '1px solid #e5e5e5',
+        border: selected ? '2px solid #111' : '1px solid #e5e5e5',
         borderRadius: '12px',
         padding: '16px',
         backgroundColor: (theme.tokens.bodyBg as string) || '#fff',
@@ -214,18 +197,21 @@ function ThemeCard({
         )}
       </div>
 
+      {selected && !active && <span data-testid={`selected-badge-${theme.key}`} style={{ fontSize: 12, fontWeight: 700, color: '#92400e', background: '#fffbeb', padding: '4px 8px', borderRadius: 6 }}>
+        Selected · not saved
+      </span>}
       <button
         type="button"
         onClick={() => onSelect(theme.key)}
-        disabled={disabled || active}
+        disabled={disabled || selected}
         data-testid={`theme-select-${theme.key}`}
         style={{
           // The button is full-width and tall enough to be
           // comfortable on a touch device.
           minHeight: '40px',
           padding: '8px 14px',
-          backgroundColor: active ? '#f5f5f5' : '#111',
-          color: active ? '#999' : '#fff',
+          backgroundColor: selected ? '#f5f5f5' : '#111',
+          color: selected ? '#999' : '#fff',
           border: 'none',
           borderRadius: '8px',
           fontSize: '14px',
@@ -239,7 +225,7 @@ function ThemeCard({
           // focus styling.
         }}
       >
-        {active ? 'Currently active' : 'Use this theme'}
+        {selected ? (active ? 'Currently active' : 'Selected') : 'Select theme'}
       </button>
 
       {/* A separate "Preview" link opens /preview/<key>?from=admin
@@ -268,7 +254,7 @@ function ThemeCard({
   );
 }
 
-export function ThemePicker({ activeTheme, onSelect, disabled, themes = THEMES }: ThemePickerProps) {
+export function ThemePicker({ activeTheme, selectedTheme = activeTheme, onSelect, disabled, themes = THEMES }: ThemePickerProps) {
   // The list is read from the registry at module load (merged
   // with runtime-installed themes when the parent passes
   // them), but rendering them in a stable order is a UX
@@ -326,6 +312,7 @@ export function ThemePicker({ activeTheme, onSelect, disabled, themes = THEMES }
             <ThemeCard
               theme={theme}
               active={activeTheme === theme.key}
+              selected={selectedTheme === theme.key}
               disabled={Boolean(disabled)}
               onSelect={onSelect}
             />

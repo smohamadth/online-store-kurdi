@@ -156,7 +156,7 @@ export function studioTokenStyle(
 
 /** Live storefront path for the studio iframe, or null when the page has no public URL. */
 export function studioLivePreviewPath(page: string, bust: number): string | null {
-  if (page === 'home') return `/?homePreview=${bust}`;
+  if (page === 'home') return `/?studioPreview=${bust}`;
   if (page === 'products') return `/products?studioPreview=${bust}`;
   if (page === 'blog') return `/blog?studioPreview=${bust}`;
   return null;

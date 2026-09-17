@@ -5,18 +5,25 @@
  *
  * Lets an admin create/edit a theme with:
  *   - design tokens (colours, typography, spacing) edited with controls
- *   - per-page grid layouts built by drag-and-drop on a column grid
+ *   - ordered home templates plus per-page grids
  *   - full grid control: each block's column start/span and row start/span
- *   - a live storefront preview rendered by the same LayoutRenderer the
- *     storefront uses
+ *   - template previews using the storefront renderers, plus a separate saved-store iframe
  *
  * A theme is persisted as a theme.json file via the theme-studio API (the
  * "files" model). Bundled themes are the read-only base; an admin creates a
  * new theme by duplicating one, then edits + saves it to its own directory.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { API_BASE } from '@/lib/http';
+import { API_BASE, errorMessage } from '@/lib/http';
+import ReplaceHomepageButton from '@/components/ReplaceHomepageButton';
+import { DESIGN_COLOR_FIELDS, ANNOUNCEMENT_COLOR_FIELDS } from '@/lib/designTokens';
+import { appearanceHref, hasHomeTemplate } from '@/lib/designWorkflow';
+import { homeStackLayout, moveHomeBlock } from '@/lib/layouts/homeStack';
+import { PreviewThemeProvider } from '@/lib/previewTheme';
+import { getDefaultTheme, type ThemeConfig } from '@/lib/themeRegistry';
+import { setRuntimeThemeConfig } from '@/lib/themeRuntime';
 import { useIsMobile } from '@/lib/hooks';
+import { useDesignNavigationGuard } from '@/lib/useDesignNavigationGuard';
 import {
   PageKey,
   PageLayout,
@@ -34,7 +41,7 @@ import { addBlock, moveBlock, resizeBlock, removeBlock } from '@/lib/layouts/edi
 import { CONFIG_FIELDS, LIST_BLOCK_TYPES, type ConfigField } from '@/lib/layouts/blockUtils';
 import { isPlatformBundledTheme } from '@/lib/themeBundled';
 import { studioLayoutData, studioTokenStyle, studioHomeMerch, studioLivePreviewPath } from '@/lib/layouts/studioPreview';
-import { FONT_LABELS, FONT_STACKS } from '@/lib/theme';
+import { FONT_LABELS, FONT_STACKS, useTheme } from '@/lib/theme';
 import { mergeStudioLayouts, studioHasUnsavedDrafts } from '@/lib/layouts/studioSave';
 import { layoutToHomeSections } from '@/lib/layouts/homeMapping';
 import { HomeSectionStack } from '@/components/HomeSectionStack';
@@ -89,11 +96,13 @@ const BLOCK_LABELS: Record<BlockType, string> = {
 };
 
 export default function ThemeStudioPage() {
+  const { theme: liveTheme } = useTheme();
   // The Theme Studio is a 3-column desktop layout (theme list | canvas |
   // palette+tokens). On phones that fixed ~580px of columns overflows a
   // ~360px viewport, so stack the three panels vertically below 900px.
   const isMobile = useIsMobile(900);
   const [themes, setThemes] = useState<ThemeStudioTheme[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [currentKey, setCurrentKey] = useState<string>('');
   const [current, setCurrent] = useState<ThemeStudioTheme | null>(null);
   const [page, setPage] = useState<PageKey>('home');
@@ -101,17 +110,22 @@ export default function ThemeStudioPage() {
   // discards unsaved work; the derived `layout` below is the draft for the
   // current page, falling back to the theme's saved layout, then the built-in.
   const [drafts, setDrafts] = useState<Partial<Record<PageKey, PageLayout>>>({});
-  const layout: PageLayout =
+  const pageLayout: PageLayout =
     drafts[page] ??
     (current?.layouts?.[page] as PageLayout | undefined) ??
-    defaultLayoutFor(page) ??
+    (page === 'home' ? { columns: 1, gap: 0, blocks: [] } : defaultLayoutFor(page)) ??
     { columns: DEFAULT_COLUMNS, gap: 24, blocks: [] };
-  const setLayout = (next: PageLayout) => setDrafts((d) => ({ ...d, [page]: next }));
+  const layout = page === 'home' ? homeStackLayout(pageLayout) : pageLayout;
+  const setLayout = (next: PageLayout) => setDrafts((d) => ({ ...d, [page]: page === 'home' ? homeStackLayout(next) : next }));
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   // Ref (not state): setting state on dragStart re-renders the palette item
   // and Chrome cancels the HTML5 drag. Drop reads this or dataTransfer.
   const draggingTypeRef = useRef<BlockType | null>(null);
   const [saving, setSaving] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const busy = saving || working || replacing;
+  const operation = useRef(false);
   const [msg, setMsg] = useState<{ type: string; text: string }>({ type: '', text: '' });
   const [newName, setNewName] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -132,54 +146,56 @@ export default function ThemeStudioPage() {
   };
 
   const loadThemes = useCallback(async () => {
-    const res = await fetch(`${API_BASE}/theme-studio/themes`, {
-      headers: { Authorization: `Bearer ${token()}` },
-    });
-    if (!res.ok) return;
-    const payload = (await res.json()).data as ThemeStudioTheme[] | string[];
-    if (Array.isArray(payload) && payload.length && typeof payload[0] === 'object') {
-      setThemes(payload as ThemeStudioTheme[]);
-      return;
+    try {
+      const res = await fetch(`${API_BASE}/theme-studio/themes`, { headers: { Authorization: `Bearer ${token()}` } });
+      if (!res.ok) throw new Error('Could not load themes. Reload this page to try again.');
+      const payload = (await res.json()).data as ThemeStudioTheme[] | string[];
+      // Older API versions returned keys; new ones return full configs.
+      const list = await Promise.all((payload || []).map(async (entry) => {
+        if (typeof entry !== 'string') return entry;
+        const r = await fetch(`${API_BASE}/theme-studio/themes/${entry}`, { headers: { Authorization: `Bearer ${token()}` } });
+        if (!r.ok) throw new Error(`Could not load theme “${entry}”.`);
+        return (await r.json()).data as ThemeStudioTheme;
+      }));
+      setThemes(list);
+      setCatalogLoaded(true);
+    } catch (error) {
+      setMsg({ type: 'error', text: errorMessage(error, 'Could not load themes.') });
     }
-    const keys = (payload as string[]) || [];
-    const list: ThemeStudioTheme[] = [];
-    for (const k of keys) {
-      const r = await fetch(`${API_BASE}/theme-studio/themes/${k}`, {
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      if (r.ok) list.push((await r.json()).data);
-    }
-    setThemes(list);
   }, []);
 
-  useEffect(() => {
-    loadThemes();
-  }, [loadThemes]);
+  useEffect(() => { void loadThemes(); }, [loadThemes]);
 
   const studioDirty = studioHasUnsavedDrafts(drafts) || metaDirty;
-  useEffect(() => {
-    if (!studioDirty) return;
-    const onLeave = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onLeave);
-    return () => window.removeEventListener('beforeunload', onLeave);
-  }, [studioDirty]);
+  useDesignNavigationGuard(
+    studioDirty || busy,
+    busy ? 'A theme update is still in progress. Leave this page?' : 'Discard unsaved theme edits and leave this page?',
+  );
 
-  const selectTheme = async (key: string) => {
-    setCurrentKey(key);
-    const r = await fetch(`${API_BASE}/theme-studio/themes/${key}`, {
-      headers: { Authorization: `Bearer ${token()}` },
-    });
-    if (!r.ok) return;
-    const data = (await r.json()).data as ThemeStudioTheme;
+  const acceptSavedTheme = (data: ThemeStudioTheme) => {
     setCurrent(data);
-    // Reset in-memory drafts; `layout` re-derives from the theme's saved
-    // layouts so the newly-selected theme's pages show immediately.
+    setCurrentKey(data.key);
     setDrafts({});
     setMetaDirty(false);
     setSelectedBlockId(null);
+  };
+
+  const selectTheme = async (key: string) => {
+    if (busy || operation.current || key === currentKey) return;
+    if (studioDirty && !window.confirm('Discard unsaved theme edits and switch themes?')) return;
+    operation.current = true;
+    setWorking(true);
+    try {
+      const r = await fetch(`${API_BASE}/theme-studio/themes/${key}`, { headers: { Authorization: `Bearer ${token()}` } });
+      if (!r.ok) throw new Error((await r.json()).message || 'Could not load this theme.');
+      acceptSavedTheme((await r.json()).data as ThemeStudioTheme);
+      setMsg({ type: '', text: '' });
+    } catch (error) {
+      notify('error', errorMessage(error, 'Could not load this theme. Your edits were kept.'));
+    } finally {
+      operation.current = false;
+      setWorking(false);
+    }
   };
 
   const switchPage = (p: PageKey) => {
@@ -188,93 +204,92 @@ export default function ThemeStudioPage() {
   };
 
   const createTheme = async () => {
-    const key = newName.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '');
-    if (!key) return notify('error', 'Enter a theme name first.');
+    if (!catalogLoaded || busy || operation.current) return;
+    const key = newName.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    if (!key) return notify('error', 'Enter a name with at least one Latin letter or number.');
+    if (themes.some((t) => t.key === key)) return notify('error', 'A theme with this name already exists. Choose a different name.');
+    operation.current = true;
+    setWorking(true);
     const cfg: ThemeStudioTheme = {
-      key,
-      name: newName.trim(),
-      description: 'A custom theme created in the Theme Studio.',
-      version: '1.0.0',
-      author: 'Store Admin',
-      preview: `/themes/${key}/preview.png`,
-      features: { rtl: true, darkMode: false, paid: false },
-      tokens: { ...(current?.tokens ?? {}) },
-      layouts: current?.layouts ?? {},
+      key, name: newName.trim(), description: current?.description || 'A custom theme created in Theme Studio.',
+      version: '1.0.0', author: 'Store Admin', preview: current?.preview || '/themes/default/preview.png',
+      features: current?.features ? { ...current.features } : { rtl: true, darkMode: false, paid: false },
+      tokens: { ...(current?.tokens ?? getDefaultTheme().tokens) },
+      layouts: mergeStudioLayouts(current?.layouts, drafts),
+      ...(current?.sections ? { sections: { ...current.sections } } : {}),
     };
-    const res = await fetch(`${API_BASE}/theme-studio/themes/${key}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify(cfg),
-    });
-    if (!res.ok) return notify('error', (await res.json()).message || 'Could not create theme.');
-    await loadThemes();
-    setCreateOpen(false);
-    setNewName('');
-    notify('success', `Theme "${key}" created.`);
-    await selectTheme(key);
+    try {
+      const res = await fetch(`${API_BASE}/theme-studio/themes/${key}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(cfg),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'Could not create theme.');
+      const saved = body.data as ThemeStudioTheme;
+      acceptSavedTheme(saved);
+      setThemes((list) => [...list, saved]);
+      setCreateOpen(false);
+      setNewName('');
+      notify('success', `Theme “${saved.name}” created, including your current edits.`);
+    } catch (error) {
+      notify('error', errorMessage(error, 'Could not create theme. Your edits were kept.'));
+    } finally {
+      operation.current = false;
+      setWorking(false);
+    }
   };
 
   const bundled = isPlatformBundledTheme(current?.key);
 
   const save = async () => {
-    if (!current) return;
-    if (isPlatformBundledTheme(current.key)) {
-      notify('error', 'Bundled themes are read-only. Create a new theme (duplicate) to save your edits.');
-      return;
-    }
+    if (!current || busy || operation.current || !studioDirty) return;
+    if (bundled) return notify('error', 'Duplicate this platform theme to save your edits.');
+    operation.current = true;
     setSaving(true);
-    const updated: ThemeStudioTheme = {
-      ...current,
-      layouts: mergeStudioLayouts(current.layouts, drafts),
-    };
-    const res = await fetch(`${API_BASE}/theme-studio/themes/${current.key}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify(updated),
-    });
-    setSaving(false);
-    if (!res.ok) return notify('error', (await res.json()).message || 'Save failed.');
-    setCurrent(updated);
-    setDrafts({});
-    setMetaDirty(false);
-    notify('success', `Theme "${current.key}" saved.`);
-  };
-
-  const applyHomeToStore = async () => {
-    if (!current) return;
-    if (studioHasUnsavedDrafts(drafts) && !bundled) {
-      notify('error', 'Save the theme first so the live home uses the latest layout.');
-      return;
+    const updated = { ...current, layouts: mergeStudioLayouts(current.layouts, drafts) };
+    try {
+      const res = await fetch(`${API_BASE}/theme-studio/themes/${current.key}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify(updated),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'Save failed.');
+      // Use the sanitised server response, not the pre-save draft.
+      const saved = body.data as ThemeStudioTheme;
+      acceptSavedTheme(saved);
+      setThemes((list) => list.map((theme) => theme.key === saved.key ? saved : theme));
+      setRuntimeThemeConfig(saved);
+      window.dispatchEvent(new Event('themeChange'));
+      notify('success', `Theme “${saved.name}” saved. Homepage blocks were not changed. Apply styling in Appearance, or replace the homepage from this saved template.`);
+    } catch (error) {
+      notify('error', errorMessage(error, 'Could not save theme. Your edits were kept.'));
+    } finally {
+      operation.current = false;
+      setSaving(false);
     }
-    if (
-      !confirm(
-        `Replace the live homepage with “${current.name}” home layout? Current Home builder blocks will be deleted.`,
-      )
-    )
-      return;
-    const res = await fetch(`${API_BASE}/home-sections/apply-theme`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body: JSON.stringify({ themeKey: current.key }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) return notify('error', body.message || 'Could not apply home layout.');
-    setLivePreviewKey((k) => k + 1);
-    notify('success', body.message || 'Live home updated.');
   };
 
   const deleteCurrent = async () => {
-    if (!current) return;
-    if (!confirm(`Delete theme "${current.key}"? This cannot be undone.`)) return;
-    const res = await fetch(`${API_BASE}/theme-studio/themes/${current.key}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token()}` },
-    });
-    if (!res.ok) return notify('error', (await res.json()).message || 'Delete failed.');
-    setCurrent(null);
-    setCurrentKey('');
-    await loadThemes();
-    notify('success', 'Theme deleted.');
+    if (!current || bundled || busy || operation.current) return;
+    if (!confirm(`Delete theme “${current.name}”${studioDirty ? ' and discard its unsaved edits' : ''}? This cannot be undone.`)) return;
+    operation.current = true;
+    setWorking(true);
+    try {
+      const res = await fetch(`${API_BASE}/theme-studio/themes/${current.key}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'Delete failed.');
+      setThemes((list) => list.filter((theme) => theme.key !== current.key));
+      setCurrent(null);
+      setCurrentKey('');
+      setDrafts({});
+      setMetaDirty(false);
+      setSelectedBlockId(null);
+      window.dispatchEvent(new Event('themeChange'));
+      notify('success', body.message || 'Theme deleted.');
+    } catch (error) {
+      notify('error', errorMessage(error, 'Could not delete this theme.'));
+    } finally {
+      operation.current = false;
+      setWorking(false);
+    }
   };
 
   const setToken = (k: string, v: string | number | boolean) => {
@@ -291,10 +306,21 @@ export default function ThemeStudioPage() {
       notify('error', 'Select a theme first, then add blocks.');
       return;
     }
+    if (busy) return;
     const next = addBlock(layout, type);
     setLayout(next);
     setSelectedBlockId(next.blocks[next.blocks.length - 1].id);
   };
+
+  const homePreview = () => current && (
+    <PreviewThemeProvider themeKey={current.key} themeConfig={current as ThemeConfig} storeActiveTheme={liveTheme.activeTheme}>
+      <HomeSectionStack sections={layoutToHomeSections(layout)} isMobile={previewMode === 'phone'}
+        perRow={Math.max(2, Math.min(6, Number(current.tokens.productsPerRow ?? 4) || 4))}
+        currencySymbol="$" featuredProducts={merch.products} categories={merch.categories}
+        heroBanners={merch.banners} promoBanners={[]} stripBanners={[]} bannersLoaded
+        newArrivals={merch.products} trending={merch.products} />
+    </PreviewThemeProvider>
+  );
 
   // ---- grid editing -------------------------------------------------------
   const handleDropBlock = (e: React.DragEvent) => {
@@ -312,28 +338,29 @@ export default function ThemeStudioPage() {
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700 }}>Theme Studio</h1>
           <p style={{ color: '#666', marginTop: 4, fontSize: 14 }}>
-            Design your own theme — pick colours, typography, and build the grid layout of every page by dragging blocks.
-            Installing a <strong>.zip</strong> package can only add tokens and layout JSON; it cannot ship new React sections
-            (a custom Hero still needs a platform release).
+            Design reusable theme styles and page templates. Appearance manages your live shop.
+            Homepage templates are ordered sections; other pages support grids.
+            Theme packages contain data, not executable React components.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'start' }}>
+          <a href={appearanceHref('home')} style={{ ...btnGhost, padding: '9px 12px' }}>Edit live homepage</a>
+          <button disabled={busy || !catalogLoaded}
             onClick={() => setCreateOpen((o) => !o)}
             style={btnPrimary}
           >
-            + New theme
+            {current ? 'Duplicate theme' : '+ New theme'}
           </button>
-          <button
-            onClick={applyHomeToStore}
-            disabled={!current}
-            style={{ ...btnPrimary, background: '#fff', color: '#111', border: '1px solid #111' }}
-          >
-            Apply home to store
-          </button>
+          {current && page === 'home' && <ReplaceHomepageButton key={current.key} themeKey={current.key} themeName={current.name}
+            disabled={busy || studioDirty || !hasHomeTemplate(current.layouts)}
+            disabledReason={studioDirty ? (bundled ? 'Duplicate this theme to save your edits first.' : 'Save theme edits first.') : !hasHomeTemplate(current.layouts) ? 'Add homepage sections and save the theme first.' : undefined}
+            onApplied={() => setLivePreviewKey((key) => key + 1)} onBusyChange={setReplacing} />}
+          {current && <a href={appearanceHref('theme', current.key)} aria-disabled={studioDirty || busy}
+            onClick={(event) => { if (studioDirty || busy) { event.preventDefault(); notify('error', 'Save or duplicate this theme before applying its styling.'); } }}
+            style={{ ...btnGhost, padding: '9px 12px', opacity: studioDirty || busy ? 0.5 : 1 }}>Apply styling in Appearance</a>}
           <button
             onClick={save}
-            disabled={saving || !current || bundled}
+            disabled={busy || !current || bundled || !studioDirty}
             title={bundled ? 'Duplicate this theme first — bundled themes cannot be overwritten' : undefined}
             style={{ ...btnPrimary, background: '#111', opacity: bundled ? 0.5 : 1 }}
           >
@@ -342,25 +369,32 @@ export default function ThemeStudioPage() {
         </div>
       </header>
 
+      {studioDirty && <p role="status" style={{ fontSize: 13, color: '#92400e', marginTop: 12 }}>Unsaved theme edits{bundled ? ' — duplicate this platform theme to keep them.' : ' — Save theme to keep them.'}</p>}
+      {current?.key === liveTheme.activeTheme && <p style={{ fontSize: 13, color: '#666', marginTop: 12 }}>
+        You are editing the active theme. Saving layouts for other pages updates those pages on their next load.
+        Homepage blocks and live appearance overrides stay separate. Duplicate the theme to experiment safely.
+      </p>}
+      <fieldset disabled={busy} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
       {createOpen && (
         <div style={{ margin: '16px 0', padding: 16, border: '1px solid #e5e5e5', borderRadius: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
           <input
+            aria-label="New theme name"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Theme name (e.g. My Brand)"
             style={{ flex: 1, padding: '9px 11px', border: '1px solid #d4d4d4', borderRadius: 6 }}
           />
-          <button onClick={createTheme} style={btnPrimary}>Create</button>
+          <button onClick={createTheme} disabled={!catalogLoaded || !newName.trim()} style={btnPrimary}>Create</button>
         </div>
       )}
 
       {msg.text && (
-        <div style={{ margin: '14px 0', padding: '12px 16px', borderRadius: 8, fontSize: 14, backgroundColor: msg.type === 'success' ? '#dcfce7' : '#fee2e2', color: msg.type === 'success' ? '#166534' : '#991b1b' }}>
+        <div role={msg.type === 'error' ? 'alert' : 'status'} style={{ margin: '14px 0', padding: '12px 16px', borderRadius: 8, fontSize: 14, backgroundColor: msg.type === 'success' ? '#dcfce7' : '#fee2e2', color: msg.type === 'success' ? '#166534' : '#991b1b' }}>
           {msg.text}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '260px 1fr 320px', gap: 18, marginTop: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px minmax(0, 1fr) 320px', gap: 18, marginTop: 20, alignItems: 'start' }}>
         {/* ---- Theme list ---- */}
         <div style={card}>
           <h3 style={{ fontSize: 15, marginBottom: 10 }}>Themes</h3>
@@ -388,6 +422,7 @@ export default function ThemeStudioPage() {
             <>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                 <input
+                  aria-label="Theme name"
                   value={current.name}
                   onChange={(e) => {
                     setCurrent({ ...current, name: e.target.value });
@@ -405,7 +440,7 @@ export default function ThemeStudioPage() {
                 </button>
                 {bundled && (
                   <p style={{ width: '100%', fontSize: 13, color: '#666', margin: 0 }}>
-                    This is a platform theme. Use “+ New theme” to duplicate it, then save.
+                    This is a platform theme. Use “Duplicate theme” to save a copy, including any edits you make here.
                   </p>
                 )}
               </div>
@@ -427,7 +462,7 @@ export default function ThemeStudioPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              {page !== 'home' && <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
                 <label style={{ fontSize: 13 }}>
                   Columns:{' '}
                   <input
@@ -450,7 +485,7 @@ export default function ThemeStudioPage() {
                     style={{ ...inputField, width: 60 }}
                   />
                 </label>
-              </div>
+              </div>}
 
               {/* Drop zone for palette blocks */}
               <div
@@ -463,9 +498,11 @@ export default function ThemeStudioPage() {
                 style={{ minHeight: 300, border: '2px dashed #d4d4d4', borderRadius: 12, padding: 12 }}
               >
                 <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
-                  Layout for “{PAGE_LABELS[page]}” — drag a block here, or reorder / resize blocks below.
+                  {page === 'home' ? 'Homepage template — full-width sections. Add blocks, then use the arrows below to reorder.' : `Layout for “${PAGE_LABELS[page]}” — drag a block here, or reorder / resize blocks below.`}
                 </div>
-                <LayoutRenderer layout={layout} data={studioLayoutData()} />
+                <div dir={current.features.rtl ? 'rtl' : 'ltr'} style={studioTokenStyle(current.tokens)}>
+                  {page === 'home' ? homePreview() : <LayoutRenderer layout={layout} data={studioLayoutData()} />}
+                </div>
               </div>
 
               {/* Block list with grid controls */}
@@ -485,11 +522,12 @@ export default function ThemeStudioPage() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 600, fontSize: 14 }}>{BLOCK_LABELS[b.type]}</span>
-                      <button onClick={(e) => { e.stopPropagation(); setLayout(removeBlock(layout, b.id)); setSelectedBlockId(null); }} style={btnGhost}>✕</button>
+                      <button aria-label={`Remove ${BLOCK_LABELS[b.type]}`} onClick={(e) => { e.stopPropagation(); setLayout(removeBlock(layout, b.id)); setSelectedBlockId(null); }} style={btnGhost}>✕</button>
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
-                      <button type="button" aria-label={`Move ${BLOCK_LABELS[b.type]} up`} onClick={() => setLayout(moveBlock(layout, b.id, -1))} style={btnGhost}>↑</button>
-                      <button type="button" aria-label={`Move ${BLOCK_LABELS[b.type]} down`} onClick={() => setLayout(moveBlock(layout, b.id, 1))} style={btnGhost}>↓</button>
+                      <button type="button" aria-label={`Move ${BLOCK_LABELS[b.type]} up`} onClick={() => setLayout(page === 'home' ? moveHomeBlock(layout, b.id, -1) : moveBlock(layout, b.id, -1))} style={btnGhost}>↑</button>
+                      <button type="button" aria-label={`Move ${BLOCK_LABELS[b.type]} down`} onClick={() => setLayout(page === 'home' ? moveHomeBlock(layout, b.id, 1) : moveBlock(layout, b.id, 1))} style={btnGhost}>↓</button>
+                      {page !== 'home' && <>
                       <label>
                         Col{' '}
                         <input type="number" min={1} max={layout.columns} value={b.colStart} onChange={(e) => setLayout(resizeBlock(layout, b.id, 'colStart', parseInt(e.target.value) || 1))} style={{ ...inputField, width: 46 }} />
@@ -506,6 +544,7 @@ export default function ThemeStudioPage() {
                         Span{' '}
                         <input type="number" min={1} value={b.rowSpan} onChange={(e) => setLayout(resizeBlock(layout, b.id, 'rowSpan', parseInt(e.target.value) || 1))} style={{ ...inputField, width: 46 }} />
                       </label>
+                      </>}
                     </div>
                     {selectedBlockId === b.id && (
                       <div style={{ marginTop: 10 }}>
@@ -546,9 +585,9 @@ export default function ThemeStudioPage() {
             ))}
           </div>
 
-          <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Design tokens</h3>
+          <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Theme styles</h3>
           <TokenEditor
-            tokens={current?.tokens ?? {}}
+            tokens={{ ...getDefaultTheme().tokens, ...current?.tokens }}
             onTokenChange={setToken}
             features={current?.features}
             onFeatureChange={(k, v) => {
@@ -558,7 +597,7 @@ export default function ThemeStudioPage() {
             }}
           />
 
-          <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Preview</h3>
+          <h3 style={{ fontSize: 15, margin: '18px 0 10px' }}>Template preview · sample content</h3>
           <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
             {(['desktop', 'tablet', 'phone'] as const).map((mode) => (
               <button
@@ -592,20 +631,7 @@ export default function ThemeStudioPage() {
                 style={studioTokenStyle(current?.tokens ?? {})}
               >
                 {page === 'home' ? (
-                  <HomeSectionStack
-                    sections={layoutToHomeSections(layout)}
-                    isMobile={previewMode === 'phone'}
-                    perRow={Math.max(2, Math.min(6, Number(current?.tokens.productsPerRow ?? 4) || 4))}
-                    currencySymbol="$"
-                    featuredProducts={merch.products}
-                    categories={merch.categories}
-                    heroBanners={merch.banners}
-                    promoBanners={[]}
-                    stripBanners={[]}
-                    bannersLoaded
-                    newArrivals={merch.products}
-                    trending={merch.products}
-                  />
+                  homePreview()
                 ) : (
                   <LayoutRenderer layout={layout} data={studioLayoutData()} />
                 )}
@@ -616,12 +642,12 @@ export default function ThemeStudioPage() {
             <div style={{ marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 12, color: '#666' }}>
-                  {page === 'home' ? 'Live storefront home (saved Home builder)' : `Live storefront ${PAGE_LABELS[page]}`}
+                  {page === 'home' ? 'Saved storefront homepage · not the template above' : `Live storefront ${PAGE_LABELS[page]}`}
                 </span>
                 <button type="button" onClick={() => setLivePreviewKey((k) => k + 1)} style={btnGhost}>Refresh</button>
               </div>
               <iframe
-                title="Live page preview"
+                title="Saved storefront preview"
                 src={studioLivePreviewPath(page, livePreviewKey)!}
                 style={{ width: '100%', height: 280, border: '1px solid #e5e5e5', borderRadius: 8, background: '#fff' }}
               />
@@ -629,6 +655,7 @@ export default function ThemeStudioPage() {
           )}
         </div>
       </div>
+    </fieldset>
     </div>
   );
 }
@@ -739,14 +766,14 @@ function TokenEditor({
   features?: { rtl: boolean; darkMode: boolean; paid: boolean };
   onFeatureChange?: (k: 'rtl' | 'darkMode', v: boolean) => void;
 }) {
-  const colorKeys = ['primaryColor', 'primaryTextColor', 'accentColor', 'bodyBg', 'cardBg', 'bodyText', 'mutedText', 'borderColor', 'headerBg', 'headerText', 'footerBg', 'footerText', 'priceColor', 'saleColor', 'announcementBg', 'announcementText2'];
+  const colors = [...DESIGN_COLOR_FIELDS, ...ANNOUNCEMENT_COLOR_FIELDS];
   const fontKeys = Object.keys(FONT_STACKS);
   const fontValue = String(tokens.fontFamily ?? 'vazirmatn');
   return (
     <div style={{ display: 'grid', gap: 8 }}>
-      {colorKeys.map((k) => (
+      {colors.map(({ key: k, label }) => (
         <label key={k} style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>{k}</span>
+          <span>{label}</span>
           <input type="color" value={String(tokens[k] ?? '#000000')} onChange={(e) => onTokenChange(k, e.target.value)} style={{ width: 40, height: 26, border: 'none', background: 'none', cursor: 'pointer' }} />
         </label>
       ))}
@@ -772,23 +799,23 @@ function TokenEditor({
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Font size</span>
-        <input type="number" value={Number(tokens.baseFontSize ?? 16)} onChange={(e) => onTokenChange('baseFontSize', parseInt(e.target.value) || 16)} style={{ ...inputField, width: 70 }} />
+        <input type="number" min={12} max={22} value={Number(tokens.baseFontSize ?? 16)} onChange={(e) => onTokenChange('baseFontSize', Math.max(12, Math.min(22, parseInt(e.target.value) || 16)))} style={{ ...inputField, width: 70 }} />
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Radius</span>
-        <input type="number" value={Number(tokens.radius ?? 8)} onChange={(e) => onTokenChange('radius', parseInt(e.target.value) || 0)} style={{ ...inputField, width: 70 }} />
+        <input type="number" min={0} max={40} value={Number(tokens.radius ?? 8)} onChange={(e) => onTokenChange('radius', Math.max(0, Math.min(40, parseInt(e.target.value) || 0)))} style={{ ...inputField, width: 70 }} />
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Button radius</span>
-        <input type="number" value={Number(tokens.buttonRadius ?? tokens.radius ?? 8)} onChange={(e) => onTokenChange('buttonRadius', parseInt(e.target.value) || 0)} style={{ ...inputField, width: 70 }} />
+        <input type="number" min={0} max={40} value={Number(tokens.buttonRadius ?? tokens.radius ?? 8)} onChange={(e) => onTokenChange('buttonRadius', Math.max(0, Math.min(40, parseInt(e.target.value) || 0)))} style={{ ...inputField, width: 70 }} />
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Heading weight</span>
-        <input type="number" min={400} max={900} step={100} value={Number(tokens.headingWeight ?? 800)} onChange={(e) => onTokenChange('headingWeight', parseInt(e.target.value) || 800)} style={{ ...inputField, width: 70 }} />
+        <input type="number" min={400} max={900} step={100} value={Number(tokens.headingWeight ?? 800)} onChange={(e) => onTokenChange('headingWeight', Math.max(400, Math.min(900, parseInt(e.target.value) || 800)))} style={{ ...inputField, width: 70 }} />
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Container width</span>
-        <input type="number" min={720} max={1600} value={Number(tokens.containerWidth ?? 1200)} onChange={(e) => onTokenChange('containerWidth', parseInt(e.target.value) || 1200)} style={{ ...inputField, width: 70 }} />
+        <input type="number" min={960} max={1920} value={Number(tokens.containerWidth ?? 1200)} onChange={(e) => onTokenChange('containerWidth', Math.max(960, Math.min(1920, parseInt(e.target.value) || 1200)))} style={{ ...inputField, width: 70 }} />
       </label>
       <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Products per row</span>
@@ -802,32 +829,14 @@ function TokenEditor({
           <option value="strong">Strong</option>
         </select>
       </label>
-      <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span>Announcement</span>
-        <input type="checkbox" checked={Boolean(tokens.showAnnouncement)} onChange={(e) => onTokenChange('showAnnouncement', e.target.checked)} />
-      </label>
-      <label style={{ fontSize: 13 }}>
-        Announcement text
-        <input type="text" value={String(tokens.announcementText ?? '')} onChange={(e) => onTokenChange('announcementText', e.target.value)} style={{ ...inputField, width: '100%', marginTop: 4 }} />
-      </label>
-      <label style={{ fontSize: 13 }}>
-        Announcement link
-        <input type="text" value={String(tokens.announcementLink ?? '')} onChange={(e) => onTokenChange('announcementLink', e.target.value)} style={{ ...inputField, width: '100%', marginTop: 4 }} />
-      </label>
-      <label style={{ fontSize: 13 }}>
-        Custom CSS
-        <textarea
-          value={String(tokens.customCss ?? '')}
-          onChange={(e) => onTokenChange('customCss', e.target.value)}
-          spellCheck={false}
-          style={{ ...inputField, width: '100%', marginTop: 4, minHeight: 72, fontFamily: 'monospace', fontSize: 12 }}
-        />
-      </label>
+      <p style={{ fontSize: 12, color: '#666', lineHeight: 1.5 }}>
+        The shop’s announcement message and custom CSS are edited in <a href={appearanceHref('announcement')}>Appearance</a>, not in a theme template.
+      </p>
     </div>
   );
 }
 
-const card: React.CSSProperties = { border: '1px solid #e5e5e5', borderRadius: 12, padding: 18, background: '#fff' };
+const card: React.CSSProperties = { minWidth: 0, border: '1px solid #e5e5e5', borderRadius: 12, padding: 18, background: '#fff' };
 const btnPrimary: React.CSSProperties = { padding: '9px 16px', border: 'none', borderRadius: 8, background: '#111', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 };
 const btnGhost: React.CSSProperties = { padding: '4px 8px', border: '1px solid #d4d4d4', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 };
 const inputField: React.CSSProperties = { padding: '7px 9px', border: '1px solid #d4d4d4', borderRadius: 6, fontSize: 13 };

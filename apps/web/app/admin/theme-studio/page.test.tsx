@@ -69,9 +69,10 @@ describe('ThemeStudioPage', () => {
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
     // After selecting, the canvas shows the theme's saved hero block.
-    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
-    // "Hello" renders on both the canvas and the live preview.
-    expect(screen.getAllByText('Hello').length).toBeGreaterThanOrEqual(1);
+    await screen.findByRole('button', { name: 'Remove Hero' });
+    // Banner merchandise is sample data; the saved template title remains editable.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Hero' }).parentElement!);
+    expect(screen.getByLabelText('Title')).toHaveValue('Hello');
   });
 
   it('adds a block by drag-and-drop and saves it (persistence round-trip)', async () => {
@@ -93,7 +94,7 @@ describe('ThemeStudioPage', () => {
     render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
-    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
+    await screen.findByRole('button', { name: 'Remove Hero' });
 
     const beforeBlocks = screen.getAllByText('Hero').length;
     expect(beforeBlocks).toBeGreaterThanOrEqual(1);
@@ -137,7 +138,7 @@ describe('ThemeStudioPage', () => {
     render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
-    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
+    await screen.findByRole('button', { name: 'Remove Hero' });
 
     // Remove the hero block.
     fireEvent.click(screen.getByText('✕'));
@@ -157,7 +158,7 @@ describe('ThemeStudioPage', () => {
     render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
-    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
+    await screen.findByRole('button', { name: 'Remove Hero' });
 
     // Switch to the Products page and add a block there.
     fireEvent.click(screen.getByRole('button', { name: 'All products' }));
@@ -209,10 +210,9 @@ describe('ThemeStudioPage', () => {
     render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
-    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
+    await screen.findByRole('button', { name: 'Remove Hero' });
 
     // The main 3-column grid collapses to a single '1fr' column.
-    const main = screen.getByText('Theme Studio').closest('div')!.parentElement!.parentElement!.parentElement as HTMLElement;
     // Find the grid div with the responsive template.
     const grid = Array.from(document.querySelectorAll('div[style]')).find(
       (d) => (d as HTMLElement).style.gridTemplateColumns === '1fr'
@@ -233,7 +233,7 @@ describe('ThemeStudioPage', () => {
     render(<CompareProvider><CartProvider><ThemeStudioPage /></CartProvider></CompareProvider>);
     await waitFor(() => expect(screen.getByText('My Brand')).toBeTruthy());
     fireEvent.click(screen.getByText('My Brand'));
-    await waitFor(() => expect(screen.getByText('Hero')).toBeTruthy());
+    await screen.findByRole('button', { name: 'Remove Hero' });
 
     // Three preview width toggles are offered.
     const desktopBtn = screen.getByRole('button', { name: 'Desktop' });

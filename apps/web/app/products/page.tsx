@@ -506,6 +506,7 @@ function ActiveFilterChips({
 }
 
 export default function ProductsPage() {
+  const { t } = useTranslation();
   return (
     <Suspense
       fallback={

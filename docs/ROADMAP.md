@@ -73,6 +73,11 @@ and a hands-on inventory/shipping review. Grouped by impact.
 
 ---
 
+> **Feature candidates** (returns/RMA, search facets, WhatsApp/SMS, brands,
+> loyalty, multi-tenancy) are inventoried separately in
+> [`docs/FEATURE_BACKLOG.md`](FEATURE_BACKLOG.md), with a note on what is
+> already built so it is not re-proposed.
+
 ## 🟡 Growth / differentiation features
 
 8. **Import/export follow-ups** — image *upload* during import

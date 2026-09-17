@@ -147,17 +147,17 @@ List `GET /pages/all`, `GET /blog/all`; create/update/delete; blocks; translatio
 
 ### Appearance — `/admin/appearance`
 
-| Tab | Persist | Verdict |
-|---|---|---|
+| Control | API | Writes | Verdict |
+|---|---|---|---|
 | Theme tokens / active theme | `GET/PUT /theme`, `POST /theme/reset` | `ThemeSettings` | **WIRED** |
 | Zip install / delete | `/theme-studio/install`, `DELETE /theme-studio/themes/:key` | disk catalog + optional `activeTheme` | **WIRED (disk)** |
-| Apply theme home | `applyThemeHomeLayout` → `POST /home-sections/apply-theme` | **replaces** `HomeSection` rows | **WIRED** |
+| Replace homepage from theme | `applyThemeHomeLayout` → `POST /home-sections/apply-theme` | **replaces** `HomeSection` rows | **WIRED** |
 | Home builder | `lib/homeSections.ts` CRUD/reorder/reset | `HomeSection` | **WIRED** |
 | Home versions | `localStorage` only | **not DB** | **PARTIAL** |
 
 ### Theme Studio — `/admin/theme-studio`
 
-`GET/PUT /theme-studio/themes/:key` → `theme.json` on disk. Bundled keys refuse PUT. Apply home as above. **WIRED (disk)** for custom themes.
+`GET/PUT /theme-studio/themes/:key` → `theme.json` on disk. Bundled keys refuse PUT. Explicit homepage replacement as above; Save alone does not modify live home rows. **WIRED (disk)** for custom themes.
 
 ### Plugins — `/admin/plugins`
 
@@ -230,7 +230,7 @@ These persist if you call the API; merchants cannot manage them in the sidebar:
 
 ## Connection risks (not “missing pages”)
 
-1. **Live home ≠ Studio canvas** until **Apply theme home**. Tokens still persist via `PUT /theme`.
+1. **Live home rows ≠ saved Studio template** until **Replace homepage from theme**. Tokens still persist via `PUT /theme`.
 2. **`isFeatured`**: UI and Zod wired; Prisma query uses `as any`. If migration not applied, featured writes/reads can fail at runtime.
 3. **Languages**: PUT can “succeed” in memory even if `writeFileSync` fails (errors swallowed).
 4. **Settings GET fallback** still hydrates from `localStorage` if API is down — display only; Save refuses without token/API.
@@ -284,6 +284,6 @@ On a machine with `npm ci`, `prisma migrate deploy`, seed, API `:3001`, web `:30
 3. SQL or Studio: row exists after PUT.
 4. Featured: confirm `Product.isFeatured` column exists.
 5. Languages: confirm `data/storefront-i18n.json` after Save.
-6. Apply theme home: `HomeSection` count/keys change; `/` reflects it.
+6. Replace homepage from theme: `HomeSection` count/keys change; `/` reflects it.
 
 That live pass was **not** run in this sandbox.

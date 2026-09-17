@@ -13,7 +13,7 @@ export function parseHomePreviewDraft(raw: string | null | undefined): HomeSecti
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    if (!Array.isArray(parsed)) return null;
     if (!parsed.every((r) => r && typeof r.id === 'string' && typeof r.type === 'string')) {
       return null;
     }
@@ -39,4 +39,9 @@ export function readHomePreviewDraft(): HomeSection[] | null {
   } catch {
     return null;
   }
+}
+
+export function clearHomePreviewDraft(): void {
+  if (typeof window === 'undefined') return;
+  try { window.sessionStorage.removeItem(HOME_PREVIEW_DRAFT_KEY); } catch { /* optional preview */ }
 }

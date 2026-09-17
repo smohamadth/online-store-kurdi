@@ -76,7 +76,7 @@ describe('studioHomeMerch', () => {
 
 describe('studioLivePreviewPath', () => {
   it('maps home/products/blog and skips pages without a public URL', () => {
-    expect(studioLivePreviewPath('home', 3)).toBe('/?homePreview=3');
+    expect(studioLivePreviewPath('home', 3)).toBe('/?studioPreview=3');
     expect(studioLivePreviewPath('products', 1)).toBe('/products?studioPreview=1');
     expect(studioLivePreviewPath('blog', 1)).toBe('/blog?studioPreview=1');
     expect(studioLivePreviewPath('product', 1)).toBeNull();

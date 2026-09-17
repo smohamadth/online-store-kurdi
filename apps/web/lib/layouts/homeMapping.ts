@@ -1,20 +1,14 @@
 /**
- * homeMapping — convert Theme Studio layout blocks into HomeSection rows.
- *
- * The storefront home page is data-driven through `HomeSection` rows
- * (Appearance → Home). A Theme Studio layout block carries the same intent
- * plus an explicit grid position. This module is the single bridge between the
- * two so the storefront can render a saved `layouts.home` by reusing the exact
- * same rich section renderers the default layout uses.
- *
- * Pure and side-effect free so it is trivially unit-testable.
+ * Theme template → section-renderer props for Studio's sample preview.
+ * The live homepage always reads DB rows. The explicit replacement API uses
+ * the matching mapping in apps/api/src/modules/home/home.layoutMap.ts.
  */
 import type { LayoutBlock, BlockType, PageLayout } from './types';
 import type { HomeSection } from '@/lib/homeSections';
 
 /**
  * Live storefront home is always Appearance → Home (`HomeSection` rows).
- * Theme Studio `layouts.home` is a canvas for custom themes and must not
+ * Theme Studio `layouts.home` is a reusable template and must not
  * hide those rows (that made the Home builder look saved but never render).
  */
 export function pickStorefrontHomeSections(

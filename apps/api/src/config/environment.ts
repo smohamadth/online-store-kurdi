@@ -62,9 +62,19 @@ const envSchema = z.object({
   // which is only right for local development.
   API_URL: z.string().url().optional(),
   
-  // Rate Limiting
+  // Rate Limiting. Three budgets share one window; see config/rateLimits.ts.
+  // RATE_LIMIT_MAX keeps its original meaning: the WRITE budget (the
+  // state-changing calls). Reads and auth attempts get their own.
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
   RATE_LIMIT_MAX: z.string().default('100'),
+  RATE_LIMIT_READ_MAX: z.string().default('1000'),
+  RATE_LIMIT_AUTH_MAX: z.string().default('20'),
+
+  // Number of reverse proxies in front of the API (nginx/Caddy/Cloudflare).
+  // Decides which X-Forwarded-For entry becomes req.ip, which the rate
+  // limiter and the login throttle key on. A COUNT, never a boolean:
+  // trusting every hop lets a client forge the header and escape both.
+  TRUST_PROXY_HOPS: z.string().default('0'),
   
   // File Upload
   MAX_FILE_SIZE: z.string().default('10485760'),
@@ -180,6 +190,21 @@ if (env.NODE_ENV === 'production') {
     );
     process.exit(1);
   }
+
+  // PAYMENTS_ALLOW_MOCK lets a customer mark their OWN order paid with no
+  // money moving. allowMockPayments() already refuses it in production, so
+  // the store is safe either way — but a config that says "free goods" and
+  // is silently ignored is a trap for the next operator to read it. Refuse
+  // to boot so the flag gets removed from the deployment rather than
+  // lingering as a live-looking switch.
+  if (process.env.PAYMENTS_ALLOW_MOCK === 'true') {
+    console.error(
+      '❌ Refusing to start in production with PAYMENTS_ALLOW_MOCK=true.\n' +
+        '   That flag lets any logged-in customer settle their own order\n' +
+        '   without paying. Remove it from the production environment.',
+    );
+    process.exit(1);
+  }
 }
 
 /**
@@ -197,6 +222,31 @@ export function exposeResetToken(): boolean {
   // impossible to exercise in a test (and therefore unverifiable).
   if (process.env.NODE_ENV === 'production') return false;
   return process.env.EXPOSE_RESET_TOKEN === 'true';
+}
+
+/**
+ * May POST /api/payments/process settle an order for a NON-STAFF caller?
+ *
+ * That endpoint talks to no gateway — it simply marks an order paid. It is
+ * staff-only (recording a bank transfer or a COD collection) precisely
+ * because a customer who can call it gets the goods for free: their own
+ * order flips to paymentStatus=completed with no money moving, and for a
+ * digital product the download token unlocks immediately.
+ *
+ * PAYMENTS_ALLOW_MOCK=true re-opens it for local demos and for the test
+ * suite. It is hard-refused in production for the same reason
+ * exposeResetToken() is: a store that ships with this flag set is giving
+ * away inventory to anyone with an account.
+ *
+ * Like exposeResetToken(), this reads process.env live rather than the
+ * frozen `env` snapshot, so the production refusal is testable, and it
+ * checks for production EXPLICITLY rather than trusting isDevelopment —
+ * NODE_ENV defaults to 'development', so an operator who merely forgets to
+ * set it would otherwise be running the permissive branch.
+ */
+export function allowMockPayments(): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  return process.env.PAYMENTS_ALLOW_MOCK === 'true';
 }
 
 // Environment helpers

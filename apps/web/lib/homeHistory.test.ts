@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseHomeVersions, pushHomeVersion, HOME_HISTORY_CAP } from './homeHistory';
+import { describe, it, expect, vi } from 'vitest';
+import { parseHomeVersions, pushHomeVersion, HOME_HISTORY_CAP, recordHomeVersion, loadHomeVersions } from './homeHistory';
 import type { HomeSection } from '@/lib/homeSections';
 
 const row = (id: string): HomeSection => ({
@@ -19,6 +19,18 @@ describe('homeHistory', () => {
     expect(parseHomeVersions('not-json')).toEqual([]);
     const ok = parseHomeVersions(JSON.stringify([{ id: 'a', at: 't', sections: [] }]));
     expect(ok).toHaveLength(1);
+  });
+
+  it('does not turn a successful API save into an error when optional browser storage fails', () => {
+    const read = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => { throw new Error('Storage unavailable'); });
+    const write = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => { throw new Error('Quota exceeded'); });
+    try {
+      expect(loadHomeVersions()).toEqual([]);
+      expect(recordHomeVersion([row('saved')])[0].sections[0].id).toBe('saved');
+    } finally {
+      read.mockRestore();
+      write.mockRestore();
+    }
   });
 
   it('prepends snapshots and caps length', () => {

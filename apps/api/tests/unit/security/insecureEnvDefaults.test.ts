@@ -113,6 +113,78 @@ describe('password-reset token exposure', () => {
   });
 });
 
+describe('mock payment settlement (PAYMENTS_ALLOW_MOCK)', () => {
+  // POST /api/payments/process marks an order paid without talking to any
+  // gateway. It is staff-only for a reason: a customer who can reach it
+  // settles their OWN order for free, and a digital product's download
+  // token unlocks the moment the order flips to paid.
+  //
+  // The flag used to be read as a raw `process.env.PAYMENTS_ALLOW_MOCK ===
+  // 'true'` at the route, with no production guard at all — so a stray flag
+  // in a live deployment gave away inventory to anyone with an account.
+  async function freshAllowMockPayments() {
+    const mod = await import('../../../src/config/environment');
+    return mod.allowMockPayments;
+  }
+
+  it('is OFF by default outside production', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.PAYMENTS_ALLOW_MOCK;
+    expect((await freshAllowMockPayments())()).toBe(false);
+  });
+
+  it('is OFF in production even when explicitly requested', async () => {
+    // The regression that matters: the flag must not be honoured on a real
+    // store, however it got into the environment.
+    process.env.NODE_ENV = 'production';
+    process.env.PAYMENTS_ALLOW_MOCK = 'true';
+    expect((await freshAllowMockPayments())()).toBe(false);
+  });
+
+  it('is ON only with an explicit opt-in outside production', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.PAYMENTS_ALLOW_MOCK = 'true';
+    expect((await freshAllowMockPayments())()).toBe(true);
+  });
+
+  it('treats any value other than the exact string "true" as off', async () => {
+    process.env.NODE_ENV = 'development';
+    for (const v of ['1', 'yes', 'TRUE', 'on', '']) {
+      process.env.PAYMENTS_ALLOW_MOCK = v;
+      expect((await freshAllowMockPayments())(), `PAYMENTS_ALLOW_MOCK=${v}`).toBe(false);
+    }
+  });
+
+  it('is not read as a raw env var anywhere outside config/environment.ts', async () => {
+    // Source ratchet: the whole point of allowMockPayments() is that the
+    // production refusal cannot be bypassed by a second reader.
+    const { readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const SRC = resolve(__dirname, '../../../src');
+
+    const offenders: string[] = [];
+    (function walk(dir: string) {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (full.endsWith('.ts') && !full.includes('.test.')) {
+          if (full.endsWith(join('config', 'environment.ts'))) continue;
+          const src = readFileSync(full, 'utf8');
+          for (const [i, line] of src.split('\n').entries()) {
+            // Comments explaining the flag are fine; reading it is not.
+            const code = line.split('//')[0];
+            if (code.includes('PAYMENTS_ALLOW_MOCK')) {
+              offenders.push(`${full.slice(SRC.length + 1)}:${i + 1}`);
+            }
+          }
+        }
+      }
+    })(SRC);
+
+    expect(offenders, 'read PAYMENTS_ALLOW_MOCK via allowMockPayments() instead').toEqual([]);
+  });
+});
+
 describe('no security switch keys off an ambient NODE_ENV default', () => {
   // Source-level ratchet. NODE_ENV defaults to 'development', so gating a
   // protection on it is fail-open. Annotate a reviewed exception with

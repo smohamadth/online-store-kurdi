@@ -13,11 +13,11 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import path from 'path';
-import { rateLimit } from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { env, isDevelopment } from './config/environment';
+import { createApiRateLimiter, trustProxyHops } from './config/rateLimits';
 import { logger, loggerStream } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { initSentry } from './config/sentry';
@@ -83,6 +83,15 @@ initSentry();
 
 // Create Express app
 const app = express();
+
+// How many reverse proxies sit in front of us. Express uses this to decide
+// which X-Forwarded-For entry becomes req.ip — and req.ip is what the rate
+// limiter, the auth brute-force throttle, and the newsletter/analytics
+// consent records all key on. Left unset (the old behaviour) every visitor
+// behind a proxy shares ONE identity: the limiter becomes a store-wide kill
+// switch and the per-IP login lockout locks out everybody at once.
+// Configured as a hop COUNT, never `true` — see config/rateLimits.ts.
+app.set('trust proxy', trustProxyHops());
 const httpServer = createServer(app);
 
 // Socket.IO for real-time features
@@ -135,31 +144,15 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Session-ID'],
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS),
-  // A single page view makes ~8 API calls (settings, menus, categories,
-  // products, banners...), so a 100/15min budget locked the whole storefront
-  // out after roughly a dozen page views and every request returned 429.
-  // Development gets a generous budget; production keeps a real limit.
-  max: isDevelopment ? 10000 : parseInt(env.RATE_LIMIT_MAX),
-  message: {
-    status: 'error',
-    message: 'Too many requests from this IP, please try again later.',
-    code: 'RATE_LIMITED',
-    retryAfter: Math.ceil(parseInt(env.RATE_LIMIT_WINDOW_MS) / 1000),
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Read-only GETs are cheap and are what page loads are made of; only count
-  // mutations plus auth attempts against the budget.
-  skip: (req) => isDevelopment && req.method === 'GET',
-});
-
+// Rate limiting: three budgets (read / write / auth) instead of one shared
+// bucket. See config/rateLimits.ts for why — a single storefront page view
+// makes ~8 read calls, so one 100-per-window budget threw 429s at real
+// shoppers after a dozen pages.
+//
 // Request spans are created automatically by Sentry.httpIntegration()
 // (registered in config/sentry.ts, v8+ replacement for the old
 // Handlers.requestHandler).
-app.use('/api/', limiter);
+app.use('/api/', createApiRateLimiter());
 
 // Body parsing middleware. The 3PL webhook handler needs the raw body
 // for HMAC verification, so we register a verify hook that stashes it

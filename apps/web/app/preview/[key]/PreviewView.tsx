@@ -21,7 +21,7 @@ import Link from 'next/link';
 import { useTheme as useStoreTheme } from '@/lib/theme';
 import { ThemeSectionRenderer } from '@/lib/themeSectionRenderer';
 import { PreviewThemeProvider } from '@/lib/previewTheme';
-import { activateStoreTheme } from '@/lib/activateStoreTheme';
+import { appearanceHref } from '@/lib/designWorkflow';
 import type { ThemeConfig } from '@/lib/themeRegistry';
 import {
   PREVIEW_PRODUCTS,
@@ -240,111 +240,13 @@ function PreviewHeader({
             </div>
           </div>
         </div>
-        <ActivateButton themeKey={themeKey} />
+        <Link href={appearanceHref('theme', themeKey)} data-testid="preview-use-theme" style={{ padding: '10px 18px', borderRadius: 8, background: '#111', color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>Select in Appearance</Link>
       </div>
     </header>
   );
 }
 
-/**
- * The "Activate this theme" button.
- *
- * Calls PATCH /api/theme/settings with { activeTheme: key }.
- * On success, navigates back to the storefront (or shows a
- * confirmation if the user wasn't on /admin/appearance).
- *
- * The button is admin-only: the API requires admin auth.
- * A non-admin visitor sees the button as disabled with
- * a "Sign in as admin to activate" tooltip. We don't
- * show a different button because the marketing site
- * will have its own "buy this theme" flow; this CTA
- * is the merchant's.
- */
-function ActivateButton({ themeKey }: { themeKey: string }) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [error, setError] = useState<string>('');
 
-  const activate = async () => {
-    setStatus('loading');
-    setError('');
-    try {
-      // The theme settings API takes the full theme record;
-      // we send the minimum required (activeTheme) and let
-      // the server fill in the rest. The mock prisma is
-      // permissive; the real API will need to be too.
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/theme`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ activeTheme: themeKey }),
-        },
-      );
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data?.message || `Could not activate (${res.status})`);
-        setStatus('error');
-        return;
-      }
-      setStatus('success');
-      // Reload after a moment so the merchant sees the
-      // theme in their actual storefront, not just the
-      // preview.
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1500);
-    } catch {
-      setError('Network error');
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      {status === 'error' && (
-        <span
-          data-testid="preview-activate-error"
-          style={{ fontSize: 12, color: '#b91c1c' }}
-        >
-          {error}
-        </span>
-      )}
-      {status === 'success' && (
-        <span
-          data-testid="preview-activate-success"
-          style={{ fontSize: 12, color: '#15803d' }}
-        >
-          Activated! Reloading…
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={activate}
-        disabled={status === 'loading' || status === 'success'}
-        data-testid="preview-activate"
-        style={{
-          minHeight: 40,
-          padding: '0 18px',
-          backgroundColor: '#111',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 8,
-          fontSize: 14,
-          fontWeight: 700,
-          cursor: status === 'loading' || status === 'success' ? 'not-allowed' : 'pointer',
-          opacity: status === 'loading' || status === 'success' ? 0.6 : 1,
-        }}
-      >
-        {status === 'loading'
-          ? 'Activating…'
-          : status === 'success'
-          ? 'Active'
-          : 'Activate this theme'}
-      </button>
-    </div>
-  );
-}
 
 /**
  * The bottom CTA. Always shown. The link goes to the

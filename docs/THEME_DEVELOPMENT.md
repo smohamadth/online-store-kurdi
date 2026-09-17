@@ -92,11 +92,12 @@ theme can carry extra keys for its own sections.
 
 ### `layouts` (optional)
 
-Per-page grid layouts, authored visually in **Theme Studio** or by hand
+Per-page templates, authored visually in **Theme Studio** or by hand
 against `apps/web/lib/layouts/types.ts` (`PageLayout` / `LayoutBlock`).
 The seven page keys are `home`, `products`, `category`, `product`, `blog`,
-`blogPost`, `page`. A page with no layout renders the platform's built-in
-content — layouts are an override, never a requirement. The 33 block types
+`blogPost`, `page`. Home is an ordered full-width template, copied to live
+`HomeSection` rows only through **Replace homepage from theme**. Other pages
+retain their grids; a missing layout keeps the built-in page content. The 33 block types
 (hero, featured, cta, video, faq, productDetail, …) are listed in
 `docs/THEME_STUDIO.md` §2.
 
@@ -195,10 +196,13 @@ first and says so.
 
 ### 3.5 Edit an installed theme
 
-Any theme on disk is editable in **Admin → Theme Studio** (tokens + every
-page's layout grid) and in **Admin → Appearance** (per-store overrides on
-top of the theme). Saved changes are served at runtime on the next page
-load — the old "needs a rebuild" limitation is gone for tokens/layouts.
+Custom themes are editable in **Admin → Theme Studio** (tokens, an ordered Home
+template and other-page grids); bundled themes must be duplicated first. Use
+**Admin → Appearance** for live per-store style overrides. Save the definition,
+then follow **Apply styling in Appearance** and save there. Copying the Home
+template to the live store is a separate, confirmed action. Active non-home
+layouts are served at runtime on the next page load, without a rebuild. See
+[DESIGN_WORKFLOW.md](DESIGN_WORKFLOW.md) for the complete save/apply boundaries.
 
 ---
 
@@ -263,11 +267,12 @@ code-section source.**
 
 ## 7. Admin surface
 
-- **Admin → Appearance**: gallery of bundled + installed themes, Set
-  active, Install (`.zip` upload), Remove (installed only), per-store
-  token overrides.
-- **Admin → Theme Studio**: create / duplicate / edit tokens + per-page
-  layouts for any theme on disk; live preview; save writes `theme.json`.
+- **Admin → Appearance**: select a theme, then **Save appearance**; install
+  (`.zip` upload), remove custom themes, edit live style overrides and announcement
+  settings. **Homepage** owns live homepage blocks and visibility.
+- **Admin → Theme Studio**: create / duplicate / edit reusable tokens and page
+  templates; sample preview; save writes `theme.json`. **Replace homepage from
+  theme** explicitly copies a saved Home template without changing styling.
 
 ## 8. Production (Docker) notes
 

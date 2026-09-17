@@ -27,10 +27,10 @@ import {
   createHomeSection,
   deleteHomeSection,
   resetHomeSections,
-  applyThemeHomeLayout,
 } from '@/lib/homeSections';
 import { loadHomeVersions, recordHomeVersion, type HomeVersion } from '@/lib/homeHistory';
-import { writeHomePreviewDraft } from '@/lib/homePreviewDraft';
+import ReplaceHomepageButton from '@/components/ReplaceHomepageButton';
+import { writeHomePreviewDraft, clearHomePreviewDraft } from '@/lib/homePreviewDraft';
 
 type Notice = { type: 'success' | 'error'; text: string } | null;
 
@@ -56,13 +56,18 @@ function cloneSection(row: HomeSection): HomeSection {
   return { ...row, config: JSON.parse(JSON.stringify(row.config || {})) };
 }
 
-export default function HomeBuilder() {
+export default function HomeBuilder({ onDirtyChange, onBusyChange }: {
+  onDirtyChange?: (dirty: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const isMobile = useIsMobile();
   const { theme } = useTheme();
   const nicheHero = NICHE_HERO_THEMES.has(theme.activeTheme || '');
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [snapshots, setSnapshots] = useState<Record<string, HomeSection>>({});
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   // Drag-and-drop reordering (native HTML5 DnD, no dependency) - same
   // pattern as the page-block editor: the grip handle starts the drag,
   // the cards are drop targets, a thin bar marks the insertion point.
@@ -80,6 +85,12 @@ export default function HomeBuilder() {
   const [previewKey, setPreviewKey] = useState(0);
   const [undoStack, setUndoStack] = useState<HomeSection[][]>([]);
   const [versions, setVersions] = useState<HomeVersion[]>([]);
+  const unsaved = Object.values(dirty).some(Boolean);
+  const busy = busyId !== null || adding || replacing;
+
+  useEffect(() => { onDirtyChange?.(unsaved); }, [unsaved, onDirtyChange]);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  useEffect(() => () => { onDirtyChange?.(false); onBusyChange?.(false); clearHomePreviewDraft(); }, [onDirtyChange, onBusyChange]);
   const PREVIEW_WIDTHS = { desktop: 1280, tablet: 768, phone: 375 } as const;
 
   const pushUndo = (rows: HomeSection[]) => {
@@ -93,16 +104,19 @@ export default function HomeBuilder() {
     if (type === 'success') setTimeout(() => setNotice(null), 4000);
   };
 
-  const load = () =>
-    fetchHomeSections()
+  const load = () => {
+    setLoading(true);
+    setLoadFailed(false);
+    return fetchHomeSections()
       .then((rows) => {
         setSections(rows);
         const next: Record<string, HomeSection> = {};
         for (const r of rows) next[r.id] = cloneSection(r);
         setSnapshots(next);
       })
-      .catch((e) => say('error', errorMessage(e, 'Could not load the home page layout.')))
+      .catch((e) => { setLoadFailed(true); say('error', errorMessage(e, 'Could not load the home page layout.')); })
       .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     load();
@@ -111,12 +125,12 @@ export default function HomeBuilder() {
   }, []);
 
   const rememberVersion = (rows: HomeSection[]) => {
-    setVersions(recordHomeVersion(rows));
+    try { setVersions(recordHomeVersion(rows)); } catch { /* History is optional; a storage error must not undo a successful API save. */ }
   };
 
   useEffect(() => {
-    if (sections.length) writeHomePreviewDraft(sections);
-  }, [sections]);
+    if (!loading && !loadFailed) writeHomePreviewDraft(sections);
+  }, [sections, loading, loadFailed]);
 
   useEffect(() => {
     const unsaved = Object.values(dirty).some(Boolean);
@@ -125,41 +139,30 @@ export default function HomeBuilder() {
     return () => window.clearTimeout(t);
   }, [sections, dirty]);
 
-  useEffect(() => {
-    const unsaved = Object.values(dirty).some(Boolean);
-    if (!unsaved) return;
-    const onLeave = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onLeave);
-    return () => window.removeEventListener('beforeunload', onLeave);
-  }, [dirty]);
+  // Appearance owns the navigation guard (including sidebar Next Links),
+  // driven by onDirtyChange / onBusyChange above.
 
   /** Local edit — marks the row dirty until it is saved. */
   const patchLocal = (id: string, patch: Partial<HomeSection>) => {
-    setSections((rows) => {
-      pushUndo(rows);
-      return rows.map((r) => (r.id === id ? { ...r, ...patch } : r));
-    });
+    if (busy) return;
+    pushUndo(sections);
+    setSections((rows) => rows.map((row) => row.id === id ? { ...row, ...patch } : row));
     setDirty((d) => ({ ...d, [id]: true }));
   };
 
   const patchConfig = (id: string, patch: Record<string, any>) => {
-    setSections((rows) => {
-      pushUndo(rows);
-      return rows.map((r) => (r.id === id ? { ...r, config: { ...r.config, ...patch } } : r));
-    });
+    if (busy) return;
+    pushUndo(sections);
+    setSections((rows) => rows.map((row) => row.id === id ? { ...row, config: { ...row.config, ...patch } } : row));
     setDirty((d) => ({ ...d, [id]: true }));
   };
 
   const undo = () => {
-    setUndoStack((stack) => {
-      if (!stack.length) return stack;
-      const prev = stack[stack.length - 1];
-      setSections(prev.map(cloneSection));
-      return stack.slice(0, -1);
-    });
+    if (busy || !undoStack.length) return;
+    const previous = undoStack[undoStack.length - 1].map(cloneSection);
+    setSections(previous);
+    setDirty(Object.fromEntries(previous.map((row) => [row.id, JSON.stringify(row) !== JSON.stringify(snapshots[row.id])])));
+    setUndoStack((stack) => stack.slice(0, -1));
   };
 
   const saveRow = async (row: HomeSection) => {
@@ -174,6 +177,7 @@ export default function HomeBuilder() {
       setSections((rows) => rows.map((r) => (r.id === saved.id ? saved : r)));
       setSnapshots((s) => ({ ...s, [saved.id]: cloneSection(saved) }));
       setDirty((d) => ({ ...d, [row.id]: false }));
+      setUndoStack([]);
       bumpPreview();
       rememberVersion(sections.map((r) => (r.id === saved.id ? saved : r)));
       say('success', `“${row.title || TYPE_LABELS[row.type] || row.key}” saved.`);
@@ -191,7 +195,10 @@ export default function HomeBuilder() {
     setBusyId(row.id);
     try {
       const saved = await updateHomeSection(row.id, { isVisible: next });
-      setSections((rows) => rows.map((r) => (r.id === saved.id ? { ...r, ...saved } : r)));
+      // Visibility is an immediate write, not permission to overwrite draft copy.
+      setSections((rows) => rows.map((r) => (r.id === saved.id ? { ...r, isVisible: saved.isVisible } : r)));
+      setSnapshots((rows) => ({ ...rows, [saved.id]: cloneSection(saved) }));
+      setUndoStack([]);
       bumpPreview();
     } catch (e) {
       say('error', errorMessage(e, 'Could not change visibility.'));
@@ -204,16 +211,20 @@ export default function HomeBuilder() {
   // optimistic update, roll back so the UI matches the database on failure.
   const applyReorder = async (next: HomeSection[]) => {
     const previous = sections;
-    pushUndo(previous);
+    setBusyId('reorder');
     setSections(next); // optimistic
     try {
       const saved = await reorderHomeSections(next.map((s) => s.id));
-      setSections(saved);
+      setSections(saved.map((row) => ({ ...(next.find((draft) => draft.id === row.id) || row), sortOrder: row.sortOrder })));
+      setSnapshots(Object.fromEntries(saved.map((row) => [row.id, cloneSection(row)])));
+      setUndoStack([]);
       rememberVersion(saved);
       bumpPreview();
     } catch (e) {
       setSections(previous); // roll back so the UI matches the database
       say('error', errorMessage(e, 'Could not save the new order.'));
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -275,6 +286,7 @@ export default function HomeBuilder() {
       setSections((rows) => [...rows, created]);
       setSnapshots((s) => ({ ...s, [created.id]: cloneSection(created) }));
       setOpenId(created.id);
+      setUndoStack([]);
       setNewKey('');
       bumpPreview();
       rememberVersion([...sections, created]);
@@ -292,6 +304,8 @@ export default function HomeBuilder() {
     setBusyId(row.id);
     try {
       await deleteHomeSection(row.id);
+      setDirty((d) => { const next = { ...d }; delete next[row.id]; return next; });
+      setUndoStack([]);
       setSections((rows) => rows.filter((r) => r.id !== row.id));
       setSnapshots((s) => {
         const next = { ...s };
@@ -308,55 +322,39 @@ export default function HomeBuilder() {
     }
   };
 
-  const applyThemeHome = async () => {
-    if (
-      !confirm(
-        'Replace the live homepage with the active theme’s home layout? Current Home builder blocks will be deleted.',
-      )
-    )
-      return;
-    setLoading(true);
-    try {
-      const { sections: rows, message } = await applyThemeHomeLayout();
-      setSections(rows);
-      const next: Record<string, HomeSection> = {};
-      for (const r of rows) next[r.id] = cloneSection(r);
-      setSnapshots(next);
-      setDirty({});
-      bumpPreview();
-      rememberVersion(rows);
-      say('success', message || 'Live home now matches the active theme.');
-    } catch (e) {
-      say('error', errorMessage(e, 'Could not apply the theme home layout.'));
-    } finally {
-      setLoading(false);
-    }
+  const acceptReplacement = (rows: HomeSection[]) => {
+    setSections(rows);
+    setSnapshots(Object.fromEntries(rows.map((row) => [row.id, cloneSection(row)])));
+    setDirty({});
+    setUndoStack([]);
+    setOpenId(null);
+    bumpPreview();
+    rememberVersion(rows);
   };
 
   const resetAll = async () => {
+    if (busy || unsaved) return;
     if (!confirm('Restore the default home page? Your edits to these blocks will be lost.')) return;
-    setLoading(true);
+    setReplacing(true);
     try {
       const rows = await resetHomeSections();
-      setSections(rows);
-      const next: Record<string, HomeSection> = {};
-      for (const r of rows) next[r.id] = cloneSection(r);
-      setSnapshots(next);
-      setDirty({});
-      bumpPreview();
-      rememberVersion(rows);
+      acceptReplacement(rows);
       say('success', 'Home page restored to the shipped layout.');
     } catch (e) {
       say('error', errorMessage(e, 'Reset failed.'));
     } finally {
-      setLoading(false);
+      setReplacing(false);
     }
   };
 
-  if (loading) return <LoadingState message="Loading home page layout…" minHeight={300} />;
+  if (loading) return <LoadingState message="Loading homepage…" minHeight={300} />;
+  if (loadFailed) return <div role="alert" style={{ padding: 20 }}>
+    <p>{notice?.text || 'Could not load the homepage.'} No changes have been made.</p>
+    <button onClick={load}>Retry loading homepage</button>
+  </div>;
 
   return (
-    <div style={{ display: 'grid', gap: '16px' }}>
+    <fieldset disabled={busy} style={{ display: 'grid', gap: '16px', border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div
         style={{
           border: '1px solid #e5e5e5',
@@ -375,11 +373,11 @@ export default function HomeBuilder() {
           }}
         >
           <div>
-            <h3 style={{ fontWeight: 700 }}>Home page blocks</h3>
+            <h3 style={{ fontWeight: 700 }}>Homepage</h3>
             <p style={{ fontSize: '13px', color: '#666', marginTop: '4px', maxWidth: '620px' }}>
-              Drag-free reordering with the arrows, hide anything you don’t need, and edit the
-              wording in place. Every change is stored in the database and appears on the storefront
-              immediately.
+              The single editor for your live homepage. Save each block’s content edits below.
+              Adding, deleting, reordering and visibility changes go live immediately.
+              Theme switches never hide blocks marked visible here.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -387,7 +385,7 @@ export default function HomeBuilder() {
               type="button"
               onClick={undo}
               disabled={!undoStack.length}
-              title="Undo the last local edit or reorder (this session)"
+              title="Undo an unsaved content edit (this session)"
               style={{
                 padding: '8px 14px',
                 border: '1px solid #d4d4d4',
@@ -429,9 +427,13 @@ export default function HomeBuilder() {
                     e.target.value = '';
                     const v = versions.find((x) => x.id === id);
                     if (!v) return;
-                    setSections(v.sections.map(cloneSection));
+                    if (v.sections.length !== sections.length || v.sections.some((r) => !snapshots[r.id])) {
+                      say('error', 'This version has a different set of blocks and cannot be restored here. No changes were made.');
+                      return;
+                    }
+                    setSections(v.sections.map((r) => ({ ...cloneSection(r), sortOrder: snapshots[r.id].sortOrder, isVisible: snapshots[r.id].isVisible })).sort((a, b) => a.sortOrder - b.sortOrder));
                     setDirty(Object.fromEntries(v.sections.map((s) => [s.id, true])));
-                    say('success', 'Restored this version locally. Save each block to publish.');
+                    say('success', 'Restored block content locally. Order and visibility were kept. Save each block to publish.');
                   }}
                   style={{
                     padding: '8px 10px',
@@ -451,23 +453,9 @@ export default function HomeBuilder() {
                 </select>
               </label>
             )}
-            <button
-              type="button"
-              onClick={applyThemeHome}
-              title="Copy the active theme home layout onto the live homepage"
-              style={{
-                padding: '8px 14px',
-                border: '1px solid #111',
-                borderRadius: '6px',
-                background: '#111',
-                color: '#fff',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '13px',
-              }}
-            >
-              Apply theme home
-            </button>
+            <ReplaceHomepageButton disabled={busy || unsaved}
+              disabledReason={unsaved ? 'Save or discard homepage edits first.' : undefined}
+              onApplied={acceptReplacement} onBusyChange={setReplacing} />
             <button
               onClick={resetAll}
               title="Replaces every block with the shipped layout. Deleted blocks come back."
@@ -488,6 +476,7 @@ export default function HomeBuilder() {
 
         {notice && (
           <div
+            role={notice.type === 'error' ? 'alert' : 'status'}
             style={{
               marginTop: '14px',
               padding: '11px 14px',
@@ -607,6 +596,7 @@ export default function HomeBuilder() {
                   >
                     <input
                       type="checkbox"
+                      aria-label={`Show ${row.title || TYPE_LABELS[row.type] || row.key}`}
                       checked={row.isVisible}
                       disabled={busyId === row.id}
                       onChange={() => toggleVisible(row)}
@@ -644,6 +634,7 @@ export default function HomeBuilder() {
                         <label style={labelStyle}>Heading</label>
                         <input
                           style={inputStyle}
+                          aria-label={`Heading for ${row.key}`}
                           value={row.title || ''}
                           placeholder="Leave empty to hide the heading"
                           onChange={(e) => patchLocal(row.id, { title: e.target.value })}
@@ -653,6 +644,7 @@ export default function HomeBuilder() {
                         <label style={labelStyle}>Sub-heading</label>
                         <input
                           style={inputStyle}
+                          aria-label={`Sub-heading for ${row.key}`}
                           value={row.subtitle || ''}
                           onChange={(e) => patchLocal(row.id, { subtitle: e.target.value })}
                         />
@@ -876,7 +868,7 @@ export default function HomeBuilder() {
           />
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }
 

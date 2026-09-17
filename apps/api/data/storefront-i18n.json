@@ -1,0 +1,23 @@
+{
+  "languages": [
+    {
+      "code": "en",
+      "name": "English",
+      "dir": "ltr",
+      "flag": "🏳️",
+      "enabled": false
+    },
+    {
+      "code": "ku",
+      "name": "کوردی",
+      "dir": "rtl",
+      "flag": "🏳️",
+      "enabled": true
+    }
+  ],
+  "strings": {
+    "en": {
+      "nav.home": "Start"
+    }
+  }
+}

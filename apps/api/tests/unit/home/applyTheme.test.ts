@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
 import { describe, it, expect } from 'vitest';
+import { layoutToHomeSections } from '../../../../web/lib/layouts/homeMapping';
 import { layoutHomeToSeeds } from '../../../src/modules/home/home.layoutMap';
 
 describe('layoutHomeToSeeds', () => {
@@ -58,5 +59,24 @@ describe('layoutHomeToSeeds', () => {
       expect(seeds.length, `${key} missing layouts.home`).toBeGreaterThan(0);
     }
     expect(Object.keys(mapped).sort()).toEqual(['bold', 'dawnlight', 'default', 'minimal', 'pulse']);
+  });
+});
+
+
+describe('template preview / persistence contract', () => {
+  it('preserves the same content and type aliases across both render paths', () => {
+    const types = ['gallery', 'logoStrip', 'testimonials', 'quote', 'video', 'textImage', 'iconsGrid', 'newArrivals'] as const;
+    for (const type of types) {
+      const layout = { columns: 12, gap: 24, blocks: [{
+        id: 'block', type, colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 1,
+        config: { title: 'Title', text: 'Copy', src: '/uploads/photo.jpg', items: [{ author: 'Author', text: 'Brand', src: '/uploads/item.jpg' }] },
+      }] };
+      const preview = layoutToHomeSections(layout)[0];
+      const stored = layoutHomeToSeeds(layout)[0];
+      expect(stored.type).toBe(preview.type);
+      expect(stored.title).toBe(preview.title);
+      expect(stored.config).toEqual(preview.config);
+      expect(stored.isVisible).toBe(preview.isVisible);
+    }
   });
 });
