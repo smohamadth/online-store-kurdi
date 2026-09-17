@@ -12,6 +12,12 @@ import sys
 import urllib.request
 import urllib.error
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-404")
+
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 
 results = []
@@ -20,6 +26,8 @@ results = []
 def check(name, ok, detail=""):
     results.append(ok)
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-404", str(name), str(detail))
 
 
 def get(path):

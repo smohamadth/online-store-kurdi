@@ -22,6 +22,12 @@ import re
 import subprocess
 import sys
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-env-config")
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = os.path.join(ROOT, "apps", "api")
 SCHEMA = os.path.join(API, "prisma", "schema.prisma")
@@ -32,6 +38,8 @@ results = []
 def check(name, ok, detail=""):
     results.append(ok)
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-env-config", str(name), str(detail))
 
 
 def schema_provider():

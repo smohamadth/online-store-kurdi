@@ -11,6 +11,12 @@ import urllib.error
 import urllib.request
 from playwright.sync_api import sync_playwright
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-home-builder")
+
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 
 # The Appearance screen now uses a real ARIA tablist; the block editor lives
@@ -24,13 +30,8 @@ results = []
 def check(name, ok, detail=""):
     results.append((name, ok, detail))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
-    # Emit a GitHub annotation for failures. The raw job log is not always
-    # retrievable through the API (the blob endpoint intermittently returns
-    # EOF), and annotations are, so a failure here must say what broke
-    # without anyone needing to open the log.
-    if not ok and os.environ.get("GITHUB_ACTIONS") == "true":
-        clean = (detail or "").replace("\r", " ").replace("\n", " ")[:800]
-        print(f"::error title=home-builder: {name}::{clean}")
+    if not ok:
+        ci_annotate.annotate_failure("verify-home-builder", str(name), str(detail))
 
 
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
@@ -68,21 +69,6 @@ def _admin_token():
 # previously left both changed, so a SECOND run failed on its own leftovers,
 # which reads as a regression. Tests must be repeatable.
 _api("POST", "/home-sections/reset", _admin_token(), {})
-
-def _annotate_crash(exc):
-    """Report an unhandled exception as a GitHub annotation.
-
-    A Playwright timeout (locator never appeared) aborts the script before any
-    check() runs, so without this the job reports only "exit code 1" and the
-    raw log is not reliably fetchable through the API.
-    """
-    import traceback
-    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-    print(tb)
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        clean = tb.replace("\r", " ").replace("\n", " ")[-900:]
-        print(f"::error title=home-builder crashed::{clean}")
-
 
 try:
   with sync_playwright() as p:
@@ -172,7 +158,7 @@ try:
       b.close()
 
 except Exception as exc:  # noqa: BLE001 - re-raised after annotating
-    _annotate_crash(exc)
+    ci_annotate.annotate_crash("verify-home-builder", exc)
     raise
 
 failed = [r for r in results if not r[1]]

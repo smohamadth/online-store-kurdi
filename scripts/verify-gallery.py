@@ -1,11 +1,21 @@
+import sys
 """Proves the home gallery is editable and persists to the database."""
 import os
 import re, sys
 from playwright.sync_api import sync_playwright
+
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-gallery")
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 res=[]
 def check(n,ok,d=""):
     res.append(ok); print(("PASS  " if ok else "FAIL  ")+n+(f"  -- {d}" if d else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-gallery", str(n), str(d))
+
 
 with sync_playwright() as p:
     b=p.chromium.launch(); ctx=b.new_context(viewport={"width":1500,"height":1100}); pg=ctx.new_page()

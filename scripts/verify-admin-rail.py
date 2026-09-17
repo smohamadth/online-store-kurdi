@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Admin sidebar rail geometry.
 
@@ -11,6 +12,12 @@ Both are only visible at certain viewport heights, so every height is checked.
 """
 import sys
 from playwright.sync_api import sync_playwright
+
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-admin-rail")
 
 WEB = "http://localhost:3000"
 HEIGHTS = [700, 800, 900, 1000, 1200, 1300, 1600]
@@ -27,6 +34,8 @@ def check(name, ok, detail=""):
     else:
         failed += 1
         print(f"  FAIL  {name} {detail}")
+    if not ok:
+        ci_annotate.annotate_failure("verify-admin-rail", str(name), str(detail))
 
 
 PROBE = """() => {
