@@ -109,7 +109,11 @@ try:
       page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
       page.get_by_role("tab", name=HOME_TAB).click()
       page.wait_for_timeout(2500)
-      check("builder lists blocks", "Home page blocks" in page.inner_text("body"), page.inner_text("body")[:400])
+      # The panel heading is now just "Homepage"; assert on the block rows
+      # themselves, which is what the rest of this suite actually drives.
+      check("builder lists blocks",
+            page.locator("[data-home-row]").count() > 0,
+            page.inner_text("body")[:400])
 
       # --- edit the Featured heading and save
       rows = page.locator("text=Featured products").first
