@@ -30,7 +30,7 @@ with sync_playwright() as p:
     pg.get_by_role("button",name="Sign In",exact=True).click(); pg.wait_for_timeout(3500)
 
     pg.goto(f"{WEB}/admin/appearance",wait_until="networkidle")
-    pg.get_by_role("button",name=re.compile("Home page")).click(); pg.wait_for_timeout(2500)
+    ci_annotate.open_home_tab(pg)
     check("gallery block in builder", pg.locator('[data-home-row="gallery"]').count()==1)
 
     row=pg.locator('[data-home-row="gallery"]')

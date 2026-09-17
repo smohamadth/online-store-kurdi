@@ -18,11 +18,6 @@ import ci_annotate  # noqa: E402
 ci_annotate.install("verify-home-builder")
 
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
-
-# The Appearance screen now uses a real ARIA tablist; the block editor lives
-# behind the tab labelled "Homepage" (it used to be a button reading
-# "Home page"). Matched loosely so a re-word doesn't break the suite again.
-HOME_TAB = re.compile(r"Home\s*page", re.I)
 errors = []
 results = []
 
@@ -93,7 +88,7 @@ try:
       page.wait_for_timeout(3000)
 
       page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-      page.get_by_role("tab", name=HOME_TAB).click()
+      ci_annotate.open_home_tab(page, 0)
       page.wait_for_timeout(2500)
       # The panel heading is now just "Homepage"; assert on the block rows
       # themselves, which is what the rest of this suite actually drives.
@@ -121,7 +116,7 @@ try:
 
       # --- hide a block (state-independent: force it visible first)
       page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-      page.get_by_role("tab", name=HOME_TAB).click()
+      ci_annotate.open_home_tab(page, 0)
       page.wait_for_timeout(2500)
       cb = page.locator('[data-home-row="testimonials"] input[type="checkbox"]').first
       if not cb.is_checked():
@@ -141,7 +136,7 @@ try:
       page.locator('[data-home-row="stats"]').get_by_role("button", name="Move up").click()
       page.wait_for_timeout(2500)
       page.reload(wait_until="networkidle")
-      page.get_by_role("tab", name=HOME_TAB).click()
+      ci_annotate.open_home_tab(page, 0)
       page.wait_for_timeout(2500)
       keys = page.locator("[data-home-row]").evaluate_all(
           "els => els.map(e => e.getAttribute('data-home-row'))")

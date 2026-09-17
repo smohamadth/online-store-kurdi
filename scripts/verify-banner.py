@@ -125,7 +125,7 @@ with sync_playwright() as p:
 
     # move the banner via the home page builder
     page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
+    ci_annotate.open_home_tab(page, 0)
     page.wait_for_timeout(2500)
     check("banner block appears in the builder",
           page.locator('[data-home-row="bannerStrip"]').count() == 1)
@@ -134,7 +134,7 @@ with sync_playwright() as p:
         "button", name="Move up").click()
     page.wait_for_timeout(2500)
     page.reload(wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
+    ci_annotate.open_home_tab(page, 0)
     page.wait_for_timeout(2500)
     keys = page.locator("[data-home-row]").evaluate_all(
         "els => els.map(e => e.getAttribute('data-home-row'))")
