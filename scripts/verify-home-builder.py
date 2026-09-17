@@ -19,6 +19,13 @@ results = []
 def check(name, ok, detail=""):
     results.append((name, ok, detail))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    # Emit a GitHub annotation for failures. The raw job log is not always
+    # retrievable through the API (the blob endpoint intermittently returns
+    # EOF), and annotations are, so a failure here must say what broke
+    # without anyone needing to open the log.
+    if not ok and os.environ.get("GITHUB_ACTIONS") == "true":
+        clean = (detail or "").replace("\r", " ").replace("\n", " ")[:800]
+        print(f"::error title=home-builder: {name}::{clean}")
 
 
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
@@ -67,9 +74,9 @@ with sync_playwright() as p:
     # --- storefront renders the DB-driven layout
     page.goto(WEB, wait_until="networkidle")
     body = page.inner_text("body")
-    check("home renders trust bar", "Free shipping" in body)
-    check("home renders featured heading", "Featured Products" in body)
-    check("home renders newsletter", "Subscribe" in body)
+    check("home renders trust bar", "Free shipping" in body, body[:400])
+    check("home renders featured heading", "Featured Products" in body, body[:400])
+    check("home renders newsletter", "Subscribe" in body, body[:400])
 
     # --- admin login
     page.goto(f"{WEB}/login", wait_until="networkidle")
@@ -81,7 +88,7 @@ with sync_playwright() as p:
     page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
     page.get_by_role("button", name=re.compile("Home page")).click()
     page.wait_for_timeout(2500)
-    check("builder lists blocks", "Home page blocks" in page.inner_text("body"))
+    check("builder lists blocks", "Home page blocks" in page.inner_text("body"), page.inner_text("body")[:400])
 
     # --- edit the Featured heading and save
     rows = page.locator("text=Featured products").first
@@ -92,14 +99,14 @@ with sync_playwright() as p:
     heading.fill("Hand-picked for you")
     page.locator('[data-home-row="featured"]').get_by_role("button", name="Save this block").click()
     page.wait_for_timeout(2500)
-    check("save reports success", "saved" in page.inner_text("body").lower())
+    check("save reports success", "saved" in page.inner_text("body").lower(), page.inner_text("body")[:400])
 
     # --- verify it persisted on the storefront
     page2 = ctx.new_page()
     page2.goto(WEB, wait_until="networkidle")
     t = page2.inner_text("body")
-    check("storefront shows the new heading", "Hand-picked for you" in t)
-    check("old heading gone", "Featured Products" not in t)
+    check("storefront shows the new heading", "Hand-picked for you" in t, t[:400])
+    check("old heading gone", "Featured Products" not in t, t[:400])
 
     # --- hide a block (state-independent: force it visible first)
     page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
@@ -110,13 +117,14 @@ with sync_playwright() as p:
         cb.click()
         page.wait_for_timeout(2000)
     page2.reload(wait_until="networkidle")
-    check("visible block shows on storefront", "Loved by our customers" in page2.inner_text("body"))
+    check("visible block shows on storefront", "Loved by our customers" in page2.inner_text("body"), page2.inner_text("body")[:400])
 
     cb.click()  # hide it
     page.wait_for_timeout(2500)
     page2.reload(wait_until="networkidle")
     check("hidden block disappears from storefront",
-          "Loved by our customers" not in page2.inner_text("body"))
+          "Loved by our customers" not in page2.inner_text("body"),
+          page2.inner_text("body")[:400])
 
     # --- reordering persists
     page.locator('[data-home-row="stats"]').get_by_role("button", name="Move up").click()
