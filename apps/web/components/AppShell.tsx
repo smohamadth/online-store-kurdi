@@ -19,7 +19,7 @@
 import { CartProvider, useCart } from '@/lib/store';
 import { CompareProvider } from '@/lib/compare';
 import CompareBar from '@/components/CompareBar';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
@@ -36,6 +36,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import CurrencyPicker from '@/components/CurrencyPicker';
 import { API_BASE, contentUrl } from '@/lib/http';
 import { I18nSeedProvider } from '@/lib/I18nSeedProvider';
+import type { StorefrontI18nCatalog } from '@/lib/i18n';
 import { useTranslation } from '@/lib/i18n';
 
 // Types
@@ -962,6 +963,7 @@ export default function AppShell({
   children,
   initialLang,
   initialDir,
+  initialCatalog,
 }: {
   children: React.ReactNode;
   /**
@@ -972,6 +974,12 @@ export default function AppShell({
    */
   initialLang?: string;
   initialDir?: 'ltr' | 'rtl';
+  /**
+   * Admin-editable string catalog, fetched on the server. Seeded so the first
+   * client render uses the same strings the server rendered (see lib/i18n.ts
+   * — fetching it client-side caused React #425 hydration errors).
+   */
+  initialCatalog?: StorefrontI18nCatalog | null;
 }) {
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
@@ -979,7 +987,10 @@ export default function AppShell({
   // If the server didn't tell us a locale (e.g. an AppShell rendered outside
   // the production layout in a test fixture), fall back to the i18n defaults
   // so the first paint is at least self-consistent.
-  const seed = { lang: initialLang ?? 'en', dir: initialDir ?? 'ltr' };
+  const seed = useMemo(
+    () => ({ lang: initialLang ?? 'en', dir: initialDir ?? 'ltr', catalog: initialCatalog ?? null }),
+    [initialLang, initialDir, initialCatalog],
+  );
 
   return (
     <I18nSeedProvider value={seed}>
