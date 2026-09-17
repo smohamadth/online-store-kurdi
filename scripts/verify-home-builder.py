@@ -12,6 +12,11 @@ import urllib.request
 from playwright.sync_api import sync_playwright
 
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
+
+# The Appearance screen now uses a real ARIA tablist; the block editor lives
+# behind the tab labelled "Homepage" (it used to be a button reading
+# "Home page"). Matched loosely so a re-word doesn't break the suite again.
+HOME_TAB = re.compile(r"Home\s*page", re.I)
 errors = []
 results = []
 
@@ -102,7 +107,7 @@ try:
       page.wait_for_timeout(3000)
 
       page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-      page.get_by_role("button", name=re.compile("Home page")).click()
+      page.get_by_role("tab", name=HOME_TAB).click()
       page.wait_for_timeout(2500)
       check("builder lists blocks", "Home page blocks" in page.inner_text("body"), page.inner_text("body")[:400])
 
@@ -126,7 +131,7 @@ try:
 
       # --- hide a block (state-independent: force it visible first)
       page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-      page.get_by_role("button", name=re.compile("Home page")).click()
+      page.get_by_role("tab", name=HOME_TAB).click()
       page.wait_for_timeout(2500)
       cb = page.locator('[data-home-row="testimonials"] input[type="checkbox"]').first
       if not cb.is_checked():
@@ -146,7 +151,7 @@ try:
       page.locator('[data-home-row="stats"]').get_by_role("button", name="Move up").click()
       page.wait_for_timeout(2500)
       page.reload(wait_until="networkidle")
-      page.get_by_role("button", name=re.compile("Home page")).click()
+      page.get_by_role("tab", name=HOME_TAB).click()
       page.wait_for_timeout(2500)
       keys = page.locator("[data-home-row]").evaluate_all(
           "els => els.map(e => e.getAttribute('data-home-row'))")
