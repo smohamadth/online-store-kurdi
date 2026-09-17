@@ -505,16 +505,28 @@ function ActiveFilterChips({
   );
 }
 
-export default function ProductsPage() {
+/**
+ * Suspense fallback for the catalog.
+ *
+ * Its own component on purpose. useTranslation() carries effect-driven state
+ * (it fetches the storefront catalog and re-reads the language on mount), so
+ * calling it in the component that OWNS the Suspense boundary made the
+ * boundary itself re-render during hydration and tripped React error #425
+ * ("server rendered HTML didn't match the client") on /products. Keeping the
+ * hook inside the fallback leaves the boundary static.
+ */
+function ProductsLoading() {
   const { t } = useTranslation();
   return (
-    <Suspense
-      fallback={
-        <div style={{ textAlign: 'center', padding: '64px' }}>
-          <p style={{ color: 'var(--muted, #666)' }}>{t('catalog.loading')}</p>
-        </div>
-      }
-    >
+    <div style={{ textAlign: 'center', padding: '64px' }}>
+      <p style={{ color: 'var(--muted, #666)' }}>{t('catalog.loading')}</p>
+    </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<ProductsLoading />}>
       <ProductsContent />
     </Suspense>
   );
