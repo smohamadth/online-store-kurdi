@@ -84,9 +84,19 @@ serves a small/medium store because:
   writer); for Postgres the default pool (5 connections) should be raised
   with `DATABASE_URL`'s `?connection_limit=` query parameter to roughly
   `2 × CPU cores + 1` per API process.
-- **The rate limiter is the first line of defence.**
-  `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` (env) cap anonymous abuse
-  before it reaches the database.
+- **The rate limiter is the first line of defence.** Three budgets share
+  `RATE_LIMIT_WINDOW_MS`: `RATE_LIMIT_READ_MAX` (page-load traffic, ~8
+  calls per view), `RATE_LIMIT_MAX` (writes — checkout, cart, reviews) and
+  `RATE_LIMIT_AUTH_MAX` (login/register/reset). Splitting them means a
+  browsing shopper cannot exhaust the budget that protects checkout.
+- **`TRUST_PROXY_HOPS` must match your topology or the limiter is
+  useless.** It decides which `X-Forwarded-For` entry becomes the client
+  identity that the limiter, the login lockout and consent logging all key
+  on. Behind a proxy with the default `0`, every visitor counts as the same
+  client and the store 429s everyone after a few page views. Set `1` for a
+  single nginx/Caddy/Traefik, `2` behind Cloudflare in front of nginx.
+  Never trust all hops: a forged header would then reset the counter on
+  every request.
 - **Redis is optional but recommended above ~50 req/s.** Product reads
   (by id/slug, featured) are already cached through `lib` → the API's
   `cache` helper when Redis is up; without it every read hits the

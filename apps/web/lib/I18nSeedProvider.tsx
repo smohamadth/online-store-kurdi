@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { I18nSeedContext } from './i18n';
+import { I18nSeedContext, type I18nSeed } from './i18n';
 
 /**
  * Provider for the SSR-resolved locale seed. See `lib/i18n.ts` for the
@@ -17,7 +17,7 @@ export function I18nSeedProvider({
   value,
   children,
 }: {
-  value: { lang: string; dir: 'ltr' | 'rtl' };
+  value: I18nSeed;
   children: ReactNode;
 }) {
   return <I18nSeedContext.Provider value={value}>{children}</I18nSeedContext.Provider>;

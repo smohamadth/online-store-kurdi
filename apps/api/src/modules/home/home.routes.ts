@@ -4,10 +4,8 @@ import { authenticate, authorize } from '../../middleware/auth';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../middleware/errorHandler';
-import { ALL_TYPES } from './home.defaults';
-import { seedMissingHomeSections } from './home.seed';
-import { applyThemeHomeLayout } from './home.applyTheme';
-import { getThemeConfig } from '../themeStudio/themeStudio.service';
+import { ALL_TYPES, HOME_SECTION_SEED } from './home.defaults';
+import { applyThemeHomeLayout, replaceHomeSections } from './home.applyTheme';
 import { scrubBuilderConfig } from '../../utils/scrubBuilderConfig';
 
 /** Serialized config may not exceed this (DB bloat / DoS). */
@@ -218,45 +216,31 @@ router.delete('/:id', authenticate, authorize('admin', 'manager'), async (req, r
   }
 });
 
-// ---------------------------------------------------------------------- reset
+// -------------------------------------------------------- replace from theme
+const applyThemeSchema = z.object({
+  themeKey: z.string().trim().min(1).max(40).regex(/^[a-z0-9][a-z0-9_-]*$/).optional(),
+});
+
 router.post('/apply-theme', authenticate, authorize('admin', 'manager'), async (req, res, next) => {
   try {
-    const requested = typeof req.body?.themeKey === 'string' ? req.body.themeKey.trim() : '';
-    let themeKey = requested;
-    if (!themeKey) {
-      const settings = await prisma.themeSettings.findUnique({ where: { id: 'default' } });
-      themeKey = settings?.activeTheme || 'default';
-    }
-    const result = await applyThemeHomeLayout(themeKey);
-    const rows = await prisma.homeSection.findMany({ orderBy: { sortOrder: 'asc' } });
-    logger.info(`Home sections applied from theme ${result.themeKey} (fallback=${result.usedFallback})`);
-    const cfg = await getThemeConfig(themeKey);
+    const { themeKey: requested } = applyThemeSchema.parse(req.body);
+    const settings = requested ? null : await prisma.themeSettings.findUnique({ where: { id: 'default' } });
+    const result = await applyThemeHomeLayout(requested || settings?.activeTheme || 'default');
+    logger.info(`Homepage replaced from saved theme ${result.themeKey}`);
     res.json({
-      status: 'success',
-      data: rows.map(fromRow),
-      meta: {
-        themeKey: result.themeKey,
-        themeName: cfg?.name ?? result.themeKey,
-        usedFallback: result.usedFallback,
-      },
-      message: result.usedFallback
-        ? `Theme "${cfg?.name ?? themeKey}" has no home layout — restored the platform default home.`
-        : `Live home now matches “${cfg?.name ?? themeKey}”.`,
+      status: 'success', data: result.sections.map(fromRow),
+      meta: { themeKey: result.themeKey, themeName: result.themeName, usedFallback: false },
+      message: `Homepage replaced with sections from “${result.themeName}”. Appearance settings were not changed.`,
     });
   } catch (err) {
-    const status = (err as Error & { status?: number }).status;
-    if (status === 404) {
-      return res.status(404).json({ status: 'error', message: (err as Error).message, code: 'THEME_NOT_FOUND' });
-    }
     next(err);
   }
 });
 
+// -------------------------------------------------------- explicit reset only
 router.post('/reset', authenticate, authorize('admin', 'manager'), async (_req, res, next) => {
   try {
-    await prisma.homeSection.deleteMany({});
-    await seedMissingHomeSections();
-    const rows = await prisma.homeSection.findMany({ orderBy: { sortOrder: 'asc' } });
+    const rows = await replaceHomeSections(HOME_SECTION_SEED);
     logger.info('Home sections reset to defaults');
     res.json({ status: 'success', data: rows.map(fromRow) });
   } catch (err) {

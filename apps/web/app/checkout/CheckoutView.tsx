@@ -94,6 +94,17 @@ export default function CheckoutPage() {
   // verified server-side when the customer comes back. Holds the verification
   // outcome + gateway message for a banner.
   const [gatewayReturn, setGatewayReturn] = useState<{ status: 'paid' | 'canceled'; message?: string } | null>(null);
+  // True as soon as the URL says we came back from a hosted gateway, i.e.
+  // BEFORE the server-side verify resolves. The cart is already empty on a
+  // gateway return (it is cleared when the order is placed), so without this
+  // synchronous flag the empty-cart guard bounced the customer to /cart and
+  // the verification banner never rendered — the payment looked lost.
+  const isGatewayReturn =
+    typeof window !== 'undefined' &&
+    (() => {
+      const p = new URLSearchParams(window.location.search);
+      return Boolean(p.get('gateway') && p.get('order'));
+    })();
 
   const subtotal = getTotal();
   // Physical cart totals for weight- and item_count-based shipping.
@@ -102,7 +113,16 @@ export default function CheckoutPage() {
   const itemCount = physicalItems.reduce((n, i) => n + (i.quantity || 1), 0);
   const totalWeight = physicalItems.reduce((n, i) => n + ((i.weight || 0) * (i.quantity || 1)), 0);
   const shippingCost = selectedShipping?.isFree ? 0 : (selectedShipping?.rate || 0);
-  const taxAmount = taxInfo?.taxAmount || subtotal * 0.1;
+  // A calculated tax of exactly 0 is a REAL answer (tax-free region, or the
+  // store charges no tax), not a missing one. `||` treated it as missing and
+  // silently substituted a 10% estimate, so the summary showed — and the
+  // customer agreed to — a total the server never charges: the API recomputes
+  // tax from its own rules and stores 0. Only fall back when there is no
+  // calculation at all.
+  const taxAmount =
+    typeof taxInfo?.taxAmount === 'number' && Number.isFinite(taxInfo.taxAmount)
+      ? taxInfo.taxAmount
+      : subtotal * 0.1;
   const total = subtotal - discount + shippingCost + taxAmount;
 
   // Wallet estimate: what the store credit + gift card will cover
@@ -167,10 +187,10 @@ export default function CheckoutPage() {
     // A customer returning from Stripe Checkout has an empty cart by
     // design (it was cleared when the order was placed) - don't
     // bounce them to /cart before the return banner has a chance.
-    if (items.length === 0 && !orderPlaced && !returnState) {
+    if (items.length === 0 && !orderPlaced && !returnState && !isGatewayReturn) {
       router.push('/cart');
     }
-  }, [items, orderPlaced, returnState, router]);
+  }, [items, orderPlaced, returnState, isGatewayReturn, router]);
 
   // Validate a gift-card code against the API before the order is
   // placed. This only confirms the code + balance; the actual debit
@@ -434,7 +454,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !isGatewayReturn) {
     return null;
   }
 

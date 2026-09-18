@@ -52,6 +52,13 @@ describe('/preview/<key> — page', () => {
     expect(screen.getByTestId('preview-theme-name').textContent).toContain('Default');
   });
 
+  it('routes theme selection through Appearance rather than performing a second activation write', async () => {
+    const page = await ThemePreviewPage({ params: { key: 'bold' } });
+    render(page);
+    expect(screen.getByRole('link', { name: 'Select in Appearance' })).toHaveAttribute('href', '/admin/appearance?tab=theme&theme=bold');
+    expect(screen.queryByRole('button', { name: 'Activate this theme' })).not.toBeInTheDocument();
+  });
+
   it('throws NEXT_NOT_FOUND for an unknown key', async () => {
     const params = { key: 'does-not-exist' };
     // The page calls notFound() which our mock turns into a

@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Pages and blog posts must be reachable whatever script the title uses.
 
@@ -18,6 +19,12 @@ import time
 import unicodedata
 import urllib.parse
 from playwright.sync_api import sync_playwright
+
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-page-slugs")
 
 WEB = "http://localhost:3000"
 API = "http://localhost:3001"
@@ -44,6 +51,8 @@ def check(name, ok, detail=""):
     else:
         failed += 1
         print(f"  FAIL  {name} {detail}")
+    if not ok:
+        ci_annotate.annotate_failure("verify-page-slugs", str(name), str(detail))
 
 
 def py_slugify(text: str) -> str:
@@ -194,6 +203,9 @@ def main():
             pg.press("input[type=password]", "Enter")
             pg.wait_for_timeout(5000)
             if "/login" in pg.url:
+                ci_annotate.annotate_failure(
+                    "verify-page-slugs", "admin login failed",
+                    f"still on {pg.url} after submitting")
                 print("FATAL: admin login failed")
                 sys.exit(1)
 

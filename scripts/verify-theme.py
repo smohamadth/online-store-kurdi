@@ -29,6 +29,12 @@ import urllib.request
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-theme")
+
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
 
@@ -63,6 +69,8 @@ def check(name, okv, detail=""):
         # diagnosable without the log.
         safe = f"{name}: {detail}".replace("\n", " ").replace("\r", " ")
         print(f"::error::verify-theme: {safe}")
+    if not okv:
+        ci_annotate.annotate_failure("verify-theme", str(name), str(detail))
 
 
 def call(method, path, token=None, body=None):

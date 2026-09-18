@@ -327,6 +327,12 @@ jobs:
       - name: Admin dashboard figures + empty states
         run: python3 scripts/verify-dashboard.py
 
+      # Guards the reporting surface, including the exact fabricated strings
+      # ("12% from last month", the hardcoded revenue chart) that used to be
+      # rendered as if they were real figures.
+      - name: Admin reporting + PDF/CSV export
+        run: python3 scripts/verify-reports.py
+        
       - name: Custom pages, admin layout + sidebar
         run: python3 scripts/verify-pages.py
 

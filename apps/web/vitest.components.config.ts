@@ -19,6 +19,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    // Preview iframes are inspected via their src; don't launch real network requests from unit tests.
+    environmentOptions: { happyDOM: { settings: { disableIframePageLoading: true } } },
+    onConsoleLog(log) {
+      // happy-dom logs its deliberate iframe-loading opt-out as a DOMException.
+      // Keep all actual application errors/warnings visible.
+      if (log.includes('NotSupportedError') && log.includes('Iframe page loading is disabled.')) return false;
+    },
     include: [
       'components/**/*.test.{ts,tsx}',
       'lib/store.test.{ts,tsx}',
@@ -34,6 +41,7 @@ export default defineConfig({
       'lib/previewTheme.test.{ts,tsx}',
       'lib/i18n.test.{ts,tsx}',
       'lib/hooks.test.{ts,tsx}',
+      'lib/useDesignNavigationGuard.test.{ts,tsx}',
       'app/**/*.test.{ts,tsx}',
     ],
     setupFiles: ['./test/setup-components.tsx'],

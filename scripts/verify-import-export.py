@@ -22,6 +22,12 @@ import sys
 import urllib.error
 import urllib.request
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-import-export")
+
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
 
 results = []
@@ -30,6 +36,8 @@ results = []
 def check(name, ok, detail=""):
     results.append(bool(ok))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-import-export", str(name), str(detail))
 
 
 def call(method, path, token=None, body=None, raw=False):

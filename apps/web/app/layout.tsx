@@ -52,6 +52,7 @@ import '@fontsource/tajawal/arabic-700.css';
 import type { Metadata, Viewport } from 'next';
 import { getStoreInfo, SITE, buildGtagSnippet } from '@/lib/seo';
 import AppShell from '@/components/AppShell';
+import { loadStorefrontI18nCatalog } from '@/lib/serverI18nCatalog';
 import { JsonLdScript } from '@/components/JsonLdScript';
 import {
   buildOrganizationJsonLd,
@@ -124,6 +125,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // default-language list, which mirrors the i18n hook's "browser lang or
   // English" behaviour.
   const { code: lang, dir } = await resolveRequestLocale();
+  // Fetched on the server so the client's first render uses the same strings
+  // the server rendered. Loading it client-side changed the text after
+  // hydration and tripped React #425 on every translated page.
+  const i18nCatalog = await loadStorefrontI18nCatalog();
   // Google Analytics: only when the store owner set a property id in
   // admin settings. Previously stored-but-never-used (KNOWN_GAPS #3).
   const gtagSnippet = buildGtagSnippet(store.googleAnalyticsId);
@@ -156,7 +161,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           override the admin's Appearance → Typography choice, making
           the font picker a no-op. */}
       <body style={{ margin: 0, padding: 0 }}>
-        <AppShell initialLang={lang} initialDir={dir}>{children}</AppShell>
+        <AppShell initialLang={lang} initialDir={dir} initialCatalog={i18nCatalog}>{children}</AppShell>
       </body>
     </html>
   );

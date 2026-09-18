@@ -43,12 +43,12 @@ export function pushHomeVersion(
 
 export function loadHomeVersions(): HomeVersion[] {
   if (typeof window === 'undefined') return [];
-  return parseHomeVersions(window.localStorage.getItem(HOME_HISTORY_KEY));
+  try { return parseHomeVersions(window.localStorage.getItem(HOME_HISTORY_KEY)); } catch { return []; }
 }
 
 export function persistHomeVersions(versions: HomeVersion[]): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(HOME_HISTORY_KEY, JSON.stringify(versions));
+  try { window.localStorage.setItem(HOME_HISTORY_KEY, JSON.stringify(versions)); } catch { /* optional browser-local history */ }
 }
 
 export function recordHomeVersion(sections: HomeSection[]): HomeVersion[] {

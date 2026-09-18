@@ -332,29 +332,25 @@ are deliberately data-only (uploaded code is never executed).
 
 ### 9.1 Theme Studio — visual theme & layout builder
 
-The **Theme Studio** (`/admin/theme-studio`, linked from Admin → Appearance)
-lets an admin **create** a theme visually and take full **grid control over
-every storefront page**: drag blocks from a palette onto a column grid, set each
-block's column/row start & span, reorder, hide, and click-to-edit its config —
-with a live preview rendered by the same component the storefront uses.
+The design tools have three clear jobs:
 
-- Themes are **file-based**: the Studio writes a `theme.json` (tokens +
-  per-page `layouts`) into the themes dir via the `/api/theme-studio`
-  API. Edits are served at **runtime** (the storefront reads the disk
-  catalog on every load), so a saved change shows up on the next page
-  load — no rebuild.
-- Three groups of blocks: **marketing** (hero…newsletter), **rich pre-built**
-  (cta, video, image, textImage, divider, faq, steps, logoStrip, pricing,
-  quote, iconsGrid), and **page-native** (productDetail, productList,
-  categoryGrid, blogList, blogPostBody, pageContent — they render a page's real
-  content).
-- Every page opts in through one shared renderer (`LayoutRenderer`) plus a
-  client hook (`useActiveLayout`) and a server resolver
-  (`getServerPageLayout`) for SEO pages. A page with **no** layout keeps its
-  built-in content — nothing changes until an admin ships a layout.
+- **Appearance** selects and saves live styling (colours, typography, spacing),
+  with announcement content/visibility in its own tab. A pending selection is
+  not marked Active until **Save appearance** succeeds.
+- **Appearance → Homepage** owns live homepage content, order and visibility.
+  There is no redundant Sections tab. Block edits have their own save controls.
+- **Theme Studio** (`/admin/theme-studio`) creates reusable theme definitions.
+  Home is an ordered full-width section template; other pages retain grids.
+  Saving a template does not overwrite live home blocks or appearance overrides.
+  Saved non-home layouts of the active theme are used on those pages' next load.
 
-Full architecture, data model, block list, API reference, extension guide and
-honest limitations: **[docs/THEME_STUDIO.md](docs/THEME_STUDIO.md)**.
+**Replace homepage from theme** is the explicit, confirmed bridge from a saved
+home template to live homepage rows. It does not change styling. Missing or empty
+templates are rejected instead of silently falling back to platform defaults.
+
+Themes are file-based and their tokens/layouts are served at runtime; uploaded
+custom React code is never executed. See the [design workflow guide](docs/DESIGN_WORKFLOW.md)
+and [Studio architecture, API and limitations](docs/THEME_STUDIO.md).
 
 ### 9.2 Plugins — events, webhooks and bundled code
 

@@ -23,6 +23,12 @@ import os
 import re
 import sys
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-docker-config")
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 results = []
 
@@ -33,6 +39,8 @@ def check(name, ok, detail=""):
     if not ok:
         safe = f"{name}: {detail}".replace("\n", " ")
         print(f"::error::verify-docker-config: {safe}")
+    if not ok:
+        ci_annotate.annotate_failure("verify-docker-config", str(name), str(detail))
 
 
 def read(rel):

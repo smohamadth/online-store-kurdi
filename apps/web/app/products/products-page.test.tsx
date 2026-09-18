@@ -106,7 +106,7 @@ describe('/products debounced search', () => {
       await Promise.resolve();
     });
 
-    const input = screen.getByLabelText('Search products') as HTMLInputElement;
+    const input = screen.getByRole('textbox', { name: /^Search products/ }) as HTMLInputElement;
 
     // Type a whole word fast, as a burst of characters.
     act(() => {
@@ -145,7 +145,7 @@ describe('/products debounced search', () => {
       await Promise.resolve();
     });
 
-    const input = screen.getByLabelText('Search products') as HTMLInputElement;
+    const input = screen.getByRole('textbox', { name: /^Search products/ }) as HTMLInputElement;
     act(() => {
       fireEvent.change(input, { target: { value: 'a' } });
       fireEvent.change(input, { target: { value: 'ab' } });

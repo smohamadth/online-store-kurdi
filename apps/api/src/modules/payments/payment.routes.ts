@@ -20,7 +20,7 @@ import { prisma } from '../../config/database';
 import { NotFoundError, AppError } from '../../middleware/errorHandler';
 import { logger } from '../../utils/logger';
 import { getStripe } from '../../config/stripe';
-import { env } from '../../config/environment';
+import { env, allowMockPayments } from '../../config/environment';
 import { autoPostOrder, autoPostRefund } from '../accounting/accounting.service';
 import { createCommissionForOrder, voidCommissionForOrder } from '../affiliates/affiliate.service';
 import { verifyAndSettleGatewayPayment, refundGatewayPayment } from './gateway.service';
@@ -280,8 +280,11 @@ router.post('/process', authenticate, async (req, res, next) => {
     //
     // Until a real gateway (Stripe/PayPal) is integrated, only staff may
     // settle a payment - e.g. recording a bank transfer or a cash-on-delivery
-    // collection. Set PAYMENTS_ALLOW_MOCK=true to re-open it for local demos.
-    const mockAllowed = process.env.PAYMENTS_ALLOW_MOCK === 'true';
+    // collection. PAYMENTS_ALLOW_MOCK=true re-opens it for local demos, but
+    // allowMockPayments() hard-refuses that flag in production: reading the
+    // raw env var here meant a stray flag in a live deployment handed every
+    // logged-in customer free goods.
+    const mockAllowed = allowMockPayments();
     const isStaff = req.user?.role === 'admin' || req.user?.role === 'manager';
 
     if (!isStaff && !mockAllowed) {

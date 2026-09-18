@@ -80,6 +80,19 @@ export function normalizeStudioConfig(type: string, cfg: Record<string, unknown>
       return { ...row, name: row.name ?? who, author: row.author ?? who };
     });
   }
+  if (type === 'logoStrip' && Array.isArray(next.items)) {
+    next.items = next.items.map((item) => {
+      const row = asRecord(item);
+      return { ...row, name: row.name ?? firstString(row.name, row.text) };
+    });
+  }
+  if (type === 'gallery' && Array.isArray(next.items)) {
+    next.items = next.items.map((item) => {
+      const row = asRecord(item);
+      const image = firstString(row.image, row.src, row.url);
+      return { ...row, image: row.image ?? image, src: row.src ?? image, url: row.url ?? image };
+    });
+  }
   return next;
 }
 

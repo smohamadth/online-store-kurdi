@@ -1,44 +1,22 @@
-// /admin/appearance - the look & feel editor, tabbed:
-//   - theme: pick a theme (bundled + installed via the runtime catalog;
-//     the API validates the active key against the on-disk catalog, so an
-//     installed theme is activatable immediately), install a theme .zip,
-//     and remove installed themes
-//   - colors / typography / layout / sections / announcement: the
-//     Theme fields, saved as one blob via PUT /api/theme (including
-//     the customCss tab, which the server scans for script tags)
-//   - home: the home-page block editor (the HomeSection rows)
-// The live preview at /preview/<key> renders the same theme with
-// sample data.
+// Appearance edits the running shop. Studio edits reusable theme definitions.
+// Homepage blocks have their own editor/save API; never hide that distinction
+// behind a global appearance Save button or legacy theme.show* switches.
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { useIsMobile } from '@/lib/hooks';
+import { useDesignNavigationGuard } from '@/lib/useDesignNavigationGuard';
 import { LoadingState, ButtonSpinner } from '@/components/Spinner';
 import { DEFAULT_THEME, FONT_LABELS, FONT_STACKS, Theme } from '@/lib/theme';
 import { API_BASE } from '@/lib/http';
 import HomeBuilder from '@/components/HomeBuilder';
-import { applyThemeHomeLayout } from '@/lib/homeSections';
+import ReplaceHomepageButton from '@/components/ReplaceHomepageButton';
+import { APPEARANCE_TABS, appearanceTab, appearanceHref, appearanceSettings, hasHomeTemplate, type AppearanceTab } from '@/lib/designWorkflow';
 import { ThemePicker } from './ThemePicker';
 import { THEMES, type ThemeConfig } from '@/lib/themeRegistry';
-import { fetchThemeCatalog, resolveThemeConfig } from '@/lib/themeRuntime';
+import { fetchThemeCatalog } from '@/lib/themeRuntime';
+import { DESIGN_COLOR_FIELDS as COLOR_FIELDS } from '@/lib/designTokens';
 import { mergePickedTheme } from '@/lib/mergePickedTheme';
-
-const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
-  { key: 'primaryColor', label: 'Primary / buttons', hint: 'Buttons, active states, brand accents' },
-  { key: 'primaryTextColor', label: 'Text on primary', hint: 'Label colour inside primary buttons' },
-  { key: 'accentColor', label: 'Accent', hint: 'Links and highlights' },
-  { key: 'bodyBg', label: 'Page background', hint: 'Main background of every page' },
-  { key: 'cardBg', label: 'Card / panel background', hint: 'Product cards, forms, summary boxes' },
-  { key: 'bodyText', label: 'Body text', hint: 'Default text colour' },
-  { key: 'mutedText', label: 'Muted text', hint: 'Captions, secondary labels' },
-  { key: 'borderColor', label: 'Borders', hint: 'Card and input outlines' },
-  { key: 'headerBg', label: 'Header background', hint: 'Top navigation bar' },
-  { key: 'headerText', label: 'Header text', hint: 'Navigation links' },
-  { key: 'footerBg', label: 'Footer background', hint: '' },
-  { key: 'footerText', label: 'Footer text', hint: '' },
-  { key: 'priceColor', label: 'Price', hint: 'Product price colour' },
-  { key: 'saleColor', label: 'Sale / discount', hint: 'Discount badges' },
-];
 
 const PRESETS: { name: string; swatch: string; values: Partial<Theme> }[] = [
   {
@@ -73,27 +51,28 @@ const PRESETS: { name: string; swatch: string; values: Partial<Theme> }[] = [
   },
 ];
 
-const SECTIONS: { key: keyof Theme; label: string; hint: string }[] = [
-  { key: 'showAnnouncement', label: 'Announcement bar', hint: 'Strip above the header' },
-  { key: 'showCategories', label: 'Shop by Category', hint: 'Category tiles on the home page' },
-  { key: 'showFeatured', label: 'Featured Products', hint: '' },
-  { key: 'showNewArrivals', label: 'New Arrivals carousel', hint: '' },
-  { key: 'showTrustBar', label: 'Trust bar', hint: 'Free shipping / returns / support' },
-  { key: 'showDealCountdown', label: 'Deal countdown', hint: 'Deal of the day banner' },
-  { key: 'showTestimonials', label: 'Testimonials', hint: 'Customer quotes' },
-  { key: 'showStats', label: 'Stats strip', hint: 'Animated counters' },
-  { key: 'showNewsletter', label: 'Newsletter signup', hint: '' },
-];
-
-type Tab = 'theme' | 'colors' | 'typography' | 'layout' | 'home' | 'sections' | 'announcement' | 'css';
+function themeFromResponse(data: Partial<Theme>): Theme {
+  // Never put API metadata / activeThemeConfig into an editable settings blob.
+  return Object.fromEntries(Object.entries(DEFAULT_THEME).map(([key, fallback]) => [
+    key, data[key as keyof Theme] ?? fallback,
+  ])) as unknown as Theme;
+}
 
 export default function AdminAppearancePage() {
   const isMobile = useIsMobile();
   const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
+  const [savedTheme, setSavedTheme] = useState<Theme>(DEFAULT_THEME);
+  const [homeDirty, setHomeDirty] = useState(false);
+  const [homeBusy, setHomeBusy] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const appearanceDirty = JSON.stringify(appearanceSettings(theme)) !== JSON.stringify(appearanceSettings(savedTheme));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
-  const [tab, setTab] = useState<Tab>('theme');
+  const [tab, setTab] = useState<AppearanceTab>('theme');
+  const initialSelection = useRef(false);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [catalogThemes, setCatalogThemes] = useState<ThemeConfig[]>([...THEMES]);
 
   // Themes installed at runtime (developer .zip packages). They are not in
   // the web bundle, so the picker merges them with the bundled registry;
@@ -101,6 +80,7 @@ export default function AdminAppearancePage() {
   const [installedThemes, setInstalledThemes] = useState<ThemeConfig[]>([]);
   const [installing, setInstalling] = useState(false);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const busy = saving || replacing || homeBusy || installing || removingKey !== null;
 
   const token = () => localStorage.getItem('token');
 
@@ -111,13 +91,18 @@ export default function AdminAppearancePage() {
       // stay managed by the platform registry.
       const staticKeys = new Set(THEMES.map((t) => t.key));
       setInstalledThemes(themes.filter((t) => !staticKeys.has(t.key)));
+      setCatalogThemes(themes);
     } catch {
       setInstalledThemes([]);
+      setCatalogThemes([...THEMES]);
+    } finally {
+      setCatalogLoaded(true);
     }
   };
 
   useEffect(() => {
     refreshInstalledThemes();
+    setTab(appearanceTab(new URLSearchParams(window.location.search).get('tab')));
   }, []);
 
   /**
@@ -127,7 +112,7 @@ export default function AdminAppearancePage() {
    * storefront is told to reload its theme.
    */
   const installTheme = async (file: File | null) => {
-    if (!file) return;
+    if (!file || busy) return;
     setInstalling(true);
     try {
       const fd = new FormData();
@@ -155,6 +140,8 @@ export default function AdminAppearancePage() {
    * back to the default theme and says so.
    */
   const removeTheme = async (key: string) => {
+    if (busy) return;
+    if (appearanceDirty && !window.confirm('Discard unsaved appearance edits before removing a theme?')) return;
     if (!window.confirm(`Remove theme "${key}"? This cannot be undone. If it is the store's active theme, the store will switch back to the default theme.`)) {
       return;
     }
@@ -167,6 +154,19 @@ export default function AdminAppearancePage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.message || `Remove failed (HTTP ${res.status}).`);
       await refreshInstalledThemes();
+      try {
+        const response = await fetch(`${API_BASE}/theme`, { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.data) throw new Error('Appearance reload failed');
+        const next = themeFromResponse(result.data);
+        setTheme(next);
+        setSavedTheme(next);
+      } catch {
+        const message = 'Theme removed, but appearance could not be reloaded. Reload this page before saving.';
+        setLoadFailed(message);
+        window.dispatchEvent(new Event('themeChange'));
+        throw new Error(message);
+      }
       notify('success', body?.message || `Theme "${key}" removed.`);
       window.dispatchEvent(new Event('themeChange'));
     } catch (e: any) {
@@ -183,6 +183,7 @@ export default function AdminAppearancePage() {
   const [loadFailed, setLoadFailed] = useState('');
 
   useEffect(() => {
+    let active = true;
     fetch(`${API_BASE}/theme`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) {
@@ -191,16 +192,51 @@ export default function AdminAppearancePage() {
         }
         return r.json();
       })
-      .then((d) => d.data && setTheme({ ...DEFAULT_THEME, ...d.data }))
-      .catch((err) =>
+      .then((d) => {
+        if (!active) return;
+        if (!d.data) throw new Error('The server returned no appearance settings.');
+        const loaded = themeFromResponse(d.data);
+        setTheme(loaded);
+        setSavedTheme(loaded);
+      })
+      .catch((err) => {
+        if (!active) return;
         setLoadFailed(
           `${err?.message || 'Could not reach the API.'} ` +
             'The values below are the shipped defaults, NOT your saved settings — ' +
             'saving now would overwrite them. Start the API, then reload this page.'
-        )
-      )
-      .finally(() => setLoading(false));
+        );
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (loading || !catalogLoaded || loadFailed || initialSelection.current) return;
+    initialSelection.current = true;
+    const key = new URLSearchParams(window.location.search).get('theme');
+    if (!key) return;
+    const picked = catalogThemes.find((candidate) => candidate.key === key);
+    if (!picked) {
+      setMsg({ type: 'error', text: `Theme “${key}” is not available. No settings were changed.` });
+      return;
+    }
+    setTheme((current) => mergePickedTheme(current, picked));
+    setTab('theme');
+    setMsg({ type: 'success', text: `“${picked.name}” selected. Save appearance to apply its styling. Homepage blocks stay unchanged.` });
+  }, [loading, catalogLoaded, catalogThemes, loadFailed]);
+
+  useDesignNavigationGuard(
+    appearanceDirty || homeDirty || busy,
+    busy ? 'A design update is still in progress. Leave this page?' : 'Discard unsaved design edits and leave this page?',
+  );
+
+  const changeTab = (next: AppearanceTab) => {
+    if (busy || next === tab) return;
+    if (tab === 'home' && homeDirty && !window.confirm('Discard unsaved homepage edits and leave the Homepage tab?')) return;
+    setTab(next);
+    window.history.replaceState(null, '', appearanceHref(next));
+  };
 
   const set = <K extends keyof Theme>(k: K, v: Theme[K]) => setTheme((t) => ({ ...t, [k]: v }));
 
@@ -210,6 +246,7 @@ export default function AdminAppearancePage() {
   };
 
   const save = async () => {
+    if (busy || !appearanceDirty) return;
     if (loadFailed) {
       notify(
         'error',
@@ -223,7 +260,7 @@ export default function AdminAppearancePage() {
       const res = await fetch(`${API_BASE}/theme`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-        body: JSON.stringify(theme),
+        body: JSON.stringify(appearanceSettings(theme)),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
@@ -231,11 +268,13 @@ export default function AdminAppearancePage() {
         return;
       }
       const saved = await res.json();
-      setTheme({ ...DEFAULT_THEME, ...saved.data });
-      localStorage.setItem('themeSettings', JSON.stringify(saved.data));
+      const next = themeFromResponse(saved.data);
+      setTheme(next);
+      setSavedTheme(next);
+      try { localStorage.setItem('themeSettings', JSON.stringify(next)); } catch { /* API save succeeded even when storage is full. */ }
       // Repaint every open tab of the storefront immediately.
       window.dispatchEvent(new Event('themeChange'));
-      notify('success', 'Appearance saved. Your storefront has been updated.');
+      notify('success', 'Appearance saved. Styling is live; homepage blocks were not changed.');
     } catch {
       notify('error', 'Could not reach the server. Nothing was saved.');
     } finally {
@@ -244,20 +283,23 @@ export default function AdminAppearancePage() {
   };
 
   const reset = async () => {
-    if (!confirm('Reset every appearance setting back to the defaults?')) return;
+    if (busy || loadFailed || !confirm('Reset the active theme, colours, fonts, announcement and custom CSS to platform defaults? Homepage blocks will not be changed.')) return;
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/theme/reset`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token()}` },
       });
-      if (res.ok) {
-        const d = await res.json();
-        setTheme({ ...DEFAULT_THEME, ...d.data });
-        localStorage.setItem('themeSettings', JSON.stringify(d.data));
-        window.dispatchEvent(new Event('themeChange'));
-        notify('success', 'Appearance reset to defaults.');
-      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || `Reset failed (${res.status}).`);
+      const next = themeFromResponse(d.data);
+      setTheme(next);
+      setSavedTheme(next);
+      try { localStorage.setItem('themeSettings', JSON.stringify(next)); } catch { /* optional cache */ }
+      window.dispatchEvent(new Event('themeChange'));
+      notify('success', 'Appearance reset. Homepage blocks were not changed.');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : 'Could not reset appearance.');
     } finally {
       setSaving(false);
     }
@@ -282,19 +324,25 @@ export default function AdminAppearancePage() {
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 700 }}>Appearance</h1>
           <p style={{ color: '#666', marginTop: '4px', fontSize: '14px' }}>
-            Change how your storefront looks — colours, fonts, layout and which sections appear.
+            Style your live shop here. Manage its content and visibility in Homepage; design reusable themes in Theme Studio.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <a href="/admin/theme-studio" style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontWeight: 600, textDecoration: 'none', color: '#111', display: 'inline-flex', alignItems: 'center' }}>
-            🧩 Theme Studio
+            Theme Studio · templates
           </a>
-          <button onClick={reset} disabled={saving} style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}>
-            Reset
-          </button>
-          <button onClick={save} disabled={saving} style={{ padding: '10px 22px', backgroundColor: '#111', color: '#fff', border: 'none', borderRadius: '6px', cursor: saving ? 'default' : 'pointer', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            {saving ? <><ButtonSpinner /> Saving…</> : 'Save changes'}
-          </button>
+          {tab !== 'home' && <>
+            <button onClick={reset} disabled={busy || !!loadFailed} style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: 6, background: '#fff', fontWeight: 600 }}>
+              Reset appearance
+            </button>
+            <button onClick={() => setTheme(savedTheme)} disabled={busy || !appearanceDirty} style={{ padding: '10px 16px', border: '1px solid #d4d4d4', borderRadius: 6, background: '#fff', fontWeight: 600 }}>
+              Discard appearance edits
+            </button>
+            <button onClick={save} disabled={busy || !!loadFailed || !appearanceDirty} style={{ padding: '10px 22px', backgroundColor: '#111', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, opacity: busy || !appearanceDirty || loadFailed ? 0.5 : 1 }}>
+              {saving ? 'Saving…' : 'Save appearance'}
+            </button>
+          </>}
+
         </div>
       </div>
 
@@ -308,7 +356,7 @@ export default function AdminAppearancePage() {
       )}
 
       {msg.text && (
-        <div style={{
+        <div role={msg.type === 'error' ? 'alert' : 'status'} style={{
           marginTop: '16px', padding: '12px 16px', borderRadius: '8px', fontSize: '14px',
           backgroundColor: msg.type === 'success' ? '#dcfce7' : '#fee2e2',
           color: msg.type === 'success' ? '#166534' : '#991b1b',
@@ -317,29 +365,18 @@ export default function AdminAppearancePage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '6px', marginTop: '22px', flexWrap: 'wrap', borderBottom: '1px solid #e5e5e5', paddingBottom: '10px' }}>
-        {([
-          ['theme', '🎨 Theme'],
-          ['colors', '🎨 Colours'],
-          ['typography', '🔤 Typography'],
-          ['layout', '📐 Layout'],
-          ['home', '🏠 Home page'],
-          ['sections', '🧩 Sections'],
-          ['announcement', '📣 Announcement'],
-          ['css', '⚙️ Custom CSS'],
-        ] as [Tab, string][]).map(([t, lbl]) => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '8px 14px', borderRadius: '999px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-            border: tab === t ? '1px solid #111' : '1px solid #e5e5e5',
-            backgroundColor: tab === t ? '#111' : '#fff',
-            color: tab === t ? '#fff' : '#111',
-          }}>
-            {lbl}
+      {appearanceDirty && <p role="status" style={{ color: '#92400e', fontSize: 13, marginTop: 14 }}>
+        Unsaved appearance edits. {tab === 'home' ? 'Return to a styling tab to save them; Homepage saves only its blocks.' : 'Save appearance to make them live.'}
+      </p>}
+      <div role="tablist" aria-label="Appearance tools" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 22, borderBottom: '1px solid #e5e5e5', paddingBottom: 10 }}>
+        {APPEARANCE_TABS.map(([key, name]) => (
+          <button key={key} role="tab" aria-selected={tab === key} aria-controls="appearance-panel" id={`appearance-tab-${key}`} disabled={busy}
+            onClick={() => changeTab(key)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', border: '1px solid #e5e5e5', background: tab === key ? '#111' : '#fff', color: tab === key ? '#fff' : '#111' }}>
+            {name}
           </button>
         ))}
       </div>
-
+      <fieldset disabled={saving || replacing || installing || removingKey !== null} id="appearance-panel" role="tabpanel" aria-labelledby={`appearance-tab-${tab}`} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       {/* The home page builder and the theme picker both need the full
           width - their content is wide and the small colour preview on
           the right is irrelevant. Other tabs share the width with the
@@ -347,21 +384,26 @@ export default function AdminAppearancePage() {
       {tab === 'home' || tab === 'theme' ? (
         <div style={{ marginTop: '22px' }}>
           {tab === 'home' ? (
-            <HomeBuilder />
+            <HomeBuilder onDirtyChange={setHomeDirty} onBusyChange={setHomeBusy} />
           ) : (
             <ThemeTab
-              activeTheme={(theme as any).activeTheme as string | null}
+              activeTheme={savedTheme.activeTheme}
+              selectedTheme={theme.activeTheme}
+              themes={catalogThemes}
+              appearanceDirty={appearanceDirty}
+              onReplacing={setReplacing}
               installedThemes={installedThemes}
               onPick={(key) => {
-                const picked = resolveThemeConfig(key);
+                const picked = catalogThemes.find((candidate) => candidate.key === key);
+                if (!picked) return;
                 setTheme((t) => mergePickedTheme(t, picked));
-                notify('success', `Theme "${picked.name}" selected. Click Save to apply.`);
+                notify('success', `“${picked.name}” selected. Save appearance to apply styling; homepage blocks stay unchanged.`);
               }}
               onInstall={installTheme}
               onRemove={removeTheme}
               installing={installing}
               removingKey={removingKey}
-              disabled={saving}
+              disabled={busy || !!loadFailed}
             />
           )}
         </div>
@@ -463,17 +505,17 @@ export default function AdminAppearancePage() {
               <div style={{ display: 'grid', gap: '18px' }}>
                 <div>
                   <label style={label}>Corner radius — {theme.radius}px</label>
-                  <input type="range" min={0} max={28} value={theme.radius}
+                  <input type="range" min={0} max={40} value={theme.radius}
                     onChange={(e) => set('radius', parseInt(e.target.value))} style={{ width: '100%' }} />
                 </div>
                 <div>
                   <label style={label}>Button radius — {theme.buttonRadius}px</label>
-                  <input type="range" min={0} max={28} value={theme.buttonRadius}
+                  <input type="range" min={0} max={40} value={theme.buttonRadius}
                     onChange={(e) => set('buttonRadius', parseInt(e.target.value))} style={{ width: '100%' }} />
                 </div>
                 <div>
                   <label style={label}>Content width — {theme.containerWidth}px</label>
-                  <input type="range" min={960} max={1600} step={20} value={theme.containerWidth}
+                  <input type="range" min={960} max={1920} step={20} value={theme.containerWidth}
                     onChange={(e) => set('containerWidth', parseInt(e.target.value))} style={{ width: '100%' }} />
                 </div>
                 <div>
@@ -489,36 +531,6 @@ export default function AdminAppearancePage() {
                     <option value="strong">Strong</option>
                   </select>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {tab === 'sections' && (
-            <div style={card}>
-              <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Home page sections</h3>
-              <p style={{ fontSize: '13px', color: '#666', marginBottom: '14px' }}>
-                Turn parts of the storefront on or off. Changes apply immediately after saving.
-              </p>
-              <p style={{ fontSize: '13px', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 12px', borderRadius: '8px', marginBottom: '14px' }}>
-                These are the original master switches and they still win: a section switched off
-                here stays hidden even if it is marked visible under{' '}
-                <strong>🏠 Home page</strong>. Use the Home page tab to reorder and re-word blocks.
-              </p>
-              <div style={{ display: 'grid', gap: '10px' }}>
-                {SECTIONS.map((sct) => (
-                  <label key={sct.key as string} style={{
-                    display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px',
-                    border: '1px solid #eee', borderRadius: '8px', cursor: 'pointer',
-                    backgroundColor: theme[sct.key] ? '#f8fffa' : '#fafafa',
-                  }}>
-                    <input type="checkbox" checked={Boolean(theme[sct.key])}
-                      onChange={(e) => set(sct.key, e.target.checked as never)} />
-                    <span>
-                      <span style={{ display: 'block', fontWeight: 600, fontSize: '14px' }}>{sct.label}</span>
-                      {sct.hint && <span style={{ display: 'block', fontSize: '12px', color: '#888' }}>{sct.hint}</span>}
-                    </span>
-                  </label>
-                ))}
               </div>
             </div>
           )}
@@ -582,7 +594,7 @@ export default function AdminAppearancePage() {
         <div style={{ position: isMobile ? 'static' : 'sticky', top: '16px' }}>
           <div style={{ ...card, padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee', fontWeight: 700, fontSize: '14px' }}>
-              Live preview
+              Style preview · sample content
             </div>
             <div style={{ backgroundColor: theme.bodyBg, color: theme.bodyText, fontFamily: FONT_STACKS[theme.fontFamily], fontSize: `${theme.baseFontSize}px` }}>
               {theme.showAnnouncement && theme.announcementText && (
@@ -630,11 +642,12 @@ export default function AdminAppearancePage() {
           </div>
           <p style={{ fontSize: '12px', color: '#888', marginTop: '10px', lineHeight: 1.6 }}>
             The preview updates as you edit. Nothing changes on the live storefront until you press{' '}
-            <strong>Save changes</strong>.
+            <strong>Save appearance</strong>.
           </p>
         </div>
       </div>
       )}
+      </fieldset>
     </div>
   );
 }
@@ -654,6 +667,10 @@ export default function AdminAppearancePage() {
  */
 function ThemeTab({
   activeTheme,
+  selectedTheme,
+  themes,
+  appearanceDirty,
+  onReplacing,
   installedThemes,
   onPick,
   onInstall,
@@ -663,6 +680,10 @@ function ThemeTab({
   disabled,
 }: {
   activeTheme: string | null;
+  selectedTheme: string;
+  themes: ThemeConfig[];
+  appearanceDirty: boolean;
+  onReplacing: (busy: boolean) => void;
   installedThemes: ThemeConfig[];
   onPick: (key: string) => void;
   onInstall: (file: File | null) => void;
@@ -674,17 +695,9 @@ function ThemeTab({
   const [pickFile, setPickFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // The page persists `activeTheme` as a separate field on the
-  // theme record (added in the multi-theme migration). The
-  // picker reads it via props; this component is just the
-  // presentation layer.
-  //
-  // Why is the active theme not in local state? Because the
-  // page's `theme` state is the source of truth (it gets
-  // loaded from /theme, saved back to /theme). The picker is
-  // a controlled component: it renders what the parent
-  // tells it, and tells the parent when the user picked
-  // something.
+  const selected = themes.find((candidate) => candidate.key === selectedTheme);
+  const hasTemplate = hasHomeTemplate(selected?.layouts);
+
   return (
     <div>
       <div
@@ -698,52 +711,29 @@ function ThemeTab({
       >
         <h3 style={{ fontWeight: 700, marginBottom: '4px' }}>Choose your theme</h3>
         <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
-          Pick a starting point. Each theme sets the design tokens (colours, fonts,
-          layout). You can fine-tune individual values in the other tabs after picking.
+          Select a starting point, then Save appearance to apply its colours, fonts and styling.
+          Your homepage blocks, announcement message and custom CSS are kept. Fine-tune styles in the other tabs.
         </p>
       </div>
       <ThemePicker
         activeTheme={activeTheme}
+        selectedTheme={selectedTheme}
         onSelect={onPick}
         disabled={disabled}
-        themes={[...THEMES, ...installedThemes]}
+        themes={themes}
       />
-      {activeTheme && (
-        <div style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            onClick={async () => {
-              if (
-                !window.confirm(
-                  'Replace the live homepage with this theme’s home layout? Current Home page blocks will be deleted.',
-                )
-              )
-                return;
-              try {
-                const { message } = await applyThemeHomeLayout(activeTheme);
-                window.alert(message || 'Live home now matches this theme.');
-              } catch (e: any) {
-                window.alert(e?.message || 'Could not apply the theme home.');
-              }
-            }}
-            disabled={disabled}
-            style={{
-              padding: '10px 16px',
-              border: '1px solid #111',
-              borderRadius: 8,
-              background: '#111',
-              color: '#fff',
-              fontWeight: 700,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              fontSize: 14,
-            }}
-          >
-            Apply this theme’s homepage
-          </button>
-          <p style={{ fontSize: 12, color: '#666', marginTop: 8, maxWidth: 520 }}>
-            Tokens apply when you Save. The homepage is separate — this copies the theme’s
-            home layout into Appearance → Home in one step.
+      {selected && (
+        <div style={{ marginTop: 16, padding: 16, border: '1px solid #e5e5e5', borderRadius: 8 }}>
+          <h4 style={{ fontSize: 14, margin: '0 0 8px' }}>Optional: start with this theme’s homepage</h4>
+          <p style={{ fontSize: 13, color: '#666', margin: '0 0 10px' }}>
+            Copy the saved template from “{selected.name}” into your live Homepage editor.
+            This replaces existing blocks; it is not part of saving appearance.
           </p>
+          <ReplaceHomepageButton key={selected.key} themeKey={selected.key} themeName={selected.name}
+            disabled={disabled || appearanceDirty || !hasTemplate}
+            disabledReason={appearanceDirty ? 'Save or discard appearance edits first.' : !hasTemplate ? 'This theme has no saved homepage template. Build one in Theme Studio.' : undefined}
+            onBusyChange={onReplacing} />
+          <a href={appearanceHref('home')} style={{ display: 'inline-block', marginTop: 10, fontSize: 13 }}>Edit live homepage →</a>
         </div>
       )}
 
@@ -776,7 +766,7 @@ function ThemeTab({
             onClick={() => {
               if (pickFile) onInstall(pickFile);
             }}
-            disabled={installing || !pickFile}
+            disabled={disabled || installing || !pickFile}
             data-testid="install-theme-button"
             style={{
               minHeight: '36px',
@@ -837,7 +827,7 @@ function ThemeTab({
                 <button
                   type="button"
                   onClick={() => onRemove(t.key)}
-                  disabled={removingKey === t.key}
+                  disabled={disabled || removingKey === t.key}
                   data-testid={`remove-theme-${t.key}`}
                   style={{
                     flexShrink: 0,

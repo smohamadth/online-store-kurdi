@@ -12,6 +12,12 @@ import urllib.error
 import urllib.request
 from playwright.sync_api import sync_playwright
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-banner")
+
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 results = []
 
@@ -19,6 +25,8 @@ results = []
 def check(name, ok, detail=""):
     results.append(ok)
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-banner", str(name), str(detail))
 
 
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
@@ -117,7 +125,7 @@ with sync_playwright() as p:
 
     # move the banner via the home page builder
     page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
+    ci_annotate.open_home_tab(page, 0)
     page.wait_for_timeout(2500)
     check("banner block appears in the builder",
           page.locator('[data-home-row="bannerStrip"]').count() == 1)
@@ -126,7 +134,7 @@ with sync_playwright() as p:
         "button", name="Move up").click()
     page.wait_for_timeout(2500)
     page.reload(wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
+    ci_annotate.open_home_tab(page, 0)
     page.wait_for_timeout(2500)
     keys = page.locator("[data-home-row]").evaluate_all(
         "els => els.map(e => e.getAttribute('data-home-row'))")

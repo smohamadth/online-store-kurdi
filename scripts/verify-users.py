@@ -21,6 +21,12 @@ import urllib.request
 import re
 from playwright.sync_api import sync_playwright
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-users")
+
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
 
@@ -30,6 +36,8 @@ results = []
 def check(name, ok, detail=""):
     results.append(ok)
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-users", str(name), str(detail))
 
 
 def call(method, path, token=None, body=None):

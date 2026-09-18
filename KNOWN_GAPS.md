@@ -449,29 +449,37 @@ deliberate design choices or niche gaps.
    design (uploaded code is never executed); a theme that needs custom
    sections must ship bundled with the platform. See
    `docs/THEME_DEVELOPMENT.md` §2.
-2. **Live home is HomeSection rows, not Studio `layouts.home`.** The storefront
-   home always paints `HomeSection` via `HomeSectionStack` (`cta`, `faq`,
-   `steps`, `pricing`, … included). Theme Studio `layouts.home` is a canvas +
-   Preview only; listing/PDP pages still use `LayoutRenderer` when a native
-   chrome block is present.
-3. **A themed page layout replaces the page's built-in chrome.** When an admin
-   defines a layout for a page such as `/products`, that grid (not the built-in
-   filter sidebar / pagination) is what renders — the admin's explicit
-   composition wins. This is the intended behaviour of "full layout control",
-   not a bug, but it changes the UX for pages the admin themes.
+2. **Live home is HomeSection rows, not a continuously linked template.**
+   Studio Home is an ordered full-width section template rendered by
+   `HomeSectionStack`, matching the live renderer. **Replace homepage from theme**
+   explicitly copies a saved template into DB rows; saving Studio does not.
+   Missing/empty templates are rejected; resetting to platform defaults is separate.
+3. **Active non-home layouts are not staged drafts after Save.** Saved layouts of
+   an already-active theme take effect on those pages' next load. Edit an inactive
+   copy to stage changes. Native-chrome guards keep marketing-only layouts from
+   replacing listing/product/CMS content where applicable.
 4. **No marketplace / license enforcement.** There is still no theme
    marketplace or license enforcement for `paid` themes (see README §18).
    (Admin-created and admin-installed themes DO now take effect at runtime —
    see item 1 above.)
-5. **Config fields are authored in the Studio and trusted as authored.** The
+5. **Configuration is validated, but it is not a fully typed block schema.** The
    `/api/theme-studio` layer validates the theme envelope (key, semver,
    features, required fields) and strips unknown keys, but per-block `config`
-   payloads are stored as authored (rich HTML is sanitised on the home path).
+   payloads remain flexible. Home replacement checks supported block types,
+   heading lengths, count and config size, and sanitizes config before its transaction.
+6. **Local drafts are not a durable backup.** Reload/close, ordinary links
+   (including the admin sidebar), local tab exits and theme switches are guarded.
+   Arbitrary programmatic navigation, SPA browser-history changes or a browser
+   crash may still discard drafts. Browser-local history is not server revisioning.
 
 The model lives in `apps/web/lib/layouts/`; the file API in
 `apps/api/src/modules/themeStudio/`. Every block type is covered by the
 "every registered block type renders" test plus per-block unit/component
 tests; the file API is covered by `apps/api/tests/integration/themeStudio.test.ts`.
+
+See [the current merchant design workflow](docs/DESIGN_WORKFLOW.md). The obsolete
+Appearance Sections tab is removed; Announcement and Homepage have separate,
+explicit ownership.
 
 The Studio's editor UI is covered by `apps/web/app/admin/theme-studio/page.test.tsx`:
 drag-and-drop add, reorder/remove, per-page draft persistence (the save PUT

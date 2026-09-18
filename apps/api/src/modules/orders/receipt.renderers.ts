@@ -11,6 +11,7 @@
  * service module; the service re-exports the type for callers.
  */
 import PDFDocument from 'pdfkit';
+import { resolveUnicodeFont, resolveUnicodeBoldFont } from '../analytics/report.fonts';
 
 // ---------------------------------------------------------------------
 // Types
@@ -268,6 +269,25 @@ export function renderReceiptHtml(d: ReceiptData): string {
 export function renderReceiptPdf(d: ReceiptData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
+
+    // Receipts carry customer names and addresses, which on a Kurdish store
+    // are usually not Latin. pdfkit's Helvetica is WinAnsi and drops those
+    // glyphs silently, so the receipt shipped with a blank name. Embed a
+    // Unicode face when the host has one; otherwise keep Helvetica so a
+    // Latin-only store is unaffected.
+    const uniFont = resolveUnicodeFont();
+    const uniBold = resolveUnicodeBoldFont();
+    const REG = uniFont ? 'Body' : 'Helvetica';
+    const BOLD = uniBold ? 'BodyBold' : 'Helvetica-Bold';
+    if (uniFont) {
+      try {
+        doc.registerFont('Body', uniFont);
+        if (uniBold) doc.registerFont('BodyBold', uniBold);
+        doc.font('Body');
+      } catch {
+        // A corrupt font file must not take the receipt down.
+      }
+    }
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -344,7 +364,7 @@ export function renderReceiptPdf(d: ReceiptData): Promise<Buffer> {
     doc.fontSize(10);
     const writeRow = (label: string, val: string, bold = false) => {
       const y = doc.y;
-      doc.font('Helvetica' + (bold ? '-Bold' : ''));
+      doc.font(bold ? BOLD : REG);
       doc.text(label, tcol.label, y, { width: labelW });
       doc.text(val, tcol.val, y, { width: rightW, align: 'right' });
       doc.moveDown(0.4);
@@ -365,7 +385,7 @@ export function renderReceiptPdf(d: ReceiptData): Promise<Buffer> {
     doc.moveTo(380, doc.y).lineTo(545, doc.y).strokeColor('#111').lineWidth(1).stroke();
     doc.moveDown(0.4);
     writeRow('TOTAL', fmtMoney(d.totals.total), true);
-    doc.font('Helvetica');
+    doc.font(REG);
 
     doc.moveDown(2);
 

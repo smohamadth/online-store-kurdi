@@ -11,6 +11,12 @@ import urllib.error
 import urllib.request
 from playwright.sync_api import sync_playwright
 
+# Failures must be visible as GitHub annotations: the raw job log is not
+# reliably fetchable through the API.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ci_annotate  # noqa: E402
+ci_annotate.install("verify-home-builder")
+
 WEB = os.environ.get("WEB_URL", "http://127.0.0.1:3000")
 errors = []
 results = []
@@ -19,6 +25,8 @@ results = []
 def check(name, ok, detail=""):
     results.append((name, ok, detail))
     print(("PASS  " if ok else "FAIL  ") + name + (f"  -- {detail}" if detail else ""))
+    if not ok:
+        ci_annotate.annotate_failure("verify-home-builder", str(name), str(detail))
 
 
 API = os.environ.get("API_URL", "http://127.0.0.1:3001/api")
@@ -57,86 +65,96 @@ def _admin_token():
 # which reads as a regression. Tests must be repeatable.
 _api("POST", "/home-sections/reset", _admin_token(), {})
 
-with sync_playwright() as p:
-    b = p.chromium.launch()
-    ctx = b.new_context(viewport={"width": 1400, "height": 1000})
-    page = ctx.new_page()
-    console = []
-    page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
+try:
+  with sync_playwright() as p:
+      b = p.chromium.launch()
+      ctx = b.new_context(viewport={"width": 1400, "height": 1000})
+      page = ctx.new_page()
+      console = []
+      page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
 
-    # --- storefront renders the DB-driven layout
-    page.goto(WEB, wait_until="networkidle")
-    body = page.inner_text("body")
-    check("home renders trust bar", "Free shipping" in body)
-    check("home renders featured heading", "Featured Products" in body)
-    check("home renders newsletter", "Subscribe" in body)
+      # --- storefront renders the DB-driven layout
+      page.goto(WEB, wait_until="networkidle")
+      body = page.inner_text("body")
+      check("home renders trust bar", "Free shipping" in body, body[:400])
+      check("home renders featured heading", "Featured Products" in body, body[:400])
+      check("home renders newsletter", "Subscribe" in body, body[:400])
 
-    # --- admin login
-    page.goto(f"{WEB}/login", wait_until="networkidle")
-    page.fill('input[type="email"]', "admin@store.com")
-    page.fill('input[type="password"]', "admin123")
-    page.get_by_role("button", name="Sign In", exact=True).click()
-    page.wait_for_timeout(3000)
+      # --- admin login
+      page.goto(f"{WEB}/login", wait_until="networkidle")
+      page.fill('input[type="email"]', "admin@store.com")
+      page.fill('input[type="password"]', "admin123")
+      page.get_by_role("button", name="Sign In", exact=True).click()
+      page.wait_for_timeout(3000)
 
-    page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
-    page.wait_for_timeout(2500)
-    check("builder lists blocks", "Home page blocks" in page.inner_text("body"))
+      page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
+      ci_annotate.open_home_tab(page, 0)
+      page.wait_for_timeout(2500)
+      # The panel heading is now just "Homepage"; assert on the block rows
+      # themselves, which is what the rest of this suite actually drives.
+      check("builder lists blocks",
+            page.locator("[data-home-row]").count() > 0,
+            page.inner_text("body")[:400])
 
-    # --- edit the Featured heading and save
-    rows = page.locator("text=Featured products").first
-    # open the editor on the featured row
-    page.locator('[data-home-row="featured"]').get_by_role("button", name="Edit").click()
-    page.wait_for_timeout(600)
-    heading = page.locator('[data-home-row="featured"] input[placeholder="Leave empty to hide the heading"]')
-    heading.fill("Hand-picked for you")
-    page.locator('[data-home-row="featured"]').get_by_role("button", name="Save this block").click()
-    page.wait_for_timeout(2500)
-    check("save reports success", "saved" in page.inner_text("body").lower())
+      # --- edit the Featured heading and save
+      rows = page.locator("text=Featured products").first
+      # open the editor on the featured row
+      page.locator('[data-home-row="featured"]').get_by_role("button", name="Edit").click()
+      page.wait_for_timeout(600)
+      heading = page.locator('[data-home-row="featured"] input[placeholder="Leave empty to hide the heading"]')
+      heading.fill("Hand-picked for you")
+      page.locator('[data-home-row="featured"]').get_by_role("button", name="Save this block").click()
+      page.wait_for_timeout(2500)
+      check("save reports success", "saved" in page.inner_text("body").lower(), page.inner_text("body")[:400])
 
-    # --- verify it persisted on the storefront
-    page2 = ctx.new_page()
-    page2.goto(WEB, wait_until="networkidle")
-    t = page2.inner_text("body")
-    check("storefront shows the new heading", "Hand-picked for you" in t)
-    check("old heading gone", "Featured Products" not in t)
+      # --- verify it persisted on the storefront
+      page2 = ctx.new_page()
+      page2.goto(WEB, wait_until="networkidle")
+      t = page2.inner_text("body")
+      check("storefront shows the new heading", "Hand-picked for you" in t, t[:400])
+      check("old heading gone", "Featured Products" not in t, t[:400])
 
-    # --- hide a block (state-independent: force it visible first)
-    page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
-    page.wait_for_timeout(2500)
-    cb = page.locator('[data-home-row="testimonials"] input[type="checkbox"]').first
-    if not cb.is_checked():
-        cb.click()
-        page.wait_for_timeout(2000)
-    page2.reload(wait_until="networkidle")
-    check("visible block shows on storefront", "Loved by our customers" in page2.inner_text("body"))
+      # --- hide a block (state-independent: force it visible first)
+      page.goto(f"{WEB}/admin/appearance", wait_until="networkidle")
+      ci_annotate.open_home_tab(page, 0)
+      page.wait_for_timeout(2500)
+      cb = page.locator('[data-home-row="testimonials"] input[type="checkbox"]').first
+      if not cb.is_checked():
+          cb.click()
+          page.wait_for_timeout(2000)
+      page2.reload(wait_until="networkidle")
+      check("visible block shows on storefront", "Loved by our customers" in page2.inner_text("body"), page2.inner_text("body")[:400])
 
-    cb.click()  # hide it
-    page.wait_for_timeout(2500)
-    page2.reload(wait_until="networkidle")
-    check("hidden block disappears from storefront",
-          "Loved by our customers" not in page2.inner_text("body"))
+      cb.click()  # hide it
+      page.wait_for_timeout(2500)
+      page2.reload(wait_until="networkidle")
+      check("hidden block disappears from storefront",
+            "Loved by our customers" not in page2.inner_text("body"),
+            page2.inner_text("body")[:400])
 
-    # --- reordering persists
-    page.locator('[data-home-row="stats"]').get_by_role("button", name="Move up").click()
-    page.wait_for_timeout(2500)
-    page.reload(wait_until="networkidle")
-    page.get_by_role("button", name=re.compile("Home page")).click()
-    page.wait_for_timeout(2500)
-    keys = page.locator("[data-home-row]").evaluate_all(
-        "els => els.map(e => e.getAttribute('data-home-row'))")
-    check("reorder survived a reload", keys.index("stats") < keys.index("features"),
-          str(keys))
+      # --- reordering persists
+      page.locator('[data-home-row="stats"]').get_by_role("button", name="Move up").click()
+      page.wait_for_timeout(2500)
+      page.reload(wait_until="networkidle")
+      ci_annotate.open_home_tab(page, 0)
+      page.wait_for_timeout(2500)
+      keys = page.locator("[data-home-row]").evaluate_all(
+          "els => els.map(e => e.getAttribute('data-home-row'))")
+      check("reorder survived a reload", keys.index("stats") < keys.index("features"),
+            str(keys))
 
-    # --- restore so the script is idempotent
-    cb = page.locator('[data-home-row="testimonials"] input[type="checkbox"]').first
-    if not cb.is_checked():
-        cb.click()
-        page.wait_for_timeout(2000)
+      # --- restore so the script is idempotent
+      cb = page.locator('[data-home-row="testimonials"] input[type="checkbox"]').first
+      if not cb.is_checked():
+          cb.click()
+          page.wait_for_timeout(2000)
 
-    check("no console errors", len(console) == 0, "; ".join(console[:3]))
-    b.close()
+      check("no console errors", len(console) == 0, "; ".join(console[:3]))
+      b.close()
+
+except Exception as exc:  # noqa: BLE001 - re-raised after annotating
+    ci_annotate.annotate_crash("verify-home-builder", exc)
+    raise
 
 failed = [r for r in results if not r[1]]
 # Leave the layout as we found it so the suite can run again immediately.

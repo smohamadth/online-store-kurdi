@@ -21,7 +21,26 @@ import { createContext, useContext, useState, useEffect } from 'react';
  * the provider needs JSX, and this file is `i18n.ts` (renaming to `.tsx`
  * would force every importer to update its path).
  */
-export const I18nSeedContext = createContext<{ lang: string; dir: 'ltr' | 'rtl' } | null>(null);
+export interface I18nSeed {
+  lang: string;
+  dir: 'ltr' | 'rtl';
+  /**
+   * The admin-editable catalog from GET /api/i18n/storefront, already fetched
+   * on the SERVER. Without it the client used to render the built-in English
+   * dictionary first and swap in the overlay from a mount effect, which
+   * produced different text than the server had rendered — React error #425
+   * ("server rendered HTML didn't match the client") on every translated
+   * page. Seeding it here means the first client render matches the server.
+   */
+  catalog?: StorefrontI18nCatalog | null;
+}
+
+export interface StorefrontI18nCatalog {
+  languages?: { code: string; name: string; dir: 'ltr' | 'rtl'; flag?: string; enabled?: boolean }[];
+  strings?: Record<string, Record<string, string>>;
+}
+
+export const I18nSeedContext = createContext<I18nSeed | null>(null);
 
 // Supported languages
 export const languages = [
@@ -1048,10 +1067,7 @@ let storefrontOverlay: Record<string, Record<string, string>> = {};
 let extraLanguages: { code: string; name: string; dir: 'ltr' | 'rtl'; flag: string }[] = [];
 let enabledCodes: string[] | null = null;
 
-export function applyStorefrontI18nCatalog(data: {
-  languages?: { code: string; name: string; dir: 'ltr' | 'rtl'; flag?: string; enabled?: boolean }[];
-  strings?: Record<string, Record<string, string>>;
-}) {
+export function applyStorefrontI18nCatalog(data: StorefrontI18nCatalog) {
   storefrontOverlay = data.strings || {};
   if (data.languages?.length) {
     enabledCodes = data.languages.filter((l) => l.enabled !== false).map((l) => l.code);
@@ -1115,7 +1131,18 @@ export function useTranslation() {
   const [direction, setDirection] = useState<'ltr' | 'rtl'>(seed?.dir ?? 'ltr');
   const [, setCatalogTick] = useState(0);
 
+  // Apply the server-seeded catalog DURING RENDER, not in an effect. The
+  // overlay is module-level state that `t()` reads synchronously, so applying
+  // it after mount meant the first client render used the built-in English
+  // dictionary while the server had already rendered the overlay's text —
+  // React error #425 on every page that calls t(). Doing it here keeps the
+  // first client render byte-identical to the server's.
+  if (seed?.catalog) applyStorefrontI18nCatalog(seed.catalog);
+
   useEffect(() => {
+    // Already seeded by the server: no refetch, and critically no post-mount
+    // swap that would change rendered text after hydration.
+    if (seed?.catalog) return;
     fetch('/api/i18n/storefront')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
@@ -1125,7 +1152,7 @@ export function useTranslation() {
         }
       })
       .catch(() => { /* built-in dictionaries remain */ });
-  }, []);
+  }, [seed?.catalog]);
 
   useEffect(() => {
     const apply = (code: string) => {

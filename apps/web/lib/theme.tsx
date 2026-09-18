@@ -1,5 +1,6 @@
 'use client';
 
+import { CLIENT_API_BASE } from './apiBase';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   THEMES,
@@ -51,6 +52,7 @@ export interface Theme {
   cardShadow: 'none' | 'soft' | 'strong';
 
   productsPerRow: number;
+  /** @deprecated Compatibility only. Homepage blocks use HomeSection.isVisible. */
   showTrustBar: boolean;
   showTestimonials: boolean;
   showStats: boolean;
@@ -291,7 +293,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const load = async () => {
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const API_URL = CLIENT_API_BASE;
       const res = await fetch(`${API_URL}/theme`, { cache: 'no-store' });
       if (res.ok) {
         const { data } = await res.json();
@@ -335,7 +337,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       // Windows this is almost always `localhost` resolving to ::1
       // while the API bound IPv4 only.
       console.error(
-        `[theme] Could not reach ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/theme. ` +
+        `[theme] Could not reach ${CLIENT_API_BASE}/theme. ` +
           'Showing the cached theme. Is the API running?',
         err
       );

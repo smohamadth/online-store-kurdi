@@ -1,6 +1,6 @@
 # Store builder — bugs and holes
 
-Working list for the **home page builder** (Admin → Appearance → Home) and **Theme Studio** (`/admin/theme-studio`).  
+Working list for the **home page builder** (Admin → Appearance → Homepage) and **Theme Studio** (`/admin/theme-studio`).
 Not the whole platform (see `KNOWN_GAPS.md` for payments, email, etc.).
 
 **How to use:** pick the next P0/P1 item, fix it, tick it here. Do not “fix” items marked *by design* without an explicit product decision.
@@ -9,12 +9,12 @@ Not the whole platform (see `KNOWN_GAPS.md` for payments, email, etc.).
 
 ## Architecture (why so many bugs)
 
-There are **two independent layout systems**. Live home always uses Home sections; Studio `layouts.home` is a canvas only.
+There are **two explicit persistence scopes**. Live home uses DB Home sections; Studio `layouts.home` is a reusable ordered template. Copy it only with **Replace homepage from theme**. See [the design workflow](docs/DESIGN_WORKFLOW.md).
 
 | System | Admin UI | Persistence | Storefront |
 |---|---|---|---|
-| **Home sections** | Appearance → Home (`HomeBuilder.tsx`) | `HomeSection` rows in the DB | `HomeView` via `pickStorefrontHomeSections` |
-| **Theme Studio layouts** | `/admin/theme-studio` | `theme.json` `layouts.<page>` on disk | Canvas / preview only for home; listing/PDP chrome unless native blocks are present |
+| **Home sections** | Appearance → Homepage (`HomeBuilder.tsx`) | `HomeSection` rows in the DB | `HomeView` via `pickStorefrontHomeSections` |
+| **Theme Studio layouts** | `/admin/theme-studio` | `theme.json` `layouts.<page>` on disk | Saved Home template, copied explicitly to live rows; other-page grids with native-chrome guards |
 
 Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 
@@ -23,7 +23,7 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 ## P0 — broken or two systems fighting
 
 ### 1. Theme Studio home layout silently replaces the Home builder
-**Status:** fixed. Live home always uses `HomeSection` rows via `pickStorefrontHomeSections`. Studio `layouts.home` stays a studio canvas only.
+**Status:** fixed. Live home always uses `HomeSection` rows via `pickStorefrontHomeSections`. Studio `layouts.home` stays a reusable template until explicitly copied to the store.
 
 ### 2. Saving a bundled theme in Theme Studio always fails
 **Status:** fixed. Save/Delete disabled for platform keys (`isPlatformBundledTheme`); copy tells the admin to duplicate via New theme. API still refuses PUT.
@@ -111,8 +111,24 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 ### 27. Home builder “Restore default” vs “deleted keys”
 **Status:** not a live bug. Reset is the restore action.
 
-### 28. Apply theme home to the live store
-**Status:** fixed. `POST /api/home-sections/apply-theme` replaces HomeSection rows from the theme’s `layouts.home` (platform seed if the theme has none). Buttons: Appearance → Theme, Home builder, Theme Studio.
+### 28. Replace the homepage from a saved theme
+**Status:** fixed and hardened. `POST /api/home-sections/apply-theme` validates the entire saved `layouts.home`, then replaces HomeSection rows in a transaction. Missing/empty/invalid templates are errors, not implicit platform defaults. The shared **Replace homepage from theme** control is used in Appearance, Homepage and Studio, requires saved/discarded drafts, and confirms that styling stays unchanged. Reset to defaults is a separate operation.
+
+### 29. Consistent design workflow and draft safety
+**Status:** fixed. Appearance no longer exposes obsolete home master switches; the
+announcement remains independent. Active and pending theme choices are distinct,
+and Appearance Save never writes homepage content. Studio Home uses the same
+full-width section rendering as the live storefront; persisted reorder changes
+row positions. Other pages retain grids. Metadata-only and per-page drafts block
+replacement until saved; duplication includes those drafts. Sidebar links,
+browser unload, local tab exits and theme switches protect pending edits.
+
+Visibility/reorder writes in Homepage preserve draft wording. Load failures cannot
+be mistaken for an empty editable homepage. The Studio saved-store iframe no
+longer consumes stale Home editor session data; empty Home drafts are valid and
+are cleared on exit. Optional history-storage failures cannot turn a successful
+API save into an error. Regression tests cover these boundaries; native SQL
+rollback/isolation remains a real-database check, not an in-memory mock guarantee.
 
 ---
 
@@ -139,3 +155,10 @@ Legacy `theme.show*` tokens no longer hide builder-visible Home blocks.
 | Studio UI | `apps/web/app/admin/theme-studio/page.tsx` |
 | Layout model | `apps/web/lib/layouts/` |
 | Featured | `GET /products/featured`, `Product.isFeatured` |
+
+---
+
+## Beyond the builder
+
+A project-wide audit (payments, downloads, auth, money/stock math, deployment)
+is recorded separately in [`docs/AUDIT_2026-09.md`](docs/AUDIT_2026-09.md).

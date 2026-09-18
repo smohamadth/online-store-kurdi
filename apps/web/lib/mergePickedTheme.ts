@@ -1,4 +1,4 @@
-import { DEFAULT_THEME, type Theme } from '@/lib/theme';
+import { tokensToTheme, type Theme } from '@/lib/theme';
 import type { ThemeConfig } from '@/lib/themeRegistry';
 
 /**
@@ -11,12 +11,7 @@ import type { ThemeConfig } from '@/lib/themeRegistry';
  * link / custom CSS stay as the merchant wrote them.
  */
 export function pickedTokensToTheme(picked: ThemeConfig): Theme {
-  const t = picked.tokens as Record<string, string | number | boolean>;
-  return {
-    ...DEFAULT_THEME,
-    ...t,
-    activeTheme: picked.key,
-  } as Theme;
+  return tokensToTheme(picked);
 }
 
 export function mergePickedTheme(current: Theme, picked: ThemeConfig): Theme {

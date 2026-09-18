@@ -82,6 +82,18 @@ API, and put TLS in front. `PUBLIC_API_URL` in the compose environment must
 be the URL the **customer's browser** uses to reach the API — the web image
 bakes it in at build time.
 
+**Set `TRUST_PROXY_HOPS` when you add that proxy.** It is the number of
+proxies between the internet and the API: `1` for a single nginx/Caddy/
+Traefik, `2` if Cloudflare sits in front of it. The API uses it to pick the
+real client address out of `X-Forwarded-For`, and that address is what the
+rate limiter, the login brute-force lockout and consent logging all key on.
+
+Leave it at `0` behind a proxy and every visitor looks like one client: the
+store starts returning `429 RATE_LIMITED` to everybody after a handful of
+page views, and one person failing a login locks out all of your customers.
+Set it too high (or to `true`) and a client can forge the header to escape
+both protections. Match the real hop count.
+
 ## Mode B — plain Node (no Docker)
 
 ```bash
