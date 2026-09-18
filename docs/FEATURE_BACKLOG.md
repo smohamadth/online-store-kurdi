@@ -58,28 +58,20 @@ Still missing from reporting, and worth a future entry: scheduled/emailed
 reports, tax and VAT summaries by jurisdiction, cohort and repeat-purchase
 analysis, and per-channel attribution.
 
-## Wiring `verify-reports.py` into CI (one manual step)
+## Reporting regression suite
 
-`scripts/verify-reports.py` is committed and runnable, but the CI workflow
-change that invokes it is NOT in this branch: the agent's GitHub credentials
-cannot modify `.github/workflows/` (the push is rejected without the
-`workflows` permission). Add this to the "Browser regression" job in
-`.github/workflows/ci.yml`, after the "Admin dashboard figures" step:
+`scripts/verify-reports.py` runs in CI as the "Admin reporting + PDF/CSV
+export" step of the "Browser regression" job, between the dashboard and
+custom-pages steps. It guards the reporting surface against the exact
+fabricated strings that used to ship ("12% from last month", the hardcoded
+revenue chart), checks the PDF really is a PDF, and asserts no auth token
+appears in any request URL.
 
-```yaml
-      # Guards the reporting surface, including the exact fabricated strings
-      # ("12% from last month", the hardcoded revenue chart) that used to be
-      # rendered as if they were real figures.
-      - name: Admin reporting + PDF/CSV export
-        run: python3 scripts/verify-reports.py
-```
-
-Until that lands, the script can be run by hand against a running stack:
+It can also be run by hand against a running stack:
 
 ```bash
 python3 scripts/verify-reports.py   # honours WEB_URL / API_URL
 ```
-
 
 ---
 
