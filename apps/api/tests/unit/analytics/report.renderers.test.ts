@@ -3,6 +3,7 @@ import {
   renderReportPdf,
   renderReportCsv,
   formatDelta,
+  ellipsize,
 } from '../../../src/modules/analytics/report.renderers';
 import type { SalesReport } from '../../../src/modules/analytics/report.service';
 
@@ -111,5 +112,39 @@ describe('renderReportCsv', () => {
       },
     }));
     expect(csv).not.toContain('null');
+  });
+});
+
+describe('ellipsize', () => {
+  // A fake doc: 10 points per character, so widths are predictable.
+  const doc = { widthOfString: (s: string) => s.length * 10 };
+
+  it('leaves text that fits untouched', () => {
+    expect(ellipsize(doc, 'short', 100)).toBe('short');
+  });
+
+  it('truncates with an ellipsis when too wide', () => {
+    const out = ellipsize(doc, 'abcdefghij', 50);
+    expect(out.endsWith('…')).toBe(true);
+    expect(doc.widthOfString(out)).toBeLessThanOrEqual(50);
+  });
+
+  // An over-long name used to render past its column and strike through the
+  // row beneath it once a Unicode font made wrapping possible.
+  it('never returns something wider than the column', () => {
+    for (const w of [10, 25, 50, 200]) {
+      const out = ellipsize(doc, 'a'.repeat(80), w);
+      expect(doc.widthOfString(out)).toBeLessThanOrEqual(w);
+    }
+  });
+
+  it('falls back to the raw text if measuring throws', () => {
+    const bad = { widthOfString: () => { throw new Error('bad glyph'); } };
+    expect(ellipsize(bad, 'text', 10)).toBe('text');
+  });
+
+  it('handles null and empty input', () => {
+    expect(ellipsize(doc, '' as any, 50)).toBe('');
+    expect(ellipsize(doc, null as any, 50)).toBe('');
   });
 });

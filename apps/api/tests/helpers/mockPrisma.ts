@@ -771,7 +771,7 @@ function makeDelegate(model: string) {
       }
       return out;
     }),
-    groupBy: vi.fn(async ({ where, by, _count, orderBy }: any = {}) => {
+    groupBy: vi.fn(async ({ where, by, _count, _sum, _avg, orderBy, take, skip }: any = {}) => {
       const store = storeFor(singular);
       const filtered = [...store.values()].filter((r) => match(r, where || {}, singular));
       const groups = new Map<string, { rows: any[]; count: number }>();
@@ -799,9 +799,67 @@ function makeDelegate(model: string) {
             outRow['_count'] = count;
           }
         }
+        // Aggregates. Previously unimplemented, so every caller using
+        // `_sum` (dashboard best-sellers, the sales report's top products)
+        // received rows with NO _sum key and blew up on `g._sum.quantity`.
+        // The production code was fine; the mock simply never exercised it.
+        if (_sum && typeof _sum === 'object') {
+          outRow['_sum'] = {};
+          for (const field of Object.keys(_sum)) {
+            if (!_sum[field]) continue;
+            // Prisma returns null, not 0, when every value in the group is
+            // null - callers rely on `?? 0` for that, so preserve it.
+            const values = rows
+              .map((r: any) => r[field])
+              .filter((v: any) => v !== null && v !== undefined);
+            outRow['_sum'][field] = values.length
+              ? values.reduce((a: number, b: any) => a + (Number(b) || 0), 0)
+              : null;
+          }
+        }
+        if (_avg && typeof _avg === 'object') {
+          outRow['_avg'] = {};
+          for (const field of Object.keys(_avg)) {
+            if (!_avg[field]) continue;
+            const values = rows
+              .map((r: any) => r[field])
+              .filter((v: any) => v !== null && v !== undefined);
+            outRow['_avg'][field] = values.length
+              ? values.reduce((a: number, b: any) => a + (Number(b) || 0), 0) / values.length
+              : null;
+          }
+        }
         out.push(outRow);
       }
-      return out;
+
+      // orderBy, including Prisma's aggregate form `{ _sum: { field: 'desc' } }`.
+      // Without this, "top products by revenue" returned insertion order, so a
+      // test could pass while the real ranking was wrong.
+      const sorts = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
+      for (const sort of sorts.slice().reverse()) {
+        for (const [key, val] of Object.entries(sort as any)) {
+          if (val && typeof val === 'object') {
+            // aggregate ordering: key is '_sum' | '_avg' | '_count'
+            for (const [field, dir] of Object.entries(val as any)) {
+              out.sort((a, b) => {
+                const av = Number(a?.[key]?.[field] ?? 0);
+                const bv = Number(b?.[key]?.[field] ?? 0);
+                return dir === 'desc' ? bv - av : av - bv;
+              });
+            }
+          } else {
+            out.sort((a, b) => {
+              const av = a[key], bv = b[key];
+              if (av === bv) return 0;
+              const cmp = av > bv ? 1 : -1;
+              return val === 'desc' ? -cmp : cmp;
+            });
+          }
+        }
+      }
+
+      const start = typeof skip === 'number' ? skip : 0;
+      return typeof take === 'number' ? out.slice(start, start + take) : out.slice(start);
     }),
     create: vi.fn(async ({ data, include, select }: any) => {
       const store = storeFor(singular);

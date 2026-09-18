@@ -9,6 +9,7 @@ import request from 'supertest';
 import { getTestApp, cleanDatabase, authHeader } from '../helpers/db';
 import { mockPrisma } from '../helpers/mockPrisma';
 import type { Express } from 'express';
+import { resolveRange } from '../../src/modules/analytics/report.service';
 
 let app: Express;
 beforeAll(async () => { app = await getTestApp(); });
@@ -126,5 +127,81 @@ describe('GET /api/reports/sales.csv', () => {
       .get('/api/reports/sales.csv')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
+  });
+});
+
+// --- Range resolution ------------------------------------------------------
+// These pin three defects found by driving the real service with seeded data.
+describe('resolveRange (range semantics)', () => {
+  it('includes the whole of a bare "to" day', () => {
+    // ?to=2024-06-10 used to parse as midnight, silently excluding every sale
+    // made on the 10th - a whole day of takings missing from the report.
+    const r = resolveRange({ from: '2024-06-01', to: '2024-06-10' });
+    expect(r.to.toISOString()).toBe('2024-06-10T23:59:59.999Z');
+    expect(r.from.toISOString()).toBe('2024-06-01T00:00:00.000Z');
+  });
+
+  it('honours a full ISO timestamp exactly', () => {
+    const r = resolveRange({ from: '2024-06-01T06:00:00Z', to: '2024-06-10T09:30:00Z' });
+    expect(r.to.toISOString()).toBe('2024-06-10T09:30:00.000Z');
+  });
+
+  it('swaps a reversed range instead of throwing', () => {
+    // `to` was const, so the documented swap threw "Assignment to constant
+    // variable" and turned a mistyped URL into a 500.
+    expect(() => resolveRange({ from: '2024-03-31', to: '2024-03-01' })).not.toThrow();
+    const r = resolveRange({ from: '2024-03-31', to: '2024-03-01' });
+    expect(r.from.getTime()).toBeLessThan(r.to.getTime());
+  });
+
+  it('falls back to the default window on nonsense input', () => {
+    expect(resolveRange({ days: 'abc' }).days).toBe(30);
+    expect(resolveRange({ days: -5 }).days).toBe(30);
+    expect(resolveRange({ days: 99999 }).days).toBe(30);
+    expect(resolveRange({}).days).toBe(30);
+  });
+
+  it('accepts a valid lookback', () => {
+    expect(resolveRange({ days: 7 }).days).toBe(7);
+    expect(resolveRange({ days: 365 }).days).toBe(365);
+  });
+});
+
+describe('units sold across the whole catalogue', () => {
+  it('counts every product, not just the ten in the table', async () => {
+    // Regression: unitsSold summed `topProducts`, which is capped at 10, so a
+    // store selling more than ten distinct products under-reported its unit
+    // count with no hint the figure was partial (88 instead of 178).
+    const { mockPrisma } = await import('../helpers/mockPrisma');
+    const { assembleSalesReport, resolveRange } =
+      await import('../../src/modules/analytics/report.service');
+
+    const orderId = 'units-order';
+    await mockPrisma.order.create({
+      data: {
+        id: orderId, orderNumber: 'ORD-UNITS', userId: 'u-units', status: 'delivered',
+        subtotal: 0, totalAmount: 150, paymentMethod: 'cod', paymentStatus: 'completed',
+        createdAt: new Date(Date.now() - 86400000),
+      },
+    });
+    for (let i = 0; i < 15; i++) {
+      await mockPrisma.product.create({
+        data: {
+          id: `up${i}`, name: `Unit ${i}`, slug: `up-${i}`, sku: `USKU-${i}`,
+          price: 10, quantity: 99, status: 'active', createdAt: new Date(),
+        },
+      });
+      await mockPrisma.orderItem.create({
+        data: {
+          id: `uoi${i}`, orderId, productId: `up${i}`,
+          quantity: 10, unitPrice: 10, totalPrice: 100,
+        },
+      });
+    }
+
+    const report = await assembleSalesReport(resolveRange({ days: 30 }));
+    expect(report.topProducts.length).toBeLessThanOrEqual(10);
+    // 15 products x 10 units, regardless of the table cap.
+    expect(report.totals.unitsSold).toBe(150);
   });
 });

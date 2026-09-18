@@ -64,8 +64,12 @@ export type SalesReport = {
  * a mistyped URL should not 500 an admin dashboard.
  */
 export function resolveRange(query: any, defaultDays = 30): ReportRange {
-  const to = parseDate(query?.to) ?? new Date();
-  let from = parseDate(query?.from);
+  // A bare calendar date as `to` means "up to the END of that day". Without
+  // this, ?to=2024-06-10 parses as midnight and silently excludes every sale
+  // made on the 10th - the report would omit a whole day's takings while
+  // looking perfectly normal.
+  let to = parseDate(query?.to, 'end') ?? new Date();
+  let from = parseDate(query?.from, 'start');
 
   if (!from) {
     const raw = Number(query?.days);
@@ -74,17 +78,35 @@ export function resolveRange(query: any, defaultDays = 30): ReportRange {
     from.setUTCDate(from.getUTCDate() - days);
   }
 
-  // Reversed range: swap rather than return a negative span.
-  if (from > to) [from, to as any] = [to, from];
+  // Reversed range: swap rather than return a negative span. `to` used to be
+  // declared const, so this line threw "Assignment to constant variable" and
+  // turned a mistyped URL into a 500 - the opposite of the intent documented
+  // above. The `as any` on the destructuring hid it from the compiler.
+  if (from > to) {
+    const swap = from;
+    from = to;
+    to = swap;
+  }
 
   const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400000));
   return { from, to, days };
 }
 
-function parseDate(value: any): Date | null {
+/**
+ * Parse a query date.
+ *
+ * `boundary` decides how a bare YYYY-MM-DD is widened: 'start' keeps midnight,
+ * 'end' moves to 23:59:59.999 of the same day so the range is inclusive.
+ * A full ISO timestamp is always honoured exactly as given.
+ */
+function parseDate(value: any, boundary: 'start' | 'end' = 'start'): Date | null {
   if (!value || typeof value !== 'string') return null;
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isNaN(d.getTime())) return null;
+  if (boundary === 'end' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    d.setUTCHours(23, 59, 59, 999);
+  }
+  return d;
 }
 
 /** Assemble the full report. */
@@ -157,7 +179,17 @@ export async function assembleSalesReport(range: ReportRange): Promise<SalesRepo
   const topProducts = await topProductsFor(orderIds);
   const topCustomers = await topCustomersFor(orders as any);
 
-  const unitsSold = topProducts.reduce((s: number, p: any) => s + p.sold, 0);
+  // Units sold across EVERY product, not just the ten shown in the table.
+  // This previously summed `topProducts`, so a store selling more than ten
+  // distinct products under-reported its unit count without any hint that
+  // the figure was partial - 88 instead of 178 in a 19-product test.
+  const unitsAgg = orderIds.length
+    ? await prisma.orderItem.aggregate({
+        where: { orderId: { in: orderIds } },
+        _sum: { quantity: true },
+      })
+    : null;
+  const unitsSold = Number(unitsAgg?._sum?.quantity ?? 0);
 
   const granularity = pickGranularity(days);
 

@@ -12,6 +12,7 @@
 import PDFDocument from 'pdfkit';
 import type { SalesReport } from './report.service';
 import { toBarHeights } from './report.helpers';
+import { resolveUnicodeFont } from './report.fonts';
 
 // A4 at pdfkit's default 72dpi, with a 50pt margin: content spans x=50..545.
 const LEFT = 50;
@@ -115,6 +116,36 @@ export function renderReportCsv(r: SalesReport): string {
   return rows.map((row) => row.map(csvCell).join(',')).join('\n');
 }
 
+/**
+ * Trim a cell to fit its column, with an ellipsis.
+ *
+ * `lineBreak: false` alone is not enough: pdfkit still renders the full
+ * string, so an over-long product name ran past its column and, once a
+ * Unicode font made wrapping possible, spilled onto the row below and struck
+ * through it. Measuring and cutting keeps every row on one line.
+ */
+export function ellipsize(doc: any, text: string, maxWidth: number): string {
+  const s = String(text ?? '');
+  if (maxWidth <= 0) return s;
+  try {
+    if (doc.widthOfString(s) <= maxWidth) return s;
+    // Binary search the longest prefix that fits, rather than measuring once
+    // per character: tables can be long and widthOfString is not free.
+    let lo = 0;
+    let hi = s.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (doc.widthOfString(s.slice(0, mid) + '…') <= maxWidth) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo > 0 ? s.slice(0, lo) + '…' : '…';
+  } catch {
+    // widthOfString can throw on an exotic glyph; showing the raw text is
+    // better than losing the cell.
+    return s;
+  }
+}
+
 /** Render the report as a PDF and resolve the bytes. */
 export function renderReportPdf(r: SalesReport): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -123,6 +154,20 @@ export function renderReportPdf(r: SalesReport): Promise<Buffer> {
     doc.on('data', (c: Buffer) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
+
+    // Embed a Unicode font when one is available. pdfkit's built-in Helvetica
+    // is WinAnsi-only and SILENTLY DROPS Kurdish/Arabic glyphs — a store named
+    // "کوردی" printed a blank name with no error. Falls back to Helvetica on a
+    // machine with no suitable font, so a Latin-only store still gets a PDF.
+    const unicodeFont = resolveUnicodeFont();
+    if (unicodeFont) {
+      try {
+        doc.registerFont('Report', unicodeFont);
+        doc.font('Report');
+      } catch {
+        // A corrupt or unsupported font file must not take the report down.
+      }
+    }
 
     const sym = r.store.currencySymbol;
 
@@ -249,7 +294,8 @@ export function renderReportPdf(r: SalesReport): Promise<Buffer> {
         doc.fontSize(9.5).fillColor('#111');
         row.forEach((cell, i) => {
           const c = cols[i];
-          doc.text(String(cell), x, y, { width: c.width, align: c.align ?? 'left', lineBreak: false });
+          doc.text(ellipsize(doc, String(cell), c.width - 6), x, y,
+            { width: c.width, align: c.align ?? 'left', lineBreak: false });
           x += c.width;
         });
         doc.y = y + 15;
