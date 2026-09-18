@@ -41,6 +41,45 @@ Verified present in this checkout:
 | Theme Studio + plugins | `/admin/theme-studio`, `Plugin` hooks |
 | Stock alerts ("notify me") | `StockAlert`, `StockAlertSubscription` |
 | Order tracking page | `/track-order` |
+| Admin sales reporting | `/api/reports/sales{,.pdf,.csv}`, `/admin/analytics` — KPIs with real period-over-period deltas, revenue chart, conversion funnel, PDF + CSV export |
+
+> **Correction (September 2026).** An earlier revision of this table listed
+> analytics as built without qualification. That was too generous: the admin
+> analytics page was partly cosmetic — the three KPI trend captions were the
+> hardcoded strings "↑ 12% / 8% / 5% from last month", and the "Revenue
+> Overview" chart was a literal twelve-element array, neither connected to the
+> database. There was also no date-range control (everything was silently 30
+> days), no export, and the conversion-funnel endpoint had no UI at all. Those
+> are now fixed and the row above describes what actually ships. The lesson
+> worth keeping: "the endpoint exists" is not the same as "the merchant can
+> see it", and an inventory that only greps the API will overstate the product.
+
+Still missing from reporting, and worth a future entry: scheduled/emailed
+reports, tax and VAT summaries by jurisdiction, cohort and repeat-purchase
+analysis, and per-channel attribution.
+
+## Wiring `verify-reports.py` into CI (one manual step)
+
+`scripts/verify-reports.py` is committed and runnable, but the CI workflow
+change that invokes it is NOT in this branch: the agent's GitHub credentials
+cannot modify `.github/workflows/` (the push is rejected without the
+`workflows` permission). Add this to the "Browser regression" job in
+`.github/workflows/ci.yml`, after the "Admin dashboard figures" step:
+
+```yaml
+      # Guards the reporting surface, including the exact fabricated strings
+      # ("12% from last month", the hardcoded revenue chart) that used to be
+      # rendered as if they were real figures.
+      - name: Admin reporting + PDF/CSV export
+        run: python3 scripts/verify-reports.py
+```
+
+Until that lands, the script can be run by hand against a running stack:
+
+```bash
+python3 scripts/verify-reports.py   # honours WEB_URL / API_URL
+```
+
 
 ---
 

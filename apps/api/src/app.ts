@@ -56,6 +56,7 @@ import stockAlertRoutes from './modules/stock-alerts/stock-alert.routes';
 import menuRoutes from './modules/menus/menu.routes';
 import bannerRoutes from './modules/banners/banner.routes';
 import dashboardRoutes from './modules/analytics/dashboard.routes';
+import reportRoutes from './modules/analytics/report.routes';
 import themeRoutes from './modules/theme/theme.routes';
 import themeStudioRoutes from './modules/themeStudio/themeStudio.routes';
 import pluginRoutes from './modules/plugins/plugin.routes';
@@ -210,6 +211,7 @@ app.get('/api', (req, res) => {
       users: '/api/users',
       payments: '/api/payments',
       analytics: '/api/analytics',
+      reports: '/api/reports',
       recommendations: '/api/recommendations',
       storage: '/api/storage',
     },
@@ -254,6 +256,7 @@ app.use('/api/stock-alerts', stockAlertRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/theme', themeRoutes);
 app.use('/api/themes', themeRegistryRoutes);
 app.use('/api/theme-studio', themeStudioRoutes);

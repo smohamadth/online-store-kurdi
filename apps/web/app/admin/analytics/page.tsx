@@ -1,8 +1,18 @@
-// /admin/analytics - the analytics dashboard: real-time stats,
-// search analytics, trending products, and the recent-activity feed.
-// All figures come from the /api/analytics/* endpoints (the server
-// aggregates the UserEvent table); if the store has tracking
-// disabled, the pages render empty rather than fake data.
+// /admin/analytics - the analytics dashboard: KPIs with real
+// period-over-period trends, a real revenue chart, the conversion funnel,
+// real-time stats, search analytics, trending products, and PDF/CSV export.
+//
+// Every figure here is computed from the database by /api/reports/sales or
+// /api/analytics/*. Three things on this page used to be fabricated and are
+// now gone:
+//   - the KPI trend captions were the literal strings "↑ 12% from last
+//     month", "↑ 8%" and "↑ 5%", so a store whose revenue had halved still
+//     displayed growth;
+//   - the "Revenue Overview" chart was a hardcoded array of twelve numbers
+//     against Jan-Dec labels, connected to nothing;
+//   - there was no way to pick a period, so everything was silently 30 days.
+// Invented numbers in an admin panel are worse than no numbers, because they
+// get trusted and acted on.
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,6 +20,34 @@ import { api } from '@/lib/api';
 import { useStoreSettings, formatPrice } from '@/lib/settings';
 import { API_BASE } from '@/lib/http';
 import { useIsMobile } from '@/lib/hooks';
+
+/**
+ * A period-over-period trend caption.
+ *
+ * `percent: null` means the previous period had no data. There is no
+ * meaningful percentage for "grew from zero", so say so rather than print
+ * an infinity or a fabricated figure.
+ */
+function DeltaCaption({ delta }: { delta?: { percent: number | null; direction: string } | null }) {
+  if (!delta) {
+    return <p style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>&nbsp;</p>;
+  }
+  if (delta.percent === null) {
+    return (
+      <p style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+        No prior period to compare
+      </p>
+    );
+  }
+  const colour = delta.direction === 'up' ? '#22c55e'
+    : delta.direction === 'down' ? '#ef4444' : '#666';
+  const arrow = delta.direction === 'up' ? '↑' : delta.direction === 'down' ? '↓' : '→';
+  return (
+    <p style={{ fontSize: '12px', color: colour, marginTop: '4px' }}>
+      {arrow} {Math.abs(delta.percent)}% vs previous period
+    </p>
+  );
+}
 
 export default function AdminAnalyticsPage() {
   const { settings } = useStoreSettings();
@@ -26,6 +64,14 @@ export default function AdminAnalyticsPage() {
     recentOrders: [] as any[],
     ordersByStatus: {} as Record<string, number>,
   });
+  // The selected reporting window. Drives the report fetch AND the export
+  // links, so a downloaded PDF always covers the period on screen.
+  const [days, setDays] = useState(30);
+  // Real report: totals, period-over-period deltas and the revenue series.
+  const [report, setReport] = useState<any>(null);
+  const [funnel, setFunnel] = useState<any>(null);
+  const [downloading, setDownloading] = useState<'pdf' | 'csv' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   // Behavioural analytics (the event loop: view / search / add_to_cart /
   // purchase). Only populated when the store runs the API with
   // ANALYTICS_TRACKING_ENABLED=true - off by default, and the
@@ -42,6 +88,29 @@ export default function AdminAnalyticsPage() {
     fetchAnalytics();
     fetchActivity();
   }, []);
+
+  // Re-fetch whenever the admin changes the period.
+  useEffect(() => {
+    let cancelled = false;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+
+    Promise.all([
+      fetch(`${API_BASE}/reports/sales?days=${days}`, { headers })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(`${API_BASE}/analytics/funnel?days=${days}`, { headers })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([salesRes, funnelRes]) => {
+      if (cancelled) return;
+      setReport(salesRes?.data ?? null);
+      setFunnel(funnelRes?.data ?? null);
+    });
+
+    return () => { cancelled = true; };
+  }, [days]);
 
   const fetchActivity = async () => {
     try {
@@ -96,6 +165,42 @@ export default function AdminAnalyticsPage() {
     }
   };
 
+  /**
+   * Download an export over fetch, then hand the browser a blob URL.
+   *
+   * These endpoints are admin-only, so the request must carry the bearer
+   * token. A plain <a href> cannot set an Authorization header, and putting
+   * the JWT in the query string would leak it into server access logs,
+   * browser history and Referer headers. Fetching with the header and
+   * saving the resulting blob keeps the token out of the URL entirely.
+   */
+  const downloadReport = async (ext: 'pdf' | 'csv') => {
+    setExportError(null);
+    setDownloading(ext);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/reports/sales.${ext}?days=${days}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales-report-${days}d.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Release the object URL, otherwise the blob is pinned in memory for
+      // the lifetime of the document.
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setExportError(err?.message || 'Export failed');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'delivered': return '#22c55e';
@@ -107,6 +212,13 @@ export default function AdminAnalyticsPage() {
     }
   };
 
+  const series: any[] = report?.series ?? [];
+  // Scale bars against the tallest bucket. Computed here (not inline) so the
+  // all-zero case is handled once: dividing by a zero max yields NaN% heights
+  // and collapses the chart.
+  const maxBucket = series.reduce((m, b) => Math.max(m, Number(b?.revenue) || 0), 0);
+
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '64px' }}>
@@ -117,6 +229,78 @@ export default function AdminAnalyticsPage() {
 
   return (
     <div>
+      {/* Toolbar: reporting period + exports. There was previously no way to
+          change the period at all - every figure was silently the last 30
+          days - and no way to get the numbers out of the browser. */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '12px',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '24px',
+      }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <label htmlFor="report-period" style={{ fontSize: '14px', color: '#666' }}>Period</label>
+          <select
+            id="report-period"
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: '1px solid #e5e5e5',
+              fontSize: '14px',
+              backgroundColor: 'white',
+            }}
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+            <option value={365}>Last 12 months</option>
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {exportError && (
+            <span role="alert" style={{ fontSize: '13px', color: '#ef4444' }}>{exportError}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => downloadReport('pdf')}
+            disabled={downloading !== null}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e5e5e5',
+              fontSize: '14px',
+              fontWeight: 600,
+              backgroundColor: '#111',
+              color: 'white',
+              cursor: downloading ? 'wait' : 'pointer',
+            }}
+          >
+            {downloading === 'pdf' ? 'Preparing…' : 'Download PDF report'}
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadReport('csv')}
+            disabled={downloading !== null}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e5e5e5',
+              fontSize: '14px',
+              fontWeight: 600,
+              backgroundColor: 'white',
+              color: '#111',
+              cursor: downloading ? 'wait' : 'pointer',
+            }}
+          >
+            {downloading === 'csv' ? 'Preparing…' : 'Export CSV'}
+          </button>
+        </div>
+      </div>
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         <div style={{
@@ -127,7 +311,7 @@ export default function AdminAnalyticsPage() {
         }}>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Revenue</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(analytics.totalRevenue, settings.currencySymbol)}</p>
-          <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>↑ 12% from last month</p>
+          <DeltaCaption delta={report?.deltas?.revenue} />
         </div>
 
         <div style={{
@@ -138,7 +322,7 @@ export default function AdminAnalyticsPage() {
         }}>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Orders</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{analytics.totalOrders}</p>
-          <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>↑ 8% from last month</p>
+          <DeltaCaption delta={report?.deltas?.orders} />
         </div>
 
         <div style={{
@@ -149,7 +333,7 @@ export default function AdminAnalyticsPage() {
         }}>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Average Order Value</p>
           <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{formatPrice(analytics.averageOrderValue, settings.currencySymbol)}</p>
-          <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>↑ 5% from last month</p>
+          <DeltaCaption delta={report?.deltas?.averageOrderValue} />
         </div>
 
         <div style={{
@@ -294,7 +478,9 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      {/* Revenue Chart Placeholder */}
+      {/* Revenue over time - real buckets from /api/reports/sales.
+          This card used to render a hardcoded [65,40,85,...] array against
+          fixed Jan-Dec labels: a picture of nothing. */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '8px',
@@ -302,29 +488,98 @@ export default function AdminAnalyticsPage() {
         padding: '24px',
         marginBottom: '32px',
       }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Revenue Overview</h3>
-        <div style={{
-          height: '300px',
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: '8px',
-          padding: '0 16px',
-        }}>
-          {[65, 40, 85, 50, 70, 45, 90, 60, 75, 55, 80, 95].map((height, i) => (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                width: '100%',
-                height: `${height}%`,
-                backgroundColor: i === 11 ? '#3b82f6' : '#e5e5e5',
-                borderRadius: '4px 4px 0 0',
-                transition: 'height 0.3s',
-              }} />
-              <span style={{ fontSize: '10px', color: '#666' }}>
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i]}
-              </span>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>
+          Revenue Overview{report?.range ? ` (by ${report.range.granularity})` : ''}
+        </h3>
+        {!report ? (
+          <p style={{ fontSize: '13px', color: '#999' }}>Loading revenue…</p>
+        ) : maxBucket <= 0 ? (
+          <p style={{ fontSize: '13px', color: '#999' }}>
+            No revenue in this period. Cancelled and refunded orders are excluded.
+          </p>
+        ) : (
+          <div style={{
+            height: '300px',
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: series.length > 40 ? '1px' : '8px',
+            padding: '0 16px',
+          }}>
+            {series.map((b: any, i: number) => (
+              <div
+                key={b.date}
+                title={`${b.label}: ${formatPrice(b.revenue, settings.currencySymbol)} from ${b.orders} order(s)`}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', minWidth: 0 }}
+              >
+                <div style={{
+                  width: '100%',
+                  // Percentage of the tallest bar. Guarded against the
+                  // all-zero case upstream, which would divide by zero.
+                  height: `${Math.max(1, (b.revenue / maxBucket) * 100)}%`,
+                  backgroundColor: b.revenue > 0 ? '#3b82f6' : '#e5e5e5',
+                  borderRadius: '4px 4px 0 0',
+                  transition: 'height 0.3s',
+                }} />
+                {(series.length <= 14 || i % Math.ceil(series.length / 12) === 0) && (
+                  <span style={{ fontSize: '10px', color: '#666', whiteSpace: 'nowrap' }}>{b.label}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Conversion funnel. The API has served this since the funnel work
+          landed, but nothing in the admin UI ever called it, so the data was
+          unreachable for the merchant it was built for. */}
+      <div data-testid="funnel-card" style={{
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        border: '1px solid #e5e5e5',
+        padding: '24px',
+        marginBottom: '32px',
+      }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>Conversion Funnel</h3>
+        {!funnel || !funnel.stages?.some((s: any) => s.count > 0) ? (
+          <p style={{ fontSize: '13px', color: '#999' }}>
+            No funnel data yet. Behavioural events are only collected when the API runs with
+            <code style={{ margin: '0 4px' }}>ANALYTICS_TRACKING_ENABLED=true</code>.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+              {funnel.stages.map((stage: any) => (
+                <div key={stage.step}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '14px', textTransform: 'capitalize' }}>
+                      {String(stage.step).replace(/_/g, ' ')}
+                    </span>
+                    <span style={{ fontSize: '14px', fontWeight: 600 }}>
+                      {stage.count}
+                      <span style={{ color: '#666', fontWeight: 400, marginLeft: '8px' }}>
+                        {Math.round((stage.conversionFromStart ?? 0) * 100)}%
+                      </span>
+                    </span>
+                  </div>
+                  <div style={{ height: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.round((stage.conversionFromStart ?? 0) * 100)}%`,
+                      backgroundColor: '#3b82f6',
+                      borderRadius: '5px',
+                    }} />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+            {funnel.biggestDropOff && (
+              <p style={{ fontSize: '13px', color: '#92400e', marginTop: '16px' }}>
+                Biggest drop-off before <strong>{String(funnel.biggestDropOff.step).replace(/_/g, ' ')}</strong>
+                {' '}— {funnel.biggestDropOff.droppedFromPrevious} lost from the previous step.
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* Recent Orders */}
